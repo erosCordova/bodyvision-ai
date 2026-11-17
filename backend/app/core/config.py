@@ -30,7 +30,8 @@ class Settings(BaseSettings):
     def block_unreleased_environments(self) -> "Settings":
         if self.app_env in {"staging", "production"}:
             raise ValueError(
-                "F1 is local/test only. Identity, privacy, legal and operational gates are pending."
+                "F2 is synthetic local/test only. "
+                "Identity, privacy, legal and operational gates are pending."
             )
         if self.debug:
             raise ValueError("Debug mode is disabled")

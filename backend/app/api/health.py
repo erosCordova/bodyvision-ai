@@ -15,8 +15,8 @@ router = APIRouter(prefix="/api/v1/health", tags=["Health"])
 class LiveResponse(BaseModel):
     status: Literal["alive"] = "alive"
     service: str = "bodyvision-api"
-    version: str = "0.1.0"
-    phase: int = 1
+    version: str = "0.2.0"
+    phase: int = 2
     environment: str
     checked_at: datetime
 

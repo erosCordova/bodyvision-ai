@@ -9,3 +9,7 @@ Actualizaciones de digests: consultar manifiesto del registro, renovar lockfiles
 CI: servicio PostgreSQL descartable, pruebas con motor 15, rollback/reaplicación de migración sobre base sin datos personales; builds API/UI; Chromium+axe; smoke Docker con .env aleatorio. El workflow está creado pero su ejecución remota no se presupone.
 
 SLO objetivo del usuario (no medido/aprobado): disponibilidad 99.5%, p95 lectura <500 ms, pose <30 s, RPO15min/RTO4h. No hay promesas de operación productiva en F1. PITR, restauración demostrada, réplicas, alertas, OTel/Prometheus, Sentry con scrubbing y runbooks completos se requieren antes de F9.
+
+## Operación F2
+
+make seed (docker compose run --rm seed) carga exclusivamente fixtures falsos. No se ejecuta al arrancar la API y no sobrescribe registros existentes. El catálogo y dos espacios de desarrollo se crean con la migración. Antes de usar una base de F1 aplicar alembic upgrade head o arrancar Compose. El downgrade destructivo se prueba solo sobre bases de CI/descartables. CI siembra después de comprobar upgrade/downgrade, ejecuta el flujo de datos en navegador y vuelve a probar los contenedores con PostgreSQL real.

@@ -1,6 +1,14 @@
-# BODYVISION AI — Fase 1
+# BODYVISION AI — Fase 2
 
-Base técnica local para registro, seguimiento y visualización corporal. **No es un dispositivo médico.** Esta entrega no acepta datos de personas ni incluye autenticación, expedientes, imágenes, IA o visor 3D. El texto adjunto `Texto pegado.txt` es la especificación de implementación; los dos PDF son referencias de diseño. El backend de esta especificación es Python, no Java.
+Núcleo local para registrar expedientes y mediciones **ficticias**, conservar correcciones y consultar evolución. **No es un dispositivo médico.** Identidad, consentimiento y uso con datos reales siguen bloqueados. El backend es Python/FastAPI según la especificación adjunta.
+
+La interfaz abre el resumen; puedes crear un expediente desde **Expedientes**. Para cargar ejemplos explícitos, después del arranque ejecuta:
+
+```bash
+docker compose run --rm seed
+```
+
+Se crean 5 expedientes por cada organización ficticia con mediciones de seis meses, huecos, un atípico y una corrección. Repetir no duplica. El selector de organización es para desarrollo local; no autentica a nadie.
 
 ## Requisitos
 
@@ -17,7 +25,7 @@ docker compose up --build --wait
 
 En sistemas donde el comando sea `python3`, úsalo en lugar de `python`. La primera orden genera `.env` con dos contraseñas aleatorias sin mostrarlas. La segunda inicia PostgreSQL, ejecuta Alembic como servicio de una sola ejecución, espera readiness de la API y publica la interfaz únicamente en loopback.
 
-Abre http://localhost:8080. Las dos tarjetas deben informar conexión verificada. `http://localhost:8080/api/v1/health/live` comprueba el proceso; `/api/v1/health/ready` consulta PostgreSQL y exige la revisión `0001_foundation`. Swagger local: http://localhost:8080/api/v1/docs. La CSP local de nginx impide recursos externos de Swagger; para documentación interactiva usa el acceso nativo de desarrollo indicado abajo o el OpenAPI JSON `/api/v1/openapi.json`.
+Abre http://localhost:8080. El resumen debe cargar desde la base. Las comprobaciones de salud están en /system. `http://localhost:8080/api/v1/health/live` comprueba el proceso; `/api/v1/health/ready` consulta PostgreSQL y exige la revisión `0002_data_core`. Swagger local: http://localhost:8080/api/v1/docs. La CSP local de nginx impide recursos externos de Swagger; para documentación interactiva usa el acceso nativo de desarrollo indicado abajo o el OpenAPI JSON `/api/v1/openapi.json`.
 
 ```bash
 docker compose ps
@@ -67,7 +75,7 @@ alembic downgrade base
 alembic upgrade head
 ```
 
-El downgrade es exclusivamente para la base descartable de F1. En fases siguientes se revisará su impacto sobre datos.
+El downgrade es exclusivamente para la base descartable de F2 sobre una base descartable. En fases siguientes se revisará su impacto sobre datos.
 
 ```bash
 cd frontend
@@ -89,6 +97,6 @@ E2E requiere API y Vite activos y base migrada. Para probar Docker usa `E2E_BASE
 - `docs/`: decisiones, contratos, privacidad, operaciones y evidencia.
 - `.github/workflows/ci.yml`: instalación bloqueada, lint, tests, migraciones, build, E2E y smoke Docker en un runner compatible.
 
-`APP_ENV=production` y `staging` están bloqueados por completo. Este bloqueo preventivo no sustituye el gate granular R11 de F3. No se implementan botones de módulos futuros, métricas simuladas ni enlaces a políticas inexistentes.
+`APP_ENV=production` y `staging` están bloqueados por completo. Este bloqueo preventivo no sustituye el gate granular R11 de F3. No se implementan botones de módulos futuros ni se presentan las observaciones ficticias como datos de personas reales.
 
-Estado de aceptación y salidas reales: [reporte F1](docs/qa/PHASE_1_REPORT.md). **La Fase 1 fue comprobada con Docker y navegador en [GitHub Actions](https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237). El reporte conserva el alcance y las limitaciones de esa evidencia.**
+Estado de la entrega actual: [reporte F2](docs/qa/PHASE_2_REPORT.md). Evidencia previa: [reporte F1](docs/qa/PHASE_1_REPORT.md). **La Fase 1 fue comprobada con Docker y navegador en [GitHub Actions](https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237). El reporte conserva el alcance y las limitaciones de esa evidencia.**

@@ -1,0 +1,53 @@
+import { ApiError } from "../../services/api/client";
+export function LoadingState() {
+  return (
+    <p role="status" className="panel state">
+      Cargando información…
+    </p>
+  );
+}
+export function ErrorState({
+  error,
+  retry,
+}: {
+  error: Error | null;
+  retry: () => void;
+}) {
+  return (
+    <div role="alert" className="panel state">
+      <h2>No se pudo cargar la información</h2>
+      <p>{error?.message}</p>
+      {error instanceof ApiError && (
+        <p className="reference">Referencia: {error.correlationId}</p>
+      )}
+      <button onClick={retry}>Reintentar</button>
+    </div>
+  );
+}
+export function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="panel state empty">
+      <span aria-hidden="true">▱</span>
+      <h2>{text}</h2>
+      <p>Los registros aparecerán aquí cuando los añadas.</p>
+    </div>
+  );
+}
+export function InlineError({ error }: { error: unknown }) {
+  return (
+    <div role="alert" className="inline-error">
+      {error instanceof Error
+        ? error.message
+        : "Revisa los datos e inténtalo de nuevo."}
+      {error instanceof ApiError && (
+        <small>Referencia: {error.correlationId}</small>
+      )}
+    </div>
+  );
+}
+export const dateTime = (value: string) =>
+  new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));

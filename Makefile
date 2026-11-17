@@ -1,4 +1,4 @@
-.PHONY: setup up down check logs migrate
+.PHONY: setup up down check logs migrate seed
 setup:
 	python3 scripts/setup_local.py
 up:
@@ -12,3 +12,6 @@ logs:
 	docker compose logs --tail=100
 down:
 	docker compose down
+
+seed:
+	docker compose run --rm seed
