@@ -7,17 +7,19 @@ const defaultOpacity: LayerOpacity = {
   skeleton: 1, muscles: 0.94, arteries: 1, veins: 1, nerves: 1, skin: 0.35,
 };
 const presets: { label: string; layers: AnatomicalLayer[] }[] = [
+  { label: "Cuerpo completo", layers: ["skin"] },
   { label: "Huesos", layers: ["skeleton"] },
   { label: "Músculos", layers: ["muscles"] },
   { label: "Circulación", layers: ["arteries", "veins"] },
   { label: "Sistema nervioso", layers: ["nerves", "skeleton"] },
   { label: "Piel y músculos", layers: ["skin", "muscles"] },
+  { label: "Visión interna", layers: ["skin", "muscles", "skeleton", "arteries", "veins", "nerves"] },
 ];
 
 export function AnatomyAtlas() {
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<SceneController | null>(null);
-  const [visible, setVisible] = useState<AnatomicalLayer[]>(["skeleton"]);
+  const [visible, setVisible] = useState<AnatomicalLayer[]>(["skin"]);
   const [opacity, setOpacity] = useState<LayerOpacity>({ ...defaultOpacity });
   const [selected, setSelected] = useState<string | null>(null);
   const [status, setStatus] = useState("Preparando el atlas anatómico…");
@@ -28,7 +30,7 @@ export function AnatomyAtlas() {
     try {
       const scene = createAnatomyScene(host.current, setStatus, setSelected);
       controller.current = scene;
-      scene.update(new Set<AnatomicalLayer>(["skeleton"]), defaultOpacity);
+      scene.update(new Set<AnatomicalLayer>(["skin"]), defaultOpacity);
       return () => { scene.dispose(); if (controller.current === scene) controller.current = null; };
     } catch {
       setError("No se pudo iniciar WebGL. Abre el atlas en un navegador compatible con aceleración gráfica.");
@@ -49,21 +51,21 @@ export function AnatomyAtlas() {
   return (
     <div className="anatomy-page">
       <header className="anatomy-heading">
-        <p className="eyebrow">ATLAS ANATÓMICO INTERACTIVO</p>
-        <h1>Explora el interior del cuerpo humano</h1>
-        <p>Activa las capas anatómicas, observa las estructuras desde cualquier ángulo y selecciona una pieza para identificarla.</p>
+        <p className="eyebrow">VISIÓN ANATÓMICA DE BODYVISION</p>
+        <h1>El cuerpo humano en 3D</h1>
+        <p>Explora la superficie corporal y revela progresivamente músculos, huesos, arterias, venas y nervios. Selecciona cualquier estructura para identificarla.</p>
       </header>
       <div className="anatomy-layout">
         <section className="anatomy-stage" aria-label="Escena anatómica tridimensional">
-          <div className="anatomy-stage-caption">ATLAS 3D · MODELOS DE REFERENCIA</div>
+          <div className="anatomy-stage-caption">BODYVISION · VISIÓN ANATÓMICA 3D</div>
           <div className="anatomy-canvas" ref={host} />
           {error && <div className="anatomy-error" role="alert">{error}</div>}
           <div className="anatomy-viewport-help">Arrastra para girar · Pellizca o usa la rueda para acercar · Pulsa una pieza para seleccionarla</div>
           <div className="anatomy-status" role="status">{status}</div>
         </section>
         <aside className="anatomy-panel">
-          <h2>Capas anatómicas</h2>
-          <p>Enciende o apaga cada sistema. Ajusta su transparencia para ver las estructuras interiores.</p>
+          <h2>Exploración del cuerpo</h2>
+          <p>Oculta la piel, muestra los sistemas internos y ajusta la opacidad para explorar la anatomía por niveles.</p>
           <div className="anatomy-presets" role="group" aria-label="Vistas rápidas">
             {presets.map(preset => (
               <button key={preset.label} type="button" onClick={() => choosePreset(preset.layers)}>{preset.label}</button>

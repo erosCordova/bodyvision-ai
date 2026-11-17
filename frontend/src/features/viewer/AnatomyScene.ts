@@ -23,6 +23,31 @@ export type LayerOpacity = Record<AnatomicalLayer, number>;
  */
 const source = "https://raw.githubusercontent.com/SeemaBansal1/3d-human-body-anatomy/main/web/public/models/";
 
+/** Anatomical palettes and physical material properties adapted for BODYVISION.
+ * This is a visual representation, not quantitative tissue imaging.
+ */
+function tissueAppearance(layer: AnatomicalLayer, materialName: string) {
+  const name = materialName.toLowerCase();
+  if (layer === "skeleton") {
+    if (name.includes("cartilage")) return { color: "#b9d6d9", roughness: 0.39, clearcoat: 0.2 };
+    if (name.includes("teeth")) return { color: "#eee9dc", roughness: 0.27, clearcoat: 0.28 };
+    return { color: "#e6dbc7", roughness: 0.66, clearcoat: 0.08 };
+  }
+  if (layer === "muscles") {
+    if (name.includes("tendon")) return { color: "#e2d7bf", roughness: 0.43, clearcoat: 0.22 };
+    return { color: "#a94843", roughness: 0.46, clearcoat: 0.34 };
+  }
+  if (layer === "arteries") return { color: "#c44242", roughness: 0.38, clearcoat: 0.36 };
+  if (layer === "veins") return { color: "#476ea9", roughness: 0.4, clearcoat: 0.32 };
+  if (layer === "nerves") return { color: "#e2cb8b", roughness: 0.51, clearcoat: 0.2 };
+  if (name.includes("black") || name.includes("hair")) return { color: "#30231f", roughness: 0.68, clearcoat: 0.06 };
+  if (name.includes("garment")) return { color: "#425b76", roughness: 0.82, clearcoat: 0.03 };
+  if (name.includes("nail")) return { color: "#e6b9a2", roughness: 0.36, clearcoat: 0.23 };
+  if (name.includes("cornea")) return { color: "#e6e9e9", roughness: 0.19, clearcoat: 0.6 };
+  if (name.includes("iris")) return { color: "#554031", roughness: 0.35, clearcoat: 0.2 };
+  return { color: "#c68e74", roughness: 0.58, clearcoat: 0.09 };
+}
+
 export function createAnatomyScene(
   host: HTMLDivElement,
   onStatus: (message: string) => void,
@@ -139,13 +164,24 @@ export function createAnatomyScene(
         loading.delete(id);
         if (disposed) return;
         const group = gltf.scene;
+        const originals = new Set<THREE.Material>();
         group.traverse(node => {
           if (!(node instanceof THREE.Mesh)) return;
           node.frustumCulled = false;
+          const prepare = (original: THREE.Material) => {
+            originals.add(original);
+            const appearance = tissueAppearance(id, original.name);
+            return new THREE.MeshPhysicalMaterial({
+              ...appearance,
+              side: THREE.DoubleSide,
+              metalness: 0,
+            });
+          };
           node.material = Array.isArray(node.material)
-            ? node.material.map(material => material.clone())
-            : node.material.clone();
+            ? node.material.map(prepare)
+            : prepare(node.material);
         });
+        originals.forEach(material => material.dispose());
         loaded.set(id, group);
         layersRoot.add(group);
         if (!fitted) fit();
