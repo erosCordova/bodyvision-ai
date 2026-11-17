@@ -1,7 +1,7 @@
 # Pendientes externos
 
-- Ejecutar recorrido Docker completo desde cero en host con Engine/Compose disponible. Bloquea aceptación final F1 si no hay evidencia real.
-- Ejecución remota del workflow GitHub Actions cuando se conecte un repositorio; no se ha creado ni publicado uno.
+- Recorrido Docker F1 y pruebas Chromium/axe completados en GitHub Actions run 44110966237. Conservar su evidencia; otras plataformas y revisión manual siguen pendientes.
+- Repositorio privado erosCordova/bodyvision-ai creado y workflow remoto ejecutado con éxito. Mantener CI en los siguientes cambios.
 - Identificar producto, operador, responsable de privacidad y aprobación del alcance.
 - Abogado: normas vigentes en Perú, textos legales versionados, aprobación con referencia, DPIA, transferencias y posibles obligaciones sanitarias. Ninguna aprobación concedida por esta entrega.
 - Proveedor/región/costos de BD, S3 cifrado y secretos. Se mantienen como decisiones diferidas; no se contrata servicio.

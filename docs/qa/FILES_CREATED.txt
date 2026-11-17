@@ -5,10 +5,10 @@ Makefile
 README.md
 backend/.dockerignore
 backend/Dockerfile
+backend/alembic.ini
 backend/alembic/env.py
 backend/alembic/script.py.mako
 backend/alembic/versions/0001_foundation.py
-backend/alembic.ini
 backend/app/__init__.py
 backend/app/api/__init__.py
 backend/app/api/health.py
@@ -54,6 +54,7 @@ docs/operations/.gitkeep
 docs/operations/OPERACIONES.md
 docs/qa/.gitkeep
 docs/qa/FILES_CREATED.txt
+docs/qa/PHASE_1_LOCAL_REPORT.md
 docs/qa/PHASE_1_REPORT.md
 docs/qa/evidence/api-startup.txt
 docs/qa/evidence/backend-format.txt
@@ -67,6 +68,7 @@ docs/qa/evidence/frontend-build.txt
 docs/qa/evidence/frontend-lint.txt
 docs/qa/evidence/frontend-tests.txt
 docs/qa/evidence/frontend-typecheck.txt
+docs/qa/evidence/github-actions-phase1.json
 docs/qa/evidence/http-smoke.json
 docs/qa/evidence/migration-current.txt
 docs/qa/evidence/migration-downgrade.txt

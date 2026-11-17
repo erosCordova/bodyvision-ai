@@ -1,0 +1,40 @@
+{
+  "run_url": "https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237",
+  "commit": "ef9a1cd009edcf5e251808d23233ac1373f4db9c",
+  "jobs": [
+    {
+      "name": "native-checks",
+      "conclusion": "success",
+      "job_id": 134136112860,
+      "evidence": [
+        "2026-11-17T15:09:29.2449560Z 19 passed, 1 warning in 0.59s",
+        "2026-11-17T15:09:33.5242063Z found 0 vulnerabilities",
+        "2026-11-17T15:09:38.6072438Z  Test Files  1 passed (1)",
+        "2026-11-17T15:09:38.6073132Z       Tests  5 passed (5)",
+        "2026-11-17T15:09:41.8693137Z ✓ built in 241ms",
+        "2026-11-17T15:09:42.9362615Z No known vulnerabilities found",
+        "2026-11-17T15:09:43.3689005Z found 0 vulnerabilities",
+        "2026-11-17T15:10:08.5678814Z   3 passed (3.8s)"
+      ]
+    },
+    {
+      "name": "docker-smoke",
+      "conclusion": "success",
+      "job_id": 134136113202,
+      "evidence": [
+        "2026-11-17T15:09:29.1250133Z #24 5.205 found 0 vulnerabilities",
+        "2026-11-17T15:09:36.7421247Z #26 7.521 ✓ built in 227ms",
+        "2026-11-17T15:09:40.8387011Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:09:47.5254735Z  Container bodyvision-local-backend-1  Healthy",
+        "2026-11-17T15:09:48.2218917Z  Container bodyvision-local-backend-1  Healthy",
+        "2026-11-17T15:09:48.2223845Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:09:53.2205843Z  Container bodyvision-local-frontend-1  Healthy",
+        "2026-11-17T15:09:53.8213526Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:10:01.6168374Z 19 passed, 1 warning in 0.61s",
+        "2026-11-17T15:10:08.3403017Z  Test Files  1 passed (1)",
+        "2026-11-17T15:10:08.3409893Z       Tests  5 passed (5)",
+        "2026-11-17T15:10:11.7207842Z ✓ built in 234ms"
+      ]
+    }
+  ]
+}

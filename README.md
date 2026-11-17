@@ -91,4 +91,4 @@ E2E requiere API y Vite activos y base migrada. Para probar Docker usa `E2E_BASE
 
 `APP_ENV=production` y `staging` están bloqueados por completo. Este bloqueo preventivo no sustituye el gate granular R11 de F3. No se implementan botones de módulos futuros, métricas simuladas ni enlaces a políticas inexistentes.
 
-Estado de aceptación y salidas reales: [reporte F1](docs/qa/PHASE_1_REPORT.md). **La aceptación final Docker requiere ejecutar el recorrido completo en un host con Docker; no se debe considerar validado por la mera existencia del YAML o del CI.**
+Estado de aceptación y salidas reales: [reporte F1](docs/qa/PHASE_1_REPORT.md). **La Fase 1 fue comprobada con Docker y navegador en [GitHub Actions](https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237). El reporte conserva el alcance y las limitaciones de esa evidencia.**
