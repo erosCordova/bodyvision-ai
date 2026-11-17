@@ -8,3 +8,7 @@
 - Activo 3D producido en Maya o licenciado: evidencia comercial, GLB, rig, escala, checksum, LOD. Sin activo integrado todavía; no se integrará SMPL/SMPL-X sin evidencia suficiente.
 - Retención de 12 meses como default propuesto; límites organizacionales y caducidad de backups por aprobar antes de datos reales.
 - Ensayos navegador/dispositivo, restauración, carga, revisión externa de seguridad y go-live firmado antes de piloto.
+
+## Cierre F2
+
+PR #1 integrado tras GitHub Actions 44116998812 exitoso: 40 backend, 11 frontend y 5 E2E. El núcleo de datos sigue siendo exclusivamente ficticio. El próximo gate es identidad/privacidad F3; no deben exponerse estos endpoints de desarrollo a usuarios reales.

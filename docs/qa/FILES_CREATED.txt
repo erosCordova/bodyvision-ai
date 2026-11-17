@@ -91,6 +91,7 @@ docs/qa/evidence/npm-audit.json
 docs/qa/evidence/npm-ci.txt
 docs/qa/evidence/phase2/backend-tests.txt
 docs/qa/evidence/phase2/frontend-build.txt
+docs/qa/evidence/phase2/github-actions.json
 docs/qa/evidence/phase2/migration-down.txt
 docs/qa/evidence/phase2/migration-reapply.txt
 docs/qa/evidence/phase2/migration-up.txt

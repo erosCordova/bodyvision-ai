@@ -1,0 +1,42 @@
+{
+  "run_id": 44116998812,
+  "url": "https://github.com/erosCordova/bodyvision-ai/actions/runs/44116998812",
+  "source_commit": "7a563f7303d04e87745909762aaa71256d3a4c1c",
+  "jobs": [
+    {
+      "name": "docker-smoke",
+      "conclusion": "success",
+      "evidence": [
+        "2026-11-17T15:40:56.2193790Z #24 13.90 found 0 vulnerabilities",
+        "2026-11-17T15:41:07.9724357Z #26 10.58 ✓ built in 599ms",
+        "2026-11-17T15:41:12.8528283Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:41:19.7057931Z  Container bodyvision-local-backend-1  Healthy",
+        "2026-11-17T15:41:20.3760813Z  Container bodyvision-local-backend-1  Healthy",
+        "2026-11-17T15:41:20.3761435Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:41:25.3752954Z  Container bodyvision-local-frontend-1  Healthy",
+        "2026-11-17T15:41:26.0302186Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:41:29.1962274Z  Container bodyvision-local-db-1  Healthy",
+        "2026-11-17T15:41:43.3707785Z 40 passed, 1 warning in 2.66s",
+        "2026-11-17T15:41:59.4561025Z  Test Files  2 passed (2)",
+        "2026-11-17T15:41:59.4572991Z       Tests  11 passed (11)",
+        "2026-11-17T15:42:06.7413373Z ✓ built in 587ms"
+      ]
+    },
+    {
+      "name": "native-checks",
+      "conclusion": "success",
+      "evidence": [
+        "2026-11-17T15:40:42.1293452Z healthy",
+        "2026-11-17T15:40:42.1315950Z postgres service is healthy.",
+        "2026-11-17T15:41:01.5638955Z 40 passed, 1 warning in 2.70s",
+        "2026-11-17T15:41:11.2626323Z found 0 vulnerabilities",
+        "2026-11-17T15:41:22.8016930Z  Test Files  2 passed (2)",
+        "2026-11-17T15:41:22.8036708Z       Tests  11 passed (11)",
+        "2026-11-17T15:41:30.2128054Z ✓ built in 615ms",
+        "2026-11-17T15:41:31.0174915Z No known vulnerabilities found",
+        "2026-11-17T15:41:31.5490244Z found 0 vulnerabilities",
+        "2026-11-17T15:42:13.5530759Z   5 passed (12.0s)"
+      ]
+    }
+  ]
+}
