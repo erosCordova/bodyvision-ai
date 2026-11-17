@@ -18,7 +18,7 @@ from app.main import create_app
 def engine():
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
-    connection.execute.return_value.scalar_one.return_value = "0001_foundation"
+    connection.execute.return_value.scalar_one.return_value = "0002_data_core"
     return engine
 
 
@@ -40,7 +40,7 @@ def test_live_does_not_require_database(client, engine):
 def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
-    assert response.json()["schema_revision"] == "0001_foundation"
+    assert response.json()["schema_revision"] == "0002_data_core"
 
 
 def test_database_failure_returns_safe_error(client, engine):
@@ -59,7 +59,7 @@ def test_wrong_schema_is_not_ready(client, engine):
 
 
 def test_unknown_resource_has_contract(client):
-    response = client.get("/api/v1/profiles/private-code?email=private@example.com")
+    response = client.get("/api/v1/missing/private-code?email=private@example.com")
     assert response.status_code == 404
     assert set(response.json()) == {"code", "message", "details", "correlation_id"}
     assert "private" not in response.text
@@ -136,4 +136,5 @@ def test_unsafe_configuration_is_rejected(override):
 
 def test_openapi_contains_foundation_only(client):
     paths = client.get("/api/v1/openapi.json").json()["paths"]
-    assert set(paths) == {"/api/v1/health/live", "/api/v1/health/ready"}
+    assert {"/api/v1/health/live", "/api/v1/health/ready"}.issubset(paths)
+    assert "/api/v1/profiles/{profile_id}/media" not in paths

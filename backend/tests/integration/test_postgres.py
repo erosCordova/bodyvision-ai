@@ -22,7 +22,7 @@ def test_actual_database_has_revision(database_url):
     try:
         with engine.connect() as conn:
             assert conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one() == (
-                "0001_foundation"
+                "0002_data_core"
             )
             assert conn.execute(text("SHOW server_version_num")).scalar_one().startswith("15")
     finally:

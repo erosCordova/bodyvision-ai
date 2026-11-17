@@ -8,11 +8,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.health import router as health_router
+from app.api.routes.data_core import router as data_router
 from app.core.config import Settings
+from app.core.errors import DomainError
 from app.core.logging import configure_logging
 from app.db.session import build_engine
 
@@ -30,9 +33,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         logging.getLogger("bodyvision").info("service_stopped")
 
     app = FastAPI(
-        title="BODYVISION AI — Foundation",
-        version="0.1.0",
-        description="Fase 1. Solo infraestructura local; sin datos personales ni flujos clínicos.",
+        title="BODYVISION AI — Synthetic data core",
+        version="0.2.0",
+        description="Fase 2. Núcleo de datos ficticios local; identidad y uso real aún bloqueados.",
         docs_url="/api/v1/docs",
         redoc_url=None,
         openapi_url="/api/v1/openapi.json",
@@ -45,8 +48,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,
-        allow_methods=["GET"],
-        allow_headers=["X-Correlation-ID", "Content-Type"],
+        allow_methods=["GET", "POST", "PATCH"],
+        allow_headers=["X-Correlation-ID", "Content-Type", "X-Workspace-ID", "Idempotency-Key"],
         expose_headers=["X-Correlation-ID"],
     )
 
@@ -59,6 +62,27 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 "details": {},
                 "correlation_id": request.state.correlation_id,
             },
+        )
+
+    @app.exception_handler(DomainError)
+    async def domain_error(request: Request, exc: DomainError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details,
+                "correlation_id": request.state.correlation_id,
+            },
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+        return error(
+            request,
+            409,
+            "CONFLICT",
+            "El registro cambió o incumple una restricción. Actualiza y revisa los datos.",
         )
 
     @app.exception_handler(HTTPException)
@@ -102,4 +126,5 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         return response
 
     app.include_router(health_router)
+    app.include_router(data_router)
     return app
