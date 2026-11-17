@@ -57,9 +57,11 @@ export function DataLayout() {
               }}
               disabled={!workspaces.data}
             >
-              <option value={id} hidden>
-                {workspaces.isError ? "No disponible" : "Cargando…"}
-              </option>
+              {!workspaces.data?.items.some((w) => w.id === id) && (
+                <option value={id} hidden>
+                  {workspaces.isError ? "No disponible" : "Cargando…"}
+                </option>
+              )}
               {workspaces.data?.items.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}

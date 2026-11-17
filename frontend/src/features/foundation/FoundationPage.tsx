@@ -97,14 +97,14 @@ export function FoundationPage() {
         </Link>
         <div className="sidebar-note">
           <span className="phase-label">FASE 2 / NÚCLEO DE DATOS</span>
-          <p>Base técnica local</p>
+          <p>Base técnica</p>
           <small>
             Los expedientes ficticios y las mediciones ya están disponibles en
             el espacio de trabajo.
           </small>
         </div>
         <div className="sidebar-bottom">
-          <span className="local-dot" aria-hidden="true" /> Entorno local ·
+          <span className="local-dot" aria-hidden="true" /> Entorno de prueba ·
           es-PE
         </div>
       </aside>
