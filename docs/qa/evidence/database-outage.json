@@ -1,0 +1,9 @@
+{
+  "readiness_status": 503,
+  "body": {
+    "code": "NOT_READY",
+    "message": "La base de datos o su versi\u00f3n de esquema no est\u00e1n disponibles.",
+    "details": {},
+    "correlation_id": "655e778e-3859-442a-898e-e67617e089b4"
+  }
+}

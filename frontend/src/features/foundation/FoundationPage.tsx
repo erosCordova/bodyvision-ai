@@ -1,0 +1,65 @@
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { ApiError, api, type LiveStatus, type ReadyStatus } from '../../services/api/client';
+
+function ServiceCheck({ name, kind }: { name: string; kind: 'live' | 'ready' }) {
+  const query = useQuery<LiveStatus | ReadyStatus>({ queryKey: ['health', kind], queryFn: kind === 'live' ? api.live : api.ready });
+  return <article className="service-card" aria-label={name}>
+    <div className="card-heading"><span className="service-icon" aria-hidden="true">{kind === 'live' ? '↗' : '▤'}</span>
+      <h3>{name}</h3></div>
+    <div aria-live="polite" aria-busy={query.isFetching}>
+      {query.isPending && <p className="muted">Consultando el servicio…</p>}
+      {query.isError && <div role="alert"><p className="status error">! No disponible</p>
+        <p className="muted">Comprueba que el entorno local esté iniciado y vuelve a consultar.</p>
+        {query.error instanceof ApiError && <p className="reference">Referencia: {query.error.correlationId}</p>}
+      </div>}
+      {query.isSuccess && query.data && <>
+        <p className="status success">✓ {kind === 'live' ? 'API en ejecución' : 'Base de datos conectada'}</p>
+        <p className="muted">Verificado el {new Intl.DateTimeFormat('es-PE', {
+          timeZone: 'America/Lima', dateStyle: 'medium', timeStyle: 'medium',
+        }).format(new Date(query.data.checked_at))} · Lima</p>
+        <p className="reference">{'schema_revision' in query.data
+          ? `Esquema: ${query.data.schema_revision}` : `Versión: ${query.data.version}`}</p>
+      </>}
+    </div>
+    <button className="secondary-button" disabled={query.isFetching} onClick={() => void query.refetch()}>
+      {query.isFetching ? 'Consultando…' : 'Volver a consultar'}
+    </button>
+  </article>;
+}
+
+export function FoundationPage() {
+  return <div className="shell">
+    <aside className="sidebar" aria-label="Navegación principal">
+      <Link className="brand" to="/" aria-label="BODYVISION AI — Inicio"><span className="brand-mark" aria-hidden="true">B</span>
+        <span>BODYVISION <strong>AI</strong><small>Registro y visualización</small></span></Link>
+      <p className="nav-label">ESPACIO DE TRABAJO</p>
+      <Link className="nav-item active" to="/" aria-current="page"><span aria-hidden="true">◫</span> Estado del entorno</Link>
+      <div className="sidebar-note"><span className="phase-label">FASE 1 / FUNDACIÓN</span>
+        <p>Base técnica local</p><small>Los módulos de expedientes, imágenes y visualización se habilitarán en sus fases correspondientes.</small></div>
+      <div className="sidebar-bottom"><span className="local-dot" aria-hidden="true"/> Entorno local · es-PE</div>
+    </aside>
+    <div className="workspace">
+      <header className="topbar"><span>Plataforma de seguimiento corporal</span><span className="local-pill">DESARROLLO LOCAL</span></header>
+      <main id="main-content">
+        <div className="breadcrumb">BODYVISION AI <span aria-hidden="true">/</span> Fundación</div>
+        <div className="page-title"><div><p className="eyebrow">EL PRIMER PASO</p><h1>Todo empieza con una base sólida.</h1>
+          <p className="intro">Verifica la conexión de los servicios antes de continuar con el registro y seguimiento corporal.</p></div>
+          <span className="version-label">v0.1.0</span></div>
+        <section className="notice" aria-label="Alcance de esta entrega"><span className="notice-icon" aria-hidden="true">i</span>
+          <div><h2>Entorno técnico de desarrollo</h2><p>Esta fase no recoge datos de personas. La identidad, los permisos y el consentimiento se incorporarán antes de habilitar el uso con datos reales.</p></div></section>
+        <section aria-labelledby="services-title"><div className="section-title"><h2 id="services-title">Conexión de servicios</h2><span>Consultas a los servicios</span></div>
+          <div className="services"><ServiceCheck name="Servicio de aplicación" kind="live"/><ServiceCheck name="Persistencia y esquema" kind="ready"/></div>
+        </section>
+        <section className="empty-panel" aria-labelledby="records-title"><div className="empty-icon" aria-hidden="true">▱</div><div>
+          <h2 id="records-title">El espacio está preparado para comenzar</h2><p>Los expedientes y las mediciones forman parte de la Fase 2. Todavía no hay registros disponibles en esta entrega.</p></div></section>
+        <section className="principles" aria-label="Principios del producto">
+          <article><span>01</span><h3>Procedencia visible</h3><p>Cada dato conservará su fuente, método y fecha.</p></article>
+          <article><span>02</span><h3>Privacidad desde el origen</h3><p>Acceso por organización y expediente, con consentimiento.</p></article>
+          <article><span>03</span><h3>Escenarios diferenciados</h3><p>Las simulaciones se mostrarán separadas de las mediciones.</p></article>
+        </section>
+      </main>
+      <footer><span>No es un dispositivo médico.</span><span>Textos legales pendientes de revisión · Uso local</span></footer>
+    </div>
+  </div>;
+}

@@ -1,0 +1,14 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> bodyvision-web@0.1.0 test
+> vitest run
+
+
+ RUN  v5.1.0 /workspace/scratch/c7d87e6cf676/bodyvision-ai/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  09:14:31
+   Duration  724ms (tests 35%, environment 35%, import 12%, transform 9%, setup 9%)
+

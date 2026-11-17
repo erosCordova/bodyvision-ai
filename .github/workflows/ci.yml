@@ -1,0 +1,80 @@
+name: Foundation CI
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  native-checks:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3
+        env:
+          POSTGRES_DB: bodyvision
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: [127.0.0.1:5432:5432]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://bodyvision_app@127.0.0.1:5432/bodyvision
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/bodyvision
+      TEST_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/bodyvision
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - name: Install Python dependencies
+        run: python -m pip install --require-hashes -r backend/requirements-dev.lock
+      - name: Initialize least privilege role (ephemeral CI database only)
+        run: psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
+      - name: Backend quality and migrations
+        working-directory: backend
+        run: |
+          ruff check app tests alembic
+          ruff format --check app tests alembic
+          alembic upgrade head
+          pytest -q
+          alembic downgrade base
+          alembic upgrade head
+      - name: Frontend checks
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Dependency checks
+        run: |
+          pip-audit -r backend/requirements.lock --disable-pip
+          cd frontend
+          npm audit --audit-level=high
+      - name: Start native services and test browser
+        run: |
+          cd backend
+          uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log > /tmp/api.log 2>&1 &
+          cd ../frontend
+          npm run dev > /tmp/web.log 2>&1 &
+          npx playwright install --with-deps chromium
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/api/v1/health/ready; then break; fi
+            sleep 1
+          done
+          npm run test:e2e
+  docker-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Full fresh Docker startup
+        run: |
+          python3 scripts/setup_local.py
+          docker compose config --quiet
+          docker compose up --build --wait --wait-timeout 240
+          curl --fail http://127.0.0.1:8080/api/v1/health/live
+          curl --fail http://127.0.0.1:8080/api/v1/health/ready
+          docker compose run --rm api-test
+          docker compose run --rm frontend-test
+      - name: Stop disposable environment
+        if: always()
+        run: docker compose down -v

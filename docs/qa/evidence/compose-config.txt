@@ -1,0 +1,3 @@
+Command: docker-compose -f compose.yaml config --quiet
+Exit: 0
+No validation errors. This does not verify container builds or startup.

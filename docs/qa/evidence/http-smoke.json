@@ -1,0 +1,22 @@
+{
+  "live": {
+    "status": 200,
+    "body": {
+      "status": "alive",
+      "service": "bodyvision-api",
+      "version": "0.1.0",
+      "phase": 1,
+      "environment": "test",
+      "checked_at": "2026-11-17T14:14:08.287503Z"
+    }
+  },
+  "ready": {
+    "status": 200,
+    "body": {
+      "status": "ready",
+      "database": "connected",
+      "schema_revision": "0001_foundation",
+      "checked_at": "2026-11-17T14:14:08.291630Z"
+    }
+  }
+}
