@@ -140,8 +140,11 @@ export function AnatomyAtlas() {
     try {
       const scene = createAnatomyScene(host.current, setStatus, part => {
         setSelected(part);
-        if (part) { setPanel("informacion"); setIsolated(false); }
-        else { setSelectedEntry(null); setIsolated(false); }
+        setIsolated(false);
+        setSelectedEntry(previous => {
+          if (!part || !previous || previous.layer !== part.layer) return null;
+          return previous.match.some(name => word(cleanMesh(name)) === word(cleanMesh(part.name))) ? previous : null;
+        });
       });
       controller.current = scene;
       scene.update(new Set<AnatomicalLayer>(["skin"]), initialOpacity);
