@@ -31,6 +31,9 @@ export function DataLayout() {
           <NavLink to="/profiles" aria-label="Expedientes">
             ▱ <span>Expedientes</span>
           </NavLink>
+          <NavLink to="/body-3d" aria-label="Cuerpo 3D">
+            ◇ <span>Cuerpo 3D</span>
+          </NavLink>
           <NavLink to="/system" aria-label="Estado del entorno">
             ↗ <span>Estado del entorno</span>
           </NavLink>
