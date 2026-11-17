@@ -12,6 +12,7 @@ export function BodyViewer() {
   const [shape, setShape] = useState<BodyShape>(initialShape);
   const [view, setView] = useState<View>("perspective");
   const [wireframe, setWireframe] = useState(false);
+  const [reference, setReference] = useState<BodyShape | null>(null);
   const [rotate, setRotate] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [status, setStatus] = useState("Preparando el visor…");
@@ -55,6 +56,8 @@ export function BodyViewer() {
   }, [restart]);
   const changeView = (next: View) => { setView(next); controller.current?.setView(next); };
   const reset = () => { setShape(initialShape); setWireframe(false); setRotate(false); changeView("perspective"); };
+  const delta = (current: number, baseline: number, unit: string) => `${current > baseline ? "+" : ""}${current - baseline} ${unit}`;
+  const compareChanged = reference !== null && (reference.height !== shape.height || reference.weight !== shape.weight || reference.definition !== shape.definition);
   const field = (key: keyof BodyShape, label: string, unit: string, min: number, max: number) => (
     <div className="body-field">
       <label htmlFor={`body-${key}`}>{label}</label>
@@ -91,6 +94,21 @@ export function BodyViewer() {
           {field("weight", "Peso ilustrativo", "kg", 45, 130)}
           {field("definition", "Definición visual", "%", 0, 100)}
           <p className="body-small">La definición es un efecto artístico; no equivale a un porcentaje de músculo o grasa.</p>
+          <div className="body-reference" aria-label="Comparación de escenarios">
+            <h3>Comparar escenarios</h3>
+            <p className="body-small">Guarda las medidas actuales como referencia y ajusta los controles para ver la diferencia.</p>
+            <button className="secondary-button" onClick={() => setReference({ ...shape })}>Guardar referencia</button>
+            {reference && <div className="body-reference-result" aria-live="polite">
+              <strong>Respecto a la referencia</strong>
+              <dl>
+                <div><dt>Estatura</dt><dd>{delta(shape.height, reference.height, "cm")}</dd></div>
+                <div><dt>Peso</dt><dd>{delta(shape.weight, reference.weight, "kg")}</dd></div>
+                <div><dt>Definición artística</dt><dd>{delta(shape.definition, reference.definition, "%")}</dd></div>
+              </dl>
+              <p className="body-small">{compareChanged ? "El visor muestra el escenario actual, no dos cuerpos simultáneos." : "El escenario coincide con la referencia guardada."}</p>
+              <div className="body-reference-actions"><button onClick={() => setShape({ ...reference })}>Volver a referencia</button><button onClick={() => setReference(null)}>Quitar referencia</button></div>
+            </div>}
+          </div>
           <div className="body-display-options">
             <h3>Visualización</h3>
             <label><input type="checkbox" checked={wireframe} onChange={e => setWireframe(e.target.checked)} /> Mostrar malla</label>
