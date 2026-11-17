@@ -1,3 +1,4 @@
+.dockerignore
 .env.example
 .gitattributes
 .github/workflows/ci.yml
@@ -24,6 +25,7 @@ backend/app/core/logging.py
 backend/app/db/__init__.py
 backend/app/db/base.py
 backend/app/db/session.py
+backend/app/demo_runtime.py
 backend/app/integrations/.gitkeep
 backend/app/main.py
 backend/app/models/.gitkeep
@@ -44,6 +46,7 @@ backend/tests/integration/test_data_core.py
 backend/tests/integration/test_postgres.py
 backend/tests/security/.gitkeep
 backend/tests/unit/.gitkeep
+backend/tests/unit/test_demo.py
 backend/tests/unit/test_health.py
 compose.yaml
 docs/PENDIENTES_EXTERNOS.md
@@ -53,6 +56,7 @@ docs/adr/0002-identity-tenancy.md
 docs/adr/0003-storage-and-retention.md
 docs/adr/0004-3d-and-observability.md
 docs/adr/0005-synthetic-data-core.md
+docs/adr/0006-public-read-only-demo.md
 docs/api/.gitkeep
 docs/api/API.md
 docs/architecture/.gitkeep
@@ -63,6 +67,7 @@ docs/legal/.gitkeep
 docs/legal/LEGAL.md
 docs/licenses/INTER-OFL.txt
 docs/operations/.gitkeep
+docs/operations/DEMO_DEPLOYMENT.md
 docs/operations/OPERACIONES.md
 docs/qa/.gitkeep
 docs/qa/FILES_CREATED.txt
@@ -77,6 +82,9 @@ docs/qa/evidence/browser-e2e.txt
 docs/qa/evidence/compose-config.txt
 docs/qa/evidence/compose-start.txt
 docs/qa/evidence/database-outage.json
+docs/qa/evidence/demo/backend-tests.txt
+docs/qa/evidence/demo/native-http-smoke.json
+docs/qa/evidence/demo/supervisor-smoke.txt
 docs/qa/evidence/frontend-build.txt
 docs/qa/evidence/frontend-lint.txt
 docs/qa/evidence/frontend-tests.txt
@@ -143,6 +151,7 @@ frontend/src/styles/data.css
 frontend/src/styles/tokens.css
 frontend/src/types/.gitkeep
 frontend/src/utils/.gitkeep
+frontend/src/vite-env.d.ts
 frontend/tests/data-core.test.tsx
 frontend/tests/e2e/data-core.spec.ts
 frontend/tests/e2e/foundation.spec.ts
@@ -150,6 +159,7 @@ frontend/tests/foundation.test.tsx
 frontend/tests/setup.ts
 frontend/tsconfig.json
 frontend/vite.config.ts
+infra/demo/Dockerfile
 infra/postgres/init.sh
 infra/terraform/.gitkeep
 scripts/setup_local.py

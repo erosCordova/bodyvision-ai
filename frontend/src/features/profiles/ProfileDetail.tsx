@@ -20,7 +20,7 @@ const HistoryChart = lazy(() =>
 );
 export function ProfileDetail() {
   const { profileId = "" } = useParams();
-  const { id, api } = useWorkspace();
+  const { id, api, readOnly } = useWorkspace();
   const cache = useQueryClient();
   const [tab, setTab] = useState("summary");
   const [metric, setMetric] = useState("weight");
@@ -102,7 +102,7 @@ export function ProfileDetail() {
         </div>
         <button
           className="primary-button"
-          disabled={current.status !== "active" || !catalog.data}
+          disabled={readOnly || current.status !== "active" || !catalog.data}
           onClick={() => setForm("new")}
         >
           + Registrar medición
@@ -198,7 +198,7 @@ export function ProfileDetail() {
               </form>
             ) : (
               <button
-                disabled={current.status === "archived"}
+                disabled={readOnly || current.status === "archived"}
                 onClick={() => {
                   setName(current.display_name ?? "");
                   setEditing(true);
@@ -209,7 +209,9 @@ export function ProfileDetail() {
             )}
             <div className="form-actions">
               <button
-                disabled={current.status === "archived" || update.isPending}
+                disabled={
+                  readOnly || current.status === "archived" || update.isPending
+                }
                 onClick={() =>
                   update.mutate({
                     status:
@@ -222,7 +224,9 @@ export function ProfileDetail() {
                   : "Restringir registro"}
               </button>
               <button
-                disabled={current.status !== "active" || archive.isPending}
+                disabled={
+                  readOnly || current.status !== "active" || archive.isPending
+                }
                 onClick={() => {
                   if (
                     window.confirm(
@@ -351,7 +355,7 @@ export function ProfileDetail() {
                               Ver versiones
                             </button>
                             <button
-                              disabled={current.status !== "active"}
+                              disabled={readOnly || current.status !== "active"}
                               onClick={() => setForm(row)}
                             >
                               Corregir

@@ -1,0 +1,1 @@
+Actual local process smoke: PostgreSQL 15 + Uvicorn started; 5 profiles visible per workspace; read_only=true; POST/PATCH/PUT/DELETE rejected with 403 DEMO_READ_ONLY; SIGTERM shut down API and PostgreSQL cleanly.

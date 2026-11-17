@@ -12,6 +12,10 @@ def build_engine(settings: Settings) -> Engine:
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=5,
-        connect_args={"connect_timeout": 3, "options": "-c statement_timeout=3000"},
+        connect_args={
+            "connect_timeout": 3,
+            "options": "-c statement_timeout=3000"
+            + (" -c default_transaction_read_only=on" if settings.app_env == "demo" else ""),
+        },
         hide_parameters=True,
     )

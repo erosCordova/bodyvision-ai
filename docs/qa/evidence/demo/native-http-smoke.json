@@ -1,0 +1,353 @@
+{
+  "health/live": {
+    "http_status": 200,
+    "body": {
+      "status": "alive",
+      "service": "bodyvision-api",
+      "version": "0.2.0",
+      "phase": 2,
+      "environment": "test",
+      "checked_at": "2026-11-17T15:57:00.944540Z"
+    }
+  },
+  "health/ready": {
+    "http_status": 200,
+    "body": {
+      "status": "ready",
+      "database": "connected",
+      "schema_revision": "0002_data_core",
+      "checked_at": "2026-11-17T15:57:00.947725Z"
+    }
+  },
+  "workspaces": {
+    "http_status": 200,
+    "body": {
+      "items": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Centro Horizonte (ficticio)"
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000002",
+          "name": "Estudio Andino (ficticio)"
+        }
+      ],
+      "synthetic": true,
+      "read_only": false,
+      "notice": "Selector local de datos ficticios. No representa autenticaci\u00f3n."
+    }
+  },
+  "dashboard/summary": {
+    "http_status": 200,
+    "body": {
+      "active_profiles": 5,
+      "measurements_30d": 21,
+      "corrections": 1,
+      "recent_measurements": [
+        {
+          "id": "006bdfb9-d435-5c2e-b067-58adc939e244",
+          "metric_code": "height",
+          "metric_label": "Estatura",
+          "value": "170.00",
+          "unit": "cm",
+          "measured_at": "2026-06-20T10:57:00.202493-05:00",
+          "method": "manual",
+          "profile_id": "473700f0-54be-524b-8bc3-713ddbc07593",
+          "display_code": "FICT-05",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "0164329c-e03b-5d6f-b985-22661df93298",
+          "metric_code": "height",
+          "metric_label": "Estatura",
+          "value": "169.00",
+          "unit": "cm",
+          "measured_at": "2026-09-18T10:57:00.199712-05:00",
+          "method": "manual",
+          "profile_id": "bc602238-1f43-58dc-ae5a-5db3ab614d4e",
+          "display_code": "FICT-04",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "016ccda9-cdda-542c-bc65-47a940929a0b",
+          "metric_code": "waist",
+          "metric_label": "Cintura",
+          "value": "84.00",
+          "unit": "cm",
+          "measured_at": "2026-11-16T10:57:00.195771-05:00",
+          "method": "manual",
+          "profile_id": "de884047-18c7-5db4-84c3-8042043d304b",
+          "display_code": "FICT-03",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "01cc78c9-4dc6-5511-8166-08725de99508",
+          "metric_code": "height",
+          "metric_label": "Estatura",
+          "value": "169.00",
+          "unit": "cm",
+          "measured_at": "2026-08-19T10:57:00.198965-05:00",
+          "method": "manual",
+          "profile_id": "bc602238-1f43-58dc-ae5a-5db3ab614d4e",
+          "display_code": "FICT-04",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "02b96fee-2409-5351-9438-9bf286de9205",
+          "metric_code": "weight",
+          "metric_label": "Peso",
+          "value": "71.10",
+          "unit": "kg",
+          "measured_at": "2026-09-18T10:57:00.190265-05:00",
+          "method": "manual",
+          "profile_id": "f30e4f47-b1e7-5eff-b05d-2954fecd63d3",
+          "display_code": "FICT-02",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "040e52aa-fc6f-55f4-8a8f-dc88a7e97ad9",
+          "metric_code": "waist",
+          "metric_label": "Cintura",
+          "value": "82.80",
+          "unit": "cm",
+          "measured_at": "2026-07-20T10:57:00.179713-05:00",
+          "method": "manual",
+          "profile_id": "e6221246-4221-5319-8dfe-f1d0f81977ca",
+          "display_code": "FICT-01",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "054baec0-b117-5a39-9230-d9fb134a5f09",
+          "metric_code": "weight",
+          "metric_label": "Peso",
+          "value": "71.70",
+          "unit": "kg",
+          "measured_at": "2026-07-20T10:57:00.188459-05:00",
+          "method": "manual",
+          "profile_id": "f30e4f47-b1e7-5eff-b05d-2954fecd63d3",
+          "display_code": "FICT-02",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        },
+        {
+          "id": "06d21593-3065-52ac-8dc4-8b166102c5a7",
+          "metric_code": "height",
+          "metric_label": "Estatura",
+          "value": "168.00",
+          "unit": "cm",
+          "measured_at": "2026-06-20T10:57:00.193244-05:00",
+          "method": "manual",
+          "profile_id": "de884047-18c7-5db4-84c3-8042043d304b",
+          "display_code": "FICT-03",
+          "responsible": "Operador ficticio 1",
+          "data_type": "OBSERVADO"
+        }
+      ],
+      "synthetic": true
+    }
+  },
+  "profiles": {
+    "http_status": 200,
+    "body": {
+      "items": [
+        {
+          "id": "473700f0-54be-524b-8bc3-713ddbc07593",
+          "organization_id": "10000000-0000-4000-8000-000000000001",
+          "display_code": "FICT-05",
+          "display_name": "Expediente ficticio 05",
+          "birth_year": 1995,
+          "sex": null,
+          "status": "active",
+          "created_at": "2026-11-17T10:57:00.172970-05:00",
+          "synthetic": true
+        },
+        {
+          "id": "bc602238-1f43-58dc-ae5a-5db3ab614d4e",
+          "organization_id": "10000000-0000-4000-8000-000000000001",
+          "display_code": "FICT-04",
+          "display_name": "Expediente ficticio 04",
+          "birth_year": 1994,
+          "sex": null,
+          "status": "active",
+          "created_at": "2026-11-17T10:57:00.172970-05:00",
+          "synthetic": true
+        },
+        {
+          "id": "de884047-18c7-5db4-84c3-8042043d304b",
+          "organization_id": "10000000-0000-4000-8000-000000000001",
+          "display_code": "FICT-03",
+          "display_name": "Expediente ficticio 03",
+          "birth_year": 1993,
+          "sex": null,
+          "status": "active",
+          "created_at": "2026-11-17T10:57:00.172970-05:00",
+          "synthetic": true
+        },
+        {
+          "id": "e6221246-4221-5319-8dfe-f1d0f81977ca",
+          "organization_id": "10000000-0000-4000-8000-000000000001",
+          "display_code": "FICT-01",
+          "display_name": "Expediente ficticio 01",
+          "birth_year": 1991,
+          "sex": null,
+          "status": "active",
+          "created_at": "2026-11-17T10:57:00.172970-05:00",
+          "synthetic": true
+        },
+        {
+          "id": "f30e4f47-b1e7-5eff-b05d-2954fecd63d3",
+          "organization_id": "10000000-0000-4000-8000-000000000001",
+          "display_code": "FICT-02",
+          "display_name": "Expediente ficticio 02",
+          "birth_year": 1992,
+          "sex": null,
+          "status": "active",
+          "created_at": "2026-11-17T10:57:00.172970-05:00",
+          "synthetic": true
+        }
+      ],
+      "total": 5,
+      "limit": 20,
+      "offset": 0
+    }
+  },
+  "metrics/catalog": {
+    "http_status": 200,
+    "body": [
+      {
+        "code": "weight",
+        "label": "Peso",
+        "unit": "kg",
+        "min_value": 20.0,
+        "max_value": 500.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Utiliza una balanza y registra el m\u00e9todo."
+      },
+      {
+        "code": "height",
+        "label": "Estatura",
+        "unit": "cm",
+        "min_value": 50.0,
+        "max_value": 250.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Registra la estatura medida, sin calzado."
+      },
+      {
+        "code": "waist",
+        "label": "Cintura",
+        "unit": "cm",
+        "min_value": 30.0,
+        "max_value": 250.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Utiliza cinta m\u00e9trica y un m\u00e9todo consistente."
+      },
+      {
+        "code": "hip",
+        "label": "Cadera",
+        "unit": "cm",
+        "min_value": 30.0,
+        "max_value": 250.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Utiliza cinta m\u00e9trica y conserva el m\u00e9todo."
+      },
+      {
+        "code": "chest",
+        "label": "Pecho",
+        "unit": "cm",
+        "min_value": 10.0,
+        "max_value": 250.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Anota la medici\u00f3n observada con cinta."
+      },
+      {
+        "code": "neck",
+        "label": "Cuello",
+        "unit": "cm",
+        "min_value": 10.0,
+        "max_value": 150.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Anota la medici\u00f3n observada con cinta."
+      },
+      {
+        "code": "arm",
+        "label": "Brazo",
+        "unit": "cm",
+        "min_value": 10.0,
+        "max_value": 150.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Mant\u00e9n la misma referencia entre registros."
+      },
+      {
+        "code": "thigh",
+        "label": "Muslo",
+        "unit": "cm",
+        "min_value": 10.0,
+        "max_value": 150.0,
+        "allowed_methods": [
+          "manual",
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Mant\u00e9n la misma referencia entre registros."
+      },
+      {
+        "code": "body_fat_pct",
+        "label": "Grasa corporal",
+        "unit": "%",
+        "min_value": 2.0,
+        "max_value": 70.0,
+        "allowed_methods": [
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Solo valor observado mediante instrumento; nunca desde fotos."
+      },
+      {
+        "code": "muscle_mass_kg",
+        "label": "Masa muscular",
+        "unit": "kg",
+        "min_value": 0.1,
+        "max_value": 300.0,
+        "allowed_methods": [
+          "device"
+        ],
+        "precision": 2,
+        "instructions": "Solo valor observado mediante instrumento; nunca desde fotos."
+      }
+    ]
+  }
+}

@@ -88,6 +88,7 @@ export const workspacesSchema = z.object({
   items: z.array(z.object({ id: z.string(), name: z.string() })),
   synthetic: z.boolean(),
   notice: z.string(),
+  read_only: z.boolean(),
 });
 
 export async function dataRequest<T>(
@@ -98,7 +99,10 @@ export async function dataRequest<T>(
 ): Promise<T> {
   const correlationId = crypto.randomUUID();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    import.meta.env.VITE_DEPLOYMENT_MODE === "demo" ? 90000 : 7000,
+  );
   try {
     const response = await fetch(`/api/v1${path}`, {
       ...options,

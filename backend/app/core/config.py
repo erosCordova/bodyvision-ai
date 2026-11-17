@@ -1,3 +1,5 @@
+import os
+import re
 from typing import Literal
 
 from pydantic import SecretStr, field_validator, model_validator
@@ -6,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    app_env: Literal["local", "test", "staging", "production"] = "local"
+    app_env: Literal["local", "test", "demo", "staging", "production"] = "local"
     debug: bool = False
     database_url: SecretStr
     cors_origins: list[str] = ["http://localhost:8080"]
@@ -33,6 +35,10 @@ class Settings(BaseSettings):
                 "F2 is synthetic local/test only. "
                 "Identity, privacy, legal and operational gates are pending."
             )
+        if self.app_env == "demo":
+            hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
+            if hostname and re.fullmatch(r"[a-zA-Z0-9.-]+", hostname):
+                self.allowed_hosts = list(dict.fromkeys([*self.allowed_hosts, hostname]))
         if self.debug:
             raise ValueError("Debug mode is disabled")
         return self

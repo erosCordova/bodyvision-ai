@@ -36,7 +36,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         title="BODYVISION AI — Synthetic data core",
         version="0.2.0",
         description="Fase 2. Núcleo de datos ficticios local; identidad y uso real aún bloqueados.",
-        docs_url="/api/v1/docs",
+        docs_url=None if settings.app_env == "demo" else "/api/v1/docs",
         redoc_url=None,
         openapi_url="/api/v1/openapi.json",
         lifespan=lifespan,
@@ -103,7 +103,15 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             correlation_id = str(uuid4())
         request.state.correlation_id = correlation_id
         try:
-            response = await call_next(request)
+            if settings.app_env == "demo" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+                response = error(
+                    request,
+                    403,
+                    "DEMO_READ_ONLY",
+                    "La demostración pública es de solo lectura y usa datos ficticios.",
+                )
+            else:
+                response = await call_next(request)
         except Exception:
             # Do not expose or log exception strings: database URLs may contain credentials.
             response = error(request, 500, "INTERNAL_ERROR", "No se pudo completar la operación.")

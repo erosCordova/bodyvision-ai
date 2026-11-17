@@ -21,7 +21,7 @@ const schema = z.object({
 });
 type Inputs = z.infer<typeof schema>;
 export function ProfilesPage() {
-  const { id, api } = useWorkspace();
+  const { id, api, readOnly } = useWorkspace();
   const cache = useQueryClient();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -57,9 +57,14 @@ export function ProfilesPage() {
         </div>
         <button
           className="primary-button"
+          disabled={readOnly}
           onClick={() => setCreating(!creating)}
         >
-          {creating ? "Cerrar formulario" : "+ Nuevo expediente"}
+          {readOnly
+            ? "Vista de solo lectura"
+            : creating
+              ? "Cerrar formulario"
+              : "+ Nuevo expediente"}
         </button>
       </div>
       {creating && (

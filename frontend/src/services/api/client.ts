@@ -30,7 +30,10 @@ export class ApiError extends Error {
 async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   const correlationId = crypto.randomUUID();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    import.meta.env.VITE_DEPLOYMENT_MODE === "demo" ? 90000 : 7000,
+  );
   try {
     const response = await fetch(`/api/v1${path}`, {
       signal: controller.signal,

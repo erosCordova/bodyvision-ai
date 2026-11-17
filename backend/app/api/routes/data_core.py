@@ -35,6 +35,7 @@ def workspaces(request: Request) -> dict:
     return {
         "items": [dict(x) for x in rows],
         "synthetic": True,
+        "read_only": request.app.state.settings.app_env == "demo",
         "notice": "Selector local de datos ficticios. No representa autenticación.",
     }
 

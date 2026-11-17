@@ -111,7 +111,7 @@ export function FoundationPage() {
       <div className="workspace">
         <header className="topbar">
           <span>Plataforma de seguimiento corporal</span>
-          <span className="local-pill">DESARROLLO LOCAL</span>
+          <span className="local-pill">ENTORNO DE PRUEBA</span>
         </header>
         <main id="main-content">
           <div className="breadcrumb">
@@ -186,7 +186,7 @@ export function FoundationPage() {
         </main>
         <footer>
           <span>No es un dispositivo médico.</span>
-          <span>Textos legales pendientes de revisión · Uso local</span>
+          <span>Textos legales pendientes de revisión · Datos ficticios</span>
         </footer>
       </div>
     </div>

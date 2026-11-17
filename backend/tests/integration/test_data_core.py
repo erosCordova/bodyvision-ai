@@ -276,3 +276,19 @@ def test_minor_profile_accepts_only_manual_measurements(client):
         ).status_code
         == 422
     )
+
+
+def test_demo_database_rejects_sql_writes_even_with_owner_connection(db_url):
+    from sqlalchemy.exc import DBAPIError
+
+    from app.db.session import build_engine
+
+    engine = build_engine(Settings(app_env="demo", database_url=db_url))
+    try:
+        with engine.connect() as conn:
+            assert conn.execute(text("SHOW transaction_read_only")).scalar_one() == "on"
+            with pytest.raises(DBAPIError) as error:
+                conn.execute(text("UPDATE system_schema_state SET revision=revision"))
+            assert error.value.orig.sqlstate == "25006"
+    finally:
+        engine.dispose()

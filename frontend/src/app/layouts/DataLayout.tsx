@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../providers/WorkspaceProvider";
 export function DataLayout() {
-  const { id, setId, api } = useWorkspace();
+  const { id, setId, api, readOnly } = useWorkspace();
   const navigate = useNavigate();
   const workspaces = useQuery({
     queryKey: ["workspaces"],
@@ -74,10 +74,15 @@ export function DataLayout() {
           )}
         </header>
         <div className="synthetic-banner">
-          <strong>ENTORNO LOCAL · DATOS FICTICIOS</strong>
+          <strong>
+            {readOnly
+              ? "DEMOSTRACIÓN · SOLO LECTURA"
+              : "ENTORNO LOCAL · DATOS FICTICIOS"}
+          </strong>
           <span>
-            Este selector no es autenticación. No introduzcas información de
-            personas reales.
+            {readOnly
+              ? "Explora los expedientes ficticios. Los datos se regeneran al reiniciarse la demo."
+              : "Este selector no es autenticación. No introduzcas información de personas reales."}
           </span>
         </div>
         <main id="main-content" className="data-main" key={id}>
