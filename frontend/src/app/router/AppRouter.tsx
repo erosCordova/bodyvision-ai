@@ -5,7 +5,7 @@ import { DataLayout } from "../layouts/DataLayout";
 import { Dashboard } from "../../features/dashboard/Dashboard";
 import { ProfilesPage } from "../../features/profiles/ProfilesPage";
 import { ProfileDetail } from "../../features/profiles/ProfileDetail";
-const BodyViewer = lazy(() => import("../../features/viewer/BodyViewer").then(module => ({ default: module.BodyViewer })));
+const BodyWorkspace = lazy(() => import("../../features/viewer/BodyWorkspace").then(module => ({ default: module.BodyWorkspace })));
 export function AppRouter() {
   return (
     <BrowserRouter>
@@ -15,7 +15,7 @@ export function AppRouter() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/profiles" element={<ProfilesPage />} />
           <Route path="/profiles/:profileId" element={<ProfileDetail />} />
-          <Route path="/body-3d" element={<Suspense fallback={<p role="status">Abriendo visor 3D…</p>}><BodyViewer /></Suspense>} />
+          <Route path="/body-3d" element={<Suspense fallback={<p role="status">Abriendo visor 3D…</p>}><BodyWorkspace /></Suspense>} />
           <Route
             path="*"
             element={
