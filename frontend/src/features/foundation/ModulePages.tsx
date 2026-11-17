@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
@@ -7,7 +7,7 @@ import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 function PageTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return <div className="enterprise-page-head"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div></div>;
 }
-function Limitation({ children }: { children: React.ReactNode }) {
+function Limitation({ children }: { children: ReactNode }) {
   return <div className="enterprise-limit"><strong>ESTADO DEL MÓDULO</strong><p>{children}</p></div>;
 }
 export function MeasurementsPage() {
@@ -124,10 +124,10 @@ export function AnalysisPage() {
   </div>;
 }
 
-function HumanOutline({ ratio }: { ratio: number }) {
+function HumanOutline({ ratio, heightScale = 1 }: { ratio: number; heightScale?: number }) {
   return <svg className="enterprise-sim-body" viewBox="0 0 220 340" role="img" aria-label="Silueta esquemática, no reconstrucción de una persona">
     <path d="M93 52Q83 24 105 14Q126 10 133 33L127 57L138 70L165 83L184 139L193 185L180 190L165 150L152 118L151 190L138 207L132 283L128 326L110 326L107 263L102 216L96 263L91 326L72 326L75 283L65 207L66 190L67 118L54 150L39 190L26 185L35 139L54 83L82 70Z"
-      fill="#348fc2" fillOpacity=".27" stroke="#71d7ed" strokeWidth="2" style={{ transformOrigin:"110px 175px",transform:"scaleX("+ratio+")" }}/>
+      fill="#348fc2" fillOpacity=".27" stroke="#71d7ed" strokeWidth="2" style={{ transformOrigin:"110px 175px",transform:"scale("+ratio+", "+heightScale+")" }}/>
     <path d="M110 57V211M83 86L138 86M66 126L151 126M75 206L139 206" stroke="#71cced" opacity=".4" strokeWidth="2"/>
   </svg>;
 }
@@ -146,9 +146,9 @@ export function SimulationPage() {
         <div className="enterprise-sim-figures">
           <div><span>ESTADO BASE · ILUSTRATIVO</span><HumanOutline ratio={1}/><small>Referencia visual</small></div>
           <div className="enterprise-sim-arrow" aria-hidden="true">⟶</div>
-          <div><span>ESCENARIO · SIMULACIÓN</span><HumanOutline ratio={ratio}/><small>Variación artística</small></div>
+          <div><span>ESCENARIO · SIMULACIÓN</span><HumanOutline ratio={ratio} heightScale={height/175}/><small>Variación artística</small></div>
         </div>
-        <Limitation>La forma mostrada es una interpolación gráfica, no una predicción anatómica ni una estimación de grasa o músculo. Los parámetros no generan datos clínicos.</Limitation>
+        <Limitation>La forma mostrada es una interpolación gráfica de anchura y altura, no una predicción anatómica ni una estimación de grasa o músculo. Los parámetros no generan datos clínicos.</Limitation>
       </section>
       <aside className="enterprise-panel enterprise-module-side enterprise-sim-controls">
         <h2>Parámetros hipotéticos</h2>
@@ -192,7 +192,7 @@ export function ReportsPage() {
       <div><h2>Preparar informe</h2><label>Expediente ficticio<select value={profileId} onChange={e=>setProfileId(e.target.value)}>
         <option value="">Seleccionar expediente</option>{profiles.data?.items.map(p=><option key={p.id} value={p.id}>{p.display_name||p.display_code} · {p.display_code}</option>)}
       </select></label></div>
-      <div className="enterprise-report-actions"><button disabled={!measurements.data?.items.length} onClick={exportCsv}>Exportar mediciones CSV</button><button disabled={!profileId || measurements.isPending} onClick={()=>window.print()}>Imprimir vista previa</button></div>
+      <div className="enterprise-report-actions"><button disabled={!measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button><button disabled={!profileId || measurements.isPending} onClick={()=>window.print()}>Imprimir vista previa</button></div>
     </section>
     <section className="enterprise-panel enterprise-report-preview">
       <div className="enterprise-panel-title"><h2>Vista previa del informe</h2><span>FICTICIO · NO MÉDICO</span></div>
