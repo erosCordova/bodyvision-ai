@@ -78,6 +78,9 @@ function ServiceCheck({
 export function FoundationPage() {
   return (
     <div className="shell">
+      <a className="skip-link" href="#main-content">
+        Saltar al contenido
+      </a>
       <aside className="sidebar" aria-label="Navegación principal">
         <Link className="brand" to="/" aria-label="BODYVISION AI — Inicio">
           <span className="brand-mark" aria-hidden="true">

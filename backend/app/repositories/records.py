@@ -7,15 +7,18 @@ from app.models.context import Workspace
 
 
 def profile(scope: Workspace, profile_id: UUID, write: bool = False) -> dict:
-    row = (
-        scope.connection.execute(
-            text("""
+    query = """
         SELECT p.* FROM profiles p JOIN profile_access a ON a.profile_id=p.id
           AND a.organization_id=p.organization_id
         WHERE p.id=:id AND p.organization_id=:org AND a.user_id=:actor
           AND (a.expires_at IS NULL OR a.expires_at>now())
           AND (NOT :write OR a.access_level IN ('write','manage'))
-    """),
+    """
+    if write:
+        query += " FOR UPDATE OF p"
+    row = (
+        scope.connection.execute(
+            text(query),
             {
                 "id": profile_id,
                 "org": scope.organization_id,
