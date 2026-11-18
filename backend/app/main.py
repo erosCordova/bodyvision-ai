@@ -112,8 +112,18 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 )
             else:
                 response = await call_next(request)
-        except Exception:
-            # Do not expose or log exception strings: database URLs may contain credentials.
+        except Exception as exc:
+            # Never log exception messages: drivers can include credentials/URLs.
+            # SQLSTATE and error class are enough for safe production triage.
+            original = getattr(exc, "orig", exc)
+            logging.getLogger("bodyvision").error(
+                "unhandled_request_error",
+                extra={
+                    "error_type": type(exc).__name__,
+                    "driver_error_type": type(original).__name__,
+                    "sqlstate": getattr(original, "sqlstate", None),
+                },
+            )
             response = error(request, 500, "INTERNAL_ERROR", "No se pudo completar la operación.")
         response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Content-Type-Options"] = "nosniff"
