@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0002_data_core"
+SCHEMA_REVISION = "0003_identity_foundation"
 
 
 def build_engine(settings: Settings) -> Engine:

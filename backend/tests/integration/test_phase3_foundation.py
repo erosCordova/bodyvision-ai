@@ -1,0 +1,137 @@
+"""Security schema smoke tests against a real ephemeral PostgreSQL database."""
+
+import os
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
+
+from app.models.context import FIRST_WORKSPACE
+
+
+@pytest.fixture
+def database():
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("Only runs against the CI/local disposable PostgreSQL database")
+    engine = create_engine(url)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
+    with database.connect() as conn:
+        assert (
+            conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
+            == "0003_identity_foundation"
+        )
+        for table in (
+            "user_role_assignments",
+            "auth_sessions",
+            "profile_consents",
+            "security_audit_events",
+        ):
+            assert not conn.execute(
+                text("SELECT has_table_privilege('bodyvision_app', :table, 'SELECT')"),
+                {"table": f"public.{table}"},
+            ).scalar_one()
+            assert not conn.execute(
+                text("SELECT has_table_privilege('bodyvision_app', :table, 'INSERT')"),
+                {"table": f"public.{table}"},
+            ).scalar_one()
+            assert conn.execute(
+                text(
+                    "SELECT relrowsecurity FROM pg_class "
+                    "WHERE oid=to_regclass(:table)"
+                ),
+                {"table": f"public.{table}"},
+            ).scalar_one()
+
+
+def test_fixture_operators_are_disabled_for_login(database):
+    with database.connect() as conn:
+        operators = conn.execute(
+            text(
+                "SELECT email,password_hash,account_status FROM users "
+                "WHERE is_local_operator"
+            )
+        ).mappings().all()
+        assert operators
+        assert all(
+            u["email"] is None
+            and u["password_hash"] is None
+            and u["account_status"] == "disabled"
+            for u in operators
+        )
+
+
+def test_consent_is_versioned_and_requires_consistent_status(database):
+    with database.connect() as conn:
+        tx = conn.begin()
+        try:
+            actor = conn.execute(
+                text(
+                    "SELECT id FROM users WHERE organization_id=:organization "
+                    "AND is_local_operator"
+                ),
+                {"organization": FIRST_WORKSPACE},
+            ).scalar_one()
+            profile_id = uuid4()
+            conn.execute(
+                text(
+                    "INSERT INTO profiles("
+                    "id,organization_id,display_code,birth_year,created_by"
+                    ") VALUES (:id,:org,:code,1995,:actor)"
+                ),
+                {
+                    "id": profile_id,
+                    "org": FIRST_WORKSPACE,
+                    "code": "SEC-" + profile_id.hex[:12],
+                    "actor": actor,
+                },
+            )
+            consent_id = uuid4()
+            values = {
+                "id": consent_id,
+                "org": FIRST_WORKSPACE,
+                "profile": profile_id,
+                "actor": actor,
+            }
+            conn.execute(
+                text(
+                    "INSERT INTO profile_consents "
+                    "(id,organization_id,profile_id,purpose,version,status,"
+                    "accepted_at,recorded_by) "
+                    "VALUES (:id,:org,:profile,'capture','v1','accepted',now(),:actor)"
+                ),
+                values,
+            )
+            with pytest.raises(IntegrityError):
+                with conn.begin_nested():
+                    conn.execute(
+                        text(
+                            "INSERT INTO profile_consents "
+                            "(id,organization_id,profile_id,purpose,version,status,"
+                            "recorded_by) "
+                            "VALUES (:id,:org,:profile,'pose','v1','accepted',:actor)"
+                        ),
+                        {**values, "id": uuid4()},
+                    )
+            conn.execute(
+                text(
+                    "UPDATE profile_consents "
+                    "SET status='revoked',revoked_at=now() WHERE id=:id"
+                ),
+                {"id": consent_id},
+            )
+            result = conn.execute(
+                text("SELECT status,revoked_at FROM profile_consents WHERE id=:id"),
+                {"id": consent_id},
+            ).one()
+            assert result.status == "revoked"
+            assert result.revoked_at is not None
+        finally:
+            tx.rollback()
