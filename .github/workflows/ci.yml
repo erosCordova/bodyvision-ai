@@ -67,11 +67,11 @@ jobs:
             sleep 1
           done
           npm run test:e2e
-      - name: Upload browser failure evidence
-        if: failure()
+      - name: Upload browser evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase2-browser-results
+          name: bodyvision-browser-evidence
           path: frontend/test-results
           if-no-files-found: ignore
   docker-smoke:

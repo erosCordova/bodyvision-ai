@@ -3,8 +3,9 @@ import { Link } from "react-router-dom";
 import {
   anatomicalLayers, createAnatomyScene,
   type AnatomicalLayer, type LayerOpacity, type RenderMode,
-  type SceneQuality, type SelectedStructure,
+  type SceneQuality, type SelectedStructure, type LayerState,
 } from "./AnatomyScene";
+import { anatomySource } from "./atlasSource";
 import "./anatomy-studio.css";
 
 type AtlasController = ReturnType<typeof createAnatomyScene>;
@@ -90,7 +91,7 @@ const aliases: Record<string, string> = {
 };
 const word = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_.-]/g, " ").trim();
 const cleanMesh = (name: string) => name.replace(/\.(l|r)(\.\d+)?$/i, "").replaceAll("_", " ").trim();
-const sourceRoot = "https://raw.githubusercontent.com/SeemaBansal1/3d-human-body-anatomy/main/content/";
+const sourceRoot = anatomySource + "content/";
 
 function candidateNames(entry: AtlasEntry) {
   return [entry.medical, entry.common || "", entry.category || "", ...entry.match, ...Object.entries(aliases)
@@ -128,15 +129,27 @@ export function AnatomyAtlas() {
   const [contentReady, setContentReady] = useState(false);
   const [status, setStatus] = useState("Inicializando el cuerpo humano 3D…");
   const [error, setError] = useState("");
+  const [layerStates, setLayerStates] = useState<Partial<Record<AnatomicalLayer, LayerState>>>({});
+  const [restart, setRestart] = useState(0);
   const [tour, setTour] = useState<{ id: string; step: number } | null>(null);
   const [question, setQuestion] = useState("");
   const [reply, setReply] = useState("Escribe el nombre de un músculo, hueso, vaso o nervio para explorar su información anatómica.");
   const [voice, setVoice] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const reducedMotion = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => { setReducedMotion(query.matches); if (query.matches) setSpin(false); };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!host.current) return;
+    setError("");
+    setLayerStates({});
+    setStatus("Inicializando el cuerpo humano 3D…");
     try {
       const scene = createAnatomyScene(host.current, setStatus, part => {
         setSelected(part);
@@ -145,15 +158,15 @@ export function AnatomyAtlas() {
           if (!part || !previous || previous.layer !== part.layer) return null;
           return previous.match.some(name => word(cleanMesh(name)) === word(cleanMesh(part.name))) ? previous : null;
         });
-      });
+      }, (layer, state) => setLayerStates(previous => ({ ...previous, [layer]: state })), setError);
       controller.current = scene;
-      scene.update(new Set<AnatomicalLayer>(["skin"]), initialOpacity);
       return () => { scene.dispose(); if (controller.current === scene) controller.current = null; };
     } catch {
-      setError("No se puede iniciar WebGL. Activa la aceleración gráfica en Chrome o Edge y vuelve a abrir esta página.");
+      setError("Este navegador no pudo iniciar el visor 3D. Comprueba que admita WebGL y tenga aceleración gráfica, o prueba otro navegador.");
+      setStatus("Visor 3D no disponible en este navegador");
       return;
     }
-  }, []);
+  }, [restart]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -170,11 +183,11 @@ export function AnatomyAtlas() {
     return () => abort.abort();
   }, []);
 
-  useEffect(() => controller.current?.update(new Set(visible), opacity), [visible, opacity]);
-  useEffect(() => controller.current?.setRenderMode(mode), [mode]);
-  useEffect(() => controller.current?.setQuality(quality), [quality]);
-  useEffect(() => controller.current?.setAutoRotate(spin), [spin]);
-  useEffect(() => controller.current?.setIsolated(isolated), [isolated]);
+  useEffect(() => controller.current?.update(new Set(visible), opacity), [visible, opacity, restart]);
+  useEffect(() => controller.current?.setRenderMode(mode), [mode, restart]);
+  useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
+  useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
+  useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
   useEffect(() => {
     const changed = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", changed);
@@ -200,7 +213,7 @@ export function AnatomyAtlas() {
     setVisible(previous => previous.includes(layer) ? previous.filter(id => id !== layer) : [...previous, layer]);
     setTour(null);
   };
-  const usePreset = (preset: typeof quickViews[number]) => {
+  const applyPreset = (preset: typeof quickViews[number]) => {
     setVisible([...preset.layers]);
     setOpacity({ ...initialOpacity, ...preset.opacities });
     setIsolated(false);
@@ -305,6 +318,8 @@ export function AnatomyAtlas() {
                   <span className="studio-layer-label"><strong>{layer.label}</strong><small>{layer.detail}</small></span>
                   <input type="checkbox" checked={visible.includes(layer.id)} onChange={() => toggleLayer(layer.id)} />
                 </label>
+                {visible.includes(layer.id) && layerStates[layer.id] === "loading" && <p className="studio-layer-status" role="status">Cargando {layer.label.toLowerCase()}…</p>}
+                {visible.includes(layer.id) && layerStates[layer.id] === "error" && <div className="studio-layer-status" role="alert"><p>No se pudo cargar {layer.label.toLowerCase()}.</p><button onClick={() => controller.current?.retryLayer(layer.id)}>Reintentar {layer.label.toLowerCase()}</button></div>}
                 {visible.includes(layer.id) && (
                   <div className="studio-slider">
                     <span>Opacidad</span>
@@ -320,16 +335,16 @@ export function AnatomyAtlas() {
           <div className="studio-left-section">
             <div className="studio-section-title"><strong>VISTAS RÁPIDAS</strong><span>07</span></div>
             <div className="studio-preset-grid">
-              {quickViews.map(preset => <button key={preset.name} onClick={() => usePreset(preset)}>{preset.name}</button>)}
+              {quickViews.map(preset => <button key={preset.name} onClick={() => applyPreset(preset)}>{preset.name}</button>)}
             </div>
           </div>
           <div className="studio-left-section studio-left-footer">
             <p>Modelo anatómico de referencia. No corresponde a pacientes ni expedientes clínicos.</p>
-            <button onClick={() => { usePreset(quickViews[0]); setMode("realista"); setSpin(false); }}>↺ Restaurar visualización</button>
+            <button onClick={() => { applyPreset(quickViews[0]); setMode("realista"); setSpin(false); }}>↺ Restaurar visualización</button>
           </div>
         </aside>
 
-        <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa">
+        <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")}>
           <div className="studio-canvas" ref={host} />
           <div className="studio-view-top">
             <span><i /> EXPLORACIÓN ANATÓMICA EN TIEMPO REAL</span>
@@ -341,7 +356,7 @@ export function AnatomyAtlas() {
             <button onClick={() => controller.current?.view("left")}>Izquierda</button>
             <button onClick={() => controller.current?.view("right")}>Derecha</button>
           </div>
-          {error && <div className="studio-overlay-error" role="alert">{error}</div>}
+          {error && <div className="studio-overlay-error" role="alert"><p>{error}</p><button onClick={() => setRestart(value => value + 1)}>Recargar visor</button></div>}
           {showMarker && selected && (
             <div className="studio-selected-tag">
               <span>ESTRUCTURA SELECCIONADA</span>

@@ -16,6 +16,9 @@
 .studio-root button, .studio-root input, .studio-root textarea { font-family: inherit; }
 .studio-root button { cursor: pointer; }
 .studio-root button:disabled { cursor: not-allowed; opacity: .45; }
+.studio-layer-status { margin: 10px 0 0; font-size: 11px; line-height: 1.6; color: #c4d8ed; }
+.studio-layer-status button, .studio-overlay-error button { border: 1px solid #749bbb; background: #193a55; color: #edf6ff; border-radius: 7px; padding: 8px 12px; font-size: 12px; }
+.studio-overlay-error p { margin: 0 0 12px; }
 .studio-root :is(button, a, input, textarea):focus-visible { outline: 2px solid #7ce3ff; outline-offset: 3px; }
 .studio-header {
   height: 73px; flex-shrink: 0; display: grid; align-items: center;

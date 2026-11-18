@@ -100,12 +100,12 @@ test("seeded dashboard, mobile layout and historical chart", async ({
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
-      name: "Seguimiento con contexto.",
+      name: "Dashboard general",
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("ENTORNO LOCAL · DATOS FICTICIOS", { exact: true }),
+    page.getByText("DATOS FICTICIOS DE DESARROLLO", { exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(

@@ -53,7 +53,7 @@ describe("Synthetic data core", () => {
     show();
     expect(await screen.findByText("17")).toBeVisible();
     expect(screen.getByText("42")).toBeVisible();
-    expect(screen.getByText("Aún no hay mediciones")).toBeVisible();
+    expect(screen.getByText("Aún no hay mediciones recientes.")).toBeVisible();
   });
   it("shows loading while waiting for summary", () => {
     vi.stubGlobal(

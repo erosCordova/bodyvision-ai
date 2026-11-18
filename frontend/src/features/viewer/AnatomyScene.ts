@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url";
+import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
+import { anatomySource } from "./atlasSource";
 
 export const anatomicalLayers = [
   { id: "skin", label: "Piel", detail: "Superficie corporal", color: "#c68e74" },
@@ -17,8 +20,9 @@ export type LayerOpacity = Record<AnatomicalLayer, number>;
 export type RenderMode = "realista" | "holograma" | "radiografia";
 export type SceneQuality = "alta" | "fluida";
 export type SelectedStructure = { name: string; layer: AnatomicalLayer };
+export type LayerState = "loading" | "ready" | "error";
 
-const assetSource = "https://raw.githubusercontent.com/SeemaBansal1/3d-human-body-anatomy/main/web/public/models/";
+const assetSource = anatomySource + "web/public/models/";
 
 /**
  * The source is Z-Anatomy / BodyParts3D, processed by SeemaBansal1.
@@ -64,6 +68,8 @@ export function createAnatomyScene(
   host: HTMLDivElement,
   onStatus: (message: string) => void,
   onSelected: (part: SelectedStructure | null) => void,
+  onLayerState: (layer: AnatomicalLayer, state: LayerState) => void,
+  onError: (message: string) => void,
 ) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -97,7 +103,8 @@ export function createAnatomyScene(
   controls.target.set(0, 0, 0);
 
   const draco = new DRACOLoader();
-  draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+  draco.setDecoderPath({ js: dracoWrapperUrl, wasm: dracoWasmUrl });
+  draco.setWorkerLimit(2);
   const loader = new GLTFLoader();
   loader.setDRACOLoader(draco);
   const objects = new Map<AnatomicalLayer, THREE.Group>();
@@ -150,7 +157,7 @@ export function createAnatomyScene(
   };
   const visibilityChange = () => updateAnimation();
   document.addEventListener("visibilitychange", visibilityChange);
-  const contextLost = (event: Event) => { event.preventDefault(); onStatus("Se perdió el contexto gráfico. Vuelve a abrir esta vista."); };
+  const contextLost = (event: Event) => { event.preventDefault(); onError("El navegador perdió la conexión gráfica. Recarga el visor para volver a abrir el modelo."); };
   canvas.addEventListener("webglcontextlost", contextLost);
 
   const restoreHighlight = () => {
@@ -272,6 +279,7 @@ export function createAnatomyScene(
   const load = (layer: AnatomicalLayer) => {
     if (disposed || objects.has(layer) || loading.has(layer)) return;
     loading.add(layer);
+    onLayerState(layer, "loading");
     onStatus("Descargando " + (anatomicalLayers.find(item => item.id === layer)?.label || layer).toLowerCase() + "…");
     loader.load(
       assetSource + layer + ".glb",
@@ -309,12 +317,16 @@ export function createAnatomyScene(
         if (!fitted) frameBody();
         applyLayer(layer);
         onStatus("Modelo anatómico preparado · selecciona una estructura");
+        onLayerState(layer, "ready");
         if (pendingFocus?.layer === layer) focus(pendingFocus.name, layer);
       },
       undefined,
       () => {
         loading.delete(layer);
-        if (!disposed) onStatus("Error al cargar " + layer + ". Desactiva y vuelve a activar la capa para reintentar.");
+        if (!disposed) {
+          onLayerState(layer, "error");
+          onStatus("No se pudo descargar una capa. Usa su botón Reintentar.");
+        }
       },
     );
   };
@@ -402,5 +414,6 @@ export function createAnatomyScene(
     renderer.forceContextLoss();
     canvas.remove();
   };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, resetCamera, view, zoom, dispose };
+  const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, resetCamera, view, zoom, retryLayer, dispose };
 }
