@@ -19,6 +19,15 @@ async function signIn(page: Page, email: string, org = organization) {
   return response.json() as Promise<{ token: string }>;
 }
 
+async function signOut(page: Page) {
+  const responsePromise = page.waitForResponse(response =>
+    response.url().endsWith("/api/v1/auth/logout") && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
+  expect((await responsePromise).status()).toBe(204);
+  await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
+}
+
 test("private identity, user creation, RLS grants, revocation and logout work together", async ({ page, browser }) => {
   const apiRequests: string[] = [];
   page.on("request", request => {
@@ -99,8 +108,7 @@ test("private identity, user creation, RLS grants, revocation and logout work to
     ].join("\n"));
     expect(stored.includes(member.token)).toBe(false);
 
-    await memberPage.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
-    await expect(memberPage.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
+    await signOut(memberPage);
     const loggedOut = await memberPage.request.get("/api/v1/auth/me", { headers: memberHeaders });
     expect(loggedOut.status()).toBe(401);
     await memberPage.goBack();
@@ -120,7 +128,7 @@ test("private identity, user creation, RLS grants, revocation and logout work to
 
   await page.getByRole("button", { name: "Actualizar", exact: true }).click();
   await expect(page.getByRole("cell", { name: "Permiso revocado", exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
+  await signOut(page);
   const adminLoggedOut = await page.request.get("/api/v1/auth/me", {
     headers: { Authorization: `Bearer ${admin.token}` },
   });
