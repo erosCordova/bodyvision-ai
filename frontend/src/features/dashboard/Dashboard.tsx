@@ -1,8 +1,11 @@
+import { lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { EmptyState, ErrorState, LoadingState, dateTime } from "../../components/ui/States";
+
+const DashboardBodyPreview = lazy(() => import("./DashboardBodyPreview").then(m => ({ default: m.DashboardBodyPreview })));
 
 export function Dashboard() {
   const { id, api } = useWorkspace();
@@ -36,15 +39,10 @@ export function Dashboard() {
       <div className="enterprise-dashboard-grid">
         <section className="enterprise-panel enterprise-anatomy-promo" aria-label="Exploración anatómica">
           <div className="enterprise-panel-title"><h2>Exploración corporal</h2><span>ATLAS 3D</span></div>
-          <div className="enterprise-figure">
-            <svg viewBox="0 0 280 380" role="img" aria-label="Silueta ilustrativa del cuerpo humano con puntos anatómicos">
-              <defs><linearGradient id="dash-glow" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#2eecff"/><stop offset="1" stopColor="#7e68ed"/></linearGradient></defs>
-              <path d="M117 54Q109 28 126 16Q140 5 153 17Q171 30 160 54L152 66L160 75L194 88L213 149L222 212L210 219L195 154L183 127L181 186L168 204L165 277L155 353L137 353L136 284L129 221L124 284L120 353L102 353L90 277L91 204L79 185L77 127L66 156L57 218L42 212L51 147L68 89L108 75L120 67Z" fill="#128cb6" fillOpacity=".24" stroke="url(#dash-glow)" strokeWidth="2.4"/>
-              <g stroke="#76d9f5" strokeWidth="1.7" strokeOpacity=".6" fill="none"><path d="M140 31V72L112 91L138 116L167 91L140 72M112 91L76 142L58 203M167 91L202 142L220 203M138 116V164L114 199L112 260L107 321M138 164L160 199L158 260L156 322M114 199L160 199"/></g>
-              <g fill="#80eaff">{[[140,31],[140,72],[112,91],[167,91],[138,116],[138,164],[114,199],[160,199],[112,260],[158,260],[107,321],[156,322],[76,142],[202,142]].map(([x,y],i)=><circle key={i} cx={x} cy={y} r="3"/>)}</g>
-            </svg>
-          </div>
-          <div className="enterprise-anatomy-cta"><strong>Visualizador anatómico interactivo</strong><p>Explora piel, músculos, huesos, vasos y nervios. Modelo genérico, no derivado de pacientes.</p>
+          <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Preparando el modelo humano 3D…</div>}>
+            <DashboardBodyPreview />
+          </Suspense>
+          <div className="enterprise-anatomy-cta"><strong>Visualizador anatómico interactivo</strong><p>Vista previa del modelo humano con textura realista. Accede a la visión anatómica para explorar piel, músculos, huesos y vasos.</p>
             <Link to="/body-3d">Explorar cuerpo 3D ↗</Link></div>
         </section>
         <section className="enterprise-panel enterprise-evolution">

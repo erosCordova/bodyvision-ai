@@ -232,3 +232,72 @@
   .enterprise-module *{color:#222!important}
   .enterprise-main{max-width:none!important}
 }
+
+
+/* The dashboard displays the genuine textured MakeHuman preview, not the former SVG figure. */
+.enterprise-realbody-preview{
+  position:relative;
+  flex:1;
+  width:100%;
+  min-height:350px;
+  overflow:hidden;
+  isolation:isolate;
+  background:radial-gradient(ellipse at 51% 41%,#36567366 0%,#17334a44 41%,transparent 74%);
+}
+.enterprise-realbody-preview::before{
+  content:"";
+  pointer-events:none;
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background-image:linear-gradient(90deg,#8bd9ff06 1px,transparent 1px),linear-gradient(#8bd9ff06 1px,transparent 1px);
+  background-size:35px 35px;
+  mask-image:linear-gradient(to bottom,transparent 5%,#000 42%,transparent 95%);
+}
+.enterprise-realbody-canvas{position:absolute;inset:0;z-index:1}
+.enterprise-realbody-canvas canvas{display:block;width:100%;height:100%;touch-action:pan-y;cursor:grab}
+.enterprise-realbody-canvas canvas:active{cursor:grabbing}
+.enterprise-realbody-tag,.enterprise-realbody-foot{
+  pointer-events:none;
+  position:absolute;
+  z-index:2;
+  left:20px;
+  font-size:9px;
+  font-weight:650;
+  color:#b7e9f5;
+  letter-spacing:.11em;
+  text-shadow:0 2px 10px #061324;
+}
+.enterprise-realbody-tag{top:19px}
+.enterprise-realbody-foot{
+  bottom:13px;
+  right:18px;
+  letter-spacing:.02em;
+  color:#9dbfd5;
+  font-weight:400;
+  line-height:1.4;
+}
+.enterprise-realbody-status{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  background:radial-gradient(ellipse at center,#1b3b54cc,#102439eb);
+  padding:20px;
+}
+.enterprise-realbody-status strong{font-size:13px;color:#d5f2ff}
+.enterprise-realbody-status span{max-width:260px;font-size:11px;line-height:1.5;color:#afd0e5}
+.enterprise-realbody-loading{display:grid;place-items:center;color:#bcd9ea;font-size:12px}
+@media(max-width:900px){
+  .enterprise-realbody-preview{min-height:400px}
+}
+@media(max-width:460px){
+  .enterprise-realbody-preview{min-height:350px}
+  .enterprise-realbody-tag{top:15px;left:15px}
+  .enterprise-realbody-foot{bottom:12px;left:15px}
+}
