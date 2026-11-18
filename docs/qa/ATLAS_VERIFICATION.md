@@ -2,6 +2,8 @@
 
 La interfaz vigente es el atlas inmersivo en /body-3d, incorporado en main después del primer prototipo MPFB. Se conserva ese diseño y sus seis capas. El prototipo corporal CC0 ya no es la ruta pública y su documentación histórica no describe el atlas actual.
 
+Validación de b1ac1b4: 46 pruebas backend, 13 unitarias frontend, 9 de navegador y Docker smoke correctos. Ejecución: https://github.com/erosCordova/bodyvision-ai/actions/runs/44374457358
+
 Correcciones: nombre applyPreset (no es un hook React); estados loading/ready/error por capa; reintento de una capa; error WebGL y recarga completa sin volver a abrir la página; movimiento reducido actualizado en vivo; catálogo y modelos fijados a la misma revisión. El estado data-loaded solo es verdadero cuando una capa visible terminó de cargar.
 
 ## Activos y dependencias
@@ -18,4 +20,4 @@ Se sustituyen las pruebas de la ruta antigua por la ruta pública actual. Las pr
 
 Se comprueban carga real de WebGL, vistas, zoom, cambio de capa/opacidad, búsqueda de fémur, acceso a recorridos, reset, movimiento reducido, errores y reintento de descarga, navegador sin WebGL, ausencia de escrituras y desbordamiento en móvil. Las capturas y trazas se guardan en el artefacto bodyvision-browser-evidence de CI.
 
-La revisión visual en el navegador remoto encontró WebGL deshabilitado en ese entorno (GL_VENDOR/GL_RENDERER Disabled). Eso impide usar ese navegador como evidencia de renderizado del cuerpo; no se atribuye a un fallo universal de BODYVISION. La comprobación gráfica se realiza en Chromium de CI con SwiftShader explícito. Los resultados y enlaces concretos se informan tras finalizar la ejecución.
+El navegador remoto tiene WebGL deshabilitado (GL_VENDOR/GL_RENDERER Disabled). En cambio, el navegador Chrome conectado sí renderizó el cuerpo y permitió cambiar al esqueleto y buscar el fémur. Se ajusta además el encuadre inicial y reset para reservar espacio alrededor del modelo según el campo de visión y la proporción del visor. La comprobación automatizada gráfica usa Chromium de CI con SwiftShader explícito. Los resultados y enlaces concretos se informan tras finalizar la ejecución.

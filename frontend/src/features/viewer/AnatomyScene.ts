@@ -231,9 +231,7 @@ export function createAnatomyScene(
     const max = Math.max(dimension.x, dimension.y, dimension.z, 0.01);
     anatomical.position.set(-center.x, -center.y, -center.z);
     root.scale.setScalar(2.5 / max);
-    camera.position.set(2.2, 0.8, 3.55);
-    controls.target.set(0, 0, 0);
-    controls.update();
+    resetCamera();
     fitted = true;
     render();
   };
@@ -345,8 +343,15 @@ export function createAnatomyScene(
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
   const resetCamera = () => {
-    camera.position.set(2.2, 0.8, 3.55);
+    // The normalized body is at most 2.5 units tall. Reserve room for
+    // top controls and the bottom dock, including narrow phone viewports.
+    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+    const distance = Math.min(controls.maxDistance, Math.max(
+      2.5 / (2 * Math.tan(halfFov) * 0.68),
+      1.2 / (2 * Math.tan(halfFov) * Math.max(camera.aspect, 0.2) * 0.82),
+    ));
     controls.target.set(0, 0, 0);
+    camera.position.set(0.35, 0.08, 1).normalize().multiplyScalar(distance);
     controls.update();
     render();
   };
