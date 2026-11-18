@@ -26,9 +26,9 @@ def upgrade() -> None:
           owner_id uuid;
           owner_role text;
         BEGIN
-          SELECT org_id,actor_id,assigned_role
+          SELECT resolved.org_id,resolved.actor_id,resolved.assigned_role
             INTO owner_org,owner_id,owner_role
-            FROM resolve_authenticated_session(session_digest);
+            FROM resolve_authenticated_session(session_digest) AS resolved;
           IF owner_org IS NULL OR owner_role IS DISTINCT FROM 'administrator'
             THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501';
           END IF;

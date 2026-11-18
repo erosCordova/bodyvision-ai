@@ -154,7 +154,7 @@ def headers(token):
 
 def test_login_requires_real_credentials_and_ignores_untrusted_tenant_selector(protected):
     client, _, profile, users = protected
-    editor, reader, outsider = users
+    editor, reader, outsider = users[:3]
     path = "/api/v1/profiles/" + str(profile)
     assert client.get(path).status_code == 401
     login = authenticate(client, editor[0], editor[1])
@@ -202,7 +202,7 @@ def test_login_requires_real_credentials_and_ignores_untrusted_tenant_selector(p
 
 def test_authorization_revocation_and_session_expiry(protected):
     client, owner, profile, users = protected
-    editor, reader, outsider = users
+    editor, reader, outsider = users[:3]
     path = "/api/v1/profiles/" + str(profile)
 
     editor_token = authenticate(client, editor[0], editor[1]).json()["token"]
