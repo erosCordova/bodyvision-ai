@@ -265,3 +265,30 @@ Los datos clínicos reales permanecen prohibidos.
 La base alojada de la demostración permanece **exclusivamente en Neon**,
 en el esquema `0002_data_core`; estas migraciones se validan solo en una
 base PostgreSQL desechable de CI/desarrollo.
+
+## Validación de navegador del acceso privado
+
+El pipeline ejecuta una suite independiente con FastAPI autenticado y Vite
+de desarrollo, en los puertos locales 8001 y 5174. Las peticiones llegan al
+backend real y a PostgreSQL 15; no se simulan las respuestas de identidad
+ni las decisiones de autorización.
+
+`backend/tests/browser/seed_private.py` crea dos cuentas ficticias de apoyo
+únicamente con `APP_ENV=test` y `PRIVATE_BROWSER_FIXTURES=true`, sobre una
+base `bodyvision` de loopback y usando el propietario desechable de CI.
+Rechaza proveedores externos, incluido Neon. No es un procedimiento de alta
+administrativa para usuarios reales, no se ejecuta al iniciar la aplicación
+y no concede permisos de expedientes implícitos.
+
+La suite comprueba bloqueo antes del login, alta de un usuario sin acceso,
+concesión de lectura, controles de edición bloqueados y rechazo de escritura
+en servidor, revocación con sesión todavía vigente, aislamiento entre
+organizaciones y cierre de sesión verificado remotamente. También comprueba
+que el token no se guarde en almacenamiento del navegador ni en la URL y que
+la recarga vuelva a exigir identificación. La configuración privada desactiva
+trazas y vídeo, para no guardar respuestas con tokens en los artefactos.
+
+Comando, una vez levantados los servicios privados de pruebas:
+`npx playwright test --config playwright.private.config.ts` desde `frontend`.
+La suite pública existente sigue separada. La aceptación global de fase 3
+continúa pendiente y esta incorporación no activa funcionalidades en la demo.

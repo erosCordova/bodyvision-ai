@@ -70,6 +70,23 @@ jobs:
             sleep 1
           done
           npm run test:e2e
+      - name: Test private identity and permissions in browser
+        env:
+          IDENTITY_ENABLED: 'true'
+          PRIVATE_BROWSER_FIXTURES: 'true'
+          VITE_ENABLE_PRIVATE_AUTH: 'true'
+          API_PROXY_TARGET: http://127.0.0.1:8001
+        run: |
+          cd backend
+          PYTHONPATH=. python tests/browser/seed_private.py
+          uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8001 --no-access-log > /tmp/private-api.log 2>&1 &
+          cd ../frontend
+          npm run dev -- --port 5174 --strictPort > /tmp/private-web.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5174/api/v1/health/ready; then break; fi
+            sleep 1
+          done
+          npx playwright test --config playwright.private.config.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
