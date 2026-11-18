@@ -59,7 +59,9 @@ def test_tenant_and_role_boundaries_are_default_deny():
     assert not authorized(disabled, organization, "admin:manage")
     assert not authorized(
         Identity(organization, uuid4(), "unassigned", True),
-        organization, "profile:read", access_level="manage"
+        organization,
+        "profile:read",
+        access_level="manage",
     )
     assert not authorized(None, organization, "profile:read", access_level="manage")
 
@@ -92,7 +94,8 @@ def test_consent_is_purpose_bound_and_revocation_is_respected():
     assert not valid_consent(expired, "capture", now)
     assert not valid_consent(
         ConsentState("capture", now + timedelta(days=1), version="v1", status="accepted"),
-        "capture", now
+        "capture",
+        now,
     )
     assert not valid_consent(None, "capture", now)
     assert not valid_consent(ConsentState("capture", now), "capture", now)

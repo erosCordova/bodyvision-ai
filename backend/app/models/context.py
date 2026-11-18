@@ -12,3 +12,5 @@ class Workspace:
     connection: Connection
     organization_id: UUID
     actor_id: UUID
+    role: str = "synthetic"
+    authenticated: bool = False

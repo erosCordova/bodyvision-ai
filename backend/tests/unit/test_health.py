@@ -18,7 +18,7 @@ from app.main import create_app
 def engine():
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
-    connection.execute.return_value.scalar_one.return_value = "0003_identity_foundation"
+    connection.execute.return_value.scalar_one.return_value = "0004_private_auth"
     return engine
 
 
@@ -40,7 +40,7 @@ def test_live_does_not_require_database(client, engine):
 def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
-    assert response.json()["schema_revision"] == "0003_identity_foundation"
+    assert response.json()["schema_revision"] == "0004_private_auth"
 
 
 def test_database_failure_returns_safe_error(client, engine):

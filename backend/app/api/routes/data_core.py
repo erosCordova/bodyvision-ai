@@ -28,10 +28,25 @@ router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
 Scope = Annotated[Workspace, Depends(workspace)]
 
 
+def require_writer(scope: Workspace) -> None:
+    # Synthetic local/test behaviour is unchanged. Secure mode denies writes
+    # to members even if a stale profile_access grant exists.
+    if scope.authenticated and scope.role not in {"administrator", "specialist"}:
+        raise DomainError(403, "FORBIDDEN", "No tienes permisos de edición.")
+
+
+
 @router.get("/workspaces")
-def workspaces(request: Request) -> dict:
-    with request.app.state.engine.begin() as conn:
-        rows = conn.execute(text("SELECT * FROM list_local_workspaces()")).mappings().all()
+def workspaces(request: Request, scope: Scope) -> dict:
+    if scope.authenticated:
+        rows = scope.connection.execute(
+            text("SELECT id,name FROM list_local_workspaces() WHERE id=:org"),
+            {"org": scope.organization_id},
+        ).mappings().all()
+    else:
+        rows = scope.connection.execute(
+            text("SELECT * FROM list_local_workspaces()")
+        ).mappings().all()
     return {
         "items": [dict(x) for x in rows],
         "synthetic": True,
@@ -79,6 +94,7 @@ def list_profiles(
 
 @router.post("/profiles", response_model=ProfileRead, status_code=201)
 def create_profile(data: ProfileInput, scope: Scope):
+    require_writer(scope)
     identifier = uuid4()
     params = data.model_dump()
     params.update(
@@ -114,6 +130,7 @@ def get_profile(profile_id: UUID, scope: Scope):
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileRead)
 def update_profile(profile_id: UUID, data: ProfileUpdate, scope: Scope):
+    require_writer(scope)
     current = records.profile(scope, profile_id)
     permitted = scope.connection.execute(
         text("SELECT has_profile_access(:id,true)"), {"id": profile_id}
@@ -135,6 +152,7 @@ def update_profile(profile_id: UUID, data: ProfileUpdate, scope: Scope):
 
 @router.post("/profiles/{profile_id}/archive", response_model=ProfileRead)
 def archive_profile(profile_id: UUID, scope: Scope):
+    require_writer(scope)
     records.profile(scope, profile_id, write=True)
     scope.connection.execute(
         text("UPDATE profiles SET status='archived' WHERE id=:id AND organization_id=:org"),
@@ -187,6 +205,7 @@ def create_measurement(
     scope: Scope,
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ):
+    require_writer(scope)
     return save(scope, profile_id, data, idempotency_key)
 
 
@@ -197,6 +216,7 @@ def correct_measurement(
     scope: Scope,
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ):
+    require_writer(scope)
     row = records.measurement(scope, measurement_id)
     return save(scope, row["profile_id"], data, idempotency_key, measurement_id)
 
@@ -254,19 +274,19 @@ def summary(scope: Scope) -> dict:
     conn = scope.connection
     org = {"org": scope.organization_id}
     active = conn.execute(
-        text("SELECT count(*) FROM profiles WHERE organization_id=:org AND status='active'"), org
+        text("SELECT count(*) FROM profiles WHERE organization_id=:org AND status='active' AND has_profile_access(id)"), org
     ).scalar_one()
     measured = conn.execute(
         text(
             "SELECT count(*) FROM measurements WHERE organization_id=:org AND is_current "
-            "AND measured_at>=now()-interval '30 days'"
+            "AND measured_at>=now()-interval '30 days' AND has_profile_access(profile_id)"
         ),
         org,
     ).scalar_one()
     corrections = conn.execute(
         text(
             "SELECT count(*) FROM measurements WHERE organization_id=:org "
-            "AND supersedes_id IS NOT NULL"
+            "AND supersedes_id IS NOT NULL AND has_profile_access(profile_id)"
         ),
         org,
     ).scalar_one()
@@ -278,7 +298,7 @@ def summary(scope: Scope) -> dict:
         JOIN metric_catalog c ON c.code=m.metric_code AND c.organization_id=m.organization_id
         JOIN profiles p ON p.id=m.profile_id AND p.organization_id=m.organization_id
         JOIN users u ON u.id=m.created_by AND u.organization_id=m.organization_id
-        WHERE m.organization_id=:org AND m.is_current ORDER BY m.created_at DESC,m.id LIMIT 8"""),
+        WHERE m.organization_id=:org AND m.is_current AND has_profile_access(m.profile_id) ORDER BY m.created_at DESC,m.id LIMIT 8"""),
             org,
         )
         .mappings()

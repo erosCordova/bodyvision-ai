@@ -7,12 +7,14 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.health import router as health_router
+from app.api.routes.auth import router as auth_router
 from app.api.routes.data_core import router as data_router
 from app.core.config import Settings
 from app.core.errors import DomainError
@@ -24,12 +26,24 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     settings = settings or Settings()
     configure_logging()
     database_engine = engine if engine is not None else build_engine(settings)
+    auth_engine = (
+        create_engine(
+            settings.auth_database_url.get_secret_value(),
+            pool_pre_ping=True,
+            hide_parameters=True,
+            connect_args={"connect_timeout": 3, "options": "-c statement_timeout=3000"},
+        )
+        if settings.identity_enabled and settings.auth_database_url is not None
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         logging.getLogger("bodyvision").info("service_started")
         yield
         database_engine.dispose()
+        if auth_engine is not None:
+            auth_engine.dispose()
         logging.getLogger("bodyvision").info("service_stopped")
 
     app = FastAPI(
@@ -43,13 +57,17 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     )
     app.state.settings = settings
     app.state.engine = database_engine
+    app.state.auth_engine = auth_engine
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH"],
-        allow_headers=["X-Correlation-ID", "Content-Type", "X-Workspace-ID", "Idempotency-Key"],
+        allow_headers=[
+            "X-Correlation-ID", "Content-Type", "X-Workspace-ID", "Idempotency-Key",
+            *(["Authorization"] if settings.identity_enabled else []),
+        ],
         expose_headers=["X-Correlation-ID"],
     )
 
@@ -135,4 +153,6 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     app.include_router(health_router)
     app.include_router(data_router)
+    if settings.identity_enabled:
+        app.include_router(auth_router)
     return app

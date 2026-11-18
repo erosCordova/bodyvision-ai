@@ -7,12 +7,34 @@ from sqlalchemy import text
 
 from app.core.errors import DomainError
 from app.models.context import FIRST_WORKSPACE, Workspace
+from app.services.auth_sessions import resolve_identity
 
 
 def workspace(
     request: Request, x_workspace_id: Annotated[UUID, Header()] = FIRST_WORKSPACE
 ) -> Iterator[Workspace]:
-    # Local synthetic selector, NOT authentication. Production/staging remain blocked.
+    # The private API obtains its tenant and actor ONLY from the verified
+    # opaque session. The legacy selector remains demo/local-test-only.
+    if request.app.state.settings.identity_enabled:
+        if request.headers.get("X-Workspace-ID"):
+            raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
+        identity = resolve_identity(request)
+        with request.app.state.engine.begin() as connection:
+            connection.execute(
+                text("SELECT set_config('app.organization_id',:org,true)"),
+                {"org": str(identity.organization_id)},
+            )
+            connection.execute(
+                text("SELECT set_config('app.actor_id',:actor,true)"),
+                {"actor": str(identity.user_id)},
+            )
+            yield Workspace(
+                connection, identity.organization_id, identity.user_id,
+                identity.role, True
+            )
+        return
+
+    # Legacy path: synthetic local/test selector, never real authentication.
     with request.app.state.engine.begin() as conn:
         conn.execute(
             text("SELECT set_config('app.organization_id', :id, true)"), {"id": str(x_workspace_id)}

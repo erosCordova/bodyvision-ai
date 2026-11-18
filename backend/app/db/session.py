@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0003_identity_foundation"
+SCHEMA_REVISION = "0004_private_auth"
 
 
 def build_engine(settings: Settings) -> Engine:

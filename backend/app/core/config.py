@@ -13,12 +13,23 @@ class Settings(BaseSettings):
     database_url: SecretStr
     cors_origins: list[str] = ["http://localhost:8080"]
     allowed_hosts: list[str] = ["localhost", "127.0.0.1", "backend", "testserver"]
+    identity_enabled: bool = False
+    auth_database_url: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
     def postgres_only(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value().startswith("postgresql+psycopg://"):
             raise ValueError("PostgreSQL with psycopg is required")
+        return value
+
+    @field_validator("auth_database_url")
+    @classmethod
+    def valid_auth_database_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().startswith(
+            "postgresql+psycopg://"
+        ):
+            raise ValueError("A separate PostgreSQL auth role is required")
         return value
 
     @field_validator("cors_origins", "allowed_hosts")
@@ -35,6 +46,13 @@ class Settings(BaseSettings):
                 "F2 is synthetic local/test only. "
                 "Identity, privacy, legal and operational gates are pending."
             )
+        if self.identity_enabled:
+            if self.app_env not in {"local", "test"}:
+                raise ValueError("Private authentication is local/test only")
+            if self.auth_database_url is None:
+                raise ValueError("AUTH_DATABASE_URL is required for private authentication")
+            if self.auth_database_url.get_secret_value() == self.database_url.get_secret_value():
+                raise ValueError("The authenticated database must use a distinct role")
         if self.app_env == "demo":
             hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
             if hostname and re.fullmatch(r"[a-zA-Z0-9.-]+", hostname):
