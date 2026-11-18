@@ -274,7 +274,10 @@ def summary(scope: Scope) -> dict:
     conn = scope.connection
     org = {"org": scope.organization_id}
     active = conn.execute(
-        text("SELECT count(*) FROM profiles WHERE organization_id=:org AND status='active' AND has_profile_access(id)"), org
+        text(
+            "SELECT count(*) FROM profiles WHERE organization_id=:org "
+            "AND status='active' AND has_profile_access(id)"
+        ), org
     ).scalar_one()
     measured = conn.execute(
         text(
@@ -298,7 +301,9 @@ def summary(scope: Scope) -> dict:
         JOIN metric_catalog c ON c.code=m.metric_code AND c.organization_id=m.organization_id
         JOIN profiles p ON p.id=m.profile_id AND p.organization_id=m.organization_id
         JOIN users u ON u.id=m.created_by AND u.organization_id=m.organization_id
-        WHERE m.organization_id=:org AND m.is_current AND has_profile_access(m.profile_id) ORDER BY m.created_at DESC,m.id LIMIT 8"""),
+        WHERE m.organization_id=:org AND m.is_current
+        AND has_profile_access(m.profile_id)
+        ORDER BY m.created_at DESC,m.id LIMIT 8"""),
             org,
         )
         .mappings()
