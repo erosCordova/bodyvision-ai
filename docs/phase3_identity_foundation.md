@@ -67,3 +67,31 @@ acceso de lectura, no de edición. El resumen aplica los mismos límites.
 Faltan alta verificada, tasa máxima de intentos, MFA, controles del frontend,
 auditoría integral y consentimiento en futuras API de captura y pose.
 Datos reales no admitidos. No fusionar ni desplegar sin aceptación de fase 3.
+
+## Interfaz privada de pruebas (incremento posterior)
+
+El frontend dispone de formulario de sesión y navegación restringida **solo en
+un entorno Vite de desarrollo** con `VITE_ENABLE_PRIVATE_AUTH=true`. El backend
+debe ejecutarse en `APP_ENV=local` o `test`, con
+`IDENTITY_ENABLED=true` y `AUTH_DATABASE_URL` correspondiente al rol de
+autenticación de la base PostgreSQL de pruebas. Las cuentas de prueba deberán
+ser provisionadas explícitamente por el administrador de ese entorno.
+
+- El token opaco se mantiene **solo en memoria React**; no se copia a
+  almacenamiento local, sessionStorage, URL, cookies ni caché de React Query.
+- La organización y los permisos se obtienen de la sesión del servidor. Las
+  peticiones autenticadas envían `Authorization: Bearer` sin
+  `X-Workspace-ID`; el selector sintético solo sigue funcionando en demo.
+- Antes de login, las rutas de expedientes están bloqueadas y no inician
+  solicitudes privadas. Una sesión caducada se descarta también en frontend.
+- Los miembros de solo lectura no reciben controles de edición, además de
+  la comprobación de permisos obligatoria del backend.
+- El cierre de sesión revoca el token remotamente. Si falla la revocación,
+  se borra la sesión local y se informa de que el token podría seguir vigente
+  hasta caducar.
+
+La compilación pública, incluso si recibe la variable, no puede activar
+esta modalidad porque exige `import.meta.env.DEV`. El acceso público de
+demostración permanece únicamente con datos ficticios. Falta un flujo
+completo de alta controlada, MFA, recuperación y limitación de intentos, y
+la revisión integral de privacidad y seguridad antes de usar datos reales.

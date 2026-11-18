@@ -96,6 +96,7 @@ export async function dataRequest<T>(
   path: string,
   schema: z.ZodType<T>,
   options: RequestInit = {},
+  token?: string,
 ): Promise<T> {
   const correlationId = crypto.randomUUID();
   const controller = new AbortController();
@@ -111,7 +112,7 @@ export async function dataRequest<T>(
       headers: {
         "Content-Type": "application/json",
         "X-Correlation-ID": correlationId,
-        "X-Workspace-ID": workspace,
+        ...(token ? { Authorization: `Bearer ${token}` } : { "X-Workspace-ID": workspace }),
         ...options.headers,
       },
     });
@@ -137,9 +138,9 @@ export async function dataRequest<T>(
     clearTimeout(timeout);
   }
 }
-export function recordsApi(workspace: string) {
+export function recordsApi(workspace: string, token?: string) {
   const get = <T>(path: string, schema: z.ZodType<T>) =>
-    dataRequest(workspace, path, schema);
+    dataRequest(workspace, path, schema, {}, token);
   const write = <T>(
     path: string,
     method: string,
@@ -151,7 +152,7 @@ export function recordsApi(workspace: string) {
       method,
       body: JSON.stringify(body),
       headers: key ? { "Idempotency-Key": key } : {},
-    });
+    }, token);
   return {
     workspaces: () => get("/workspaces", workspacesSchema),
     summary: () => get("/dashboard/summary", summarySchema),

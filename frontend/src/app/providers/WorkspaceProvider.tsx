@@ -8,36 +8,56 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { recordsApi } from "../../services/api/records";
+import { privateAuthEnabled, usePrivateAuth } from "./PrivateAuthProvider";
+
 const initial = "10000000-0000-4000-8000-000000000001";
+
 const WorkspaceContext = createContext({
   id: initial,
   setId: (_id: string) => {
     void _id;
   },
   api: recordsApi(initial),
-  readOnly: false,
+  readOnly: true,
 });
+
 export function WorkspaceProvider({ children }: PropsWithChildren) {
-  const environment = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => recordsApi(initial).workspaces(),
-  });
-  const readOnly = environment.data?.read_only ?? true;
-  const [id, setWorkspaceId] = useState(
+  const { session } = usePrivateAuth();
+  const protectedMode = privateAuthEnabled();
+  const [demoId, setDemoId] = useState(
     () => sessionStorage.getItem("bodyvision.workspace") ?? initial,
   );
+  const id = protectedMode && session ? session.organization_id : demoId;
+
+  const environment = useQuery({
+    queryKey: [
+      "workspaces",
+      protectedMode ? session?.organization_id : "demo",
+      protectedMode ? session?.user_id : "demo",
+    ],
+    queryFn: () => recordsApi(id, protectedMode ? session?.token : undefined).workspaces(),
+    enabled: !protectedMode || Boolean(session),
+  });
+
   const setId = useCallback((next: string) => {
+    // Client-side organization switching is NEVER an identity primitive.
+    if (protectedMode) return;
     sessionStorage.setItem("bodyvision.workspace", next);
-    setWorkspaceId(next);
-  }, []);
+    setDemoId(next);
+  }, [protectedMode]);
+  const readOnly = (environment.data?.read_only ?? true) || (protectedMode && session?.role === "member");
+
   const value = useMemo(
-    () => ({ id, setId, api: recordsApi(id), readOnly }),
-    [id, setId, readOnly],
+    () => ({
+      id,
+      setId,
+      api: recordsApi(id, protectedMode ? session?.token : undefined),
+      readOnly,
+    }),
+    [id, setId, session?.token, protectedMode, readOnly],
   );
-  return (
-    <WorkspaceContext.Provider value={value}>
-      {children}
-    </WorkspaceContext.Provider>
-  );
+
+  return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
+
 export const useWorkspace = () => useContext(WorkspaceContext);
