@@ -103,3 +103,33 @@ puede servir el backend, pero no PostgreSQL ni archivos de base de datos.
 El PostgreSQL de Docker en CI o desarrollo es desechable y no constituye
 un alojamiento de datos. La base persistente en Neon nunca recibe datos
 personales reales mientras no se aprueben seguridad y privacidad.
+
+
+## Límite transaccional de intentos de inicio de sesión
+
+La migración `0005_login_throttle` añade `auth_login_attempts` a la base
+PostgreSQL de pruebas. Nunca se almacena la dirección de correo en texto
+plano en esa tabla, sino un digest SHA-256 con alcance de organización;
+el digest es **seudónimo**, no una anonimización irreversible.
+
+- Se permiten cinco intentos por cuenta y organización durante una ventana
+  de quince minutos. El sexto intento recibe HTTP 429, incluso si la
+  contraseña es correcta, hasta la expiración del bloqueo.
+- Se contabilizan los intentos **antes** de verificar la contraseña mediante
+  una función PostgreSQL atómica con `SECURITY DEFINER`. El incremento
+  se confirma en una transacción distinta y no desaparece cuando falla el
+  inicio de sesión. Esto permite compartir el límite entre instancias.
+- El contador se limpia únicamente después de autenticar las credenciales,
+  comprobar un rol asignado y crear la sesión dentro de la misma transacción.
+- El rol de autenticación no puede leer ni modificar directamente la tabla:
+  solo tiene permiso para ejecutar las funciones controladas.
+- Correo u organización inexistentes reciben el mismo error de credenciales
+  inválidas que una contraseña equivocada, hasta alcanzar el umbral.
+
+**Alcance y límites:** la medida reduce ataques repetidos contra una misma
+identidad; no sustituye un límite global por dirección de origen, protección
+contra ataques distribuidos a múltiples correos, MFA ni observabilidad. Un
+tercero podría provocar bloqueos de una cuenta conocida. Es un control
+provisional para cuentas sintéticas; se requiere revisión antiautomatización
+antes de aceptar usuarios reales. No aplicar esta migración a la base
+pública de demostración de Neon sin plan de migración y aprobación.

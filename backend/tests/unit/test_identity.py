@@ -10,6 +10,7 @@ from app.core.identity import (
     hash_password,
     hash_session_token,
     issue_session_token,
+    login_bucket_digest,
     valid_consent,
     verify_password,
 )
@@ -27,6 +28,17 @@ def test_hashes_are_salted_and_passwords_never_stored_plaintext():
     assert not verify_password("Some strong demo passphrase 2026!", first[:-2])
     with pytest.raises(ValueError):
         hash_password("too-short")
+
+
+def test_login_throttle_bucket_is_pseudonymous_and_tenant_scoped():
+    organization = uuid4()
+    same_address = "Tester@Example.Invalid"
+    digest = login_bucket_digest(organization, same_address)
+    assert len(digest) == 64
+    assert same_address.lower() not in digest
+    assert login_bucket_digest(organization, " tester@example.invalid ") == digest
+    assert login_bucket_digest(uuid4(), same_address) != digest
+    assert login_bucket_digest(organization, "other@example.invalid") != digest
 
 
 def test_session_tokens_are_random_and_only_digest_is_persisted():

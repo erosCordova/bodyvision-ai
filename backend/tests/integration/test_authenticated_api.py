@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 
 from app.core.config import Settings
-from app.core.identity import hash_password, hash_session_token
+from app.core.identity import hash_password, hash_session_token, login_bucket_digest
 from app.main import create_app
 from app.models.context import FIRST_WORKSPACE, SECOND_WORKSPACE
 
@@ -105,6 +105,10 @@ def protected():
             yield client, owner, profile_id, users
     finally:
         with owner.begin() as conn:
+            conn.execute(
+                text("DELETE FROM auth_login_attempts WHERE organization_id IN (:a,:b)"),
+                {"a": FIRST_WORKSPACE, "b": SECOND_WORKSPACE},
+            )
             conn.execute(
                 text("DELETE FROM auth_sessions WHERE user_id = ANY(:ids)"),
                 {"ids": [x[0] for x in users]},
@@ -235,3 +239,97 @@ def test_authorization_revocation_and_session_expiry(protected):
         )
     # A valid session cannot override revoked profile grants.
     assert client.get(path, headers=headers(second_member_token)).status_code == 404
+
+
+def test_login_throttle_is_shared_and_does_not_reveal_account_existence(protected):
+    client, owner, _, users = protected
+    editor = users[0]
+    email = f"fictional-{editor[0].hex[:12]}@example.invalid"
+    wrong = {
+        "organization_id": str(editor[1]),
+        "email": email,
+        "password": "An incorrect password",
+    }
+
+    # Five attempts are processed; the sixth is rejected before password KDF.
+    for _ in range(5):
+        response = client.post("/api/v1/auth/login", json=wrong)
+        assert response.status_code == 401
+        assert response.json()["code"] == "INVALID_CREDENTIALS"
+    blocked = client.post("/api/v1/auth/login", json=wrong)
+    assert blocked.status_code == 429
+    assert blocked.json()["code"] == "LOGIN_RATE_LIMITED"
+
+    # A correct password cannot bypass the lockout.
+    correct = client.post("/api/v1/auth/login", json={**wrong, "password": PASSWORD})
+    assert correct.status_code == 429
+
+    email_hash = login_bucket_digest(editor[1], email)
+    with owner.begin() as connection:
+        bucket = connection.execute(
+            text(
+                "SELECT attempt_count,blocked_until FROM auth_login_attempts "
+                "WHERE organization_id=:org AND email_sha256=:digest"
+            ),
+            {"org": editor[1], "digest": email_hash},
+        ).one()
+        assert bucket.attempt_count >= 7
+        assert bucket.blocked_until is not None
+
+        # Advance only the synthetic test bucket to verify window expiration.
+        connection.execute(
+            text(
+                "UPDATE auth_login_attempts "
+                "SET window_started=now()-interval '16 minutes',"
+                "blocked_until=now()-interval '1 minute' "
+                "WHERE organization_id=:org AND email_sha256=:digest"
+            ),
+            {"org": editor[1], "digest": email_hash},
+        )
+
+    renewed = client.post("/api/v1/auth/login", json={**wrong, "password": PASSWORD})
+    assert renewed.status_code == 200
+    with owner.begin() as connection:
+        assert connection.execute(
+            text(
+                "SELECT count(*) FROM auth_login_attempts "
+                "WHERE organization_id=:org AND email_sha256=:digest"
+            ),
+            {"org": editor[1], "digest": email_hash},
+        ).scalar_one() == 0
+
+    # Unknown identity receives the same generic 401, and cannot share a
+    # throttle bucket with a distinct account or organization.
+    missing = client.post(
+        "/api/v1/auth/login",
+        json={**wrong, "email": "nonexistent@example.invalid"},
+    )
+    assert missing.status_code == 401
+    assert missing.json()["code"] == "INVALID_CREDENTIALS"
+    another_tenant = client.post(
+        "/api/v1/auth/login",
+        json={**wrong, "organization_id": str(SECOND_WORKSPACE)},
+    )
+    assert another_tenant.status_code == 401
+    assert another_tenant.json()["code"] == "INVALID_CREDENTIALS"
+
+
+def test_login_throttle_survives_independent_connections(protected):
+    client, owner, _, users = protected
+    editor = users[0]
+    email = f"fictional-{editor[0].hex[:12]}@example.invalid"
+    digest = login_bucket_digest(editor[1], email)
+
+    # Tests the actual SECURITY DEFINER function through two independent
+    # PostgreSQL connections, rather than an in-process Python counter.
+    for index in range(1, 7):
+        with owner.begin() as connection:
+            ok = connection.execute(
+                text(
+                    "SELECT consume_auth_login_attempt(:org,CAST(:digest AS char(64)))"
+                ),
+                {"org": editor[1], "digest": digest},
+            ).scalar_one()
+        assert ok is (index <= 5)
+
+    assert authenticate(client, editor[0], editor[1]).status_code == 429

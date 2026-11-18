@@ -16,6 +16,7 @@ from app.core.identity import (
     Identity,
     hash_session_token,
     issue_session_token,
+    login_bucket_digest,
     verify_password,
 )
 
@@ -89,6 +90,23 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
     if not request.app.state.settings.identity_enabled:
         raise DomainError(404, "NOT_FOUND", "Recurso no disponible.")
     email = credentials.email.strip().lower()
+    digest_key = login_bucket_digest(credentials.organization_id, email)
+
+    # Commit the rate-limit counter separately. Failed authentication below
+    # rolls back its own SQL transaction, but must NOT erase the throttle state.
+    with request.app.state.auth_engine.begin() as limiter:
+        permitted = limiter.execute(
+            text(
+                "SELECT consume_auth_login_attempt(:org,CAST(:digest AS char(64)))"
+            ),
+            {"org": credentials.organization_id, "digest": digest_key},
+        ).scalar_one()
+    if not permitted:
+        raise DomainError(
+            429, "LOGIN_RATE_LIMITED",
+            "Demasiados intentos de acceso. Intenta nuevamente en 15 minutos.",
+        )
+
     with request.app.state.auth_engine.begin() as connection:
         connection.execute(
             text("SELECT set_config('app.organization_id',:org,true)"),
@@ -146,6 +164,11 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
                 "expires_at": expires_at,
             },
         )
+        # Clear the counter only if the session insertion also commits.
+        connection.execute(
+            text("SELECT clear_auth_login_attempts(:org,CAST(:digest AS char(64)))"),
+            {"org": credentials.organization_id, "digest": digest_key},
+        ).scalar_one()
     return SessionRead(
         token=token,
         expires_at=expires_at,

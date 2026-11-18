@@ -57,6 +57,12 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+def login_bucket_digest(organization_id: UUID, email: str) -> str:
+    """Pseudonymous, organization-scoped key: never store raw login email."""
+    normalized = email.strip().lower()
+    return hashlib.sha256(organization_id.bytes + b":" + normalized.encode("utf-8")).hexdigest()
+
+
 def issue_session_token() -> tuple[str, str]:
     """Return an opaque bearer token and its digest; persist only the digest."""
     token = secrets.token_urlsafe(SESSION_TOKEN_BYTES)
