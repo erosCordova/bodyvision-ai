@@ -43,6 +43,18 @@ def test_ready_requires_migration(client):
     assert response.json()["schema_revision"] == "0004_private_auth"
 
 
+def test_demo_ready_uses_data_core_revision(client, engine):
+    demo_settings = client.app.state.settings.model_copy(update={"app_env": "demo"})
+    connection = engine.connect.return_value.__enter__.return_value
+    connection.execute.return_value.scalar_one.return_value = "0002_data_core"
+    with TestClient(create_app(demo_settings, engine)) as demo:
+        response = demo.get("/api/v1/health/ready")
+        assert response.status_code == 200
+        assert response.json()["schema_revision"] == "0002_data_core"
+        connection.execute.return_value.scalar_one.return_value = "0004_private_auth"
+        assert demo.get("/api/v1/health/ready").status_code == 503
+
+
 def test_database_failure_returns_safe_error(client, engine):
     engine.connect.side_effect = OperationalError("secret_sql", {}, Exception("secret_password"))
     response = client.get("/api/v1/health/ready")
