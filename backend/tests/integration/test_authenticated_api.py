@@ -636,9 +636,7 @@ def test_private_profile_grants_are_limited_audited_and_revocable(protected):
     path = f"/api/v1/profiles/{profile}"
     grant_path = "/api/v1/auth/profile-access/grant"
     revoke_path = "/api/v1/auth/profile-access/revoke"
-    grant = {
-        "profile_id": str(profile), "user_id": str(member[0]), "access_level": "read"
-    }
+    grant = {"profile_id": str(profile), "user_id": str(member[0]), "access_level": "read"}
 
     disallowed = client.post(
         grant_path, json={**grant, "access_level": "manage"}, headers=headers(admin_token)
@@ -685,10 +683,12 @@ def test_private_profile_grants_are_limited_audited_and_revocable(protected):
         )
     assert len(changes) == 2
     assert {(x["previous_level"], x["new_level"]) for x in changes} == {
-        ("read", None), (None, "read")
+        ("read", None),
+        (None, "read"),
     }
     assert {x["action"] for x in changes} == {
-        "profile.permission_granted", "profile.permission_revoked"
+        "profile.permission_granted",
+        "profile.permission_revoked",
     }
     assert all(
         x["subject_user_id"] == member[0]
@@ -700,21 +700,20 @@ def test_private_profile_grants_are_limited_audited_and_revocable(protected):
 
     self_grant = client.post(
         grant_path,
-        json={
-            "profile_id": str(profile), "user_id": str(admin[0]), "access_level": "manage"
-        },
+        json={"profile_id": str(profile), "user_id": str(admin[0]), "access_level": "manage"},
         headers=headers(admin_token),
     )
     assert self_grant.status_code == 404
     assert client.get(path, headers=headers(admin_token)).status_code == 404
-    assert client.post(
-        grant_path, json=grant, headers=headers(editor_token)
-    ).status_code == 403
-    assert client.post(
-        revoke_path,
-        json={"profile_id": str(profile), "user_id": str(member[0])},
-        headers=headers(member_token),
-    ).status_code == 403
+    assert client.post(grant_path, json=grant, headers=headers(editor_token)).status_code == 403
+    assert (
+        client.post(
+            revoke_path,
+            json={"profile_id": str(profile), "user_id": str(member[0])},
+            headers=headers(member_token),
+        ).status_code
+        == 403
+    )
     cross = client.post(
         grant_path,
         json={
@@ -734,9 +733,7 @@ def test_repeated_permission_revocation_is_not_logged_as_success(protected):
     member = users[1]
     token = authenticate(client, admin[0], admin[1]).json()["token"]
     payload = {"profile_id": str(profile), "user_id": str(member[0])}
-    first = client.post(
-        "/api/v1/auth/profile-access/revoke", json=payload, headers=headers(token)
-    )
+    first = client.post("/api/v1/auth/profile-access/revoke", json=payload, headers=headers(token))
     assert first.status_code == 200
     repeated = client.post(
         "/api/v1/auth/profile-access/revoke", json=payload, headers=headers(token)
@@ -751,8 +748,7 @@ def test_repeated_permission_revocation_is_not_logged_as_success(protected):
     with owner.connect() as connection:
         count = connection.execute(
             text(
-                "SELECT count(*) FROM private_profile_permission_changes "
-                "WHERE profile_id=:profile"
+                "SELECT count(*) FROM private_profile_permission_changes WHERE profile_id=:profile"
             ),
             {"profile": profile},
         ).scalar_one()

@@ -56,12 +56,8 @@ def audit_security(request: Request, limit: int = Query(30, ge=1, le=50)):
 
 
 @router.post("/profile-access/grant", response_model=PermissionChangeRead)
-def grant_profile_permission(
-    request: Request, data: PermissionGrantInput
-) -> PermissionChangeRead:
-    return update_profile_permission(
-        request, data.profile_id, data.user_id, data.access_level
-    )
+def grant_profile_permission(request: Request, data: PermissionGrantInput) -> PermissionChangeRead:
+    return update_profile_permission(request, data.profile_id, data.user_id, data.access_level)
 
 
 @router.post("/profile-access/revoke", response_model=PermissionChangeRead)
