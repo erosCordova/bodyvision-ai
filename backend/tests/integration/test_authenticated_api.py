@@ -506,9 +506,12 @@ def test_profile_access_and_modifications_are_audited_per_tenant(protected):
     assert reader_read.status_code == 200
 
     # Failed actions never create an "allowed" audit entry.
-    assert client.patch(
-        path, headers=headers(reader_token), json={"display_name": "No autorizado"}
-    ).status_code == 403
+    assert (
+        client.patch(
+            path, headers=headers(reader_token), json={"display_name": "No autorizado"}
+        ).status_code
+        == 403
+    )
     assert client.get(path, headers=headers(outsider_token)).status_code == 404
     assert client.get(path, headers=headers(admin_token)).status_code == 404
 

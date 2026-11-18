@@ -28,9 +28,7 @@ def workspace(
                 text("SELECT set_config('app.actor_id',:actor,true)"),
                 {"actor": str(identity.user_id)},
             )
-            connection.execute(
-                text("SELECT set_config('app.identity_verified','yes',true)")
-            )
+            connection.execute(text("SELECT set_config('app.identity_verified','yes',true)"))
             yield Workspace(
                 connection,
                 identity.organization_id,
