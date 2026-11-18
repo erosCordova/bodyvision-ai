@@ -169,3 +169,25 @@ legal, consentimientos completos, auditoría de acceso a cada expediente y
 pruebas de intrusión. Este registro es una **auditoría parcial de identidad**,
 no una auditoría clínica completa. Neon sigue siendo el único proveedor
 admitido para bases alojadas; PostgreSQL de Docker/CI es de uso temporal.
+
+## Panel de administración privada (interfaz de pruebas)
+
+La ruta existente `/administration` conserva la presentación informativa
+en la demo pública; únicamente Vite en modo desarrollo con
+`VITE_ENABLE_PRIVATE_AUTH=true` muestra la pantalla funcional de pruebas.
+
+La pantalla consume `POST /api/v1/auth/users` y `GET /api/v1/auth/audit`
+mediante `Authorization: Bearer`, sin aceptar selectores de organización ni
+almacenar el token en el navegador. Solo administradores autenticados ven
+el formulario de alta y la tabla de los últimos treinta eventos. Los otros
+roles ven un aviso de acceso restringido y no solicitan datos de auditoría.
+
+Los datos de entrada se limitan a usuarios ficticios con correo
+`@example.invalid`. Tras crear la cuenta se limpia la contraseña del
+formulario y se actualiza el registro de auditoría. El frontend no puede
+sustituir la autorización del backend: las operaciones siguen verificando
+sesión, organización y rol dentro de PostgreSQL.
+
+Aún pendiente: flujo auditado de primer administrador, concesión y revocación
+de permisos por expediente, recuperación segura, MFA, auditoría de operaciones
+clínicas y conformidad de privacidad. No habilitar sobre datos personales.

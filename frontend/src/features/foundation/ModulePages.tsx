@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
 import { PrivateAccessPage } from "../access/PrivateAccessPage";
+import { PrivateAdministrationPage } from "../access/PrivateAdministrationPage";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
 function PageTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
@@ -170,6 +171,7 @@ export function ReportsPage() {
   </div>;
 }
 export function AdministrationPage() {
+  if (privateAuthEnabled()) return <PrivateAdministrationPage />;
   return <div className="enterprise-module">
     <PageTitle eyebrow="GOBIERNO DE LA PLATAFORMA" title="Administración y seguridad" description="El documento exige roles, consentimiento, auditoría, retención, privacidad y controles de acceso antes de trabajar con datos reales."/>
     <div className="enterprise-admin-grid">
