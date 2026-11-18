@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0005_login_throttle"
+            == "0006_private_user_admin"
         )
         for table in (
             "user_role_assignments",
@@ -46,6 +46,20 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
                 text("SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass(:table)"),
                 {"table": f"public.{table}"},
             ).scalar_one()
+
+
+def test_runtime_roles_cannot_directly_modify_private_security_data(database):
+    with database.connect() as connection:
+        for role in ("bodyvision_app", "bodyvision_auth_app"):
+            for table in ("security_audit_events", "auth_login_attempts"):
+                for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                    assert not connection.execute(
+                        text("SELECT has_table_privilege(:role,:table,:privilege)"),
+                        {"role": role, "table": table, "privilege": privilege},
+                    ).scalar_one()
+        assert not connection.execute(
+            text("SELECT has_table_privilege('bodyvision_auth_app','users','INSERT')")
+        ).scalar_one()
 
 
 def test_fixture_operators_are_disabled_for_login(database):

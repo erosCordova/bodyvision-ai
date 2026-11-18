@@ -1,7 +1,7 @@
 """Opt-in authenticated API behaviour on disposable synthetic PostgreSQL only."""
 
 import os
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,11 +30,12 @@ def protected():
         connection.execute("SET ROLE bodyvision_app")
 
     profile_id = uuid4()
-    editor_id, reader_id, outsider_id = uuid4(), uuid4(), uuid4()
+    editor_id, reader_id, outsider_id, admin_id = uuid4(), uuid4(), uuid4(), uuid4()
     users = [
         (editor_id, FIRST_WORKSPACE, "specialist", "manage"),
         (reader_id, FIRST_WORKSPACE, "member", "read"),
         (outsider_id, SECOND_WORKSPACE, "specialist", None),
+        (admin_id, FIRST_WORKSPACE, "administrator", None),
     ]
     try:
         with owner.begin() as conn:
@@ -108,6 +109,13 @@ def protected():
             conn.execute(
                 text("DELETE FROM auth_login_attempts WHERE organization_id IN (:a,:b)"),
                 {"a": FIRST_WORKSPACE, "b": SECOND_WORKSPACE},
+            )
+            conn.execute(
+                text(
+                    "DELETE FROM security_audit_events "
+                    "WHERE actor_id = ANY(:ids) OR resource_id = ANY(:ids)"
+                ),
+                {"ids": [x[0] for x in users]},
             )
             conn.execute(
                 text("DELETE FROM auth_sessions WHERE user_id = ANY(:ids)"),
@@ -334,3 +342,139 @@ def test_login_throttle_survives_independent_connections(protected):
         assert ok is (index <= 5)
 
     assert authenticate(client, editor[0], editor[1]).status_code == 429
+
+
+def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(protected):
+    client, owner, profile, users = protected
+    admin, member, outsider = users[3], users[1], users[2]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    member_token = authenticate(client, member[0], member[1]).json()["token"]
+    outsider_token = authenticate(client, outsider[0], outsider[1]).json()["token"]
+
+    # Platform administration does not automatically grant record access.
+    assert client.get(
+        f"/api/v1/profiles/{profile}", headers=headers(admin_token)
+    ).status_code == 404
+
+    name = "Usuario ficticio administrado"
+    email = "provisioned.member@example.invalid"
+    body = {
+        "display_name": name,
+        "email": email,
+        "password": PASSWORD,
+        "role": "member",
+    }
+    denied = client.post("/api/v1/auth/users", json=body, headers=headers(member_token))
+    assert denied.status_code == 403
+
+    created = client.post("/api/v1/auth/users", json=body, headers=headers(admin_token))
+    assert created.status_code == 201, created.text
+    user_data = created.json()
+    assert user_data["organization_id"] == str(FIRST_WORKSPACE)
+    assert user_data["role"] == "member"
+    assert "password" not in user_data and "password_hash" not in user_data
+    created_user = UUID(user_data["id"])
+    users.append((created_user, FIRST_WORKSPACE, "member", None))
+
+    with owner.connect() as conn:
+        info = conn.execute(
+            text(
+                "SELECT email,password_hash,account_status,is_local_operator "
+                "FROM users WHERE id=:id"
+            ),
+            {"id": created_user},
+        ).mappings().one()
+        assert info["email"] == email
+        assert PASSWORD not in info["password_hash"]
+        assert info["password_hash"].startswith("pbkdf2_sha256$")
+        assert info["account_status"] == "active"
+        assert not info["is_local_operator"]
+
+    enrolled = client.post(
+        "/api/v1/auth/login",
+        json={
+            "organization_id": str(FIRST_WORKSPACE),
+            "email": email,
+            "password": PASSWORD,
+        },
+    )
+    assert enrolled.status_code == 200
+    assert enrolled.json()["role"] == "member"
+
+    # No implicit profile grant for new users.
+    assert client.get(
+        f"/api/v1/profiles/{profile}", headers=headers(enrolled.json()["token"])
+    ).status_code == 404
+
+    audit = client.get("/api/v1/auth/audit?limit=50", headers=headers(admin_token))
+    assert audit.status_code == 200, audit.text
+    events = audit.json()
+    assert any(
+        event["action"] == "admin.user_provisioned"
+        and event["resource_id"] == str(created_user)
+        and event["actor_id"] == str(admin[0])
+        for event in events
+    )
+    assert any(event["action"] == "admin.user_provision_denied" for event in events)
+    assert any(event["action"] == "auth.login" for event in events)
+    assert PASSWORD not in audit.text
+    assert admin_token not in audit.text
+
+    assert client.get(
+        "/api/v1/auth/audit", headers=headers(member_token)
+    ).status_code == 403
+    assert client.get(
+        "/api/v1/auth/audit", headers=headers(outsider_token)
+    ).status_code == 403
+    assert client.post(
+        "/api/v1/auth/users",
+        json=body,
+        headers=headers(outsider_token),
+    ).status_code == 403
+
+
+def test_private_user_provisioning_fails_closed_for_duplicate_and_invalid_data(protected):
+    client, owner, _, users = protected
+    admin = users[3]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    email = "provisioned.unique@example.invalid"
+    body = {
+        "display_name": "Usuario ficticio permitido",
+        "email": email,
+        "password": PASSWORD,
+        "role": "specialist",
+    }
+
+    assert client.post(
+        "/api/v1/auth/users",
+        json={**body, "role": "administrator"},
+        headers=headers(admin_token),
+    ).status_code == 422
+    assert client.post(
+        "/api/v1/auth/users",
+        json={**body, "email": "person@real-company.com"},
+        headers=headers(admin_token),
+    ).status_code == 422
+    assert client.post(
+        "/api/v1/auth/users",
+        json={**body, "organization_id": str(SECOND_WORKSPACE)},
+        headers=headers(admin_token),
+    ).status_code == 422
+
+    created = client.post("/api/v1/auth/users", json=body, headers=headers(admin_token))
+    assert created.status_code == 201
+    new_id = UUID(created.json()["id"])
+    users.append((new_id, FIRST_WORKSPACE, "specialist", None))
+    duplicate = client.post("/api/v1/auth/users", json=body, headers=headers(admin_token))
+    assert duplicate.status_code == 409
+    with owner.connect() as connection:
+        assert connection.execute(
+            text("SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"),
+            {"org": FIRST_WORKSPACE, "email": email},
+        ).scalar_one() == 1
+        assert connection.execute(
+            text(
+                "SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"
+            ),
+            {"org": SECOND_WORKSPACE, "email": email},
+        ).scalar_one() == 0

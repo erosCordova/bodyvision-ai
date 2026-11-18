@@ -133,3 +133,39 @@ tercero podría provocar bloqueos de una cuenta conocida. Es un control
 provisional para cuentas sintéticas; se requiere revisión antiautomatización
 antes de aceptar usuarios reales. No aplicar esta migración a la base
 pública de demostración de Neon sin plan de migración y aprobación.
+
+
+## Alta controlada y auditoría (incremento de fase 3)
+
+Migración `0006_private_user_admin` — **exclusiva de local/CI con cuentas y
+expedientes ficticios**. La aplicación pública continúa con `0002_data_core`
+en Neon y no expone endpoints privados.
+
+- `POST /api/v1/auth/users`: únicamente un **administrador con sesión
+  verificada** crea cuentas de tipo `member` o `specialist`, con correo del
+  dominio reservado `example.invalid`. No permite elevar a administrador,
+  no acepta identificadores de organización del cliente y no crea accesos a
+  expedientes por defecto. La contraseña se almacena exclusivamente como hash
+  con sal, no se devuelve en la respuesta.
+- `GET /api/v1/auth/audit`: exclusivamente administradores; hasta cincuenta
+  eventos, limitados a la organización derivada de su propia sesión.
+- Se registran `auth.login`, `auth.logout`, `admin.user_provisioned` y
+  denegaciones de alta o consulta de auditoría, con actor, correlación y
+  resultado, pero **sin contraseñas, tokens ni cuerpos de solicitud**.
+- Ambas operaciones acceden a PostgreSQL a través de funciones
+  `SECURITY DEFINER` de alcance restringido. Los roles de aplicación y
+  autenticación no pueden leer ni escribir directamente las tablas de
+  auditoría ni de límites de intentos.
+- Para crear el primer administrador de un entorno de pruebas hace falta un
+  procedimiento de bootstrap separado con una identidad migradora confiable.
+  No existe autorregistro de administradores ni cuentas activas por defecto.
+- Las pruebas confirman rechazo de cuentas duplicadas, correos no sintéticos,
+  elevación de rol, lectura sin permiso y aislamiento entre organizaciones.
+
+**Pendiente antes de producción:** bootstrap auditado de administradores,
+política de contraseñas revisada, MFA, protección distribuida por IP/cliente,
+revocación remota garantizada en condiciones de red adversas, verificación
+legal, consentimientos completos, auditoría de acceso a cada expediente y
+pruebas de intrusión. Este registro es una **auditoría parcial de identidad**,
+no una auditoría clínica completa. Neon sigue siendo el único proveedor
+admitido para bases alojadas; PostgreSQL de Docker/CI es de uso temporal.

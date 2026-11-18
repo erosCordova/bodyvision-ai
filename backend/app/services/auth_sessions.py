@@ -168,6 +168,17 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
             text("SELECT clear_auth_login_attempts(:org,CAST(:digest AS char(64)))"),
             {"org": credentials.organization_id, "digest": digest_key},
         ).scalar_one()
+        connection.execute(
+            text(
+                "SELECT record_authenticated_security_event("
+                "CAST(:digest AS char(64)),:event,:correlation,'auth.login','allowed')"
+            ),
+            {
+                "digest": digest,
+                "event": uuid4(),
+                "correlation": UUID(request.state.correlation_id),
+            },
+        ).scalar_one()
     return SessionRead(
         token=token,
         expires_at=expires_at,
@@ -181,6 +192,18 @@ def logout(request: Request) -> None:
     resolve_identity(request)
     digest = hash_session_token(bearer_token(request))
     with request.app.state.auth_engine.begin() as connection:
+        # Audit the verified actor before revocation invalidates the token.
+        connection.execute(
+            text(
+                "SELECT record_authenticated_security_event("
+                "CAST(:digest AS char(64)),:event,:correlation,'auth.logout','allowed')"
+            ),
+            {
+                "digest": digest,
+                "event": uuid4(),
+                "correlation": UUID(request.state.correlation_id),
+            },
+        ).scalar_one()
         connection.execute(
             text("SELECT revoke_authenticated_session(CAST(:digest AS char(64)))"),
             {"digest": digest},
