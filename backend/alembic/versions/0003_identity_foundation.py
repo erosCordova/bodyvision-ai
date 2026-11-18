@@ -140,7 +140,6 @@ def downgrade() -> None:
         op.execute(f"DROP TABLE {table}")
     op.execute("DROP INDEX user_email_per_organization")
     op.execute(
-        "ALTER TABLE users DROP COLUMN account_status,"
-        "DROP COLUMN password_hash,DROP COLUMN email"
+        "ALTER TABLE users DROP COLUMN account_status,DROP COLUMN password_hash,DROP COLUMN email"
     )
     op.execute("UPDATE system_schema_state SET revision='0002_data_core'")

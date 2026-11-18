@@ -43,27 +43,23 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
                 {"table": f"public.{table}"},
             ).scalar_one()
             assert conn.execute(
-                text(
-                    "SELECT relrowsecurity FROM pg_class "
-                    "WHERE oid=to_regclass(:table)"
-                ),
+                text("SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass(:table)"),
                 {"table": f"public.{table}"},
             ).scalar_one()
 
 
 def test_fixture_operators_are_disabled_for_login(database):
     with database.connect() as conn:
-        operators = conn.execute(
-            text(
-                "SELECT email,password_hash,account_status FROM users "
-                "WHERE is_local_operator"
+        operators = (
+            conn.execute(
+                text("SELECT email,password_hash,account_status FROM users WHERE is_local_operator")
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         assert operators
         assert all(
-            u["email"] is None
-            and u["password_hash"] is None
-            and u["account_status"] == "disabled"
+            u["email"] is None and u["password_hash"] is None and u["account_status"] == "disabled"
             for u in operators
         )
 
@@ -74,8 +70,7 @@ def test_consent_is_versioned_and_requires_consistent_status(database):
         try:
             actor = conn.execute(
                 text(
-                    "SELECT id FROM users WHERE organization_id=:organization "
-                    "AND is_local_operator"
+                    "SELECT id FROM users WHERE organization_id=:organization AND is_local_operator"
                 ),
                 {"organization": FIRST_WORKSPACE},
             ).scalar_one()
@@ -121,10 +116,7 @@ def test_consent_is_versioned_and_requires_consistent_status(database):
                         {**values, "id": uuid4()},
                     )
             conn.execute(
-                text(
-                    "UPDATE profile_consents "
-                    "SET status='revoked',revoked_at=now() WHERE id=:id"
-                ),
+                text("UPDATE profile_consents SET status='revoked',revoked_at=now() WHERE id=:id"),
                 {"id": consent_id},
             )
             result = conn.execute(

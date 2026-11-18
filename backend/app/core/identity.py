@@ -51,9 +51,7 @@ def verify_password(password: str, stored: str) -> bool:
         expected = bytes.fromhex(digest_hex)
         if len(salt) != 16 or len(expected) != 32 or len(password) > PASSWORD_MAX_LENGTH:
             return False
-        digest = hashlib.pbkdf2_hmac(
-            "sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS
-        )
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
         return hmac.compare_digest(digest, expected)
     except (ValueError, TypeError, AttributeError):
         return False

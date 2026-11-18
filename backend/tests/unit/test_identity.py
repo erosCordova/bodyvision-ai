@@ -70,9 +70,7 @@ def test_consent_is_purpose_bound_and_revocation_is_respected():
     capture = ConsentState("capture", now - timedelta(minutes=1))
     pose = ConsentState("pose", now - timedelta(minutes=1))
     revoked = ConsentState("capture", now - timedelta(hours=1), revoked_at=now)
-    expired = ConsentState(
-        "capture", now - timedelta(days=2), expires_at=now - timedelta(days=1)
-    )
+    expired = ConsentState("capture", now - timedelta(days=2), expires_at=now - timedelta(days=1))
 
     assert valid_consent(capture, "capture", now)
     assert not valid_consent(capture, "pose", now)
@@ -82,22 +80,17 @@ def test_consent_is_purpose_bound_and_revocation_is_respected():
     assert not valid_consent(None, "capture", now)
 
     assert authorized(
-        specialist, organization, "capture:create",
-        access_level="write", consent=capture, at=now
+        specialist, organization, "capture:create", access_level="write", consent=capture, at=now
     )
     assert not authorized(
-        specialist, organization, "capture:create",
-        access_level="write", consent=revoked, at=now
+        specialist, organization, "capture:create", access_level="write", consent=revoked, at=now
     )
     assert not authorized(
-        specialist, organization, "pose:run",
-        access_level="manage", consent=capture, at=now
+        specialist, organization, "pose:run", access_level="manage", consent=capture, at=now
     )
     assert authorized(
-        specialist, organization, "pose:run",
-        access_level="manage", consent=pose, at=now
+        specialist, organization, "pose:run", access_level="manage", consent=pose, at=now
     )
     assert not authorized(
-        specialist, organization, "pose:run",
-        access_level="read", consent=pose, at=now
+        specialist, organization, "pose:run", access_level="read", consent=pose, at=now
     )
