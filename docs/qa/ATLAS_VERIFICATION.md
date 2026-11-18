@@ -20,4 +20,6 @@ Se sustituyen las pruebas de la ruta antigua por la ruta pública actual. Las pr
 
 Se comprueban carga real de WebGL, vistas, zoom, cambio de capa/opacidad, búsqueda de fémur, acceso a recorridos, reset, movimiento reducido, errores y reintento de descarga, navegador sin WebGL, ausencia de escrituras y desbordamiento en móvil. Las capturas y trazas se guardan en el artefacto bodyvision-browser-evidence de CI.
 
+La comprobación interactiva detectó que GLTFLoader transforma Femur.l.001 en Femurl001. Ahora se conserva userData.name para asociar la malla con la ficha y se normaliza solo el sufijo numérico, manteniendo izquierda/derecha. La prueba exige además el marcador de selección real y el aislamiento de la estructura; mostrar únicamente la ficha ya no basta para pasar.
+
 El navegador remoto tiene WebGL deshabilitado (GL_VENDOR/GL_RENDERER Disabled). En cambio, el navegador Chrome conectado sí renderizó el cuerpo y permitió cambiar al esqueleto y buscar el fémur. Se ajusta además el encuadre inicial y reset para reservar espacio alrededor del modelo según el campo de visión y la proporción del visor. La comprobación automatizada gráfica usa Chromium de CI con SwiftShader explícito. Los resultados y enlaces concretos se informan tras finalizar la ejecución.

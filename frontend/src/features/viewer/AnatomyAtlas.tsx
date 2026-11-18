@@ -6,6 +6,7 @@ import {
   type SceneQuality, type SelectedStructure, type LayerState,
 } from "./AnatomyScene";
 import { anatomySource } from "./atlasSource";
+import { anatomyNameKey } from "./anatomyNames";
 import "./anatomy-studio.css";
 
 type AtlasController = ReturnType<typeof createAnatomyScene>;
@@ -104,9 +105,9 @@ function matches(entry: AtlasEntry, query: string) {
 }
 function findFromMesh(entries: AtlasEntry[], part: SelectedStructure | null) {
   if (!part) return null;
-  const target = word(cleanMesh(part.name));
-  return entries.find(e => e.layer === part.layer && e.match.some(name => word(cleanMesh(name)) === target))
-    || entries.find(e => e.layer === part.layer && candidateNames(e).some(name => word(name) === target))
+  const target = anatomyNameKey(part.name);
+  return entries.find(e => e.layer === part.layer && e.match.some(name => anatomyNameKey(name) === target))
+    || entries.find(e => e.layer === part.layer && candidateNames(e).some(name => anatomyNameKey(name) === target))
     || null;
 }
 
@@ -162,7 +163,7 @@ export function AnatomyAtlas() {
         setIsolated(false);
         setSelectedEntry(previous => {
           if (!part || !previous || previous.layer !== part.layer) return null;
-          return previous.match.some(name => word(cleanMesh(name)) === word(cleanMesh(part.name))) ? previous : null;
+          return previous.match.some(name => anatomyNameKey(name) === anatomyNameKey(part.name)) ? previous : null;
         });
       }, (layer, state) => setLayerStates(previous => ({ ...previous, [layer]: state })), setError);
       controller.current = scene;

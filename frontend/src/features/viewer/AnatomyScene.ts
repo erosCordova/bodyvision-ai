@@ -5,6 +5,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url";
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
+import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
 export const anatomicalLayers = [
   { id: "skin", label: "Piel", detail: "Superficie corporal", color: "#c68e74" },
@@ -236,7 +237,7 @@ export function createAnatomyScene(
       return cloned;
     };
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map(highlight) : highlight(mesh.material);
-    onSelected({ name: mesh.name || "Estructura sin nombre", layer });
+    onSelected({ name: anatomyMeshName(mesh) || "Estructura sin nombre", layer });
     applyAll();
   };
 
@@ -294,12 +295,12 @@ export function createAnatomyScene(
   };
 
   const matchingMesh = (group: THREE.Group, requestedName: string) => {
-    const normalized = requestedName.toLowerCase().replace(/[_.]/g, " ").replace(/\s+/g, " ").trim();
+    const normalized = anatomyNameKey(requestedName);
     let found: THREE.Mesh | null = null;
     group.traverse(obj => {
       if (found || !(obj instanceof THREE.Mesh)) return;
-      const name = obj.name.toLowerCase().replace(/[_.]/g, " ").replace(/\s+/g, " ").trim();
-      if (name === normalized || name.startsWith(normalized + " ")) found = obj;
+      const name = anatomyNameKey(anatomyMeshName(obj));
+      if (normalized && (name === normalized || name.startsWith(normalized))) found = obj;
     });
     return found;
   };
