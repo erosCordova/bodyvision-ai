@@ -23,6 +23,7 @@ from app.schemas.core import (
     ProfileUpdate,
 )
 from app.services.measurements import derived, save
+from app.services.profile_audit import record_profile_event
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
 Scope = Annotated[Workspace, Depends(workspace)]
@@ -92,6 +93,7 @@ def list_profiles(
     total = scope.connection.execute(
         text(f"SELECT count(*) FROM profiles WHERE {condition}"), params
     ).scalar_one()
+    record_profile_event(scope, "profile.list", None)
     return dict(items=[dict(x) for x in rows], total=total, limit=limit, offset=offset)
 
 
@@ -123,12 +125,16 @@ def create_profile(data: ProfileInput, scope: Scope):
             "actor": scope.actor_id,
         },
     )
-    return records.profile(scope, identifier)
+    result = records.profile(scope, identifier)
+    record_profile_event(scope, "profile.create", identifier)
+    return result
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileRead)
 def get_profile(profile_id: UUID, scope: Scope):
-    return records.profile(scope, profile_id)
+    result = records.profile(scope, profile_id)
+    record_profile_event(scope, "profile.read", profile_id)
+    return result
 
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileRead)
@@ -150,7 +156,9 @@ def update_profile(profile_id: UUID, data: ProfileUpdate, scope: Scope):
     scope.connection.execute(
         text(f"UPDATE profiles SET {assignments} WHERE id=:id AND organization_id=:org"), params
     )
-    return records.profile(scope, profile_id)
+    result = records.profile(scope, profile_id)
+    record_profile_event(scope, "profile.update", profile_id)
+    return result
 
 
 @router.post("/profiles/{profile_id}/archive", response_model=ProfileRead)
@@ -161,7 +169,9 @@ def archive_profile(profile_id: UUID, scope: Scope):
         text("UPDATE profiles SET status='archived' WHERE id=:id AND organization_id=:org"),
         {"id": profile_id, "org": scope.organization_id},
     )
-    return records.profile(scope, profile_id)
+    result = records.profile(scope, profile_id)
+    record_profile_event(scope, "profile.archive", profile_id)
+    return result
 
 
 @router.get("/profiles/{profile_id}/measurements", response_model=MeasurementList)
@@ -198,6 +208,7 @@ def list_measurements(
     total = scope.connection.execute(
         text(f"SELECT count(*) FROM measurements m WHERE {condition}"), params
     ).scalar_one()
+    record_profile_event(scope, "measurement.list", profile_id)
     return dict(items=[dict(x) for x in rows], total=total, limit=limit, offset=offset)
 
 
@@ -209,7 +220,9 @@ def create_measurement(
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ):
     require_writer(scope)
-    return save(scope, profile_id, data, idempotency_key)
+    result = save(scope, profile_id, data, idempotency_key)
+    record_profile_event(scope, "measurement.create", profile_id)
+    return result
 
 
 @router.patch("/measurements/{measurement_id}", response_model=MeasurementRead, status_code=201)
@@ -221,7 +234,9 @@ def correct_measurement(
 ):
     require_writer(scope)
     row = records.measurement(scope, measurement_id)
-    return save(scope, row["profile_id"], data, idempotency_key, measurement_id)
+    result = save(scope, row["profile_id"], data, idempotency_key, measurement_id)
+    record_profile_event(scope, "measurement.correct", row["profile_id"])
+    return result
 
 
 @router.get("/measurements/{measurement_id}/versions", response_model=list[MeasurementRead])
@@ -249,12 +264,15 @@ def versions(measurement_id: UUID, scope: Scope):
         if not following:
             break
         chain.append(following)
+    record_profile_event(scope, "measurement.read", row["profile_id"])
     return chain
 
 
 @router.get("/profiles/{profile_id}/analytics/derived", response_model=list[DerivedRead])
 def get_derived(profile_id: UUID, scope: Scope, as_of: AwareDatetime | None = None):
-    return derived(scope, profile_id, as_of)
+    result = derived(scope, profile_id, as_of)
+    record_profile_event(scope, "analytics.read", profile_id)
+    return result
 
 
 @router.get("/profiles/{profile_id}/analytics/series", response_model=list[MeasurementRead])
@@ -269,6 +287,7 @@ def series(
     if days:
         cutoff = datetime.now(UTC) - timedelta(days=days)
         rows = [row for row in rows if row["measured_at"] >= cutoff]
+    record_profile_event(scope, "analytics.read", profile_id)
     return rows
 
 

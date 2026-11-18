@@ -191,3 +191,39 @@ sesión, organización y rol dentro de PostgreSQL.
 Aún pendiente: flujo auditado de primer administrador, concesión y revocación
 de permisos por expediente, recuperación segura, MFA, auditoría de operaciones
 clínicas y conformidad de privacidad. No habilitar sobre datos personales.
+
+
+## Auditoría transaccional de expedientes (incremento 0007)
+
+La migración `0007_profile_audit` crea la función
+`record_private_profile_event`, concedida exclusivamente al rol de la API
+de datos. El backend autentica cada solicitud y configura actor y organización
+dentro de una transacción PostgreSQL. Las operaciones auditadas emiten
+un evento de acceso permitido **en esa misma transacción**; si la función de
+auditoría falla, la operación sobre el expediente no se confirma.
+
+Se registran únicamente identificador del expediente, organización, actor,
+acción, correlación, hora y resultado; nunca valores clínicos, contraseñas,
+tokens, nombres o contenido de las solicitudes. Las acciones cubiertas son:
+listado/consulta/creación/actualización/archivo de expedientes;
+listado/consulta/alta/corrección de mediciones; y lecturas analíticas.
+
+La función verifica de nuevo que se trata de una identidad ficticia activa,
+que el expediente pertenece a la organización y que existe una concesión
+vigente de acceso. Las escrituras además requieren rol administrativo o de
+especialista y acceso `write` o `manage`. Un administrador no puede consultar
+un expediente sin permiso explícito. Las pruebas comprueban que las lecturas,
+actualizaciones y consultas de métricas originan un evento, y que los
+intentos rechazados no se registran como accesos permitidos.
+
+**Limitaciones pendientes:** esta versión todavía no registra por separado
+cada acceso denegado a expedientes, cambios de permisos ni exportaciones
+de información; tampoco completa la política de retención del registro.
+Las denegaciones deben registrarse en una transacción independiente para
+que no desaparezcan con el rollback de la operación fallida. Antes de
+incorporar información personal real se requiere auditoría integral,
+consentimientos verificables, revisión independiente y medidas de privacidad.
+
+El despliegue público sobre Neon permanece en la revisión
+`0002_data_core`: esta migración está destinada únicamente a la base
+PostgreSQL desechable de desarrollo y CI. Render nunca aloja datos.

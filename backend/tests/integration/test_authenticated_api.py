@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import DBAPIError
 
 from app.core.config import Settings
 from app.core.identity import hash_password, hash_session_token, login_bucket_digest
@@ -482,3 +483,136 @@ def test_private_user_provisioning_fails_closed_for_duplicate_and_invalid_data(p
         ).scalar_one()
         assert same_org == 1
         assert other_org == 0
+
+
+def test_profile_access_and_modifications_are_audited_per_tenant(protected):
+    client, owner, profile, users = protected
+    editor, reader, outsider, administrator = users[:4]
+    editor_token = authenticate(client, editor[0], editor[1]).json()["token"]
+    reader_token = authenticate(client, reader[0], reader[1]).json()["token"]
+    outsider_token = authenticate(client, outsider[0], outsider[1]).json()["token"]
+    admin_token = authenticate(client, administrator[0], administrator[1]).json()["token"]
+    path = f"/api/v1/profiles/{profile}"
+
+    editor_read = client.get(path, headers=headers(editor_token))
+    assert editor_read.status_code == 200
+    editor_write = client.patch(
+        path,
+        headers=headers(editor_token),
+        json={"display_name": "Expediente ficticio auditado"},
+    )
+    assert editor_write.status_code == 200
+    reader_read = client.get(path, headers=headers(reader_token))
+    assert reader_read.status_code == 200
+
+    # Failed actions never create an "allowed" audit entry.
+    assert client.patch(
+        path, headers=headers(reader_token), json={"display_name": "No autorizado"}
+    ).status_code == 403
+    assert client.get(path, headers=headers(outsider_token)).status_code == 404
+    assert client.get(path, headers=headers(admin_token)).status_code == 404
+
+    with owner.connect() as connection:
+        entries = (
+            connection.execute(
+                text(
+                    "SELECT organization_id,actor_id,correlation_id,action,"
+                    "resource_type,resource_id,outcome "
+                    "FROM security_audit_events WHERE resource_id=:profile "
+                    "AND action LIKE 'profile.%'"
+                ),
+                {"profile": profile},
+            )
+            .mappings()
+            .all()
+        )
+    assert len(entries) == 3
+    assert {(x["action"], x["actor_id"]) for x in entries} == {
+        ("profile.read", editor[0]),
+        ("profile.update", editor[0]),
+        ("profile.read", reader[0]),
+    }
+    assert all(
+        x["organization_id"] == FIRST_WORKSPACE
+        and x["resource_type"] == "profile"
+        and x["resource_id"] == profile
+        and x["outcome"] == "allowed"
+        and x["correlation_id"] is not None
+        for x in entries
+    )
+    assert {str(x["correlation_id"]) for x in entries} == {
+        editor_read.headers["X-Correlation-ID"],
+        editor_write.headers["X-Correlation-ID"],
+        reader_read.headers["X-Correlation-ID"],
+    }
+    admin_audit = client.get("/api/v1/auth/audit?limit=50", headers=headers(admin_token))
+    assert admin_audit.status_code == 200
+    assert any(
+        e["action"] == "profile.update" and e["resource_id"] == str(profile)
+        for e in admin_audit.json()
+    )
+    assert "Expediente ficticio auditado" not in admin_audit.text
+    assert editor_token not in admin_audit.text
+
+
+def test_reading_measurements_and_analytics_creates_profile_scoped_events(protected):
+    client, owner, profile, users = protected
+    editor = users[0]
+    token = authenticate(client, editor[0], editor[1]).json()["token"]
+    paths = (
+        (f"/api/v1/profiles/{profile}/measurements", "measurement.list"),
+        (f"/api/v1/profiles/{profile}/analytics/derived", "analytics.read"),
+        (f"/api/v1/profiles/{profile}/analytics/series", "analytics.read"),
+    )
+    for path, action in paths:
+        response = client.get(path, headers=headers(token))
+        assert response.status_code == 200, response.text
+        with owner.connect() as connection:
+            exists = connection.execute(
+                text(
+                    "SELECT count(*) FROM security_audit_events "
+                    "WHERE actor_id=:actor AND resource_id=:profile "
+                    "AND correlation_id=:correlation AND action=:action"
+                ),
+                {
+                    "actor": editor[0],
+                    "profile": profile,
+                    "correlation": response.headers["X-Correlation-ID"],
+                    "action": action,
+                },
+            ).scalar_one()
+        assert exists == 1
+
+
+def test_unverified_data_connection_cannot_forge_profile_audit(protected):
+    _, owner, profile, users = protected
+    with owner.begin() as connection:
+        allowed_to_call = connection.execute(
+            text(
+                "SELECT has_function_privilege("
+                "'bodyvision_app','record_private_profile_event(uuid,uuid,uuid,text)',"
+                "'EXECUTE')"
+            )
+        ).scalar_one()
+        auth_cannot_call = connection.execute(
+            text(
+                "SELECT has_function_privilege("
+                "'bodyvision_auth_app','record_private_profile_event(uuid,uuid,uuid,text)',"
+                "'EXECUTE')"
+            )
+        ).scalar_one()
+    assert allowed_to_call
+    assert not auth_cannot_call
+
+    with owner.connect() as connection:
+        with connection.begin():
+            connection.execute(text("SET LOCAL ROLE bodyvision_app"))
+            with pytest.raises(DBAPIError):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "SELECT record_private_profile_event("
+                            ":event,:correlation,:profile,'profile.read')"
+                        ),
+                        {"event": uuid4(), "correlation": uuid4(), "profile": profile},
+                    )

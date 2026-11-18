@@ -14,3 +14,4 @@ class Workspace:
     actor_id: UUID
     role: str = "synthetic"
     authenticated: bool = False
+    correlation_id: UUID | None = None

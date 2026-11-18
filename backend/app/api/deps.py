@@ -28,8 +28,16 @@ def workspace(
                 text("SELECT set_config('app.actor_id',:actor,true)"),
                 {"actor": str(identity.user_id)},
             )
+            connection.execute(
+                text("SELECT set_config('app.identity_verified','yes',true)")
+            )
             yield Workspace(
-                connection, identity.organization_id, identity.user_id, identity.role, True
+                connection,
+                identity.organization_id,
+                identity.user_id,
+                identity.role,
+                True,
+                UUID(request.state.correlation_id),
             )
         return
 
