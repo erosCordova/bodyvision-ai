@@ -53,7 +53,7 @@ def verify_password(password: str, stored: str) -> bool:
             return False
         digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
         return hmac.compare_digest(digest, expected)
-    except (ValueError, TypeError, AttributeError):
+    except (ValueError, TypeError, AttributeError, UnicodeError):
         return False
 
 
@@ -66,7 +66,10 @@ def issue_session_token() -> tuple[str, str]:
 def hash_session_token(token: str) -> str:
     if not isinstance(token, str) or not (40 <= len(token) <= 256):
         raise ValueError("Invalid session token")
-    return hashlib.sha256(token.encode("ascii")).hexdigest()
+    try:
+        return hashlib.sha256(token.encode("ascii")).hexdigest()
+    except UnicodeError as exc:
+        raise ValueError("Invalid session token") from exc
 
 
 @dataclass(frozen=True)
@@ -84,10 +87,17 @@ class ConsentState:
     revoked_at: datetime | None = None
     expires_at: datetime | None = None
     version: str = ""
+    status: Literal["pending", "accepted", "revoked"] = "pending"
 
 
 def valid_consent(consent: ConsentState | None, purpose: Purpose, at: datetime) -> bool:
-    if consent is None or consent.purpose != purpose or consent.accepted_at is None:
+    if (
+        consent is None
+        or consent.purpose != purpose
+        or consent.status != "accepted"
+        or not consent.version.strip()
+        or consent.accepted_at is None
+    ):
         return False
     if at.tzinfo is None or consent.accepted_at.tzinfo is None:
         return False
@@ -113,6 +123,8 @@ def authorized(
     explicit profile grant to read or modify individual records.
     """
     if identity is None or not identity.active or identity.organization_id != organization_id:
+        return False
+    if identity.role not in {"administrator", "specialist", "member"}:
         return False
     if action == "admin:manage":
         return identity.role == "administrator"

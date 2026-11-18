@@ -39,6 +39,8 @@ def test_session_tokens_are_random_and_only_digest_is_persisted():
     assert hash_session_token(token) == digest
     with pytest.raises(ValueError):
         hash_session_token("short")
+    with pytest.raises(ValueError):
+        hash_session_token("ñ" * 45)
 
 
 def test_tenant_and_role_boundaries_are_default_deny():
@@ -55,6 +57,10 @@ def test_tenant_and_role_boundaries_are_default_deny():
     assert not authorized(admin, organization, "profile:read")
     assert not authorized(admin, wrong_organization, "admin:manage")
     assert not authorized(disabled, organization, "admin:manage")
+    assert not authorized(
+        Identity(organization, uuid4(), "unassigned", True),
+        organization, "profile:read", access_level="manage"
+    )
     assert not authorized(None, organization, "profile:read", access_level="manage")
 
     assert authorized(member, organization, "profile:read", access_level="read")
@@ -67,17 +73,29 @@ def test_consent_is_purpose_bound_and_revocation_is_respected():
     organization = uuid4()
     specialist = Identity(organization, uuid4(), "specialist", True)
     now = datetime.now(UTC)
-    capture = ConsentState("capture", now - timedelta(minutes=1))
-    pose = ConsentState("pose", now - timedelta(minutes=1))
-    revoked = ConsentState("capture", now - timedelta(hours=1), revoked_at=now)
-    expired = ConsentState("capture", now - timedelta(days=2), expires_at=now - timedelta(days=1))
+    capture = ConsentState("capture", now - timedelta(minutes=1), version="v1", status="accepted")
+    pose = ConsentState("pose", now - timedelta(minutes=1), version="v1", status="accepted")
+    revoked = ConsentState(
+        "capture", now - timedelta(hours=1), revoked_at=now, version="v1", status="revoked"
+    )
+    expired = ConsentState(
+        "capture",
+        now - timedelta(days=2),
+        expires_at=now - timedelta(days=1),
+        version="v1",
+        status="accepted",
+    )
 
     assert valid_consent(capture, "capture", now)
     assert not valid_consent(capture, "pose", now)
     assert not valid_consent(revoked, "capture", now)
     assert not valid_consent(expired, "capture", now)
-    assert not valid_consent(ConsentState("capture", now + timedelta(days=1)), "capture", now)
+    assert not valid_consent(
+        ConsentState("capture", now + timedelta(days=1), version="v1", status="accepted"),
+        "capture", now
+    )
     assert not valid_consent(None, "capture", now)
+    assert not valid_consent(ConsentState("capture", now), "capture", now)
 
     assert authorized(
         specialist, organization, "capture:create", access_level="write", consent=capture, at=now
