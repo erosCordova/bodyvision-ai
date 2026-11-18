@@ -12,7 +12,16 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "event": record.getMessage(),
         }
-        for name in ("correlation_id", "method", "route", "status_code", "duration_ms"):
+        for name in (
+            "correlation_id",
+            "method",
+            "route",
+            "status_code",
+            "duration_ms",
+            "error_type",
+            "driver_error_type",
+            "sqlstate",
+        ):
             if hasattr(record, name):
                 payload[name] = getattr(record, name)
         return json.dumps(payload, ensure_ascii=False)
