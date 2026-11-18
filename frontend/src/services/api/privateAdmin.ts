@@ -19,6 +19,19 @@ const createdUserSchema = z.object({
   status: z.literal("active"),
 });
 
+const permissionChangeSchema = z.object({
+  profile_id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  status: z.enum(["granted", "revoked"]),
+});
+export type PermissionGrant = {
+  profile_id: string;
+  user_id: string;
+  access_level: "read" | "write" | "manage";
+};
+export type PermissionRevoke = Pick<PermissionGrant, "profile_id" | "user_id">;
+export type PermissionChange = z.infer<typeof permissionChangeSchema>;
+
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type NewTestAccount = {
   display_name: string;
@@ -65,5 +78,17 @@ export function privateAdminApi(token: string) {
     },
     audit: async (): Promise<AuditEvent[]> =>
       z.array(auditEventSchema).parse(await secureRequest(token, "/audit?limit=30")),
+    grantAccess: async (grant: PermissionGrant): Promise<PermissionChange> =>
+      permissionChangeSchema.parse(
+        await secureRequest(token, "/profile-access/grant", {
+          method: "POST", body: JSON.stringify(grant),
+        }),
+      ),
+    revokeAccess: async (data: PermissionRevoke): Promise<PermissionChange> =>
+      permissionChangeSchema.parse(
+        await secureRequest(token, "/profile-access/revoke", {
+          method: "POST", body: JSON.stringify(data),
+        }),
+      ),
   };
 }

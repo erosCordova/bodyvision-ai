@@ -1,6 +1,7 @@
 """Opt-in authenticated API behaviour on disposable synthetic PostgreSQL only."""
 
 import os
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -110,6 +111,10 @@ def protected():
             conn.execute(
                 text("DELETE FROM auth_login_attempts WHERE organization_id IN (:a,:b)"),
                 {"a": FIRST_WORKSPACE, "b": SECOND_WORKSPACE},
+            )
+            conn.execute(
+                text("DELETE FROM private_profile_permission_changes WHERE profile_id=:profile"),
+                {"profile": profile_id},
             )
             conn.execute(
                 text(
@@ -619,3 +624,136 @@ def test_unverified_data_connection_cannot_forge_profile_audit(protected):
                         ),
                         {"event": uuid4(), "correlation": uuid4(), "profile": profile},
                     )
+
+
+def test_private_profile_grants_are_limited_audited_and_revocable(protected):
+    client, owner, profile, users = protected
+    editor, member, outsider, admin = users[:4]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    member_token = authenticate(client, member[0], member[1]).json()["token"]
+    editor_token = authenticate(client, editor[0], editor[1]).json()["token"]
+    outsider_token = authenticate(client, outsider[0], outsider[1]).json()["token"]
+    path = f"/api/v1/profiles/{profile}"
+    grant_path = "/api/v1/auth/profile-access/grant"
+    revoke_path = "/api/v1/auth/profile-access/revoke"
+    grant = {
+        "profile_id": str(profile), "user_id": str(member[0]), "access_level": "read"
+    }
+
+    disallowed = client.post(
+        grant_path, json={**grant, "access_level": "manage"}, headers=headers(admin_token)
+    )
+    assert disallowed.status_code == 404
+    assert client.get(path, headers=headers(member_token)).status_code == 200
+    revoked = client.post(
+        revoke_path,
+        json={"profile_id": str(profile), "user_id": str(member[0])},
+        headers=headers(admin_token),
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["status"] == "revoked"
+    assert client.get(path, headers=headers(member_token)).status_code == 404
+
+    restored = client.post(grant_path, json=grant, headers=headers(admin_token))
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["status"] == "granted"
+    assert client.get(path, headers=headers(member_token)).status_code == 200
+
+    with owner.connect() as connection:
+        access = connection.execute(
+            text(
+                "SELECT access_level,expires_at FROM profile_access "
+                "WHERE organization_id=:org AND profile_id=:profile AND user_id=:user"
+            ),
+            {"org": FIRST_WORKSPACE, "profile": profile, "user": member[0]},
+        ).one()
+        assert access.access_level == "read"
+        assert access.expires_at > datetime.now(UTC) + timedelta(days=29)
+        changes = (
+            connection.execute(
+                text(
+                    "SELECT c.subject_user_id,c.previous_level,c.new_level,"
+                    "e.organization_id,e.actor_id,e.action,e.outcome "
+                    "FROM private_profile_permission_changes c "
+                    "JOIN security_audit_events e ON e.id=c.event_id "
+                    "WHERE c.profile_id=:profile"
+                ),
+                {"profile": profile},
+            )
+            .mappings()
+            .all()
+        )
+    assert len(changes) == 2
+    assert {(x["previous_level"], x["new_level"]) for x in changes} == {
+        ("read", None), (None, "read")
+    }
+    assert {x["action"] for x in changes} == {
+        "profile.permission_granted", "profile.permission_revoked"
+    }
+    assert all(
+        x["subject_user_id"] == member[0]
+        and x["organization_id"] == FIRST_WORKSPACE
+        and x["actor_id"] == admin[0]
+        and x["outcome"] == "allowed"
+        for x in changes
+    )
+
+    self_grant = client.post(
+        grant_path,
+        json={
+            "profile_id": str(profile), "user_id": str(admin[0]), "access_level": "manage"
+        },
+        headers=headers(admin_token),
+    )
+    assert self_grant.status_code == 404
+    assert client.get(path, headers=headers(admin_token)).status_code == 404
+    assert client.post(
+        grant_path, json=grant, headers=headers(editor_token)
+    ).status_code == 403
+    assert client.post(
+        revoke_path,
+        json={"profile_id": str(profile), "user_id": str(member[0])},
+        headers=headers(member_token),
+    ).status_code == 403
+    cross = client.post(
+        grant_path,
+        json={
+            "profile_id": str(profile),
+            "user_id": str(outsider[0]),
+            "access_level": "read",
+        },
+        headers=headers(admin_token),
+    )
+    assert cross.status_code == 404
+    assert client.get(path, headers=headers(outsider_token)).status_code == 404
+
+
+def test_repeated_permission_revocation_is_not_logged_as_success(protected):
+    client, owner, profile, users = protected
+    admin = users[3]
+    member = users[1]
+    token = authenticate(client, admin[0], admin[1]).json()["token"]
+    payload = {"profile_id": str(profile), "user_id": str(member[0])}
+    first = client.post(
+        "/api/v1/auth/profile-access/revoke", json=payload, headers=headers(token)
+    )
+    assert first.status_code == 200
+    repeated = client.post(
+        "/api/v1/auth/profile-access/revoke", json=payload, headers=headers(token)
+    )
+    assert repeated.status_code == 404
+    unknown = client.post(
+        "/api/v1/auth/profile-access/grant",
+        json={**payload, "profile_id": str(uuid4()), "access_level": "read"},
+        headers=headers(token),
+    )
+    assert unknown.status_code == 404
+    with owner.connect() as connection:
+        count = connection.execute(
+            text(
+                "SELECT count(*) FROM private_profile_permission_changes "
+                "WHERE profile_id=:profile"
+            ),
+            {"profile": profile},
+        ).scalar_one()
+    assert count == 1

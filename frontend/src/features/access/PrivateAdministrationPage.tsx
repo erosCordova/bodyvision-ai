@@ -13,6 +13,9 @@ const eventNames: Record<string, string> = {
   "admin.user_provisioned": "Usuario creado",
   "admin.user_provision_denied": "Alta de usuario denegada",
   "admin.audit_denied": "Consulta de auditoría denegada",
+  "admin.permission_change_denied": "Cambio de permisos denegado",
+  "profile.permission_granted": "Permiso concedido",
+  "profile.permission_revoked": "Permiso revocado",
 };
 
 const initialAccount: NewTestAccount = {
@@ -31,6 +34,14 @@ export function PrivateAdministrationPage() {
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
   const [creating, setCreating] = useState(false);
+  const [permission, setPermission] = useState({
+    profile_id: "",
+    user_id: "",
+    access_level: "read" as "read" | "write" | "manage",
+  });
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [permissionError, setPermissionError] = useState("");
+  const [permissionSuccess, setPermissionSuccess] = useState("");
   const [auditRevision, setAuditRevision] = useState(0);
 
   const administrator = session?.role === "administrator";
@@ -82,6 +93,7 @@ export function PrivateAdministrationPage() {
       const created = await api.createUser(account);
       setSuccess(`Cuenta ficticia creada: ${created.display_name} (${created.role === "member" ? "Consulta" : "Especialista"}).`);
       setAccount(initialAccount);
+      setPermission(previous => ({ ...previous, user_id: created.id }));
       setAuditStatus("loading");
       setAuditRevision(previous => previous + 1);
     } catch (error) {
@@ -90,6 +102,36 @@ export function PrivateAdministrationPage() {
       setAccount(previous => ({ ...previous, password: "" }));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function changePermission(operation: "grant" | "revoke") {
+    if (!api || !administrator) return;
+    const validUuid = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
+    if (!validUuid.test(permission.profile_id) || !validUuid.test(permission.user_id)) {
+      setPermissionError("Introduce identificadores UUID válidos.");
+      return;
+    }
+    setPermissionBusy(true);
+    setPermissionError("");
+    setPermissionSuccess("");
+    try {
+      const payload = {
+        profile_id: permission.profile_id,
+        user_id: permission.user_id,
+      };
+      const response = operation === "grant"
+        ? await api.grantAccess({ ...payload, access_level: permission.access_level })
+        : await api.revokeAccess(payload);
+      setPermissionSuccess(response.status === "granted"
+        ? "Permiso ficticio concedido durante 30 días."
+        : "Permiso revocado. El acceso se bloquea en el servidor inmediatamente.");
+      setAuditStatus("loading");
+      setAuditRevision(previous => previous + 1);
+    } catch (cause) {
+      setPermissionError(cause instanceof Error ? cause.message : "No se pudo modificar el permiso.");
+    } finally {
+      setPermissionBusy(false);
     }
   }
 
@@ -190,6 +232,45 @@ export function PrivateAdministrationPage() {
           )}
         </section>
       </div>
+      <section className="enterprise-panel private-admin-permissions" aria-label="Permisos por expediente">
+        <h2>Permisos por expediente</h2>
+        <p>Concede o revoca permisos sobre un expediente ficticio de tu organización. No puedes asignarte acceso a ti mismo. Las concesiones caducan a los 30 días.</p>
+        <form className="private-admin-form" onSubmit={event => {
+          event.preventDefault();
+          void changePermission("grant");
+        }}>
+          <label htmlFor="permission-profile">Identificador de expediente</label>
+          <input id="permission-profile" type="text" required value={permission.profile_id}
+            onChange={event => setPermission(old => ({ ...old, profile_id: event.target.value }))}
+            placeholder="UUID del expediente ficticio" />
+          <label htmlFor="permission-user">Identificador de usuario</label>
+          <input id="permission-user" type="text" required value={permission.user_id}
+            onChange={event => setPermission(old => ({ ...old, user_id: event.target.value }))}
+            placeholder="UUID del usuario de prueba" />
+          <label htmlFor="permission-level">Nivel de acceso</label>
+          <select id="permission-level" value={permission.access_level}
+            onChange={event => setPermission(old => ({
+              ...old, access_level: event.target.value as typeof old.access_level,
+            }))}>
+            <option value="read">Lectura</option>
+            <option value="write">Lectura y edición</option>
+            <option value="manage">Gestión del expediente</option>
+          </select>
+          <small>Los usuarios de consulta únicamente pueden recibir acceso de lectura.</small>
+          {permissionError && <p className="private-admin-error" role="alert">{permissionError}</p>}
+          {permissionSuccess && <p className="private-admin-success" role="status">{permissionSuccess}</p>}
+          <div className="private-admin-permission-actions">
+            <button type="submit" disabled={permissionBusy}>
+              {permissionBusy ? "Guardando…" : "Conceder permiso"}
+            </button>
+            <button type="button" className="private-admin-revoke"
+              disabled={permissionBusy}
+              onClick={() => { void changePermission("revoke"); }}>
+              Revocar permiso
+            </button>
+          </div>
+        </form>
+      </section>
       <div className="enterprise-panel private-admin-guardrails">
         <strong>Controles pendientes para uso real</strong>
         <p>El registro actual cubre operaciones de identidad; todavía no representa la auditoría clínica completa. Falta verificación administrativa inicial, MFA, políticas de consentimiento y trazabilidad de cada expediente.</p>

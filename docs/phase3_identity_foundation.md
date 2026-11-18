@@ -227,3 +227,41 @@ consentimientos verificables, revisión independiente y medidas de privacidad.
 El despliegue público sobre Neon permanece en la revisión
 `0002_data_core`: esta migración está destinada únicamente a la base
 PostgreSQL desechable de desarrollo y CI. Render nunca aloja datos.
+
+## Gestión limitada de permisos por expediente (incremento 0008)
+
+La migración `0008_profile_permissions` permite a un administrador
+autenticado conceder o revocar acceso de prueba mediante funciones
+`SECURITY DEFINER` que derivan la organización y el actor de la sesión
+verificada. La cuenta administradora **no puede concederse acceso a sí
+misma** ni acceder a expedientes sin una concesión independiente.
+
+- `POST /api/v1/auth/profile-access/grant`: acepta UUID del expediente,
+  UUID de la cuenta ficticia y nivel `read`, `write` o `manage`. Las
+  concesiones caducan a los **30 días**.
+- `POST /api/v1/auth/profile-access/revoke`: revoca inmediatamente el
+  acceso existente. La sesión puede permanecer activa, pero las consultas
+  a ese expediente dejan de estar autorizadas por RLS.
+- Solo cuentas activas de la misma organización pueden recibir permisos.
+  Los miembros de consulta reciben exclusivamente `read`; las
+  modificaciones exigen roles permitidos en el backend.
+- Cada concesión y revocación se registra en
+  `security_audit_events`, con detalles adicionales de usuario afectado,
+  expediente, nivel anterior y nivel nuevo guardados en
+  `private_profile_permission_changes`. Las tablas de auditoría
+  siguen inaccesibles para los roles operativos; se escriben únicamente
+  mediante funciones autorizadas dentro de la misma transacción.
+- El panel administrativo de pruebas expone los controles de concesión
+  y revocación. No permite seleccionar otra organización ni almacenar
+  tokens en el navegador.
+
+Las pruebas abarcan revocación con sesión todavía válida, intentos de
+autoconcederse permisos, cuentas de otra organización, miembros con
+permisos incompatibles y revocaciones repetidas. Falta gestión fina
+de consentimientos, revisión de permisos por responsables separados,
+procedimiento de bootstrap administrativo y auditoría de acceso denegado.
+Los datos clínicos reales permanecen prohibidos.
+
+La base alojada de la demostración permanece **exclusivamente en Neon**,
+en el esquema `0002_data_core`; estas migraciones se validan solo en una
+base PostgreSQL desechable de CI/desarrollo.

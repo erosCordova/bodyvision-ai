@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0007_profile_audit"
+SCHEMA_REVISION = "0008_profile_permissions"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 

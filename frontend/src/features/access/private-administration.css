@@ -38,3 +38,12 @@
 .private-admin-guardrails strong{font-size:12px}
 @media(max-width:1050px){.private-admin-grid{grid-template-columns:1fr}}
 @media(max-width:550px){.private-admin-heading{flex-direction:column;gap:12px}}
+
+.private-admin-permissions{max-width:100%}
+.private-admin-permissions .private-admin-form{max-width:650px}
+.private-admin-permission-actions{display:flex;flex-wrap:wrap;gap:10px}
+.private-admin-permission-actions button{flex:1;min-width:180px}
+.private-admin-permission-actions .private-admin-revoke{
+  border:1px solid #b17b88;background:#403041;color:#ffe0e5
+}
+.private-admin-permission-actions .private-admin-revoke:hover{background:#543447}

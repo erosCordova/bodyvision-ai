@@ -171,3 +171,77 @@ describe("private administrator interface", () => {
     await expect(privateAdminApi(TOKEN).audit()).rejects.toThrow("permisos");
   });
 });
+
+
+describe("private per-expediente permission management", () => {
+  it("allows an administrator to grant and revoke a fictional user's access", async () => {
+    const profile = "a4000000-0000-4000-8000-000000000004";
+    const fetcher = vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
+      if (url === "/api/v1/auth/login") return jsonResponse({ ...credentials, role: "administrator" });
+      if (url === "/api/v1/auth/audit?limit=30") return jsonResponse([]);
+      if (url === "/api/v1/auth/profile-access/grant") {
+        const payload = JSON.parse(String(options?.body));
+        return jsonResponse({ profile_id: payload.profile_id, user_id: payload.user_id, status: "granted" });
+      }
+      if (url === "/api/v1/auth/profile-access/revoke") {
+        const payload = JSON.parse(String(options?.body));
+        return jsonResponse({ profile_id: payload.profile_id, user_id: payload.user_id, status: "revoked" });
+      }
+      throw new Error("Unexpected API request");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    mount();
+    login();
+    await screen.findByRole("heading", { name: "Usuarios y auditoría" });
+    fireEvent.change(screen.getByLabelText("Identificador de expediente"), {
+      target: { value: profile },
+    });
+    fireEvent.change(screen.getByLabelText("Identificador de usuario"), {
+      target: { value: CREATED },
+    });
+    fireEvent.change(screen.getByLabelText("Nivel de acceso"), {
+      target: { value: "read" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Conceder permiso" }));
+    expect(await screen.findByText("Permiso ficticio concedido durante 30 días.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Revocar permiso" }));
+    expect(await screen.findByText(/Permiso revocado/)).toBeInTheDocument();
+
+    const calls = fetcher.mock.calls as [string, RequestInit][];
+    const grantCall = calls.find(([url]) => url === "/api/v1/auth/profile-access/grant");
+    const revokeCall = calls.find(([url]) => url === "/api/v1/auth/profile-access/revoke");
+    expect(grantCall).toBeDefined();
+    expect(revokeCall).toBeDefined();
+    expect(JSON.parse(String(grantCall![1].body))).toEqual({
+      profile_id: profile, user_id: CREATED, access_level: "read",
+    });
+    expect(JSON.parse(String(revokeCall![1].body))).toEqual({
+      profile_id: profile, user_id: CREATED,
+    });
+    expect((grantCall![1].headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
+    expect((grantCall![1].headers as Record<string, string>)["X-Workspace-ID"]).toBeUndefined();
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("does not send invalid expediente or user identifiers", async () => {
+    const fetcher = vi.fn().mockImplementation(async (url: string) => {
+      if (url === "/api/v1/auth/login") return jsonResponse({ ...credentials, role: "administrator" });
+      if (url === "/api/v1/auth/audit?limit=30") return jsonResponse([]);
+      throw new Error("Unexpected write");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    mount();
+    login();
+    await screen.findByRole("heading", { name: "Usuarios y auditoría" });
+    fireEvent.change(screen.getByLabelText("Identificador de expediente"), {
+      target: { value: "invalid" },
+    });
+    fireEvent.change(screen.getByLabelText("Identificador de usuario"), {
+      target: { value: CREATED },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Revocar permiso" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("identificadores UUID válidos");
+    expect(fetcher.mock.calls.filter(([url]) => String(url).includes("profile-access"))).toHaveLength(0);
+  });
+});

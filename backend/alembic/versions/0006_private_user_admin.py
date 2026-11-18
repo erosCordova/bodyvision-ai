@@ -95,7 +95,8 @@ def upgrade() -> None:
             ('auth.login','allowed'),
             ('auth.logout','allowed'),
             ('admin.user_provision_denied','denied'),
-            ('admin.audit_denied','denied')
+            ('admin.audit_denied','denied'),
+            ('admin.permission_change_denied','denied')
           ) THEN
             RAISE EXCEPTION 'Invalid audit event' USING ERRCODE='22023';
           END IF;

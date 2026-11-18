@@ -6,8 +6,12 @@ from app.services.admin_security import (
     AuditEventRead,
     NewSyntheticUser,
     NewSyntheticUserRead,
+    PermissionChangeRead,
+    PermissionGrantInput,
+    PermissionRevokeInput,
     list_security_events,
     provision_user,
+    update_profile_permission,
 )
 from app.services.auth_sessions import (
     IdentityRead,
@@ -49,3 +53,19 @@ def create_synthetic_user(request: Request, data: NewSyntheticUser) -> NewSynthe
 @router.get("/audit", response_model=list[AuditEventRead])
 def audit_security(request: Request, limit: int = Query(30, ge=1, le=50)):
     return list_security_events(request, limit)
+
+
+@router.post("/profile-access/grant", response_model=PermissionChangeRead)
+def grant_profile_permission(
+    request: Request, data: PermissionGrantInput
+) -> PermissionChangeRead:
+    return update_profile_permission(
+        request, data.profile_id, data.user_id, data.access_level
+    )
+
+
+@router.post("/profile-access/revoke", response_model=PermissionChangeRead)
+def revoke_profile_permission(
+    request: Request, data: PermissionRevokeInput
+) -> PermissionChangeRead:
+    return update_profile_permission(request, data.profile_id, data.user_id, None)

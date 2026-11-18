@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0007_profile_audit"
+            == "0008_profile_permissions"
         )
         for table in (
             "user_role_assignments",
@@ -51,7 +51,11 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
 def test_runtime_roles_cannot_directly_modify_private_security_data(database):
     with database.connect() as connection:
         for role in ("bodyvision_app", "bodyvision_auth_app"):
-            for table in ("security_audit_events", "auth_login_attempts"):
+            for table in (
+                "security_audit_events",
+                "auth_login_attempts",
+                "private_profile_permission_changes",
+            ):
                 for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                     assert not connection.execute(
                         text("SELECT has_table_privilege(:role,:table,:privilege)"),
@@ -59,6 +63,14 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
                     ).scalar_one()
         assert not connection.execute(
             text("SELECT has_table_privilege('bodyvision_auth_app','users','INSERT')")
+        ).scalar_one()
+        assert connection.execute(
+            text(
+                "SELECT has_function_privilege("
+                "'bodyvision_auth_app',"
+                "'manage_private_profile_permission(char(64),uuid,uuid,text,uuid,uuid,uuid)',"
+                "'EXECUTE')"
+            )
         ).scalar_one()
 
 

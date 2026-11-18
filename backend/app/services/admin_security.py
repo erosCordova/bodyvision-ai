@@ -123,3 +123,58 @@ def list_security_events(request: Request, limit: int) -> list[AuditEventRead]:
             .all()
         )
     return [AuditEventRead.model_validate(row) for row in rows]
+
+
+class PermissionGrantInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: UUID
+    user_id: UUID
+    access_level: Literal["read", "write", "manage"]
+
+
+class PermissionRevokeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: UUID
+    user_id: UUID
+
+
+class PermissionChangeRead(BaseModel):
+    profile_id: UUID
+    user_id: UUID
+    status: Literal["granted", "revoked"]
+
+
+def update_profile_permission(
+    request: Request,
+    profile_id: UUID,
+    user_id: UUID,
+    level: Literal["read", "write", "manage"] | None,
+) -> PermissionChangeRead:
+    identity = resolve_identity(request)
+    if identity.role != "administrator":
+        with request.app.state.auth_engine.begin() as connection:
+            record_session_event(request, connection, "admin.permission_change_denied", "denied")
+        raise DomainError(403, "FORBIDDEN", "Solo un administrador puede gestionar permisos.")
+
+    with request.app.state.auth_engine.begin() as connection:
+        result = connection.execute(
+            text(
+                "SELECT manage_private_profile_permission("
+                "CAST(:digest AS char(64)),:profile,:subject,:level,"
+                ":access_id,:event,:correlation)"
+            ),
+            {
+                "digest": hash_session_token(bearer_token(request)),
+                "profile": profile_id,
+                "subject": user_id,
+                "level": level,
+                "access_id": uuid4(),
+                "event": uuid4(),
+                "correlation": UUID(request.state.correlation_id),
+            },
+        ).scalar_one()
+    if result == "not-found":
+        raise DomainError(404, "NOT_FOUND", "Destino de permisos no disponible.")
+    return PermissionChangeRead(profile_id=profile_id, user_id=user_id, status=result)
