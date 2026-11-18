@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createAnatomyScene, type LayerOpacity } from "../viewer/AnatomyScene";
+import { createAnatomyScene, type AnatomicalLayer, type LayerOpacity } from "../viewer/AnatomyScene";
 
 /**
  * The dashboard previews the exact same atlas skin mesh used in /body-3d.
@@ -37,7 +37,7 @@ export function DashboardBodyPreview() {
         veins: 1,
         nerves: 1,
       };
-      scene.update(new Set(["skin"]), opacity);
+      scene.update(new Set<AnatomicalLayer>(["skin"]), opacity);
       scene.setRenderMode("realista");
     } catch {
       setError("No se pudo iniciar la vista previa 3D. Comprueba la aceleración gráfica.");
