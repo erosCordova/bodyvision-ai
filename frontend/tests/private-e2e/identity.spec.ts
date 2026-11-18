@@ -50,7 +50,7 @@ test("private identity, user creation, RLS grants, revocation and logout work to
   await expect(page.getByLabel("Contraseña de pruebas", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Identificador de usuario", { exact: true })).toHaveValue(account.id);
 
-  const memberContext = await browser.newContext();
+  const memberContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
   const memberPage = await memberContext.newPage();
   try {
     const member = await signIn(memberPage, email);
