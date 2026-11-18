@@ -95,3 +95,11 @@ esta modalidad porque exige `import.meta.env.DEV`. El acceso público de
 demostración permanece únicamente con datos ficticios. Falta un flujo
 completo de alta controlada, MFA, recuperación y limitación de intentos, y
 la revisión integral de privacidad y seguridad antes de usar datos reales.
+
+## Restricción de proveedor de base de datos
+
+Toda base de datos **alojada** de BODYVISION debe estar en Neon. Render
+puede servir el backend, pero no PostgreSQL ni archivos de base de datos.
+El PostgreSQL de Docker en CI o desarrollo es desechable y no constituye
+un alojamiento de datos. La base persistente en Neon nunca recibe datos
+personales reales mientras no se aprueben seguridad y privacidad.
