@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { FoundationPage } from "../../features/foundation/FoundationPage";
 import { DataLayout } from "../layouts/DataLayout";
 import { Dashboard } from "../../features/dashboard/Dashboard";
@@ -11,7 +11,6 @@ const modules = () => import("../../features/foundation/ModulePages");
 const MeasurementsPage = lazy(() => modules().then(m => ({ default: m.MeasurementsPage })));
 const CapturePage = lazy(() => modules().then(m => ({ default: m.CapturePage })));
 const AnalysisPage = lazy(() => modules().then(m => ({ default: m.AnalysisPage })));
-const SimulationPage = lazy(() => modules().then(m => ({ default: m.SimulationPage })));
 const ReportsPage = lazy(() => modules().then(m => ({ default: m.ReportsPage })));
 const AdministrationPage = lazy(() => modules().then(m => ({ default: m.AdministrationPage })));
 const AccessPage = lazy(() => modules().then(m => ({ default: m.AccessPage })));
@@ -23,6 +22,7 @@ export function AppRouter() {
         <Route path="/system" element={<FoundationPage />} />
         <Route path="/access" element={<Suspense fallback={loading}><AccessPage /></Suspense>} />
         <Route path="/body-3d" element={<Suspense fallback={loading}><BodyWorkspace /></Suspense>} />
+        <Route path="/simulation" element={<Navigate to="/body-3d?panel=simulacion" replace />} />
         <Route element={<DataLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/profiles" element={<ProfilesPage />} />
@@ -30,7 +30,6 @@ export function AppRouter() {
           <Route path="/measurements" element={<Suspense fallback={loading}><MeasurementsPage /></Suspense>} />
           <Route path="/capture" element={<Suspense fallback={loading}><CapturePage /></Suspense>} />
           <Route path="/analysis" element={<Suspense fallback={loading}><AnalysisPage /></Suspense>} />
-          <Route path="/simulation" element={<Suspense fallback={loading}><SimulationPage /></Suspense>} />
           <Route path="/reports" element={<Suspense fallback={loading}><ReportsPage /></Suspense>} />
           <Route path="/administration" element={<Suspense fallback={loading}><AdministrationPage /></Suspense>} />
           <Route path="*" element={<><h1>Página no disponible</h1><Link to="/">Volver al dashboard</Link></>} />

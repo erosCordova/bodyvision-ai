@@ -24,6 +24,45 @@ export type LayerState = "loading" | "ready" | "error";
 
 const assetSource = anatomySource + "web/public/models/";
 
+/** GPU morph for illustrative soft-tissue volume changes, not calibrated to kg. */
+const BODYVOLUME_VERTEX = `
+  vec3 bvWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  float bvHeight = clamp((bvWorld.y - uBVBounds.x) / max(uBVBounds.y - uBVBounds.x, 0.00001), 0.0, 1.0);
+  float bvTorso = smoothstep(0.31, 0.46, bvHeight) * (1.0 - smoothstep(0.70, 0.83, bvHeight));
+  float bvHip = smoothstep(0.23, 0.33, bvHeight) * (1.0 - smoothstep(0.45, 0.56, bvHeight));
+  float bvLeg = smoothstep(0.10, 0.18, bvHeight) * (1.0 - smoothstep(0.37, 0.49, bvHeight));
+  float bvZone = clamp(max(bvTorso, max(bvHip * 0.85, bvLeg * 0.30)), 0.0, 1.0);
+  float bvAmount = uBVVolume * uBVStrength * bvZone;
+  vec3 bvOffset = vec3(
+    (bvWorld.x - uBVBounds.z) * bvAmount * 0.34, 0.0,
+    (bvWorld.z - uBVBounds.w) * bvAmount * 0.43
+  );
+  vec3 bvAxisX = modelMatrix[0].xyz;
+  vec3 bvAxisY = modelMatrix[1].xyz;
+  vec3 bvAxisZ = modelMatrix[2].xyz;
+  transformed += vec3(
+    dot(bvOffset, bvAxisX) / max(dot(bvAxisX, bvAxisX), 0.00001),
+    dot(bvOffset, bvAxisY) / max(dot(bvAxisY, bvAxisY), 0.00001),
+    dot(bvOffset, bvAxisZ) / max(dot(bvAxisZ, bvAxisZ), 0.00001)
+  );
+`;
+function attachBodyVolume(
+  material: THREE.Material, layer: AnatomicalLayer,
+  volume: { value: number }, bounds: { value: THREE.Vector4 },
+) {
+  const strength = layer === "skin" ? 1 : layer === "muscles" ? 0.18 : 0;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uBVVolume = volume;
+    shader.uniforms.uBVBounds = bounds;
+    shader.uniforms.uBVStrength = { value: strength };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float uBVVolume;\nuniform vec4 uBVBounds;\nuniform float uBVStrength;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + BODYVOLUME_VERTEX);
+  };
+  material.customProgramCacheKey = () => "bodyvision-volume-1-strength-" + strength;
+}
+
+
 /**
  * The source is Z-Anatomy / BodyParts3D, processed by SeemaBansal1.
  * Source and derivative geometry have attribution/share-alike obligations.
@@ -111,6 +150,10 @@ export function createAnatomyScene(
   const loading = new Set<AnatomicalLayer>();
   const settings = new Map<AnatomicalLayer, { visible: boolean; opacity: number }>();
   const assets = new Map<AnatomicalLayer, Set<THREE.Material>>();
+  const meshOverlays = new Map<AnatomicalLayer, THREE.MeshBasicMaterial>();
+  const volume = { value: 0 };
+  const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
+  let showWireMesh = false;
   let mode: RenderMode = "realista";
   let quality: SceneQuality = "alta";
   let disposed = false;
@@ -184,6 +227,8 @@ export function createAnatomyScene(
     const accent = new THREE.Color(0x82caff);
     const highlight = (old: THREE.Material) => {
       const cloned = old.clone();
+      cloned.onBeforeCompile = old.onBeforeCompile;
+      cloned.customProgramCacheKey = old.customProgramCacheKey;
       if (cloned instanceof THREE.MeshPhysicalMaterial) {
         cloned.emissive.copy(accent);
         cloned.emissiveIntensity = 0.32;
@@ -202,6 +247,10 @@ export function createAnatomyScene(
     group.visible = s.visible;
     group.traverse(node => {
       if (!(node instanceof THREE.Mesh)) return;
+      if (node.userData.bodyvisionMeshOverlay) {
+        node.visible = showWireMesh && mode !== "holograma" && (!isolated || node.parent === selectedMesh);
+        return;
+      }
       node.visible = !isolated || node === selectedMesh;
       const materials = Array.isArray(node.material) ? node.material : [node.material];
       for (const material of materials) {
@@ -216,6 +265,8 @@ export function createAnatomyScene(
         material.needsUpdate = true;
       }
     });
+    const wire = meshOverlays.get(layer);
+    if (wire) wire.opacity = Math.min(0.46, Math.max(0.12, s.opacity * 0.42));
     render();
   };
   function applyAll() {
@@ -231,7 +282,13 @@ export function createAnatomyScene(
     const max = Math.max(dimension.x, dimension.y, dimension.z, 0.01);
     anatomical.position.set(-center.x, -center.y, -center.z);
     root.scale.setScalar(2.5 / max);
-    resetCamera();
+    root.updateMatrixWorld(true);
+    const fittedBox = new THREE.Box3().setFromObject(root);
+    const fittedCentre = fittedBox.getCenter(new THREE.Vector3());
+    massBounds.value.set(fittedBox.min.y, fittedBox.max.y, fittedCentre.x, fittedCentre.z);
+    camera.position.set(2.2, 0.8, 3.55);
+    controls.target.set(0, 0, 0);
+    controls.update();
     fitted = true;
     render();
   };
@@ -287,9 +344,23 @@ export function createAnatomyScene(
         const group = gltf.scene;
         const cached = new Map<string, THREE.MeshPhysicalMaterial>();
         const old = new Set<THREE.Material>();
-        group.traverse(node => {
-          if (!(node instanceof THREE.Mesh)) return;
+        const wireMaterial = new THREE.MeshBasicMaterial({
+          color: "#81e5fa", wireframe: true, transparent: true, opacity: 0.42,
+          depthTest: true, depthWrite: false, side: THREE.DoubleSide,
+        });
+        attachBodyVolume(wireMaterial, layer, volume, massBounds);
+        meshOverlays.set(layer, wireMaterial);
+        const originalMeshes: THREE.Mesh[] = [];
+        group.traverse(node => { if (node instanceof THREE.Mesh) originalMeshes.push(node); });
+        for (const node of originalMeshes) {
           node.frustumCulled = false;
+          const overlay = new THREE.Mesh(node.geometry, wireMaterial);
+          overlay.userData.bodyvisionMeshOverlay = true;
+          overlay.name = "Malla poligonal " + layer;
+          overlay.frustumCulled = false;
+          overlay.renderOrder = 2;
+          overlay.visible = false;
+          node.add(overlay);
           const replace = (material: THREE.Material) => {
             old.add(material);
             const name = material.name || "generic";
@@ -300,16 +371,18 @@ export function createAnatomyScene(
               result = new THREE.MeshPhysicalMaterial({
                 color: a.color, roughness: a.roughness, clearcoat: a.clearcoat,
                 metalness: 0, side: THREE.DoubleSide,
+                polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
               });
+              attachBodyVolume(result, layer, volume, massBounds);
               result.userData.baseColor = a.color;
               cached.set(cacheKey, result);
             }
             return result;
           };
           node.material = Array.isArray(node.material) ? node.material.map(replace) : replace(node.material);
-        });
+        }
         old.forEach(material => material.dispose());
-        assets.set(layer, new Set(cached.values()));
+        assets.set(layer, new Set([...cached.values(), wireMaterial]));
         objects.set(layer, group);
         anatomical.add(group);
         if (!fitted) frameBody();
@@ -340,18 +413,16 @@ export function createAnatomyScene(
     applyAll();
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
+  const setWeightVariation = (percent: number) => {
+    volume.value = THREE.MathUtils.clamp(percent, -30, 30) / 30;
+    render();
+  };
+  const setMeshOverlay = (enabled: boolean) => { showWireMesh = enabled; applyAll(); };
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
   const resetCamera = () => {
-    // The normalized body is at most 2.5 units tall. Reserve room for
-    // top controls and the bottom dock, including narrow phone viewports.
-    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
-    const distance = Math.min(controls.maxDistance, Math.max(
-      2.5 / (2 * Math.tan(halfFov) * 0.68),
-      1.2 / (2 * Math.tan(halfFov) * Math.max(camera.aspect, 0.2) * 0.82),
-    ));
+    camera.position.set(2.2, 0.8, 3.55);
     controls.target.set(0, 0, 0);
-    camera.position.set(0.35, 0.08, 1).normalize().multiplyScalar(distance);
     controls.update();
     render();
   };
@@ -388,7 +459,7 @@ export function createAnatomyScene(
     point.set((event.clientX - rect.left) / rect.width * 2 - 1, -((event.clientY - rect.top) / rect.height * 2 - 1));
     raycaster.setFromCamera(point, camera);
     const pickables = [...objects.entries()].filter(([id]) => settings.get(id)?.visible).map(([,group]) => group);
-    const hit = raycaster.intersectObjects(pickables, true).find(item => item.object instanceof THREE.Mesh);
+    const hit = raycaster.intersectObjects(pickables, true).find(item => item.object instanceof THREE.Mesh && !item.object.userData.bodyvisionMeshOverlay);
     if (!hit) { clearSelection(); return; }
     let layer: AnatomicalLayer | null = null;
     for (const [id, group] of objects) {
@@ -420,5 +491,5 @@ export function createAnatomyScene(
     canvas.remove();
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, resetCamera, view, zoom, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setMeshOverlay, resetCamera, view, zoom, retryLayer, dispose };
 }

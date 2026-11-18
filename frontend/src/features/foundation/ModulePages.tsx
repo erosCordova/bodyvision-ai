@@ -124,51 +124,6 @@ export function AnalysisPage() {
   </div>;
 }
 
-function HumanOutline({ ratio, heightScale = 1 }: { ratio: number; heightScale?: number }) {
-  return <svg className="enterprise-sim-body" viewBox="0 0 220 340" role="img" aria-label="Silueta esquemática, no reconstrucción de una persona">
-    <path d="M93 52Q83 24 105 14Q126 10 133 33L127 57L138 70L165 83L184 139L193 185L180 190L165 150L152 118L151 190L138 207L132 283L128 326L110 326L107 263L102 216L96 263L91 326L72 326L75 283L65 207L66 190L67 118L54 150L39 190L26 185L35 139L54 83L82 70Z"
-      fill="#348fc2" fillOpacity=".27" stroke="#71d7ed" strokeWidth="2" style={{ transformOrigin:"110px 175px",transform:"scale("+ratio+", "+heightScale+")" }}/>
-    <path d="M110 57V211M83 86L138 86M66 126L151 126M75 206L139 206" stroke="#71cced" opacity=".4" strokeWidth="2"/>
-  </svg>;
-}
-
-export function SimulationPage() {
-  const [weightChange, setWeightChange] = useState(0);
-  const [muscleChange, setMuscleChange] = useState(0);
-  const [height, setHeight] = useState(175);
-  const [saved, setSaved] = useState<{weight:number;muscle:number;height:number}|null>(null);
-  const ratio = Math.max(.82,Math.min(1.18,1 + weightChange / 240 + muscleChange / 400));
-  return <div className="enterprise-module">
-    <PageTitle eyebrow="SIMULACIÓN · ESCENARIO HIPOTÉTICO" title="Simulación de cambios corporales" description="Compara parámetros visuales sin modificar las mediciones observadas de ningún expediente."/>
-    <div className="enterprise-module-columns enterprise-sim-layout">
-      <section className="enterprise-panel enterprise-module-main">
-        <div className="enterprise-panel-title"><h2>Comparación ilustrativa</h2><span>NO PREDICTIVO</span></div>
-        <div className="enterprise-sim-figures">
-          <div><span>ESTADO BASE · ILUSTRATIVO</span><HumanOutline ratio={1}/><small>Referencia visual</small></div>
-          <div className="enterprise-sim-arrow" aria-hidden="true">⟶</div>
-          <div><span>ESCENARIO · SIMULACIÓN</span><HumanOutline ratio={ratio} heightScale={height/175}/><small>Variación artística</small></div>
-        </div>
-        <Limitation>La forma mostrada es una interpolación gráfica de anchura y altura, no una predicción anatómica ni una estimación de grasa o músculo. Los parámetros no generan datos clínicos.</Limitation>
-      </section>
-      <aside className="enterprise-panel enterprise-module-side enterprise-sim-controls">
-        <h2>Parámetros hipotéticos</h2>
-        <label>Peso relativo ilustrativo <output>{weightChange > 0 ? "+" : ""}{weightChange}%</output>
-          <input type="range" min="-30" max="30" value={weightChange} onChange={e=>setWeightChange(Number(e.target.value))}/>
-        </label>
-        <label>Variación muscular artística <output>{muscleChange > 0 ? "+" : ""}{muscleChange}%</output>
-          <input type="range" min="-20" max="20" value={muscleChange} onChange={e=>setMuscleChange(Number(e.target.value))}/>
-        </label>
-        <label>Estatura de referencia visual <output>{height} cm</output>
-          <input type="range" min="145" max="205" value={height} onChange={e=>setHeight(Number(e.target.value))}/>
-        </label>
-        <button className="primary-button" onClick={()=>setSaved({weight:weightChange,muscle:muscleChange,height})}>Registrar comparación local</button>
-        {saved && <div className="enterprise-sim-result" role="status"><strong>Escenario visual actual</strong><p>Variación de peso: {saved.weight}% · Definición: {saved.muscle}% · Estatura de referencia: {saved.height} cm.</p><small>No guardado en expedientes ni enviado al servidor.</small></div>}
-        <button onClick={()=>{setWeightChange(0);setMuscleChange(0);setHeight(175);setSaved(null)}} className="secondary-button">Restablecer escenario</button>
-      </aside>
-    </div>
-  </div>;
-}
-
 export function ReportsPage() {
   const {id,api} = useWorkspace();
   const [profileId,setProfileId] = useState("");

@@ -23,7 +23,7 @@ type AtlasEntry = {
   layer: AnatomicalLayer;
 };
 type AtlasData = { structures?: Omit<AtlasEntry, "layer">[] };
-type Panel = "informacion" | "recorridos" | "guia";
+type Panel = "informacion" | "recorridos" | "guia" | "simulacion";
 type TourStep = { layer: AnatomicalLayer; name: string; title: string; intro: string };
 type Tour = { id: string; title: string; description: string; icon: string; steps: TourStep[] };
 
@@ -117,13 +117,19 @@ export function AnatomyAtlas() {
   const [visible, setVisible] = useState<AnatomicalLayer[]>(["skin"]);
   const [opacity, setOpacity] = useState<LayerOpacity>({ ...initialOpacity });
   const [mode, setMode] = useState<RenderMode>("realista");
+  const [meshOverlay, setMeshOverlay] = useState(false);
+  const [referenceKg, setReferenceKg] = useState(70);
+  const [weightVariation, setWeightVariation] = useState(0);
+  const [baselinePreview, setBaselinePreview] = useState(false);
+  const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number } | null>(null);
+  const simulatedWeight = Math.round(referenceKg * (1 + weightVariation / 100) * 10) / 10;
   const [quality, setQuality] = useState<SceneQuality>("alta");
   const [spin, setSpin] = useState(false);
   const [isolated, setIsolated] = useState(false);
   const [showMarker, setShowMarker] = useState(true);
   const [selected, setSelected] = useState<SelectedStructure | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<AtlasEntry | null>(null);
-  const [panel, setPanel] = useState<Panel>("informacion");
+  const [panel, setPanel] = useState<Panel>(() => new URLSearchParams(window.location.search).get("panel") === "simulacion" ? "simulacion" : "informacion");
   const [search, setSearch] = useState("");
   const [entries, setEntries] = useState<AtlasEntry[]>([]);
   const [contentReady, setContentReady] = useState(false);
@@ -188,6 +194,8 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
   useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
+  useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation), [weightVariation, baselinePreview, restart]);
+  useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
   useEffect(() => {
     const changed = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", changed);
@@ -266,6 +274,26 @@ export function AnatomyAtlas() {
     utterance.lang = "en-US";
     utterance.rate = 0.95;
     window.speechSynthesis.speak(utterance);
+  };
+  const openSimulation = () => {
+    setPanel("simulacion");
+    setTour(null);
+    setVisible(["skin"]);
+    setOpacity({ ...initialOpacity });
+    setMode("realista");
+    setIsolated(false);
+    controller.current?.clearSelection();
+    controller.current?.resetCamera();
+  };
+  const toggleMesh = () => {
+    if (mode === "holograma") setMode("realista");
+    setMeshOverlay(value => !value);
+  };
+  const resetSimulation = () => {
+    setReferenceKg(70);
+    setWeightVariation(0);
+    setBaselinePreview(false);
+    setSavedScenario(null);
   };
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -347,7 +375,7 @@ export function AnatomyAtlas() {
         <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")}>
           <div className="studio-canvas" ref={host} />
           <div className="studio-view-top">
-            <span><i /> EXPLORACIÓN ANATÓMICA EN TIEMPO REAL</span>
+            <span><i /> {weightVariation !== 0 ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE VOLUMEN · MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
             <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
           </div>
           <div className="studio-view-angles" role="group" aria-label="Cambiar ángulo">
@@ -362,6 +390,13 @@ export function AnatomyAtlas() {
               <span>ESTRUCTURA SELECCIONADA</span>
               <strong>{identified?.medical || cleanMesh(selected.name)}</strong>
               <button onClick={() => { controller.current?.clearSelection(); setSelectedEntry(null); setIsolated(false); }}>×</button>
+            </div>
+          )}
+          {weightVariation !== 0 && (
+            <div className="studio-weight-indicator" role="status">
+              <span>SIMULACIÓN HIPOTÉTICA · NO CLÍNICA</span>
+              <strong>{baselinePreview ? referenceKg : simulatedWeight} kg <small>{baselinePreview ? "Referencia" : "Escenario"}</small></strong>
+              <p>{baselinePreview ? "Vista base temporal" : (weightVariation > 0 ? "+" : "") + weightVariation + "% frente a la referencia"}</p>
             </div>
           )}
           <div className="studio-viewport-help">Arrastra para rotar · Rueda para acercar · Selecciona una estructura</div>
@@ -385,8 +420,10 @@ export function AnatomyAtlas() {
             </div>
             <div className="studio-dock-group">
               <span>HERRAMIENTAS</span>
+              <button className={meshOverlay ? "active" : ""} aria-pressed={meshOverlay} onClick={toggleMesh} title="Superponer malla poligonal sobre la anatomía">Malla 3D</button>
               <button className={showMarker ? "active" : ""} aria-pressed={showMarker} onClick={() => setShowMarker(v => !v)}>Etiqueta</button>
               <button className={spin ? "active" : ""} aria-pressed={spin} disabled={reducedMotion} onClick={() => setSpin(v => !v)}>Giro</button>
+              <button className={panel === "simulacion" ? "active" : ""} aria-pressed={panel === "simulacion"} onClick={openSimulation}>Simular peso</button>
               <button onClick={() => controller.current?.resetCamera()}>Restablecer</button>
             </div>
           </div>
@@ -398,8 +435,52 @@ export function AnatomyAtlas() {
             <button role="tab" aria-selected={panel === "informacion"} className={panel === "informacion" ? "active" : ""} onClick={() => setPanel("informacion")}>Información</button>
             <button role="tab" aria-selected={panel === "recorridos"} className={panel === "recorridos" ? "active" : ""} onClick={() => setPanel("recorridos")}>Recorridos</button>
             <button role="tab" aria-selected={panel === "guia"} className={panel === "guia" ? "active" : ""} onClick={() => setPanel("guia")}>Guía</button>
+            <button role="tab" aria-selected={panel === "simulacion"} className={panel === "simulacion" ? "active" : ""} onClick={openSimulation}>Simulación</button>
           </div>
           <div className="studio-right-content">
+            {panel === "simulacion" && (
+              <div className="studio-simulation">
+                <p className="studio-eyebrow">SIMULACIÓN · SOBRE EL MODELO 3D</p>
+                <h2>Simulador de peso corporal</h2>
+                <p className="studio-sim-lead">Aumenta o disminuye el volumen de la figura anatómica real que estás viendo. No utilizamos una silueta separada.</p>
+                <div className="studio-sim-values">
+                  <div><span>REFERENCIA ILUSTRATIVA</span><strong>{referenceKg} <small>kg</small></strong></div>
+                  <div><span>PESO HIPOTÉTICO</span><strong>{simulatedWeight} <small>kg</small></strong></div>
+                </div>
+                <label className="studio-sim-number">
+                  Peso de referencia (solo demostración)
+                  <div><input type="number" min="40" max="200" step="1" value={referenceKg} onChange={event => setReferenceKg(Math.max(40, Math.min(200, Number(event.target.value) || 40)))} /><span>kg</span></div>
+                </label>
+                <label className="studio-sim-slider">
+                  <span>Variación hipotética del peso <strong>{weightVariation > 0 ? "+" : ""}{weightVariation}%</strong></span>
+                  <input type="range" aria-label="Aumentar o disminuir peso en el modelo anatómico"
+                    min="-30" max="30" step="1" value={weightVariation}
+                    onChange={event => { setWeightVariation(Number(event.target.value)); setBaselinePreview(false); }} />
+                  <span className="studio-sim-limits"><small>−30% · menor volumen</small><small>+30% · mayor volumen</small></span>
+                </label>
+                <div className="studio-sim-state">
+                  <span className="studio-sim-state-icon">{weightVariation > 0 ? "↗" : weightVariation < 0 ? "↘" : "◈"}</span>
+                  <div><strong>{weightVariation === 0 ? "Modelo corporal de referencia" : weightVariation > 0 ? "Incremento visual de volumen" : "Reducción visual de volumen"}</strong>
+                    <p>El cambio se aplica a la piel y, con menor intensidad, a músculos. Huesos y nervios conservan sus dimensiones.</p></div>
+                </div>
+                <div className="studio-sim-mesh">
+                  <label><input type="checkbox" checked={meshOverlay} onChange={toggleMesh} />
+                    <span><strong>Superponer malla poligonal</strong><small>Visualiza triángulos y topología sobre el modelo deformado.</small></span>
+                  </label>
+                </div>
+                <div className="studio-sim-actions">
+                  <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview} onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
+                  <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation })}>Guardar comparación en esta vista</button>
+                  <button onClick={resetSimulation}>Restaurar valores</button>
+                </div>
+                {savedScenario && <div className="studio-sim-saved" role="status">
+                  <strong>Referencia visual guardada</strong>
+                  <p>Base {savedScenario.baseKg} kg → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg.</p>
+                  <button onClick={() => { setReferenceKg(savedScenario.baseKg); setWeightVariation(savedScenario.delta); setBaselinePreview(false); }}>Recuperar escenario</button>
+                </div>}
+                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg son etiquetas hipotéticas; la deformación 3D no calcula grasa, masa muscular ni la distribución real del tejido. No modifica mediciones, expedientes ni reportes.</p>
+              </div>
+            )}
             {panel === "informacion" && (
               identified ? (
                 <div className="studio-info">

@@ -9,8 +9,7 @@ const sections = [
   { route: "/measurements", name: "Mediciones", icon: "▥", short: "Mediciones" },
   { route: "/capture", name: "Captura corporal", icon: "◫", short: "Captura" },
   { route: "/analysis", name: "Análisis IA", icon: "✧", short: "Análisis" },
-  { route: "/body-3d", name: "Visor 3D", icon: "⬡", short: "Visor 3D" },
-  { route: "/simulation", name: "Simulador", icon: "⇄", short: "Simulador" },
+  { route: "/body-3d", name: "Visión 3D", icon: "⬡", short: "Visión 3D" },
   { route: "/reports", name: "Reportes", icon: "▧", short: "Reportes" },
   { route: "/administration", name: "Administración", icon: "⚙", short: "Ajustes" },
 ];
