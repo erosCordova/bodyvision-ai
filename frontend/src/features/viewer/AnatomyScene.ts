@@ -5,6 +5,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url";
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
+import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
 export const anatomicalLayers = [
@@ -33,10 +34,12 @@ const BODYVOLUME_VERTEX = `
   float bvHip = smoothstep(0.23, 0.33, bvHeight) * (1.0 - smoothstep(0.45, 0.56, bvHeight));
   float bvLeg = smoothstep(0.10, 0.18, bvHeight) * (1.0 - smoothstep(0.37, 0.49, bvHeight));
   float bvZone = clamp(max(bvTorso, max(bvHip * 0.85, bvLeg * 0.30)), 0.0, 1.0);
-  float bvAmount = uBVVolume * uBVStrength * bvZone;
+  // Fade over the arms: they should not move outwards with the abdominal volume.
+  float bvArmFade = 1.0 - smoothstep(0.34, 0.57, abs(bvWorld.x - uBVBounds.z));
+  float bvAmount = uBVVolume * uBVStrength * bvZone * bvArmFade;
   vec3 bvOffset = vec3(
-    (bvWorld.x - uBVBounds.z) * bvAmount * 0.34, 0.0,
-    (bvWorld.z - uBVBounds.w) * bvAmount * 0.43
+    (bvWorld.x - uBVBounds.z) * bvAmount * 1.06, 0.0,
+    (bvWorld.z - uBVBounds.w) * bvAmount * 1.12
   );
   vec3 bvAxisX = modelMatrix[0].xyz;
   vec3 bvAxisY = modelMatrix[1].xyz;
@@ -413,7 +416,7 @@ export function createAnatomyScene(
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
   const setWeightVariation = (percent: number) => {
-    volume.value = THREE.MathUtils.clamp(percent, -30, 30) / 30;
+    volume.value = bodyVolumeScenario(DEFAULT_REFERENCE_KG, percent).radialVariation;
     render();
   };
   const setMeshOverlay = (enabled: boolean) => { showWireMesh = enabled; applyAll(); };

@@ -83,6 +83,37 @@ test("real atlas meshes render, layers and tours respond without writing data", 
   expect(writes).toEqual([]);
 });
 
+test("weight morph and polygon overlay change the rendered 3D canvas", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error" && /THREE\.|WebGL|shader/i.test(message.text())) errors.push(message.text());
+  });
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const canvas = page.locator(".studio-canvas canvas");
+  const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  await expect(canvas).toBeVisible();
+  await slider.fill("0");
+  const before = await canvas.screenshot();
+  await slider.fill("30");
+  await expect(page.locator(".studio-weight-indicator")).toContainText("+30%");
+  const after = await canvas.screenshot();
+  expect(after.equals(before), "The 3D surface should visibly deform at +30%").toBe(false);
+  await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
+  const withWireframe = await canvas.screenshot();
+  expect(withWireframe.equals(after), "The polygon mesh must render onto the same model").toBe(false);
+  await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+  await expect(page.getByText(/La piel está oculta/)).toBeVisible();
+  await slider.fill("20");
+  await expect(page.getByRole("checkbox", { name: /Piel/ })).toBeChecked();
+  await expect(page.getByText(/La piel está oculta/)).not.toBeVisible();
+  await expect(page.locator(".studio-weight-indicator")).toContainText("+20%");
+  expect(errors).toEqual([]);
+});
+
 test("a failed anatomical layer can be retried", async ({ page }) => {
   await sourceFixtures(page);
   const skinUrl = anatomySource + "web/public/models/skin.glb";

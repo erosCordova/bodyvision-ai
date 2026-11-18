@@ -6,6 +6,7 @@ import {
   type SceneQuality, type SelectedStructure, type LayerState,
 } from "./AnatomyScene";
 import { anatomySource } from "./atlasSource";
+import { bodyVolumeScenario } from "./bodyVolume";
 import { anatomyNameKey } from "./anatomyNames";
 import "./anatomy-studio.css";
 
@@ -123,7 +124,7 @@ export function AnatomyAtlas() {
   const [weightVariation, setWeightVariation] = useState(0);
   const [baselinePreview, setBaselinePreview] = useState(false);
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number } | null>(null);
-  const simulatedWeight = Math.round(referenceKg * (1 + weightVariation / 100) * 10) / 10;
+  const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
   const [quality, setQuality] = useState<SceneQuality>("alta");
   const [spin, setSpin] = useState(false);
   const [isolated, setIsolated] = useState(false);
@@ -369,7 +370,7 @@ export function AnatomyAtlas() {
           </div>
           <div className="studio-left-section studio-left-footer">
             <p>Modelo anatómico de referencia. No corresponde a pacientes ni expedientes clínicos.</p>
-            <button onClick={() => { applyPreset(quickViews[0]); setMode("realista"); setSpin(false); }}>↺ Restaurar visualización</button>
+            <button onClick={() => { applyPreset(quickViews[0]); setMode("realista"); setSpin(false); resetSimulation(); setMeshOverlay(false); }}>↺ Restaurar visualización</button>
           </div>
         </aside>
 
@@ -456,10 +457,24 @@ export function AnatomyAtlas() {
                   <span>Variación hipotética del peso <strong>{weightVariation > 0 ? "+" : ""}{weightVariation}%</strong></span>
                   <input type="range" aria-label="Aumentar o disminuir peso en el modelo anatómico"
                     min="-30" max="30" step="1" value={weightVariation}
-                    onChange={event => { setWeightVariation(Number(event.target.value)); setBaselinePreview(false); }} />
+                    onChange={event => {
+                      setWeightVariation(Number(event.target.value));
+                      setBaselinePreview(false);
+                      setVisible(previous => previous.includes("skin") ? previous : ["skin", ...previous]);
+                      setOpacity(previous => ({ ...previous, skin: 1 }));
+                      setMode("realista");
+                    }} />
                   <span className="studio-sim-limits"><small>−30% · menor volumen</small><small>+30% · mayor volumen</small></span>
                 </label>
-                <div className="studio-sim-state">
+                {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
+                <p>La piel está oculta. Activa la superficie corporal para ver el cambio de volumen.</p>
+                <button onClick={() => {
+                  setVisible(previous => ["skin", ...previous.filter(layer => layer !== "skin")]);
+                  setOpacity(previous => ({ ...previous, skin: 1 }));
+                  setMode("realista");
+                }}>Mostrar piel deformable</button>
+              </div>}
+              <div className="studio-sim-state">
                   <span className="studio-sim-state-icon">{weightVariation > 0 ? "↗" : weightVariation < 0 ? "↘" : "◈"}</span>
                   <div><strong>{weightVariation === 0 ? "Modelo corporal de referencia" : weightVariation > 0 ? "Incremento visual de volumen" : "Reducción visual de volumen"}</strong>
                     <p>El cambio se aplica a la piel y, con menor intensidad, a músculos. Huesos y nervios conservan sus dimensiones.</p></div>

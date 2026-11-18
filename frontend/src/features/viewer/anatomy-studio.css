@@ -334,3 +334,9 @@
 .studio-weight-indicator small{font-size:10px;font-weight:450;color:#b6d3e5}
 .studio-weight-indicator p{font-size:10px;color:#90d7ed;margin:0}
 @media(max-width:700px){.studio-weight-indicator{top:90px;left:11px;padding:9px;min-width:140px}.studio-weight-indicator strong{font-size:18px}.studio-tabs button{font-size:10px}}
+
+
+.studio-sim-no-skin{padding:14px;background:#2d293a;border:1px solid #87729d;border-radius:10px;color:#eadfff}
+.studio-sim-no-skin p{font-size:11px;line-height:1.6;margin:0 0 10px}
+.studio-sim-no-skin button{font-size:11px;padding:9px 11px;background:#3c5274;color:#eff9ff;border:1px solid #6387a8;border-radius:8px}
+.studio-sim-no-skin button:hover{background:#506c96}
