@@ -44,20 +44,24 @@ def upgrade() -> None:
           VALUES (org,email_digest,1,now(),NULL)
           ON CONFLICT (organization_id,email_sha256) DO UPDATE SET
             attempt_count = CASE
+              WHEN previous.blocked_until > now()
+                THEN LEAST(previous.attempt_count+1,1000000)
               WHEN previous.window_started <= now()-interval '15 minutes'
                 THEN 1
               ELSE LEAST(previous.attempt_count+1,1000000)
             END,
             window_started = CASE
+              WHEN previous.blocked_until > now()
+                THEN previous.window_started
               WHEN previous.window_started <= now()-interval '15 minutes'
                 THEN now()
               ELSE previous.window_started
             END,
             blocked_until = CASE
-              WHEN previous.window_started <= now()-interval '15 minutes'
-                THEN NULL
               WHEN previous.blocked_until > now()
                 THEN previous.blocked_until
+              WHEN previous.window_started <= now()-interval '15 minutes'
+                THEN NULL
               WHEN previous.attempt_count >= 5
                 THEN now()+interval '15 minutes'
               ELSE NULL

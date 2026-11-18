@@ -96,14 +96,13 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
     # rolls back its own SQL transaction, but must NOT erase the throttle state.
     with request.app.state.auth_engine.begin() as limiter:
         permitted = limiter.execute(
-            text(
-                "SELECT consume_auth_login_attempt(:org,CAST(:digest AS char(64)))"
-            ),
+            text("SELECT consume_auth_login_attempt(:org,CAST(:digest AS char(64)))"),
             {"org": credentials.organization_id, "digest": digest_key},
         ).scalar_one()
     if not permitted:
         raise DomainError(
-            429, "LOGIN_RATE_LIMITED",
+            429,
+            "LOGIN_RATE_LIMITED",
             "Demasiados intentos de acceso. Intenta nuevamente en 15 minutos.",
         )
 

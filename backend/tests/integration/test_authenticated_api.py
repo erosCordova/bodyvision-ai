@@ -290,13 +290,16 @@ def test_login_throttle_is_shared_and_does_not_reveal_account_existence(protecte
     renewed = client.post("/api/v1/auth/login", json={**wrong, "password": PASSWORD})
     assert renewed.status_code == 200
     with owner.begin() as connection:
-        assert connection.execute(
-            text(
-                "SELECT count(*) FROM auth_login_attempts "
-                "WHERE organization_id=:org AND email_sha256=:digest"
-            ),
-            {"org": editor[1], "digest": email_hash},
-        ).scalar_one() == 0
+        assert (
+            connection.execute(
+                text(
+                    "SELECT count(*) FROM auth_login_attempts "
+                    "WHERE organization_id=:org AND email_sha256=:digest"
+                ),
+                {"org": editor[1], "digest": email_hash},
+            ).scalar_one()
+            == 0
+        )
 
     # Unknown identity receives the same generic 401, and cannot share a
     # throttle bucket with a distinct account or organization.
@@ -325,9 +328,7 @@ def test_login_throttle_survives_independent_connections(protected):
     for index in range(1, 7):
         with owner.begin() as connection:
             ok = connection.execute(
-                text(
-                    "SELECT consume_auth_login_attempt(:org,CAST(:digest AS char(64)))"
-                ),
+                text("SELECT consume_auth_login_attempt(:org,CAST(:digest AS char(64)))"),
                 {"org": editor[1], "digest": digest},
             ).scalar_one()
         assert ok is (index <= 5)
