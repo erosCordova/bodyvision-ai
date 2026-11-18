@@ -35,18 +35,21 @@ def require_writer(scope: Workspace) -> None:
         raise DomainError(403, "FORBIDDEN", "No tienes permisos de edición.")
 
 
-
 @router.get("/workspaces")
 def workspaces(request: Request, scope: Scope) -> dict:
     if scope.authenticated:
-        rows = scope.connection.execute(
-            text("SELECT id,name FROM list_local_workspaces() WHERE id=:org"),
-            {"org": scope.organization_id},
-        ).mappings().all()
+        rows = (
+            scope.connection.execute(
+                text("SELECT id,name FROM list_local_workspaces() WHERE id=:org"),
+                {"org": scope.organization_id},
+            )
+            .mappings()
+            .all()
+        )
     else:
-        rows = scope.connection.execute(
-            text("SELECT * FROM list_local_workspaces()")
-        ).mappings().all()
+        rows = (
+            scope.connection.execute(text("SELECT * FROM list_local_workspaces()")).mappings().all()
+        )
     return {
         "items": [dict(x) for x in rows],
         "synthetic": True,
@@ -277,7 +280,8 @@ def summary(scope: Scope) -> dict:
         text(
             "SELECT count(*) FROM profiles WHERE organization_id=:org "
             "AND status='active' AND has_profile_access(id)"
-        ), org
+        ),
+        org,
     ).scalar_one()
     measured = conn.execute(
         text(

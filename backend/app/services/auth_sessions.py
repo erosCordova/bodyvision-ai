@@ -68,10 +68,14 @@ def resolve_identity(request: Request) -> Identity:
     token = bearer_token(request)
     digest = hash_session_token(token)
     with request.app.state.auth_engine.connect() as connection:
-        row = connection.execute(
-            text("SELECT * FROM resolve_authenticated_session(:digest)"),
-            {"digest": digest},
-        ).mappings().first()
+        row = (
+            connection.execute(
+                text("SELECT * FROM resolve_authenticated_session(CAST(:digest AS char(64)))"),
+                {"digest": digest},
+            )
+            .mappings()
+            .first()
+        )
     if row is None or row["assigned_role"] not in {
         "administrator",
         "specialist",
@@ -90,15 +94,19 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
             text("SELECT set_config('app.organization_id',:org,true)"),
             {"org": str(credentials.organization_id)},
         )
-        user = connection.execute(
-            text("""
+        user = (
+            connection.execute(
+                text("""
                 SELECT id,password_hash FROM users
                 WHERE organization_id=:org AND lower(email)=:email
                   AND account_status='active' AND NOT is_local_operator
                 LIMIT 1
             """),
-            {"org": credentials.organization_id, "email": email},
-        ).mappings().first()
+                {"org": credentials.organization_id, "email": email},
+            )
+            .mappings()
+            .first()
+        )
         verifier = user["password_hash"] if user and user["password_hash"] else DUMMY_VERIFIER
         password_ok = verify_password(credentials.password, verifier)
         if user is None or not password_ok:
@@ -139,8 +147,11 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
             },
         )
     return SessionRead(
-        token=token, expires_at=expires_at,
-        organization_id=credentials.organization_id, user_id=user_id, role=roles
+        token=token,
+        expires_at=expires_at,
+        organization_id=credentials.organization_id,
+        user_id=user_id,
+        role=roles,
     )
 
 
@@ -149,5 +160,6 @@ def logout(request: Request) -> None:
     digest = hash_session_token(bearer_token(request))
     with request.app.state.auth_engine.begin() as connection:
         connection.execute(
-            text("SELECT revoke_authenticated_session(:digest)"), {"digest": digest}
+            text("SELECT revoke_authenticated_session(CAST(:digest AS char(64)))"),
+            {"digest": digest}
         ).scalar_one()

@@ -65,7 +65,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH"],
         allow_headers=[
-            "X-Correlation-ID", "Content-Type", "X-Workspace-ID", "Idempotency-Key",
+            "X-Correlation-ID",
+            "Content-Type",
+            "X-Workspace-ID",
+            "Idempotency-Key",
             *(["Authorization"] if settings.identity_enabled else []),
         ],
         expose_headers=["X-Correlation-ID"],

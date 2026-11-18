@@ -106,12 +106,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "REVOKE ALL ON FUNCTION resolve_authenticated_session(char(64)) "
-        "FROM bodyvision_auth_app"
+        "REVOKE ALL ON FUNCTION resolve_authenticated_session(char(64)) FROM bodyvision_auth_app"
     )
     op.execute(
-        "REVOKE ALL ON FUNCTION revoke_authenticated_session(char(64)) "
-        "FROM bodyvision_auth_app"
+        "REVOKE ALL ON FUNCTION revoke_authenticated_session(char(64)) FROM bodyvision_auth_app"
     )
     op.execute("REVOKE SELECT ON users FROM bodyvision_app")
     op.execute("GRANT SELECT ON users TO bodyvision_app")

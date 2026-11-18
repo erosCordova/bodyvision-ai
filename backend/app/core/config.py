@@ -26,9 +26,7 @@ class Settings(BaseSettings):
     @field_validator("auth_database_url")
     @classmethod
     def valid_auth_database_url(cls, value: SecretStr | None) -> SecretStr | None:
-        if value is not None and not value.get_secret_value().startswith(
-            "postgresql+psycopg://"
-        ):
+        if value is not None and not value.get_secret_value().startswith("postgresql+psycopg://"):
             raise ValueError("A separate PostgreSQL auth role is required")
         return value
 

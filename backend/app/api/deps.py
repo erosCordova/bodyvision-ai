@@ -29,8 +29,7 @@ def workspace(
                 {"actor": str(identity.user_id)},
             )
             yield Workspace(
-                connection, identity.organization_id, identity.user_id,
-                identity.role, True
+                connection, identity.organization_id, identity.user_id, identity.role, True
             )
         return
 

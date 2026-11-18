@@ -96,8 +96,10 @@ def protected():
                         },
                     )
         settings = Settings(
-            app_env="test", database_url=admin_url,
-            auth_database_url=auth_url, identity_enabled=True,
+            app_env="test",
+            database_url=admin_url,
+            auth_database_url=auth_url,
+            identity_enabled=True,
         )
         with TestClient(create_app(settings, app_engine)) as client:
             yield client, owner, profile_id, users
@@ -195,13 +197,19 @@ def test_authorization_revocation_and_session_expiry(protected):
     member_token = authenticate(client, reader[0], reader[1]).json()["token"]
     outside_token = authenticate(client, outsider[0], outsider[1]).json()["token"]
     assert client.get(path, headers=headers(member_token)).status_code == 200
-    assert client.patch(
-        path, headers=headers(member_token), json={"display_name": "No permitido"}
-    ).status_code == 403
+    assert (
+        client.patch(
+            path, headers=headers(member_token), json={"display_name": "No permitido"}
+        ).status_code
+        == 403
+    )
     assert client.get(path, headers=headers(outside_token)).status_code == 404
-    assert client.patch(
-        path, headers=headers(editor_token), json={"display_name": "Ficticio seguro"}
-    ).status_code == 200
+    assert (
+        client.patch(
+            path, headers=headers(editor_token), json={"display_name": "Ficticio seguro"}
+        ).status_code
+        == 200
+    )
 
     assert client.post("/api/v1/auth/logout", headers=headers(editor_token)).status_code == 204
     assert client.get(path, headers=headers(editor_token)).status_code == 401
