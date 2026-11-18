@@ -4,6 +4,8 @@ La interfaz vigente es el atlas inmersivo en /body-3d, incorporado en main despu
 
 Validación de b1ac1b4: 46 pruebas backend, 13 unitarias frontend, 9 de navegador y Docker smoke correctos. Ejecución: https://github.com/erosCordova/bodyvision-ai/actions/runs/44374457358
 
+Validación integrada de 9577324 (incluye los controles de volumen y malla añadidos en paralelo): 46 backend, 15 unitarias frontend, 9 de navegador y Docker smoke correctos. Ejecución: https://github.com/erosCordova/bodyvision-ai/actions/runs/44375981458
+
 Correcciones: nombre applyPreset (no es un hook React); estados loading/ready/error por capa; reintento de una capa; error WebGL y recarga completa sin volver a abrir la página; movimiento reducido actualizado en vivo; catálogo y modelos fijados a la misma revisión. El estado data-loaded solo es verdadero cuando una capa visible terminó de cargar.
 
 ## Activos y dependencias

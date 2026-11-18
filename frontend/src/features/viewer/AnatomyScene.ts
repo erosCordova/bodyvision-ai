@@ -287,9 +287,7 @@ export function createAnatomyScene(
     const fittedBox = new THREE.Box3().setFromObject(root);
     const fittedCentre = fittedBox.getCenter(new THREE.Vector3());
     massBounds.value.set(fittedBox.min.y, fittedBox.max.y, fittedCentre.x, fittedCentre.z);
-    camera.position.set(2.2, 0.8, 3.55);
-    controls.target.set(0, 0, 0);
-    controls.update();
+    resetCamera();
     fitted = true;
     render();
   };
@@ -422,8 +420,13 @@ export function createAnatomyScene(
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
   const resetCamera = () => {
-    camera.position.set(2.2, 0.8, 3.55);
+    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+    const distance = Math.min(controls.maxDistance, Math.max(
+      2.5 / (2 * Math.tan(halfFov) * 0.68),
+      1.2 / (2 * Math.tan(halfFov) * Math.max(camera.aspect, 0.2) * 0.82),
+    ));
     controls.target.set(0, 0, 0);
+    camera.position.set(0.35, 0.08, 1).normalize().multiplyScalar(distance);
     controls.update();
     render();
   };
