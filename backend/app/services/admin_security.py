@@ -21,9 +21,7 @@ class NewSyntheticUser(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(min_length=3, max_length=100)
-    email: str = Field(
-        min_length=16, max_length=254, pattern=r"^[a-z0-9._%+-]+@example\.invalid$"
-    )
+    email: str = Field(min_length=16, max_length=254, pattern=r"^[a-z0-9._%+-]+@example\.invalid$")
     password: str = Field(min_length=12, max_length=128)
     role: Literal["specialist", "member"]
 
@@ -70,9 +68,7 @@ def provision_user(request: Request, data: NewSyntheticUser) -> NewSyntheticUser
     identity = resolve_identity(request)
     if identity.role != "administrator":
         with request.app.state.auth_engine.begin() as connection:
-            record_session_event(
-                request, connection, "admin.user_provision_denied", "denied"
-            )
+            record_session_event(request, connection, "admin.user_provision_denied", "denied")
         raise DomainError(403, "FORBIDDEN", "Solo un administrador puede crear usuarios.")
 
     user_id = uuid4()
@@ -116,8 +112,7 @@ def list_security_events(request: Request, limit: int) -> list[AuditEventRead]:
         rows = (
             connection.execute(
                 text(
-                    "SELECT * FROM private_admin_security_events("
-                    "CAST(:digest AS char(64)),:limit)"
+                    "SELECT * FROM private_admin_security_events(CAST(:digest AS char(64)),:limit)"
                 ),
                 {
                     "digest": hash_session_token(bearer_token(request)),

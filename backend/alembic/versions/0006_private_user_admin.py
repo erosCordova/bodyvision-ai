@@ -158,7 +158,6 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION private_admin_security_events(char(64),integer)")
     op.execute("DROP FUNCTION record_authenticated_security_event(char(64),uuid,uuid,text,text)")
     op.execute(
-        "DROP FUNCTION provision_synthetic_user("
-        "char(64),uuid,uuid,text,text,text,text,uuid,uuid)"
+        "DROP FUNCTION provision_synthetic_user(char(64),uuid,uuid,text,text,text,text,uuid,uuid)"
     )
     op.execute("UPDATE system_schema_state SET revision='0005_login_throttle'")

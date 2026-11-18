@@ -352,9 +352,8 @@ def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(pro
     outsider_token = authenticate(client, outsider[0], outsider[1]).json()["token"]
 
     # Platform administration does not automatically grant record access.
-    assert client.get(
-        f"/api/v1/profiles/{profile}", headers=headers(admin_token)
-    ).status_code == 404
+    admin_view = client.get(f"/api/v1/profiles/{profile}", headers=headers(admin_token))
+    assert admin_view.status_code == 404
 
     name = "Usuario ficticio administrado"
     email = "provisioned.member@example.invalid"
@@ -377,13 +376,17 @@ def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(pro
     users.append((created_user, FIRST_WORKSPACE, "member", None))
 
     with owner.connect() as conn:
-        info = conn.execute(
-            text(
-                "SELECT email,password_hash,account_status,is_local_operator "
-                "FROM users WHERE id=:id"
-            ),
-            {"id": created_user},
-        ).mappings().one()
+        info = (
+            conn.execute(
+                text(
+                    "SELECT email,password_hash,account_status,is_local_operator "
+                    "FROM users WHERE id=:id"
+                ),
+                {"id": created_user},
+            )
+            .mappings()
+            .one()
+        )
         assert info["email"] == email
         assert PASSWORD not in info["password_hash"]
         assert info["password_hash"].startswith("pbkdf2_sha256$")
@@ -402,9 +405,10 @@ def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(pro
     assert enrolled.json()["role"] == "member"
 
     # No implicit profile grant for new users.
-    assert client.get(
+    new_member_view = client.get(
         f"/api/v1/profiles/{profile}", headers=headers(enrolled.json()["token"])
-    ).status_code == 404
+    )
+    assert new_member_view.status_code == 404
 
     audit = client.get("/api/v1/auth/audit?limit=50", headers=headers(admin_token))
     assert audit.status_code == 200, audit.text
@@ -420,17 +424,14 @@ def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(pro
     assert PASSWORD not in audit.text
     assert admin_token not in audit.text
 
-    assert client.get(
-        "/api/v1/auth/audit", headers=headers(member_token)
-    ).status_code == 403
-    assert client.get(
-        "/api/v1/auth/audit", headers=headers(outsider_token)
-    ).status_code == 403
-    assert client.post(
-        "/api/v1/auth/users",
-        json=body,
-        headers=headers(outsider_token),
-    ).status_code == 403
+    member_audit = client.get("/api/v1/auth/audit", headers=headers(member_token))
+    outsider_audit = client.get("/api/v1/auth/audit", headers=headers(outsider_token))
+    outsider_provision = client.post(
+        "/api/v1/auth/users", json=body, headers=headers(outsider_token)
+    )
+    assert member_audit.status_code == 403
+    assert outsider_audit.status_code == 403
+    assert outsider_provision.status_code == 403
 
 
 def test_private_user_provisioning_fails_closed_for_duplicate_and_invalid_data(protected):
@@ -445,21 +446,24 @@ def test_private_user_provisioning_fails_closed_for_duplicate_and_invalid_data(p
         "role": "specialist",
     }
 
-    assert client.post(
+    elevated = client.post(
         "/api/v1/auth/users",
         json={**body, "role": "administrator"},
         headers=headers(admin_token),
-    ).status_code == 422
-    assert client.post(
+    )
+    nonsynthetic = client.post(
         "/api/v1/auth/users",
         json={**body, "email": "person@real-company.com"},
         headers=headers(admin_token),
-    ).status_code == 422
-    assert client.post(
+    )
+    supplied_tenant = client.post(
         "/api/v1/auth/users",
         json={**body, "organization_id": str(SECOND_WORKSPACE)},
         headers=headers(admin_token),
-    ).status_code == 422
+    )
+    assert elevated.status_code == 422
+    assert nonsynthetic.status_code == 422
+    assert supplied_tenant.status_code == 422
 
     created = client.post("/api/v1/auth/users", json=body, headers=headers(admin_token))
     assert created.status_code == 201
@@ -468,13 +472,13 @@ def test_private_user_provisioning_fails_closed_for_duplicate_and_invalid_data(p
     duplicate = client.post("/api/v1/auth/users", json=body, headers=headers(admin_token))
     assert duplicate.status_code == 409
     with owner.connect() as connection:
-        assert connection.execute(
+        same_org = connection.execute(
             text("SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"),
             {"org": FIRST_WORKSPACE, "email": email},
-        ).scalar_one() == 1
-        assert connection.execute(
-            text(
-                "SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"
-            ),
+        ).scalar_one()
+        other_org = connection.execute(
+            text("SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"),
             {"org": SECOND_WORKSPACE, "email": email},
-        ).scalar_one() == 0
+        ).scalar_one()
+        assert same_org == 1
+        assert other_org == 0
