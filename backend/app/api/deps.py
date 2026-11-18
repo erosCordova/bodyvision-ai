@@ -16,9 +16,9 @@ def workspace(
     # The private API obtains its tenant and actor ONLY from the verified
     # opaque session. The legacy selector remains demo/local-test-only.
     if request.app.state.settings.identity_enabled:
+        identity = resolve_identity(request)
         if request.headers.get("X-Workspace-ID"):
             raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
-        identity = resolve_identity(request)
         with request.app.state.engine.begin() as connection:
             connection.execute(
                 text("SELECT set_config('app.organization_id',:org,true)"),
