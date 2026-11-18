@@ -162,6 +162,8 @@ export function createAnatomyScene(
   let quality: SceneQuality = "alta";
   let disposed = false;
   let fitted = false;
+  let baseScale = 1;
+  let heightCm = 175;
   let autoRotate = false;
   let isolated = false;
   let selectedMesh: THREE.Mesh | null = null;
@@ -278,6 +280,18 @@ export function createAnatomyScene(
     render();
   }
 
+  // Keep the chosen atlas mesh: height changes its scale, never swaps the character.
+  const applyHeight = () => {
+    root.scale.set(baseScale, baseScale * heightCm / 175, baseScale);
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    if (!box.isEmpty()) {
+      const center = box.getCenter(new THREE.Vector3());
+      massBounds.value.set(box.min.y, box.max.y, center.x, center.z);
+    }
+    render();
+  };
+
   const frameBody = () => {
     const box = new THREE.Box3().setFromObject(anatomical);
     if (box.isEmpty()) return;
@@ -285,11 +299,8 @@ export function createAnatomyScene(
     const center = box.getCenter(new THREE.Vector3());
     const max = Math.max(dimension.x, dimension.y, dimension.z, 0.01);
     anatomical.position.set(-center.x, -center.y, -center.z);
-    root.scale.setScalar(2.5 / max);
-    root.updateMatrixWorld(true);
-    const fittedBox = new THREE.Box3().setFromObject(root);
-    const fittedCentre = fittedBox.getCenter(new THREE.Vector3());
-    massBounds.value.set(fittedBox.min.y, fittedBox.max.y, fittedCentre.x, fittedCentre.z);
+    baseScale = 2.5 / max;
+    applyHeight();
     resetCamera();
     fitted = true;
     render();
@@ -419,6 +430,10 @@ export function createAnatomyScene(
     volume.value = bodyVolumeScenario(DEFAULT_REFERENCE_KG, percent).radialVariation;
     render();
   };
+  const setHeightCm = (value: number) => {
+    heightCm = Number.isFinite(value) ? THREE.MathUtils.clamp(value, 145, 205) : 175;
+    if (fitted) applyHeight();
+  };
   const setMeshOverlay = (enabled: boolean) => { showWireMesh = enabled; applyAll(); };
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
@@ -498,5 +513,5 @@ export function createAnatomyScene(
     canvas.remove();
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setMeshOverlay, resetCamera, view, zoom, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setHeightCm, setMeshOverlay, resetCamera, view, zoom, retryLayer, dispose };
 }

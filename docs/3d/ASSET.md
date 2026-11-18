@@ -1,6 +1,8 @@
-# Cuerpo 3D de demostración · versión 1.0.0
+# Activo histórico de demostración MakeHuman / MPFB · versión 1.0.0
 
-El visor /body-3d usa un activo adulto genérico con superficie anatómica, rostro, manos, pies y textura de piel. No representa a pacientes ni se deriva de sus mediciones. No es una reconstrucción, un modelo clínico, una estimación de composición corporal ni una predicción del aspecto a cierto peso. No hay órganos, músculos internos, landmarks, rig ni captura fotográfica.
+> **Modelo descartado para la interfaz actual.** El archivo `frontend/public/models/bodyvision/adult-demo.glb.gz` permanece como recurso histórico, pero no se muestra en `/body-3d` ni en la vista previa del dashboard. Ambas vistas utilizan la misma malla de piel del atlas descrita en `docs/3d/PRIMARY_MODEL.md`. No debe volver a conectarse el recurso MPFB a una pantalla pública sin una nueva decisión de diseño.
+
+El recurso histórico usa un activo adulto genérico con superficie anatómica, rostro, manos, pies y textura de piel. No representa a pacientes ni se deriva de sus mediciones. No es una reconstrucción, un modelo clínico, una estimación de composición corporal ni una predicción del aspecto a cierto peso. No hay órganos, músculos internos, landmarks, rig ni captura fotográfica.
 
 ## Fuentes verificadas y licencia
 

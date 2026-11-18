@@ -71,6 +71,7 @@ test("real atlas meshes render, layers and tours respond without writing data", 
   await expect(page.getByRole("button", { name: "Ver escenario modificado", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Restaurar valores", exact: true }).click();
   await expect(page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico", exact: true })).toHaveValue("0");
+  await expect(page.getByRole("slider", { name: "Modificar estatura del modelo anatómico", exact: true })).toHaveValue("175");
   const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(a11y.violations).toEqual([]);
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -96,6 +97,13 @@ test("weight morph and polygon overlay change the rendered 3D canvas", async ({ 
   const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
   await expect(canvas).toBeVisible();
   await slider.fill("0");
+  const height = page.getByRole("slider", { name: "Modificar estatura del modelo anatómico" });
+  await expect(height).toHaveValue("175");
+  const originalHeight = await canvas.screenshot();
+  await height.fill("205");
+  const taller = await canvas.screenshot();
+  expect(taller.equals(originalHeight), "Height must change the atlas figure on the same canvas").toBe(false);
+  await height.fill("175");
   const before = await canvas.screenshot();
   await slider.fill("30");
   await expect(page.locator(".studio-weight-indicator")).toContainText("+30%");
