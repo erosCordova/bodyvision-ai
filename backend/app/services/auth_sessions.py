@@ -161,5 +161,5 @@ def logout(request: Request) -> None:
     with request.app.state.auth_engine.begin() as connection:
         connection.execute(
             text("SELECT revoke_authenticated_session(CAST(:digest AS char(64)))"),
-            {"digest": digest}
+            {"digest": digest},
         ).scalar_one()
