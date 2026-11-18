@@ -158,9 +158,22 @@ export async function createBodyScene(
     const response = await fetch(manifest.url, { signal });
     if (!response.ok) throw new Error("asset");
     const bytes = await response.arrayBuffer();
-    const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(v => v.toString(16).padStart(2,"0")).join("");
-    if (hash !== manifest.sha256) throw new Error("checksum");
-    const decoded = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+    // Some static hosts send .glb.gz with Content-Encoding: gzip. Browsers
+    // transparently decompress that response, so avoid decompressing twice.
+    const input = new Uint8Array(bytes);
+    const isGzip = input.length >= 2 && input[0] === 0x1f && input[1] === 0x8b;
+    const isGlb = input.length >= 4 && input[0] === 0x67 && input[1] === 0x6c && input[2] === 0x54 && input[3] === 0x46;
+    if (!isGzip && !isGlb) throw new Error("asset-format");
+    const hashBytes = async (data: ArrayBuffer) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", data))]
+      .map(v => v.toString(16).padStart(2, "0")).join("");
+    let decoded: ArrayBuffer;
+    if (isGzip) {
+      if (await hashBytes(bytes) !== manifest.sha256) throw new Error("checksum");
+      decoded = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+    } else {
+      decoded = bytes;
+    }
+    if (await hashBytes(decoded) !== manifest.decoded_sha256) throw new Error("decoded-checksum");
     const loader = new GLTFLoader();
     const asset = await loader.parseAsync(decoded, "/models/bodyvision/");
     group.add(asset.scene);

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
+import { ProjectProgressSummary } from "../progress/ProjectProgress";
 import { EmptyState, ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
 const DashboardBodyPreview = lazy(() => import("./DashboardBodyPreview").then(m => ({ default: m.DashboardBodyPreview })));
@@ -36,6 +37,7 @@ export function Dashboard() {
         <article className="enterprise-kpi"><span className="enterprise-kpi-icon violet">◇</span><p>Correcciones</p><strong>{data.corrections.toLocaleString("es-PE")}</strong><small>Versiones conservadas</small></article>
         <article className="enterprise-kpi"><span className="enterprise-kpi-icon purple">✧</span><p>Análisis IA validados</p><strong>—</strong><small>Procesamiento no disponible</small></article>
       </section>
+      <ProjectProgressSummary />
       <div className="enterprise-dashboard-grid">
         <section className="enterprise-panel enterprise-anatomy-promo" aria-label="Exploración anatómica">
           <div className="enterprise-panel-title"><h2>Exploración corporal</h2><span>ATLAS 3D</span></div>

@@ -7,6 +7,7 @@ import { ProfilesPage } from "../../features/profiles/ProfilesPage";
 import { ProfileDetail } from "../../features/profiles/ProfileDetail";
 
 const BodyWorkspace = lazy(() => import("../../features/viewer/BodyWorkspace").then(m => ({ default: m.BodyWorkspace })));
+const ProjectProgressPage = lazy(() => import("../../features/progress/ProjectProgress").then(m => ({ default: m.ProjectProgressPage })));
 const modules = () => import("../../features/foundation/ModulePages");
 const MeasurementsPage = lazy(() => modules().then(m => ({ default: m.MeasurementsPage })));
 const CapturePage = lazy(() => modules().then(m => ({ default: m.CapturePage })));
@@ -25,6 +26,7 @@ export function AppRouter() {
         <Route path="/simulation" element={<Navigate to="/body-3d?panel=simulacion" replace />} />
         <Route element={<DataLayout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/progress" element={<Suspense fallback={loading}><ProjectProgressPage /></Suspense>} />
           <Route path="/profiles" element={<ProfilesPage />} />
           <Route path="/profiles/:profileId" element={<ProfileDetail />} />
           <Route path="/measurements" element={<Suspense fallback={loading}><MeasurementsPage /></Suspense>} />

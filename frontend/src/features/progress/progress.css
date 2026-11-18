@@ -1,0 +1,51 @@
+.project-progress-summary{
+  display:grid;
+  grid-template-columns:minmax(190px,1.05fr) minmax(200px,.9fr) auto;
+  gap:22px;
+  align-items:center;
+  padding:20px 22px;
+  background:linear-gradient(118deg,#12344e 0%,#172a48 70%,#252443 100%);
+  border:1px solid #3e6688;
+  border-radius:14px;
+  box-shadow:0 10px 38px #05101e66;
+  margin:0 0 19px;
+}
+.project-progress-text>p,.project-next-step span{
+  color:#76d8ed;font-size:9px;letter-spacing:.12em;margin:0 0 6px;font-weight:700
+}
+.project-progress-text h2{font-size:16px;margin:0 0 6px;color:#e8f6ff}
+.project-progress-text>span{font-size:10px;color:#abc8de;line-height:1.5}
+.project-progress-meter-top{display:flex;align-items:baseline;gap:10px}
+.project-progress-meter-top strong{font-size:29px;letter-spacing:-.035em;color:#87e3f4}
+.project-progress-meter-top>span{font-size:10px;color:#a9c7df}
+.project-progress-track{height:9px;width:100%;background:#324c65;border-radius:20px;overflow:hidden;margin:9px 0 7px}
+.project-progress-track>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#15bad9,#87d0ff);transition:width .2s ease}
+.project-progress-meter small{font-size:9px;color:#9db7d1}
+.project-progress-action{
+  display:inline-flex;align-items:center;justify-content:center;text-align:center;
+  border:1px solid #4687a5;color:#d5f5fc;font-size:10px;white-space:nowrap;
+  padding:12px 15px;border-radius:9px;background:#164768;
+}
+.project-progress-action:hover{background:#20668b}
+.project-progress-note{padding:16px 20px;border:1px solid #355474;background:#162a42;border-radius:11px;margin:0 0 22px}
+.project-progress-note strong{font-size:11px;color:#bbebf7}
+.project-progress-note p{font-size:11px;line-height:1.7;color:#aac3db;margin:7px 0 0}
+.project-phase-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.project-phase-card{padding:22px;border:1px solid #33536d;border-radius:12px;background:linear-gradient(145deg,#142b44,#0d1c30)}
+.project-phase-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.project-phase-header span{color:#81cfe7;letter-spacing:.1em;font-weight:700;font-size:9px}
+.project-phase-header h2{font-size:15px;margin:6px 0 0;color:#edf7ff}
+.project-phase-header>strong{font-size:25px;font-variant-numeric:tabular-nums;color:#91def4}
+.project-phase-card>.project-progress-track{margin:17px 0}
+.project-phase-card dl{margin:0;display:grid;gap:11px}
+.project-phase-card dl>div{border-top:1px solid #294967;padding-top:11px}
+.project-phase-card dt{font-size:9px;color:#80cae6;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
+.project-phase-card dd{font-size:11px;line-height:1.65;color:#bdd0e1;margin:5px 0 0}
+.project-next-step{display:flex;gap:22px;justify-content:space-between;align-items:center;margin-top:22px;padding:24px;border:1px solid #5c6091;border-radius:12px;background:linear-gradient(120deg,#20274b,#14283c)}
+.project-next-step h2{font-size:17px;margin:6px 0}
+.project-next-step p{font-size:11px;color:#b6c8db;line-height:1.6;margin:7px 0 0}
+.project-next-step a{white-space:nowrap;font-size:10px;padding:12px;border:1px solid #6776b6;background:#343b72;border-radius:8px;color:#ecf4ff}
+.project-progress-footnote{font-size:10px;color:#a9bbcc;line-height:1.8;padding:10px 0}
+@media(max-width:1200px){.project-progress-summary{grid-template-columns:1fr 1fr}.project-progress-action{grid-column:1/-1;justify-self:start}}
+@media(max-width:800px){.project-phase-list{grid-template-columns:1fr}.project-next-step{display:block}.project-next-step a{display:inline-block;margin-top:18px}}
+@media(max-width:560px){.project-progress-summary{grid-template-columns:1fr;gap:13px}.project-progress-action{grid-column:auto;justify-self:stretch}.project-progress-text h2{font-size:15px}.project-phase-card{padding:17px}}

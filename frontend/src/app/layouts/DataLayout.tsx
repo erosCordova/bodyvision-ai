@@ -5,6 +5,7 @@ import "../../styles/enterprise.css";
 
 const sections = [
   { route: "/", name: "Dashboard", icon: "▦", short: "Inicio" },
+  { route: "/progress", name: "Avance del proyecto", icon: "◷", short: "Progreso" },
   { route: "/profiles", name: "Expedientes", icon: "▤", short: "Expedientes" },
   { route: "/measurements", name: "Mediciones", icon: "▥", short: "Mediciones" },
   { route: "/capture", name: "Captura corporal", icon: "◫", short: "Captura" },
