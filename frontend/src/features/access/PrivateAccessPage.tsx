@@ -41,6 +41,10 @@ export function PrivateAccessPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (recovering) {
+      await startRecovery();
+      return;
+    }
     setError("");
     setSecurityNotice("");
     setBusy(true);
