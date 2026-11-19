@@ -188,6 +188,19 @@ test("self-hosted pose model analyses a screenshot of the licensed synthetic ana
   await expect(result).toContainText("de 33 puntos");
   await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
     .toBeVisible();
+  await expect(page.getByRole("list", { name: "Visibilidad por zonas corporales" }))
+    .toBeVisible();
+  const threshold = page.getByRole("slider", { name: "Umbral de visibilidad de landmarks" });
+  await expect(threshold).toHaveValue("0.5");
+  await threshold.fill("0.9");
+  await expect(page.getByText(/visibles con umbral 0,90/)).toBeVisible();
+  await page.getByRole("checkbox", { name: "Mostrar conexiones" }).uncheck();
+  await page.getByRole("checkbox", { name: "Mostrar puntos detectados" }).uncheck();
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Mostrar puntos detectados" }).check();
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toBeVisible();
   // This is real model output on the existing licensed synthetic 3D model, not mocked points.
   console.log("Local MediaPipe pose detected on the synthetic BODYVISION anatomical atlas");
   expect(externalPoseRequests).toEqual([]);
