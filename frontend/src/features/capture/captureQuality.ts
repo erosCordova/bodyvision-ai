@@ -126,11 +126,7 @@ export async function reviewLocalCapture(file: File): Promise<CaptureReview> {
     ctx.drawImage(bitmap, 0, 0, sampleWidth, sampleHeight);
     const sample = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
     const result = assessCapturePixels(sampleWidth, sampleHeight, sample.data);
-    return {
-      ...result,
-      width: bitmap.width,
-      height: bitmap.height,
-      checks: result.checks.map(check =>
+    const checks = result.checks.map(check =>
         check.id !== "resolution" && check.id !== "orientation"
           ? check
           : {
@@ -145,7 +141,13 @@ export async function reviewLocalCapture(file: File): Promise<CaptureReview> {
                 : (bitmap.height >= bitmap.width
                   ? "Orientación vertical adecuada para una foto de cuerpo completo."
                   : "Es preferible una fotografía vertical con cabeza y pies visibles."),
-            }),
+            });
+    return {
+      ...result,
+      width: bitmap.width,
+      height: bitmap.height,
+      checks,
+      passed: checks.every(check => check.passed),
     };
   } finally {
     bitmap.close();
