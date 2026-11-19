@@ -353,3 +353,17 @@
 .enterprise-camera-buttons{display:flex;gap:9px;flex-wrap:wrap}
 .enterprise-camera-buttons button{font:inherit;font-size:12px;padding:10px 16px;cursor:pointer;border-radius:8px}
 .enterprise-camera-buttons button:disabled{cursor:not-allowed;opacity:.55}
+
+/* Visible only in the explicitly enabled local/test authenticated workspace. */
+.enterprise-logout-button{
+  border:1px solid #6089a9;
+  background:#1a3852;
+  color:#d9f1ff;
+  font-size:10px;
+  font-weight:650;
+  border-radius:8px;
+  padding:10px 13px;
+  cursor:pointer;
+}
+.enterprise-logout-button:hover{background:#285474}
+.enterprise-logout-button:focus-visible{outline:2px solid #81d9f4;outline-offset:2px}
