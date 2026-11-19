@@ -154,3 +154,48 @@ test("a browser without WebGL gets an actionable error and keeps the catalogue",
   await page.getByRole("textbox", { name: "Buscar estructura anatómica", exact: true }).fill("femur");
   await expect(page.getByRole("option", { name: /Femur/i }).first()).toBeVisible();
 });
+
+test("self-hosted pose model analyses a screenshot of the licensed synthetic anatomical body", async ({ page }) => {
+  test.setTimeout(150000);
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Frente", exact: true }).click();
+  const syntheticBody = await page.locator(".studio-canvas canvas").screenshot();
+  const externalPoseRequests: string[] = [];
+  let inAnalysis = false;
+  page.on("request", request => {
+    if (inAnalysis && /cdn\.jsdelivr\.net|storage\.googleapis\.com/.test(request.url())) {
+      externalPoseRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/capture");
+  await page.getByRole("checkbox", {
+    name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
+  }).check();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "atlas-anatomico-sintetico.png",
+    mimeType: "image/png",
+    buffer: syntheticBody,
+  });
+  await expect(page.getByRole("region", { name: "Resultados de calidad local" })).toBeVisible();
+  await page.getByRole("link", { name: "Ver control de calidad en el módulo de análisis" }).click();
+  inAnalysis = true;
+  await page.getByRole("button", { name: "Detectar pose con IA" }).click();
+  const result = page.getByRole("region", { name: "Estimación local de pose con IA" });
+  await expect(result).toContainText(/Pose detectada|No se detectó una pose humana/, { timeout: 90000 });
+  const detected = await result.getByText(/Pose detectada/).count();
+  if (detected > 0) {
+    await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+      .toBeVisible();
+  } else {
+    await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+      .toHaveCount(0);
+  }
+  // The model's real output, including no-detection, is an acceptable test observation.
+  console.log("Local pose result on synthetic anatomical atlas: " +
+    (detected > 0 ? "33-landmark pose detected" : "no pose detected"));
+  expect(externalPoseRequests).toEqual([]);
+  await page.screenshot({ path: "test-results/pose-synthetic-anatomical-body.png", fullPage: true });
+});
