@@ -11,7 +11,7 @@ describe("BODYVISION project progress assessment", () => {
   it("calculates the overall estimate from the phase assessments", () => {
     const average = phaseAssessment.reduce((sum, phase) => sum + phase.progress, 0) / phaseAssessment.length;
     expect(overallProgress).toBe(Math.round(average));
-    expect(overallProgress).toBe(59);
+    expect(overallProgress).toBe(60);
     expect(reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
