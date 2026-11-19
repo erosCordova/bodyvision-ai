@@ -115,6 +115,61 @@ describe("private BODYVISION authentication UI", () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it("enrolls an authenticator without issuing a session before confirmation", async () => {
+    const expires_at = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const recover = Array.from({ length: 8 }, (_, i) => i.toString(16).padStart(32, "0"));
+    const seed = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: "MFA_SETUP_REQUIRED",
+      }), { status: 428, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: "pending",
+        otpauth_uri: `otpauth://totp/BODYVISION?secret=${seed}&issuer=BODYVISION`,
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: TOKEN,
+        organization_id: ORG,
+        user_id: USER,
+        role: "administrator",
+        expires_at,
+        recovery_codes: recover,
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetcher);
+    withProviders(
+      <MemoryRouter initialEntries={["/access"]}>
+        <Routes>
+          <Route path="/access" element={<PrivateAccessPage />} />
+          <Route path="/" element={<ProtectedHome />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText("Identificador de organización"), { target: { value: ORG } });
+    fireEvent.change(screen.getByLabelText("Correo electrónico"), { target: { value: "browser.admin@example.invalid" } });
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "Browser fixtures only 2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar al espacio privado" }));
+    const setup = await screen.findByRole("button", { name: "Configurar autenticador" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(localStorage.length).toBe(0);
+    fireEvent.click(setup);
+    expect(await screen.findByText(seed)).toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    fireEvent.change(screen.getByLabelText("Código del autenticador"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Activar verificación" }));
+    expect(await screen.findByRole("heading", { name: "Guarda tus códigos de recuperación" }))
+      .toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(screen.getAllByText(recover[0])).toHaveLength(1);
+    const [url, opts] = fetcher.mock.calls[2] as [string, RequestInit];
+    expect(url).toBe("/api/v1/auth/mfa/confirm");
+    const submitted = JSON.parse(opts.body as string) as Record<string, string>;
+    expect(submitted.code).toBe("123456");
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "He guardado mis códigos" }));
+    expect(await screen.findByText("Identidad verificada")).toBeInTheDocument();
+  });
+
   it("blocks the protected workspace before any private data request without a bearer session", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
