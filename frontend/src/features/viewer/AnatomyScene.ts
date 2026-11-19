@@ -6,6 +6,7 @@ import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapp
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
+import { heightScale } from "./bodyStature";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
 export const anatomicalLayers = [
@@ -158,6 +159,7 @@ export function createAnatomyScene(
   const volume = { value: 0 };
   const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
   let showWireMesh = false;
+  let statureCm = 175;
   let mode: RenderMode = "realista";
   let quality: SceneQuality = "alta";
   let disposed = false;
@@ -285,7 +287,8 @@ export function createAnatomyScene(
     const center = box.getCenter(new THREE.Vector3());
     const max = Math.max(dimension.x, dimension.y, dimension.z, 0.01);
     anatomical.position.set(-center.x, -center.y, -center.z);
-    root.scale.setScalar(2.5 / max);
+    const baseScale = 2.5 / max;
+    root.scale.set(baseScale, baseScale * heightScale(statureCm), baseScale);
     root.updateMatrixWorld(true);
     const fittedBox = new THREE.Box3().setFromObject(root);
     const fittedCentre = fittedBox.getCenter(new THREE.Vector3());
@@ -419,6 +422,19 @@ export function createAnatomyScene(
     volume.value = bodyVolumeScenario(DEFAULT_REFERENCE_KG, percent).radialVariation;
     render();
   };
+  const setStature = (centimeters: number) => {
+    statureCm = Number.isFinite(centimeters) ? Math.max(145, Math.min(205, centimeters)) : 175;
+    // Keep the same anatomical model, materials and wireframe while
+    // rescaling the existing mesh and all loaded internal layers.
+    root.scale.y = root.scale.x * heightScale(statureCm);
+    root.updateMatrixWorld(true);
+    if (fitted) {
+      const bounds = new THREE.Box3().setFromObject(root);
+      const center = bounds.getCenter(new THREE.Vector3());
+      massBounds.value.set(bounds.min.y, bounds.max.y, center.x, center.z);
+    }
+    render();
+  };
   const setMeshOverlay = (enabled: boolean) => { showWireMesh = enabled; applyAll(); };
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
@@ -498,5 +514,5 @@ export function createAnatomyScene(
     canvas.remove();
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setMeshOverlay, resetCamera, view, zoom, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, retryLayer, dispose };
 }
