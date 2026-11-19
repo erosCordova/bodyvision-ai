@@ -27,9 +27,10 @@ def test_fallback_reads_and_rotates_without_changing_synthetic_payload():
     plaintext = b"fictitious-pixels-only"
     archived = Fernet(old).encrypt(plaintext)
     cipher = CaptureCipher.from_settings(config(new, [old]))
-    assert hashlib.sha256(cipher.decrypt(archived)).hexdigest() == hashlib.sha256(
-        plaintext
-    ).hexdigest()
+    assert (
+        hashlib.sha256(cipher.decrypt(archived)).hexdigest()
+        == hashlib.sha256(plaintext).hexdigest()
+    )
     original, rotated = cipher.rotate_if_legacy(archived)
     assert original == plaintext
     assert rotated is not None and rotated != archived
