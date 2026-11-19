@@ -391,7 +391,7 @@ test("fluid quality builds a true geometric LOD and restores the original anatom
   const panel = page.getByLabel("Diagnóstico de renderizado");
   await expect.poll(async () => {
     const line = await panel.getByText(/LOD geométrico:/).innerText();
-    return Number(line.match(/LOD geométrico: (\\d+) mallas/)?.[1] ?? 0);
+    return Number(line.match(/LOD geométrico: ([0-9]+) mallas/)?.[1] ?? 0);
   }, { timeout: 35000, message: "A visible large anatomical mesh should become genuinely simpler" })
     .toBeGreaterThan(0);
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
