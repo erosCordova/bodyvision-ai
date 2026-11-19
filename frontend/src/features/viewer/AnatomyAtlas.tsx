@@ -5,7 +5,7 @@ import {
   type AnatomicalLayer, type LayerOpacity, type RenderMode,
   type SceneQuality, type SelectedStructure, type LayerState,
 } from "./AnatomyScene";
-import { anatomySource } from "./atlasSource";
+import { anatomyRevision, anatomySource } from "./atlasSource";
 import { bodyVolumeScenario } from "./bodyVolume";
 import { BASELINE_HEIGHT_CM } from "./bodyStature";
 import { preferredAtlasQuality } from "./renderBudget";
@@ -143,6 +143,7 @@ export function AnatomyAtlas() {
   ));
   const quality = qualityPreference === "auto" ? recommendedQuality : qualityPreference;
   const [renderStats, setRenderStats] = useState<ReturnType<AtlasController["getPerformanceStats"]> | null>(null);
+  const diagnosticsOpen = renderStats !== null;
   const [spin, setSpin] = useState(false);
   const [isolated, setIsolated] = useState(false);
   const [showMarker, setShowMarker] = useState(true);
@@ -231,12 +232,39 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
   useEffect(() => controller.current?.setComparison(comparison, comparisonDivider), [comparison, comparisonDivider, restart]);
   useEffect(() => {
+    if (!diagnosticsOpen) return;
+    // Reading counters does not draw another frame or create an animation loop.
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setRenderStats(controller.current?.getPerformanceStats() ?? null);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [diagnosticsOpen, restart]);
+  useEffect(() => {
     const changed = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
   }, []);
 
   const identified = useMemo(() => findFromMesh(entries, selected) || selectedEntry, [entries, selected, selectedEntry]);
+  const downloadRenderStats = () => {
+    const stats = controller.current?.getPerformanceStats();
+    if (!stats) return;
+    // Explicit allowlist: no image, profile, weight, height or device fingerprint.
+    const report = {
+      schemaVersion: 1,
+      anatomyRevision,
+      capturedAt: new Date().toISOString(),
+      ...stats,
+      timingScope: "CPU command submission only; excludes GPU completion, FPS and clinical assessment",
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "bodyvision-render-diagnostics.json";
+    link.click();
+    // Leave time for the browser to acquire the download before releasing it.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const results = useMemo(() => search.trim().length < 2 ? [] : entries
     .filter(entry => matches(entry, search)).slice(0, 9), [search, entries]);
   const runningTour = tour && tours.find(item => item.id === tour.id);
@@ -442,12 +470,17 @@ export function AnatomyAtlas() {
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
             <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
           </div>
-          {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado">
+          {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado" data-rendered-frames={renderStats.renderedFrames}>
             <strong>Diagnóstico de visualización</strong>
             <span>Resolución: {renderStats.bufferWidth} × {renderStats.bufferHeight} píxeles</span>
             <span>Geometrías: {renderStats.meshes} · Mallas: {renderStats.overlays}</span>
             <span>Operaciones gráficas: {renderStats.drawCalls} · Triángulos: {renderStats.triangles.toLocaleString("es-PE")}</span>
-            <small>Datos del último fotograma, no son FPS ni un benchmark.</small>
+            <span>Pasadas por fotograma: {renderStats.renderPasses}</span>
+            <span>Preparación CPU: {renderStats.cpuSubmissionMs === null ? "Sin muestra" : renderStats.cpuSubmissionMs.toFixed(2) + " ms"}</span>
+            <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
+            <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
+            <small>Último fotograma completo. El tiempo CPU no mide la GPU ni los FPS. Se actualiza al interactuar, sin animar el cuerpo.</small>
+            <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
             <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
           </aside>}
           <div className="studio-view-angles" role="group" aria-label="Cambiar ángulo">

@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { anatomySource } from "../../src/features/viewer/atlasSource";
 
-test.use({ launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] } });
+test.use({ launchOptions: {
+  ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+  args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+} });
 test.setTimeout(90000);
 const assets = new Map<string, Buffer>();
 const hashes: Record<string, string> = {
@@ -12,8 +15,9 @@ const hashes: Record<string, string> = {
   skeleton: "89c8d305f3727f31688abcfda2860d2b6d628832",
 };
 test.beforeAll(async () => {
-  for (const layer of ["skin", "skeleton"]) {
-    for (const path of [`web/public/models/${layer}.glb`, `content/${layer}.json`]) {
+  test.setTimeout(90000);
+  await Promise.all(["skin", "skeleton"].flatMap(layer =>
+    [`web/public/models/${layer}.glb`, `content/${layer}.json`].map(async path => {
       const response = await fetch(anatomySource + path, { signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw new Error(`Could not download pinned test asset: ${path}`);
       const body = Buffer.from(await response.arrayBuffer());
@@ -22,8 +26,8 @@ test.beforeAll(async () => {
         expect(hash).toBe(hashes[layer]);
       }
       assets.set(path, body);
-    }
-  }
+    })
+  ));
 });
 async function sourceFixtures(page: Page) {
   await page.route(anatomySource + "**", async route => {
@@ -420,4 +424,49 @@ test("split reference and scenario share one 3D canvas and block ambiguous pose 
   await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeEnabled();
   await expect(page.getByLabel("Comparación dividida del mismo modelo 3D")).toHaveCount(0);
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});
+
+test("live diagnostics count both comparison passes without drawing idle frames or exporting body data", async ({ page }) => {
+  test.setTimeout(110000);
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  const panel = page.getByLabel("Diagnóstico de renderizado");
+  await expect(panel).toContainText("Pasadas por fotograma: 1");
+  const downloadStats = async (filename: string) => {
+    const pending = page.waitForEvent("download");
+    await panel.getByRole("button", { name: "Descargar diagnóstico", exact: true }).click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe("bodyvision-render-diagnostics.json");
+    await download.saveAs(filename);
+    return JSON.parse(readFileSync(filename, "utf8"));
+  };
+  const single = await downloadStats("test-results/render-single.json");
+  expect(single.drawCalls).toBeGreaterThan(0);
+  expect(single.triangles).toBeGreaterThan(0);
+  expect(single.cpuSubmissionMs).toBeGreaterThanOrEqual(0);
+  expect(Number.isFinite(single.cpuSubmissionMs)).toBe(true);
+  // Wait for two diagnostic refreshes: reading statistics must leave the scene idle.
+  await page.waitForTimeout(2200);
+  await expect(panel).toHaveAttribute("data-rendered-frames", String(single.renderedFrames));
+  await page.getByRole("button", { name: "Comparar lado a lado", exact: true }).click();
+  await expect(panel).toContainText("Pasadas por fotograma: 2");
+  const split = await downloadStats("test-results/render-split.json");
+  // Both unmodified states have identical visible geometry; both passes count.
+  expect(split.drawCalls).toBe(single.drawCalls * 2);
+  expect(split.triangles).toBe(single.triangles * 2);
+  expect(split.meshes).toBe(single.meshes);
+  expect(split.geometryBuffers).toBe(single.geometryBuffers);
+  expect(Object.keys(split).sort()).toEqual([
+    "schemaVersion", "anatomyRevision", "capturedAt", "mode", "pixelRatio",
+    "bufferWidth", "bufferHeight", "drawCalls", "triangles", "renderPasses",
+    "renderedFrames", "cpuSubmissionMs", "contextAvailable", "geometryBuffers",
+    "textures", "meshes", "overlays", "timingScope",
+  ].sort());
+  await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
+  await expect(panel).toContainText("Pasadas por fotograma: 1");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+  await expect(panel).toHaveCount(0);
 });

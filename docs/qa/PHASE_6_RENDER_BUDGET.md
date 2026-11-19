@@ -15,8 +15,11 @@ declara equivalencia con la referencia fotográfica final.
 - Al activar giro, solo se procesa el evento de cambio de OrbitControls; se
   evita la segunda llamada a render de cada fotograma.
 - El botón **Detalles** presenta resolución, número de mallas originales,
-  mallas auxiliares, draw calls y triángulos del último fotograma. No mide
-  fotogramas por segundo ni latencia y no permite deducir rendimiento móvil real.
+  mallas auxiliares, draw calls y triángulos del último fotograma completo.
+  Incluye ambas pasadas en comparación dividida, tiempo de preparación CPU y
+  recursos gráficos asignados. El tiempo CPU no mide finalización GPU ni FPS,
+  y no permite deducir rendimiento móvil real. Véase
+  `PHASE_6_LIVE_RENDER_DIAGNOSTICS.md`.
 - Prueba de navegador con el modelo 3D auténtico: simula vista móvil, verifica
   resolución limitada, mallas superpuestas creadas a demanda y conservación del
   mismo lienzo. Las pruebas existentes comprueban que siguen funcionando

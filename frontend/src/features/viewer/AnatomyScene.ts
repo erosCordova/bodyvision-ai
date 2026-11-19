@@ -120,6 +120,9 @@ export function createAnatomyScene(
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+  // One displayed frame can contain both reference and scenario passes.
+  // Reset once per displayed frame, rather than losing the first pass's work.
+  renderer.info.autoReset = false;
   const canvas = renderer.domElement;
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", "Cuerpo humano anatómico 3D. Arrastra para rotar o usa flechas con el lienzo enfocado; más y menos para zoom, Inicio para centrar y Escape para limpiar selección.");
@@ -177,41 +180,56 @@ export function createAnatomyScene(
   let previousMaterials: THREE.Material | THREE.Material[] | null = null;
   let pendingFocus: SelectedStructure | null = null;
   let raf = 0;
+  let renderedFrames = 0;
+  let renderPasses = 0;
+  let cpuSubmissionMs: number | null = null;
 
   const render = () => {
     if (disposed || contextUnavailable) return;
-    if (!comparison || canvas.width < 2) {
-      renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, canvas.width, canvas.height);
-      renderer.render(scene, camera);
-      return;
-    }
-    // Two render passes of the SAME anatomical mesh, camera and materials.
-    // The scissor never permits one scenario to spill into the other.
-    const width = canvas.width;
-    const height = canvas.height;
-    const dividerPx = Math.round(width * comparisonDivider / 100);
-    const actualVolume = volume.value;
-    const actualY = root.scale.y;
+    const started = performance.now();
+    renderer.info.reset();
+    renderPasses = 0;
     try {
-      renderer.setScissorTest(true);
-      renderer.setViewport(0, 0, width, height);
-      renderer.setScissor(0, 0, dividerPx, height);
-      volume.value = 0;
-      root.scale.y = root.scale.x;
-      root.updateMatrixWorld(true);
-      renderer.render(scene, camera);
-      renderer.setScissor(dividerPx, 0, width - dividerPx, height);
-      volume.value = actualVolume;
-      root.scale.y = actualY;
-      root.updateMatrixWorld(true);
-      renderer.render(scene, camera);
+      if (!comparison || canvas.width < 2) {
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, canvas.width, canvas.height);
+        renderer.render(scene, camera);
+        renderPasses++;
+        return;
+      }
+      // Two render passes of the SAME anatomical mesh, camera and materials.
+      // The scissor never permits one scenario to spill into the other.
+      const width = canvas.width;
+      const height = canvas.height;
+      const dividerPx = Math.round(width * comparisonDivider / 100);
+      const actualVolume = volume.value;
+      const actualY = root.scale.y;
+      try {
+        renderer.setScissorTest(true);
+        renderer.setViewport(0, 0, width, height);
+        renderer.setScissor(0, 0, dividerPx, height);
+        volume.value = 0;
+        root.scale.y = root.scale.x;
+        root.updateMatrixWorld(true);
+        renderer.render(scene, camera);
+        renderPasses++;
+        renderer.setScissor(dividerPx, 0, width - dividerPx, height);
+        volume.value = actualVolume;
+        root.scale.y = actualY;
+        root.updateMatrixWorld(true);
+        renderer.render(scene, camera);
+        renderPasses++;
+      } finally {
+        volume.value = actualVolume;
+        root.scale.y = actualY;
+        root.updateMatrixWorld(true);
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, width, height);
+      }
     } finally {
-      volume.value = actualVolume;
-      root.scale.y = actualY;
-      root.updateMatrixWorld(true);
-      renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, width, height);
+      // CPU submission time deliberately does not claim GPU completion or FPS.
+      cpuSubmissionMs = performance.now() - started;
+      renderedFrames++;
     }
   };
   const resize = () => {
@@ -650,6 +668,12 @@ export function createAnatomyScene(
       bufferHeight: Math.round(buffer.height),
       drawCalls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
+      renderPasses,
+      renderedFrames,
+      cpuSubmissionMs,
+      contextAvailable: !contextUnavailable,
+      geometryBuffers: renderer.info.memory.geometries,
+      textures: renderer.info.memory.textures,
       meshes,
       overlays,
     };
