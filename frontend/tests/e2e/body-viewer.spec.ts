@@ -474,7 +474,7 @@ test("live diagnostics count both comparison passes without drawing idle frames 
     "schemaVersion", "anatomyRevision", "capturedAt", "mode", "interacting", "pixelRatio",
     "bufferWidth", "bufferHeight", "drawCalls", "triangles", "renderPasses",
     "renderedFrames", "cpuSubmissionMs", "contextAvailable", "geometryBuffers",
-    "textures", "meshes", "overlays", "timingScope",
+    "textures", "meshes", "overlays", "lodMeshes", "lodTrianglesSaved", "timingScope",
   ].sort());
   await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
   await expect(panel).toContainText("Pasadas por fotograma: 1");
