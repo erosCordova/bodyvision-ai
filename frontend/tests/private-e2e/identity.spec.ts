@@ -40,7 +40,9 @@ test("private identity, user creation, RLS grants, revocation and logout work to
   const admin = await signIn(page, "browser.admin@example.invalid");
   await expect(page.getByRole("combobox", { name: "Organización ficticia" })).toBeDisabled();
   await page.getByRole("link", { name: "Expedientes", exact: true }).click();
-  await expect(page.getByText("Aún no hay expedientes", { exact: true })).toBeVisible();
+  // Other private E2E flows may create fictional profiles concurrently.
+  // Access checks below assert grants and RLS independently of global row counts.
+  await expect(page.getByRole("heading", { name: "Expedientes", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Administración", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Usuarios y auditoría", exact: true })).toBeVisible();
 
