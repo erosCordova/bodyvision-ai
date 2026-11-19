@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0012_account_security"
+SCHEMA_REVISION = "0013_mfa_foundation"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 
