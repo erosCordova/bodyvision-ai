@@ -12,7 +12,6 @@ from app.api.deps import workspace
 from app.core.errors import DomainError
 from app.models.context import Workspace
 from app.repositories import records
-from app.services.simulation_audit import record_simulation_event
 from app.schemas.scenarios import (
     ALGORITHM_REVISION,
     ATLAS_REVISION,
@@ -20,6 +19,7 @@ from app.schemas.scenarios import (
     ScenarioList,
     ScenarioRead,
 )
+from app.services.simulation_audit import record_simulation_event
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic simulation scenarios"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
