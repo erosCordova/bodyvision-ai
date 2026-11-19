@@ -44,9 +44,7 @@ def upgrade() -> None:
     """)
     for table in ("private_mfa_credentials", "private_mfa_recovery_codes"):
         op.execute(f"ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY")
-        op.execute(
-            f"REVOKE ALL ON public.{table} FROM PUBLIC,bodyvision_app,bodyvision_auth_app"
-        )
+        op.execute(f"REVOKE ALL ON public.{table} FROM PUBLIC,bodyvision_app,bodyvision_auth_app")
     op.execute("UPDATE system_schema_state SET revision='0013_mfa_foundation'")
 
 
