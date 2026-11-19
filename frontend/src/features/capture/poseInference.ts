@@ -5,8 +5,6 @@
  */
 export const POSE_SDK_VERSION = "0.10.32";
 export const POSE_MODEL_VERSION = "pose_landmarker_lite/float16/1";
-export const POSE_BUNDLE_URL =
-  "/pose/vision_bundle.mjs";
 export const POSE_WASM_URL =
   "/pose/wasm";
 export const POSE_MODEL_URL =
@@ -103,10 +101,9 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
       !file.size || file.size > 10 * 1024 * 1024) {
     throw new Error("La fotografía no supera la validación local.");
   }
-  // Only local, hash-verified build artifacts may execute in the browser.
-  // The dynamic same-origin import remains lazy; the Vite build leaves it untouched.
-  const sdkUrl: string = POSE_BUNDLE_URL;
-  const vision = await import(/* @vite-ignore */ sdkUrl) as PoseVisionModule;
+  // The vendored ESM file is verified at build time and loaded lazily as a Vite chunk.
+  // Only the model and WASM remain static same-origin resources.
+  const vision = await import("../../vendor/vision_bundle.mjs") as unknown as PoseVisionModule;
   const fileset = await vision.FilesetResolver.forVisionTasks(POSE_WASM_URL);
   const landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" },
