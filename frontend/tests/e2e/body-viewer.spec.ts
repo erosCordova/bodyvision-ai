@@ -381,6 +381,27 @@ test("atlas quality automatically follows viewport changes until manually overri
   await expect(high).toHaveAttribute("aria-pressed", "true");
 });
 
+test("fluid quality builds a true geometric LOD and restores the original anatomical mesh in high quality", async ({ page }) => {
+  test.setTimeout(120000);
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Fluida", exact: true }).click();
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  const panel = page.getByLabel("Diagnóstico de renderizado");
+  await expect.poll(async () => {
+    const line = await panel.getByText(/LOD geométrico:/).innerText();
+    return Number(line.match(/LOD geométrico: (\\d+) mallas/)?.[1] ?? 0);
+  }, { timeout: 35000, message: "A visible large anatomical mesh should become genuinely simpler" })
+    .toBeGreaterThan(0);
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  await page.getByRole("button", { name: "Alta", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  await expect(page.getByLabel("Diagnóstico de renderizado")).toContainText("LOD geométrico: 0 mallas simplificadas");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});
+
 test("anatomical canvas accepts keyboard rotation, zoom, and responds to a simulated context interruption", async ({ page }) => {
   test.setTimeout(110000);
   await sourceFixtures(page);
