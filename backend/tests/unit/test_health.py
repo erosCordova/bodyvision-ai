@@ -158,9 +158,7 @@ def test_mfa_never_starts_without_private_identity_and_a_valid_secret():
     with pytest.raises(ValidationError):
         Settings(**base, mfa_enabled=True, identity_enabled=True)
     with pytest.raises(ValidationError):
-        Settings(
-            **base, mfa_enabled=True, identity_enabled=True, mfa_encryption_key="invalid-key"
-        )
+        Settings(**base, mfa_enabled=True, identity_enabled=True, mfa_encryption_key="invalid-key")
     config = Settings(
         **base,
         mfa_enabled=True,
