@@ -27,20 +27,23 @@ detector externo **no** se convierten en altura, peso, grasa o medidas.
 El navegador **ya no importa scripts ni modelos de un CDN**. Durante
 `npm run dev` o `npm run build`, el script
 `frontend/scripts/prepare_pose_assets.mjs` descarga las seis dependencias
-de las fuentes originales, comprueba sus SHA-256 contra valores fijados
-en el repositorio y coloca las versiones aprobadas bajo `public/pose/`:
+de las fuentes originales y comprueba sus SHA-256 contra valores fijados
+en el repositorio. El motor JavaScript `vision_bundle.mjs` se coloca en
+`src/vendor/`, donde Vite lo compila como **chunk importado bajo demanda**.
+Los ficheros WASM y el modelo van a `public/pose/`, servidos desde el mismo
+dominio de la aplicación:
 
-- `vision_bundle.mjs`: motor JS, versión exacta 0.10.32.
-- `wasm/vision_wasm_internal.{js,wasm}`: motor optimizado.
-- `wasm/vision_wasm_nosimd_internal.{js,wasm}`: alternativa sin SIMD.
-- `pose_landmarker_lite.task`: modelo Lite Float16, revisión 1.
+- `src/vendor/vision_bundle.mjs`: motor JS, versión exacta 0.10.32.
+- `public/pose/wasm/vision_wasm_internal.{js,wasm}`: motor optimizado.
+- `public/pose/wasm/vision_wasm_nosimd_internal.{js,wasm}`: alternativa sin SIMD.
+- `public/pose/pose_landmarker_lite.task`: modelo Lite Float16, revisión 1.
 
 Fuentes verificadas durante el empaquetado:
 
 - JS/WASM: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/`
 - Modelo: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`
 
-Los ficheros se sirven desde el **mismo dominio** de BODYVISION. Ni el
+Los recursos se sirven desde el **mismo dominio** de BODYVISION. Ni el
 archivo fotográfico ni las coordenadas de su inferencia se transmiten a
 Google, jsDelivr ni al backend. Un hash distinto o una descarga fallida
 **interrumpe el proceso de compilación**. Los binarios verificados se
