@@ -1,16 +1,16 @@
 /**
  * Local pose estimation for SYNTHETIC test photos. Model and WASM are downloaded
- * from version-pinned official sources; source images are not sent to any API.
- * Third-party runtime needs vendoring/integrity checks before clinical use.
+ * to same-origin, SHA-256-verified build assets; images never leave the tab.
+ * Third-party provenance and clinical privacy approval remain separate.
  */
 export const POSE_SDK_VERSION = "0.10.32";
 export const POSE_MODEL_VERSION = "pose_landmarker_lite/float16/1";
 export const POSE_BUNDLE_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/vision_bundle.mjs";
+  "/pose/vision_bundle.mjs";
 export const POSE_WASM_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm";
+  "/pose/wasm";
 export const POSE_MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+  "/pose/pose_landmarker_lite.task";
 
 export type PosePoint = {
   x: number;
@@ -103,8 +103,8 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
       !file.size || file.size > 10 * 1024 * 1024) {
     throw new Error("La fotografía no supera la validación local.");
   }
-  // Bundled vision runtime downloads only when the user explicitly requests AI.
-  // The dynamic URL is pinned; Vite must not try to resolve it during the build.
+  // Only local, hash-verified build artifacts may execute in the browser.
+  // The dynamic same-origin import remains lazy; the Vite build leaves it untouched.
   const sdkUrl: string = POSE_BUNDLE_URL;
   const vision = await import(/* @vite-ignore */ sdkUrl) as PoseVisionModule;
   const fileset = await vision.FilesetResolver.forVisionTasks(POSE_WASM_URL);
