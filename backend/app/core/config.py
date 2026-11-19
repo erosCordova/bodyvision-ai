@@ -2,6 +2,7 @@ import os
 import re
 from typing import Literal
 
+from cryptography.fernet import Fernet
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,6 +16,8 @@ class Settings(BaseSettings):
     allowed_hosts: list[str] = ["localhost", "127.0.0.1", "backend", "testserver"]
     identity_enabled: bool = False
     auth_database_url: SecretStr | None = None
+    mfa_enabled: bool = False
+    mfa_encryption_key: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -51,6 +54,13 @@ class Settings(BaseSettings):
                 raise ValueError("AUTH_DATABASE_URL is required for private authentication")
             if self.auth_database_url.get_secret_value() == self.database_url.get_secret_value():
                 raise ValueError("The authenticated database must use a distinct role")
+        if self.mfa_enabled:
+            if not self.identity_enabled or self.mfa_encryption_key is None:
+                raise ValueError("MFA requires private authentication and an external encryption key")
+            try:
+                Fernet(self.mfa_encryption_key.get_secret_value().encode("ascii"))
+            except (ValueError, UnicodeError) as exc:
+                raise ValueError("Invalid MFA encryption key") from exc
         if self.app_env == "demo":
             hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
             if hostname and re.fullmatch(r"[a-zA-Z0-9.-]+", hostname):
