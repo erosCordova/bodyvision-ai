@@ -370,3 +370,48 @@
  .studio-compare-after{right:9px}
  .studio-compare-caption{bottom:155px;font-size:9px}
 }
+
+
+/* Append-only synthetic scenario archive remains within the existing 3D simulator. */
+.studio-scenario-history {
+  display: grid;
+  gap: 13px;
+  border: 1px solid #42647f;
+  border-radius: 13px;
+  background: #10263b;
+  padding: 16px;
+  min-width: 0;
+}
+.studio-scenario-history-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.studio-scenario-history-head h3 { font-size: 15px; margin: 0; line-height: 1.4; }
+.studio-scenario-history-head .data-badge { flex-shrink: 0; }
+.studio-scenario-history p { font-size: 11px; color: #aec9dc; line-height: 1.6; margin: 0; }
+.studio-scenario-history .studio-sim-number select {
+  width: 100%; min-width: 0; border: 1px solid #4b6886; border-radius: 8px;
+  background: #132b43; color: #eaf8ff; padding: 11px 8px; font-size: 12px;
+}
+.studio-scenario-history .studio-sim-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.studio-scenario-history .studio-sim-success {
+  color: #b5f0da; border-left: 2px solid #78c6aa; background: #14342f;
+  padding: 10px 12px; border-radius: 6px;
+}
+.studio-scenario-records { display: grid; gap: 10px; min-width: 0; }
+.studio-scenario-records h4 { margin: 0; font-size: 12px; }
+.studio-scenario-records ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.studio-scenario-records li {
+  display: grid; gap: 9px; padding: 11px; background: #18334a;
+  border: 1px solid #365975; border-radius: 10px; min-width: 0;
+}
+.studio-scenario-records li > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.studio-scenario-records li strong { font-size: 11px; color: #e0f4fc; }
+.studio-scenario-records li span,.studio-scenario-records li small {
+  font-size: 10px; color: #b7cfe0; overflow-wrap: anywhere;
+}
+.studio-scenario-row-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.studio-scenario-row-actions button {
+  font-size: 11px; color: #eaf7ff; background: #204c67;
+  border: 1px solid #5a87a0; border-radius: 8px; padding: 9px 10px;
+}
+.studio-scenario-history :is(button,select,input):focus-visible {
+  outline: 2px solid #8ce4ff; outline-offset: 2px;
+}
