@@ -66,6 +66,7 @@ export function CapturePage() {
         if (!active) return;
         setReview(null);
         setIsReviewing(false);
+        setFile(null);
         setValidationError(error instanceof Error ? error.message : "La imagen no pudo revisarse.");
       });
     return () => { active = false; URL.revokeObjectURL(url); };
