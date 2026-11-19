@@ -471,7 +471,7 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   expect(split.meshes).toBe(single.meshes);
   expect(split.geometryBuffers).toBe(single.geometryBuffers);
   expect(Object.keys(split).sort()).toEqual([
-    "schemaVersion", "anatomyRevision", "capturedAt", "mode", "pixelRatio",
+    "schemaVersion", "anatomyRevision", "capturedAt", "mode", "interacting", "pixelRatio",
     "bufferWidth", "bufferHeight", "drawCalls", "triangles", "renderPasses",
     "renderedFrames", "cpuSubmissionMs", "contextAvailable", "geometryBuffers",
     "textures", "meshes", "overlays", "timingScope",
