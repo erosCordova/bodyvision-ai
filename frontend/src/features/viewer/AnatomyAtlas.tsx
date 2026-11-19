@@ -127,6 +127,7 @@ export function AnatomyAtlas() {
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<AtlasController | null>(null);
+  const [panel, setPanel] = useState<Panel>(() => new URLSearchParams(window.location.search).get("panel") === "simulacion" ? "simulacion" : "informacion");
   const [visible, setVisible] = useState<AnatomicalLayer[]>(["skin"]);
   const [opacity, setOpacity] = useState<LayerOpacity>({ ...initialOpacity });
   const [mode, setMode] = useState<RenderMode>("realista");
@@ -200,7 +201,6 @@ export function AnatomyAtlas() {
   const [showMarker, setShowMarker] = useState(true);
   const [selected, setSelected] = useState<SelectedStructure | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<AtlasEntry | null>(null);
-  const [panel, setPanel] = useState<Panel>(() => new URLSearchParams(window.location.search).get("panel") === "simulacion" ? "simulacion" : "informacion");
   const [search, setSearch] = useState("");
   const [entries, setEntries] = useState<AtlasEntry[]>([]);
   const [contentReady, setContentReady] = useState(false);
