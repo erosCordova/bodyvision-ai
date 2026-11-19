@@ -45,7 +45,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     async def lifespan(application: FastAPI):
         logging.getLogger("bodyvision").info("service_started")
         retention_task = None
-        if settings.identity_enabled and settings.capture_encryption_key is not None:
+        if (
+            settings.identity_enabled
+            and settings.capture_encryption_key is not None
+            and settings.capture_retention_enabled
+        ):
             retention_task = asyncio.create_task(
                 retention_loop(database_engine, settings.capture_retention_interval_seconds),
                 name="private_synthetic_capture_retention",
