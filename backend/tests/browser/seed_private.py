@@ -35,7 +35,7 @@ def seed_private_browser_accounts() -> None:
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
             if revision != "0016_simulation_scenarios":
-                raise RuntimeError("Browser fixtures require the reviewed private simulation test schema")
+                raise RuntimeError("Private browser fixtures require combined revision 0016")
             for identifier, organization, role, email in [
                 (
                     UUID("30000000-0000-4000-8000-000000000001"),
