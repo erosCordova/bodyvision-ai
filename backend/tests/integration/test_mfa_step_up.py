@@ -55,7 +55,7 @@ def test_privileged_step_up_enrollment_replay_and_recovery_are_atomic(protected,
     assert uri.startswith("otpauth://totp/")
 
     wrong = client.post("/api/v1/auth/mfa/confirm", json={**credentials, "code": "12345x"})
-    assert wrong.status_code == 422
+    assert wrong.status_code == 401
     with owner.connect() as db:
         stored = (
             db.execute(
