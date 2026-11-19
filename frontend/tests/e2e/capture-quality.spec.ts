@@ -65,3 +65,26 @@ test("capture rejects a disguised image without uploading it", async ({ page }) 
     name: "Ver control de calidad en el módulo de análisis",
   })).toHaveCount(0);
 });
+
+test("camera requires consent and reports a denied permission without uploading", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: async () => { throw new Error("camera denied"); } },
+    });
+  });
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto("/capture");
+  const open = page.getByRole("button", { name: "Abrir cámara local" });
+  await expect(open).toBeDisabled();
+  await page.getByRole("checkbox", {
+    name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
+  }).check();
+  await expect(open).toBeEnabled();
+  await open.click();
+  await expect(page.getByRole("alert")).toContainText("No se pudo acceder a la cámara");
+  expect(writes).toEqual([]);
+});
