@@ -32,8 +32,8 @@ export const phaseAssessment: ProjectPhase[] = [
     pending: "Alta verificada de primer administrador, recuperación externa de identidad, rotación de claves, anclaje de auditoría y evaluación de seguridad/privacidad antes de datos reales.",
     milestone: "Permisos cruzados y aislamiento de expedientes demostrados." },
   { id: 4, name: "Captura segura", progress: 55,
-    completed: "Cámara local y control de calidad; descarte de imágenes efímeras por sesión; archivo privado opcional de PNG ficticios cifrados, con permisos, doble consentimiento, revocación y descarga/borrado auditados." ,
-    pending: "Almacenamiento clínico y consentimiento legal verificable, gestión y rotación de claves, eliminación automática por caducidad, backups/retención, auditoría y revisión de seguridad en producción."
+    completed: "Cámara local y control de calidad; descarte de imágenes efímeras por sesión; archivo privado opcional de PNG ficticios cifrados, con permisos, doble consentimiento, revocación y descarga/borrado auditados.",
+    pending: "Almacenamiento clínico y consentimiento legal verificable, gestión y rotación de claves, eliminación automática por caducidad, backups/retención, auditoría y revisión de seguridad en producción.",
     milestone: "Carga segura y trazable con consentimiento comprobado." },
   { id: 5, name: "IA de pose", progress: 50,
     completed: "MediaPipe Lite/WASM verificados con SHA-256, inferencia real local, 33 landmarks; bloqueo de resultados asincrónicos obsoletos al cambiar la foto o salir del análisis.",
