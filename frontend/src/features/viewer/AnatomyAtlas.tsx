@@ -597,7 +597,7 @@ export function AnatomyAtlas() {
               <div className="studio-sim-state">
                   <span className="studio-sim-state-icon">{weightVariation > 0 ? "↗" : weightVariation < 0 ? "↘" : "◈"}</span>
                   <div><strong>{weightVariation === 0 ? "Modelo corporal de referencia" : weightVariation > 0 ? "Incremento visual de volumen" : "Reducción visual de volumen"}</strong>
-                    <p>El peso ilustra cambios de volumen en piel y músculos; la estatura escala verticalmente todas las capas del atlas. Son efectos gráficos no clínicos.</p></div>
+                    <p>El volumen cambia suavemente en abdomen, pecho, caderas y piernas; el rostro, las manos y los pies mantienen su forma original. La estatura escala verticalmente el mismo atlas. Son efectos gráficos ilustrativos, no clínicos.</p></div>
                 </div>
                 <div className="studio-sim-mesh">
                   <label><input type="checkbox" checked={meshOverlay} onChange={toggleMesh} />
