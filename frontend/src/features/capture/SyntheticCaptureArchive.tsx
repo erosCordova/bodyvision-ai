@@ -60,7 +60,7 @@ export function SyntheticCaptureArchive({
     onSuccess: async () => {
       setAttested(false);
       setError("");
-      setNotice("Imagen ficticia cifrada. Caduca en siete días; su eliminación física requiere una purga de retención.");
+      setNotice("Imagen ficticia cifrada. Caduca en siete días y el servidor privado eliminará los registros vencidos durante sus comprobaciones periódicas.");
       await cache.invalidateQueries({ queryKey: ["synthetic-capture-archive", ...scope, profileId] });
     },
     onError: problem => setError(problem.message),
@@ -178,8 +178,10 @@ export function SyntheticCaptureArchive({
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <small>La revocación de captura o conservación borra los objetos cifrados.
-        La caducidad bloquea su descarga; el borrado físico de objetos vencidos
-        necesita ejecutar la purga de retención. No se conservan archivos en el almacenamiento persistente del navegador.</small>
+        La caducidad bloquea su descarga; el servidor privado elimina registros
+        vencidos periódicamente mientras está funcionando. Esto no garantiza el
+        borrado inmediato de copias de seguridad o WAL. No se conservan archivos
+        en el almacenamiento persistente del navegador.</small>
     </section>
   );
 }
