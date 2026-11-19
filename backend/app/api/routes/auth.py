@@ -39,7 +39,9 @@ from app.services.mfa_service import (
     EnrollmentConfirmedRead,
     EnrollmentCredentials,
     EnrollmentRead,
+    RecoveryCredentials,
     begin_enrollment,
+    begin_factor_recovery,
     confirm_enrollment,
 )
 from app.services.password_reset import PasswordResetInput, PasswordResetRead, reset_password
@@ -71,6 +73,11 @@ def confirm_mfa_enrollment(
     request: Request, data: EnrollmentConfirmation
 ) -> EnrollmentConfirmedRead:
     return confirm_enrollment(request, data)
+
+
+@router.post("/mfa/recover", response_model=EnrollmentRead)
+def recover_mfa_factor(request: Request, data: RecoveryCredentials) -> EnrollmentRead:
+    return begin_factor_recovery(request, data)
 
 
 @router.get("/me", response_model=IdentityRead)
