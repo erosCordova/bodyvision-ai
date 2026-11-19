@@ -94,8 +94,8 @@ uniform float uBVVolume;
 uniform vec4 uBVBounds;
 uniform float uBVStrength;
 ${SOFT_TISSUE_PROFILE_GLSL}`)
-      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\\n" + BODYVOLUME_NORMAL)
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\\n" + BODYVOLUME_VERTEX);
+      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\n" + BODYVOLUME_NORMAL)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + BODYVOLUME_VERTEX);
   };
   material.customProgramCacheKey = () => SOFT_TISSUE_PROFILE_VERSION + "-strength-" + strength;
 }
