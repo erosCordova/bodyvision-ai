@@ -3,11 +3,11 @@ import {
   detectPoseOnDevice, POSE_EDGES, POSE_MODEL_VERSION,
   POSE_SDK_VERSION, type PoseEstimate,
 } from "./poseInference";
+import { assessPoseQuality, isPosePointVisible } from "./poseQuality";
 import type { CaptureReview } from "./captureQuality";
 import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
-const VISIBLE_THRESHOLD = 0.5;
 
 export function PoseReview({ file, review }: { file: File; review: CaptureReview }) {
   const alive = useRef(true);
@@ -15,6 +15,9 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
   const [state, setState] = useState<PoseState>("idle");
   const [estimate, setEstimate] = useState<PoseEstimate | null>(null);
   const [failure, setFailure] = useState("");
+  const [visibilityThreshold, setVisibilityThreshold] = useState(0.5);
+  const [showPoints, setShowPoints] = useState(true);
+  const [showConnections, setShowConnections] = useState(true);
 
   useEffect(() => {
     alive.current = true;
@@ -44,12 +47,11 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       );
     }
   };
+  const quality = state === "ready" && estimate
+    ? assessPoseQuality(estimate, review, visibilityThreshold) : null;
   const showSkeleton = state === "ready" && estimate?.found === true;
-  const displayedPoint = (index: number) => {
-    const point = estimate?.landmarks[index];
-    return point && point.visibility >= VISIBLE_THRESHOLD &&
-      point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1;
-  };
+  const displayedPoint = (index: number) =>
+    isPosePointVisible(estimate?.landmarks[index], visibilityThreshold);
 
   return (
     <section className="enterprise-pose-review" aria-label="Estimación local de pose con IA">
@@ -73,27 +75,60 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       </p>
       {state === "running" && <p role="status">Cargando el modelo y procesando la fotografía localmente…</p>}
       {state === "failed" && <p role="alert" className="enterprise-pose-error">{failure}</p>}
-      {state === "ready" && estimate && (
+      {state === "ready" && estimate && quality && (
         <div className="enterprise-pose-result" aria-live="polite">
           {estimate.found ? (
             <>
-              <p><strong>Pose detectada.</strong> {estimate.visiblePoints} de 33 puntos
-                visibles con umbral 0,50.</p>
-              <p>{estimate.fullBodyReview
-                ? "Hombros, caderas, rodillas y tobillos visibles en la imagen."
-                : "Revisa el encuadre: pueden faltar articulaciones del cuerpo completo."}</p>
-              {!review.passed && <p>La foto contiene advertencias técnicas de calidad;
-                interpreta estos puntos con mayor cautela.</p>}
+              <p><strong>Pose detectada.</strong> {quality.visiblePoints} de 33 puntos
+                visibles con umbral {visibilityThreshold.toFixed(2).replace(".", ",")}.</p>
+              <p>{quality.coreVisible} de {quality.coreTotal} puntos clave visibles
+                en hombros, caderas, rodillas y tobillos.</p>
+              <p>{quality.state === "reviewable"
+                ? "Puntos y condiciones suficientes para una revisión visual experimental."
+                : "Hay limitaciones de visibilidad o captura; revisa el detalle antes de interpretar la imagen."}</p>
             </>
           ) : <p><strong>No se detectó una pose humana.</strong> Prueba con una
             fotografía ficticia de cuerpo completo, bien iluminada y sin obstáculos.</p>}
+          <div className="enterprise-pose-quality" aria-label="Indicadores de revisión de pose">
+            <strong>Resultado técnico: {quality.label}</strong>
+            <small>Indicador heurístico de visibilidad y encuadre; no es precisión ni
+              probabilidad diagnóstica de la IA.</small>
+            {quality.warnings.length > 0 && <ul aria-label="Advertencias de pose">
+              {quality.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+            </ul>}
+          </div>
+          {estimate.found && <div className="enterprise-pose-groups" role="list"
+            aria-label="Visibilidad por zonas corporales">
+            {quality.groups.map(group => <div role="listitem" key={group.id}
+              className={"enterprise-pose-group state-" + group.state}>
+              <span>{group.label}</span>
+              <strong>{group.visible}/{group.total}</strong>
+              <small>{group.state === "visible" ? "Visible" :
+                group.state === "partial" ? "Parcial" : "No visible"}</small>
+            </div>)}
+          </div>}
         </div>
       )}
+      {showSkeleton && <div className="enterprise-pose-controls" role="group"
+        aria-label="Ajustes de superposición de pose">
+        <label>
+          <span>Umbral de visibilidad: {visibilityThreshold.toFixed(2).replace(".", ",")}</span>
+          <input type="range" min="0.3" max="0.9" step="0.05"
+            aria-label="Umbral de visibilidad de landmarks"
+            value={visibilityThreshold}
+            onChange={event => setVisibilityThreshold(Number(event.target.value))}/>
+        </label>
+        <label><input type="checkbox" checked={showPoints}
+          onChange={event => setShowPoints(event.target.checked)}/> Mostrar puntos detectados</label>
+        <label><input type="checkbox" checked={showConnections}
+          onChange={event => setShowConnections(event.target.checked)}/> Mostrar conexiones</label>
+      </div>}
       <div className="enterprise-pose-photo" style={{ aspectRatio: `${review.width} / ${review.height}` }}>
         {imageUrl && <img src={imageUrl} alt="Fotografía local utilizada únicamente para la revisión de pose"/>}
-        {showSkeleton && (
-          <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-label="Puntos corporales detectados por el modelo" role="img">
-            <g stroke="#65e5f8" strokeWidth="0.004" strokeLinecap="round">
+        {showSkeleton && (showPoints || showConnections) && (
+          <svg viewBox="0 0 1 1" preserveAspectRatio="none"
+            aria-label="Puntos corporales detectados por el modelo" role="img">
+            {showConnections && <g stroke="#65e5f8" strokeWidth="0.004" strokeLinecap="round">
               {POSE_EDGES.filter(([a, b]) => displayedPoint(a) && displayedPoint(b))
                 .map(([a, b]) => {
                   const first = estimate!.landmarks[a];
@@ -101,11 +136,11 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
                   return <line key={a + "-" + b}
                     x1={first.x} y1={first.y} x2={second.x} y2={second.y}/>;
                 })}
-            </g>
-            <g fill="#fff6b1" stroke="#034057" strokeWidth="0.0017">
+            </g>}
+            {showPoints && <g fill="#fff6b1" stroke="#034057" strokeWidth="0.0017">
               {estimate!.landmarks.map((point, index) => displayedPoint(index) ?
                 <circle key={index} cx={point.x} cy={point.y} r="0.006"/> : null)}
-            </g>
+            </g>}
           </svg>
         )}
       </div>
