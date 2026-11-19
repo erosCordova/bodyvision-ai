@@ -208,9 +208,7 @@ def test_workspace_write_dependency_commits_before_response():
     from app.api.deps import workspace
     from app.api.routes.data_core import Scope
 
-    dependency = next(
-        metadata for metadata in get_args(Scope)[1:] if isinstance(metadata, Depends)
-    )
+    dependency = next(metadata for metadata in get_args(Scope)[1:] if isinstance(metadata, Depends))
     assert dependency.dependency is workspace
     assert dependency.scope == "function"
 
