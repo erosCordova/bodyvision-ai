@@ -167,6 +167,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     app.include_router(health_router)
     app.include_router(data_router)
+    app.include_router(simulation_router)
     if settings.identity_enabled:
         app.include_router(auth_router)
     return app
