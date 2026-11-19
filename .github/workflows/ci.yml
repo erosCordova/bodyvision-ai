@@ -58,19 +58,23 @@ jobs:
           cd frontend
           npm audit --audit-level=high
       - name: Start native services and test browser
+        timeout-minutes: 8
         run: |
           cd backend
           python -m app.seed
           uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log > /tmp/api.log 2>&1 &
           cd ../frontend
           npm run dev > /tmp/web.log 2>&1 &
-          npx playwright install --with-deps chromium
+          # ubuntu-24.04 already provides the required runtime libraries.
+          # Avoid unrelated apt/Mesa/font downloads blocking the browser tests.
+          npx playwright install chromium
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:5173/api/v1/health/ready; then break; fi
             sleep 1
           done
           npm run test:e2e
       - name: Test private identity and permissions in browser
+        timeout-minutes: 3
         env:
           IDENTITY_ENABLED: 'true'
           PRIVATE_BROWSER_FIXTURES: 'true'
