@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
@@ -38,12 +38,90 @@ export function MeasurementsPage() {
 }
 
 export function CapturePage() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStream = useRef<MediaStream | null>(null);
+  const cameraRequest = useRef(0);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [review, setReview] = useState<CaptureReview | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [validationError, setValidationError] = useState("");
+
+  const closeCamera = () => {
+    cameraRequest.current += 1;
+    cameraStream.current?.getTracks().forEach(track => track.stop());
+    cameraStream.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
+    setCameraReady(false);
+  };
+  useEffect(() => {
+    return () => {
+      cameraRequest.current += 1;
+      cameraStream.current?.getTracks().forEach(track => track.stop());
+      cameraStream.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    if (!cameraOn || !videoRef.current || !cameraStream.current) return;
+    videoRef.current.srcObject = cameraStream.current;
+    void videoRef.current.play().catch(() => {
+      setValidationError("No se pudo mostrar la cámara. Comprueba los permisos.");
+    });
+  }, [cameraOn]);
+
+  const openCamera = async () => {
+    if (!consent) return;
+    setValidationError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setValidationError("Este navegador no permite la cámara. Usa una conexión HTTPS o localhost.");
+      return;
+    }
+    const pending = ++cameraRequest.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 1920 } },
+      });
+      if (pending !== cameraRequest.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      cameraStream.current = stream;
+      setCameraReady(false);
+      setCameraOn(true);
+    } catch {
+      if (pending === cameraRequest.current) {
+        setValidationError("No se pudo acceder a la cámara. Revisa el permiso y el dispositivo.");
+      }
+    }
+  };
+
+  const takePhoto = async () => {
+    const video = videoRef.current;
+    if (!video || !cameraReady || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement("canvas");
+    const factor = Math.min(1, 1920 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * factor);
+    canvas.height = Math.round(video.videoHeight * factor);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setValidationError("No se pudo preparar la fotografía.");
+      return;
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const photo = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.87));
+    if (!photo || photo.size > 10 * 1024 * 1024) {
+      setValidationError("No se pudo capturar la fotografía dentro del límite de 10 MB.");
+      return;
+    }
+    closeCamera();
+    setFile(new File([photo], "captura-local.jpg", { type: "image/jpeg" }));
+  };
+
   useEffect(() => {
     if (!file) {
       setPreview("");
@@ -73,6 +151,7 @@ export function CapturePage() {
   }, [file]);
   const fileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0] ?? null;
+    closeCamera();
     setValidationError("");
     setReview(null);
     if (next && !["image/jpeg", "image/png", "image/webp"].includes(next.type)) {
@@ -97,13 +176,39 @@ export function CapturePage() {
           <article><span>03</span><div><h3>Iluminación y resolución</h3><p>Evita contraluz, sombras duras, filtros y recortes. Comprueba que pies, cabeza y extremidades estén dentro del encuadre.</p></div></article>
           <article><span>04</span><div><h3>Revisión y trazabilidad</h3><p>Asocia la captura a un expediente autorizado y conserva fuente, fecha, método y resultado de calidad.</p></div></article>
         </div>
-        <label className="enterprise-consent"><input type="checkbox" checked={consent} onChange={e => { setConsent(e.target.checked); if (!e.target.checked) setFile(null); }} />
+        <label className="enterprise-consent"><input type="checkbox" checked={consent} onChange={e => {
+          setConsent(e.target.checked);
+          if (!e.target.checked) {
+            closeCamera();
+            setFile(null);
+            setValidationError("");
+          }
+        }} />
           <span>Confirmo que utilizaré exclusivamente imágenes ficticias o expresamente autorizadas. En esta fase solo se previsualizarán en mi navegador.</span>
         </label>
         <label className={"enterprise-upload" + (consent ? "" : " disabled")}>
           <span>＋</span><strong>Seleccionar imagen para revisión local</strong><small>JPG, PNG o WebP · máximo 10 MB · sin subida al servidor</small>
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!consent} onChange={fileChange}/>
         </label>
+        <div className="enterprise-camera-controls">
+          {!cameraOn ? (
+            <button type="button" className="secondary-button" disabled={!consent}
+              onClick={() => void openCamera()}>Abrir cámara local</button>
+          ) : (
+            <div className="enterprise-camera-session">
+              <video ref={videoRef} playsInline muted autoPlay
+                aria-label="Vista en vivo de la cámara sin transmisión"
+                onLoadedMetadata={() => setCameraReady(true)} />
+              <p>La cámara funciona únicamente en este dispositivo; no se transmite video.</p>
+              <div className="enterprise-camera-buttons">
+                <button type="button" className="primary-button" disabled={!cameraReady}
+                  onClick={() => void takePhoto()}>Tomar fotografía</button>
+                <button type="button" className="secondary-button"
+                  onClick={closeCamera}>Cerrar cámara</button>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Vista previa de captura</h2>
