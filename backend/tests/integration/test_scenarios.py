@@ -71,13 +71,17 @@ def test_append_only_version_chain_and_separation_from_observed(client, database
     assert len(first["model_revision"]) == 40
     assert first["algorithm_revision"] == "regional-soft-tissue-v2"
 
-    changed = scenario(client, profile, {
-        "reference_kg": 70,
-        "variation_percent": -15,
-        "stature_cm": 175,
-        "prior_version_id": first["id"],
-        "revision_note": "Explorar volumen menor",
-    })
+    changed = scenario(
+        client,
+        profile,
+        {
+            "reference_kg": 70,
+            "variation_percent": -15,
+            "stature_cm": 175,
+            "prior_version_id": first["id"],
+            "revision_note": "Explorar volumen menor",
+        },
+    )
     assert changed.status_code == 201, changed.text
     second = changed.json()
     assert second["data_type"] == "SIMULADO"
@@ -96,10 +100,13 @@ def test_append_only_version_chain_and_separation_from_observed(client, database
     assert observed.json()["total"] == 0
     assert client.get(f"/api/v1/profiles/{profile}/analytics/series?period=all").json() == []
     with database.connect() as conn:
-        assert conn.execute(
-            text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
-            {"id": profile},
-        ).scalar_one() == 0
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
+                {"id": profile},
+            ).scalar_one()
+            == 0
+        )
 
 
 def test_exactly_once_save_and_reject_stale_chain(client):
@@ -111,8 +118,11 @@ def test_exactly_once_save_and_reject_stale_chain(client):
     assert scenario(client, profile, data, key=key).json()["id"] == first.json()["id"]
     changed = {**data, "variation_percent": 21}
     assert scenario(client, profile, changed, key=key).status_code == 409
-    revised = {**data, "prior_version_id": first.json()["id"],
-               "revision_note": "Nuevo escenario ficticio"}
+    revised = {
+        **data,
+        "prior_version_id": first.json()["id"],
+        "revision_note": "Nuevo escenario ficticio",
+    }
     assert scenario(client, profile, revised).status_code == 201
     stale = scenario(client, profile, revised)
     assert stale.status_code == 409
@@ -126,17 +136,32 @@ def test_invalid_inputs_and_archived_profile_are_rejected(client):
         {"reference_kg": 39, "variation_percent": 0, "stature_cm": 175},
         {"reference_kg": 70, "variation_percent": 31, "stature_cm": 175},
         {"reference_kg": 70, "variation_percent": 0, "stature_cm": 206},
-        {"reference_kg": 70, "variation_percent": 0, "stature_cm": 175,
-         "prior_version_id": str(uuid4()), "revision_note": "Motivo real"},
-        {"reference_kg": 70, "variation_percent": 0, "stature_cm": 175,
-         "revision_note": "Sin versión previa"},
+        {
+            "reference_kg": 70,
+            "variation_percent": 0,
+            "stature_cm": 175,
+            "prior_version_id": str(uuid4()),
+            "revision_note": "Motivo real",
+        },
+        {
+            "reference_kg": 70,
+            "variation_percent": 0,
+            "stature_cm": 175,
+            "revision_note": "Sin versión previa",
+        },
         {"reference_kg": "NaN", "variation_percent": 0, "stature_cm": 175},
     ]
     for data in invalid:
         assert scenario(client, profile, data).status_code in {404, 422}
-    assert scenario(client, profile, {"reference_kg": 70, "variation_percent": 0,
-                                     "stature_cm": 175},
-                    key=None).status_code == 201
+    assert (
+        scenario(
+            client,
+            profile,
+            {"reference_kg": 70, "variation_percent": 0, "stature_cm": 175},
+            key=None,
+        ).status_code
+        == 201
+    )
     archived = client.post(f"/api/v1/profiles/{profile}/archive")
     assert archived.status_code == 200
     assert scenario(client, profile).status_code == 409
@@ -149,9 +174,10 @@ def test_cross_workspace_and_actual_row_level_security(client, db_url):
     assert created.status_code == 201, created.text
     scenario_id = created.json()["id"]
     assert client.get(f"/api/v1/profiles/{profile}/scenarios").status_code == 404
-    assert client.get(
-        f"/api/v1/profiles/{profile}/scenarios/{scenario_id}/versions"
-    ).status_code == 404
+    assert (
+        client.get(f"/api/v1/profiles/{profile}/scenarios/{scenario_id}/versions").status_code
+        == 404
+    )
     assert scenario(client, profile).status_code == 404
 
     engine = create_engine(db_url)
@@ -163,10 +189,13 @@ def test_cross_workspace_and_actual_row_level_security(client, db_url):
                 text("SELECT set_config('app.organization_id',:id,true)"),
                 {"id": str(FIRST_WORKSPACE)},
             )
-            assert conn.execute(
-                text("SELECT count(*) FROM simulation_scenarios WHERE id=:id"),
-                {"id": scenario_id},
-            ).scalar_one() == 0
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM simulation_scenarios WHERE id=:id"),
+                    {"id": scenario_id},
+                ).scalar_one()
+                == 0
+            )
             with pytest.raises(ProgrammingError):
                 conn.execute(
                     text("UPDATE simulation_scenarios SET stature_cm=180 WHERE id=:id"),
