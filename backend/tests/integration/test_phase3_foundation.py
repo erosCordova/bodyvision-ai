@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0014_mfa_step_up"
+            == "0015_mfa_recovery_reset"
         )
         for table in (
             "user_role_assignments",
@@ -97,6 +97,7 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
             "private_mfa_transition(uuid,uuid,text,text,text,bigint,uuid,text,jsonb,uuid,uuid)",
             "private_mfa_mark_session(uuid,uuid,text,char(64))",
             "private_mfa_session_verified(char(64))",
+            "private_mfa_reset_with_recovery(uuid,uuid,text,uuid,text,text,uuid,uuid)",
         ):
             for role, permitted in (("bodyvision_app", False), ("bodyvision_auth_app", True)):
                 assert (
