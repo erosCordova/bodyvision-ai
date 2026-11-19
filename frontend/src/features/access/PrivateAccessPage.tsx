@@ -18,7 +18,7 @@ const roleLabel = {
 export function PrivateAccessPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, login, logout, beginMfaEnrollment, confirmMfaEnrollment } = usePrivateAuth();
+  const { session, login, logout, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor } = usePrivateAuth();
   const [organizationId, setOrganizationId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +26,8 @@ export function PrivateAccessPage() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [enrollmentUri, setEnrollmentUri] = useState("");
   const [enrollmentCode, setEnrollmentCode] = useState("");
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [visiblePassword, setVisiblePassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,6 +87,26 @@ export function PrivateAccessPage() {
       setNeedsSetup(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo iniciar la verificación.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startRecovery() {
+    setError("");
+    setBusy(true);
+    try {
+      const uri = await recoverMfaFactor({
+        ...credentials(),
+        recovery_code: recoveryCode.trim(),
+      });
+      setEnrollmentUri(uri);
+      setRecoveryCode("");
+      setRecovering(false);
+      setNeedsSetup(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo recuperar el segundo factor.");
+      setRecoveryCode("");
     } finally {
       setBusy(false);
     }
@@ -221,14 +243,48 @@ export function PrivateAccessPage() {
                   {visiblePassword ? "Ocultar" : "Mostrar"}
                 </button>
               </div>
-              <label htmlFor="private-mfa-code">Código de verificación (si está activado)</label>
+              {recovering ? (
+                <>
+                  <p className="private-access-description">
+                    Para reemplazar el autenticador necesitas tu contraseña
+                    y un código de recuperación que no hayas utilizado.
+                    Se cerrarán todas las sesiones anteriores.
+                  </p>
+                  <label htmlFor="private-recovery-code">Código de recuperación disponible</label>
+                  <input id="private-recovery-code" type="text" required
+                    autoComplete="off" maxLength={64} value={recoveryCode}
+                    onChange={event => setRecoveryCode(event.target.value)}
+                    placeholder="Código de recuperación" />
+                </>
+              ) : (
+                <>
+                  <label htmlFor="private-mfa-code">Código de verificación (si está activado)</label>
               <input id="private-mfa-code" type="text" inputMode="text"
                 autoComplete="one-time-code" maxLength={64} value={mfaCode}
                 onChange={event => setMfaCode(event.target.value)}
                 placeholder="6 dígitos o código de recuperación" />
+                </>
+              )}
               {error && <p role="alert" className="private-access-error">{error}</p>}
-              <button type="submit" className="private-access-submit" disabled={busy}>
-                {busy ? "Verificando…" : "Ingresar al espacio privado"}
+              {recovering ? (
+                <button type="button" className="private-access-submit"
+                  disabled={busy || !recoveryCode || !password}
+                  onClick={() => void startRecovery()}>
+                  {busy ? "Restableciendo…" : "Restablecer autenticador"}
+                </button>
+              ) : (
+                <button type="submit" className="private-access-submit" disabled={busy}>
+                  {busy ? "Verificando…" : "Ingresar al espacio privado"}
+                </button>
+              )}
+              <button type="button" className="private-access-secondary"
+                disabled={busy} onClick={() => {
+                  setRecovering(previous => !previous);
+                  setError("");
+                  setMfaCode("");
+                  setRecoveryCode("");
+                }}>
+                {recovering ? "Volver a iniciar sesión" : "Perdí el acceso a mi autenticador"}
               </button>
               {needsSetup && (
                 <button className="private-access-secondary" type="button"
