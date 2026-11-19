@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     capture_encryption_key: SecretStr | None = None
     capture_decryption_keys: list[SecretStr] = []
     capture_retention_interval_seconds: int = 900
+    capture_retention_enabled: bool = True
 
     @field_validator("database_url")
     @classmethod
