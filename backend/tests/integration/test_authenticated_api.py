@@ -1598,11 +1598,15 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
     assert client.get(f"{path}/{capture_id}", headers=member).content == image
     assert client.get(f"{path}/{capture_id}", headers=foreign).status_code == 404
     assert client.delete(f"{path}/{capture_id}", headers=member).status_code == 403
-    assert (
-        client.get(f"{path}/{capture_id}", headers=writer)
-        .headers["content-disposition"]
-        .startswith("attachment;")
-    )
+    downloaded = client.get(f"{path}/{capture_id}", headers=writer)
+    assert downloaded.status_code == 200
+    assert downloaded.content == image
+    assert downloaded.headers["content-disposition"].startswith("attachment;")
+    assert downloaded.headers["content-type"] == "application/octet-stream"
+    assert downloaded.headers["cache-control"] == "no-store, private"
+    assert downloaded.headers["pragma"] == "no-cache"
+    assert downloaded.headers["x-content-type-options"] == "nosniff"
+    assert "set-cookie" not in downloaded.headers
 
     with owner.connect() as conn:
         record = (
