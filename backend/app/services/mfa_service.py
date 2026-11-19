@@ -58,6 +58,10 @@ class EnrollmentConfirmedRead(SessionRead):
     recovery_codes: list[str]
 
 
+def _totp_now() -> int:
+    return int(time.time())
+
+
 def require_mfa_enabled(request: Request) -> str:
     settings = request.app.state.settings
     if not settings.identity_enabled or not settings.mfa_enabled:
@@ -236,7 +240,7 @@ def confirm_enrollment(
         if snapshot["status"] != "pending":
             raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
         seed = decrypt_totp_seed(snapshot["ciphertext"], key)
-        accepted_step = verify_totp(seed, credentials.code.get_secret_value(), int(time.time()))
+        accepted_step = verify_totp(seed, credentials.code.get_secret_value(), _totp_now())
         if accepted_step is None:
             raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
         codes = new_recovery_codes()
@@ -281,7 +285,7 @@ def require_login_mfa(
     if re.fullmatch(r"[0-9]{6}", code):
         seed = decrypt_totp_seed(snapshot["ciphertext"], key)
         accepted = verify_totp(
-            seed, code, int(time.time()), last_accepted_step=snapshot["last_step"]
+            seed, code, _totp_now(), last_accepted_step=snapshot["last_step"]
         )
         if accepted is None:
             raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
