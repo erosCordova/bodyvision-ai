@@ -138,17 +138,29 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
   // detector instance, with no saved photos, canvases or landmark results.
   const landmarker = await loadPoseLandmarker();
   let bitmap: ImageBitmap | null = null;
+  let canvas: HTMLCanvasElement | null = null;
+  let context: CanvasRenderingContext2D | null = null;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    if (!bitmap.width || !bitmap.height) {
+      throw new Error("La fotografía no tiene dimensiones válidas.");
+    }
     const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
+    canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("No se pudo inicializar el lienzo de análisis.");
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    context = canvas.getContext("2d");
+    if (!context) throw new Error("No se pudo inicializar el lienzo de análisis.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     return summarizePoseResult(landmarker.detect(canvas));
   } finally {
+    // Best-effort release of temporary image surfaces even when inference fails.
+    // This is not a guarantee of secure erasure of browser or GPU memory.
+    if (canvas) {
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 0;
+      canvas.height = 0;
+    }
     bitmap?.close();
   }
 }
