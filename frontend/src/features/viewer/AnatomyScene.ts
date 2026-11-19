@@ -296,9 +296,6 @@ export function createAnatomyScene(
         queueGeometryLod();
       });
     }, 80);
-    // Keep the mesh reference for geometry and material ownership, not a second
-    // character or an additional render scene.
-    void mesh;
   };
   const resize = () => {
     if (disposed) return;
