@@ -28,9 +28,15 @@ def test_full_batches_stop_at_budget_and_resume_on_next_run():
     assert connection.execute.call_count == 2
 
 
-@pytest.mark.parametrize("batch_size,max_batches", [
-    (0, 10), (101, 10), (10, 0), (10, 101),
-])
+@pytest.mark.parametrize(
+    "batch_size,max_batches",
+    [
+        (0, 10),
+        (101, 10),
+        (10, 0),
+        (10, 101),
+    ],
+)
 def test_unbounded_or_empty_purge_is_rejected(batch_size, max_batches):
     engine = MagicMock()
     with pytest.raises(ValueError, match="bounded"):
