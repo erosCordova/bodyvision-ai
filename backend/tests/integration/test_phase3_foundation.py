@@ -53,6 +53,7 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
         for role in ("bodyvision_app", "bodyvision_auth_app"):
             for table in (
                 "security_audit_events",
+                "private_audit_heads",
                 "auth_login_attempts",
                 "private_profile_permission_changes",
                 "profile_consents",
