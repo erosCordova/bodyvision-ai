@@ -514,5 +514,22 @@ export function createAnatomyScene(
     canvas.remove();
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, retryLayer, dispose };
+  const capturePng = async (): Promise<Blob> => {
+    if (disposed || !canvas.isConnected) throw new Error("Visor 3D no disponible");
+    // Capture immediately after a fresh render. This preserves the existing
+    // single scene, camera, mesh and shader without enabling a costly persistent
+    // WebGL drawing buffer or introducing another character.
+    render();
+    return new Promise<Blob>((resolve, reject) => {
+      try {
+        canvas.toBlob(blob => {
+          if (blob && blob.size > 0) resolve(blob);
+          else reject(new Error("No se pudo generar la captura 3D"));
+        }, "image/png");
+      } catch {
+        reject(new Error("El navegador bloqueó la captura de esta vista"));
+      }
+    });
+  };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, retryLayer, dispose };
 }
