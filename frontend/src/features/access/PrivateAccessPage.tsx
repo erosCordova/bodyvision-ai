@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { privateAuthEnabled, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
+import {
+  PrivateAuthError,
+  privateAuthEnabled,
+  usePrivateAuth,
+} from "../../app/providers/PrivateAuthProvider";
 import "./private-access.css";
 import { AccountSecurityPanel } from "./AccountSecurityPanel";
 import { invalidatePrivateSession } from "../../services/api/sessionInvalidation";
@@ -14,10 +18,15 @@ const roleLabel = {
 export function PrivateAccessPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, login, logout } = usePrivateAuth();
+  const { session, login, logout, beginMfaEnrollment, confirmMfaEnrollment } = usePrivateAuth();
   const [organizationId, setOrganizationId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [enrollmentUri, setEnrollmentUri] = useState("");
+  const [enrollmentCode, setEnrollmentCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [visiblePassword, setVisiblePassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -38,12 +47,63 @@ export function PrivateAccessPage() {
         organization_id: organizationId.trim(),
         email: email.trim(),
         password,
+        ...(mfaCode ? { mfa_code: mfaCode.trim() } : {}),
       });
       setPassword("");
+      setMfaCode("");
       navigate("/", { replace: true });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo iniciar sesión.");
+      setMfaCode("");
+      if (cause instanceof PrivateAuthError && cause.code === "MFA_SETUP_REQUIRED") {
+        setNeedsSetup(true);
+      } else if (
+        !(cause instanceof PrivateAuthError &&
+          ["MFA_CODE_REQUIRED", "MFA_CODE_INVALID"].includes(cause.code))
+      ) {
+        setPassword("");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function credentials() {
+    return {
+      organization_id: organizationId.trim(),
+      email: email.trim(),
+      password,
+    };
+  }
+
+  async function startEnrollment() {
+    setError("");
+    setBusy(true);
+    try {
+      const uri = await beginMfaEnrollment(credentials());
+      setEnrollmentUri(uri);
+      setNeedsSetup(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo iniciar la verificación.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finishEnrollment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const codes = await confirmMfaEnrollment({ ...credentials(), code: enrollmentCode });
+      setRecoveryCodes(codes);
       setPassword("");
+      setMfaCode("");
+      setEnrollmentCode("");
+      setEnrollmentUri("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo confirmar la verificación.");
+      setEnrollmentCode("");
     } finally {
       setBusy(false);
     }
@@ -72,7 +132,23 @@ export function PrivateAccessPage() {
         <div className="private-access-feature">◈ Credenciales comprobadas por el backend</div>
       </div>
       <main className="private-access-card">
-        {session ? (
+        {session && recoveryCodes.length > 0 ? (
+          <section aria-label="Códigos de recuperación" className="private-mfa-recovery">
+            <p className="eyebrow">SEGUNDO FACTOR CONFIGURADO</p>
+            <h2>Guarda tus códigos de recuperación</h2>
+            <p className="private-access-description">
+              Estos ocho códigos se muestran una sola vez. Guarda una copia fuera de esta
+              aplicación. Cada código sirve para un único inicio de sesión.
+            </p>
+            <div className="private-mfa-code-grid">
+              {recoveryCodes.map(code => <code key={code}>{code}</code>)}
+            </div>
+            <button type="button" className="private-access-submit"
+              onClick={() => setRecoveryCodes([])}>
+              He guardado mis códigos
+            </button>
+          </section>
+        ) : session ? (
           <>
             <p className="eyebrow">SESIÓN DE PRUEBA ACTIVA</p>
             <h2>Identidad verificada</h2>
@@ -97,6 +173,33 @@ export function PrivateAccessPage() {
             <h2>Iniciar sesión</h2>
             <p className="private-access-description">Introduzca las credenciales ficticias entregadas por el administrador de pruebas. No utilice credenciales personales.</p>
             {securityNotice && <p role="status" className="account-security-success">{securityNotice}</p>}
+            {enrollmentUri ? (
+              <section aria-label="Activar segundo factor" className="private-mfa-enroll">
+                <h3>Vincula tu autenticador</h3>
+                <p className="private-access-description">
+                  En tu aplicación de códigos temporales, añade una cuenta manualmente
+                  con el identificador BODYVISION AI y esta clave privada:
+                </p>
+                <code className="private-mfa-secret">
+                  {new URL(enrollmentUri).searchParams.get("secret")}
+                </code>
+                <p className="private-access-description">
+                  No compartas la clave ni la guardes en fotografías. Introduce el código
+                  de seis dígitos para terminar la configuración.
+                </p>
+                <form onSubmit={event => void finishEnrollment(event)}>
+                  <label htmlFor="private-enrollment-code">Código del autenticador</label>
+                  <input id="private-enrollment-code" type="text" required
+                    pattern="[0-9]{6}" inputMode="numeric" autoComplete="one-time-code"
+                    maxLength={6} value={enrollmentCode}
+                    onChange={event => setEnrollmentCode(event.target.value)} />
+                  {error && <p role="alert" className="private-access-error">{error}</p>}
+                  <button type="submit" className="private-access-submit" disabled={busy}>
+                    {busy ? "Confirmando…" : "Activar verificación"}
+                  </button>
+                </form>
+              </section>
+            ) : (
             <form onSubmit={event => void submit(event)}>
               <label htmlFor="private-org-id">Identificador de organización</label>
               <input id="private-org-id" type="text" required value={organizationId}
@@ -118,11 +221,23 @@ export function PrivateAccessPage() {
                   {visiblePassword ? "Ocultar" : "Mostrar"}
                 </button>
               </div>
+              <label htmlFor="private-mfa-code">Código de verificación (si está activado)</label>
+              <input id="private-mfa-code" type="text" inputMode="text"
+                autoComplete="one-time-code" maxLength={64} value={mfaCode}
+                onChange={event => setMfaCode(event.target.value)}
+                placeholder="6 dígitos o código de recuperación" />
               {error && <p role="alert" className="private-access-error">{error}</p>}
               <button type="submit" className="private-access-submit" disabled={busy}>
                 {busy ? "Verificando…" : "Ingresar al espacio privado"}
               </button>
+              {needsSetup && (
+                <button className="private-access-secondary" type="button"
+                  disabled={busy || !password} onClick={() => void startEnrollment()}>
+                  Configurar autenticador
+                </button>
+              )}
             </form>
+            )}
           </>
         )}
         {(logoutWarning || new URLSearchParams(location.search).get("logout") === "unconfirmed") && (
