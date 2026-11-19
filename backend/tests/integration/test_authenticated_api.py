@@ -1,6 +1,7 @@
 """Opt-in authenticated API behaviour on disposable synthetic PostgreSQL only."""
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -15,6 +16,8 @@ from app.main import create_app
 from app.models.context import FIRST_WORKSPACE, SECOND_WORKSPACE
 
 PASSWORD = "Synthetic test passphrase 2026!"
+
+CONSENT_BODY = {"purpose": "capture", "version": "bv-synthetic-v1", "confirmed": True}
 
 
 @pytest.fixture
@@ -108,6 +111,9 @@ def protected():
             yield client, owner, profile_id, users
     finally:
         with owner.begin() as conn:
+            conn.execute(
+                text("DELETE FROM profile_consents WHERE profile_id=:id"), {"id": profile_id}
+            )
             conn.execute(
                 text("DELETE FROM auth_login_attempts WHERE organization_id IN (:a,:b)"),
                 {"a": FIRST_WORKSPACE, "b": SECOND_WORKSPACE},
@@ -753,3 +759,186 @@ def test_repeated_permission_revocation_is_not_logged_as_success(protected):
             {"profile": profile},
         ).scalar_one()
     assert count == 1
+
+
+def test_consent_accept_revoke_renew_preserves_history_and_audit(protected):
+    client, owner, profile, users = protected
+    editor = users[0]
+    token = authenticate(client, editor[0], editor[1]).json()["token"]
+    path = f"/api/v1/auth/profiles/{profile}/consents"
+    assert client.get(path, headers=headers(token)).json()["items"] == []
+    accepted = client.post(path, headers=headers(token), json=CONSENT_BODY)
+    assert accepted.status_code == 200, accepted.text
+    data = accepted.json()
+    assert data["can_record"] and data["can_revoke"]
+    first = data["items"][0]
+    assert first["status"] == "accepted" and first["effective"]
+    assert first["cycle"] == 1 and first["recorded_by"] == str(editor[0])
+    assert first["revoked_by"] is None
+    lifetime = datetime.fromisoformat(first["expires_at"]) - datetime.fromisoformat(
+        first["accepted_at"]
+    )
+    assert lifetime == timedelta(days=30)
+
+    # Retries are idempotent; no invented extra acceptance or audit success.
+    again = client.post(path, headers=headers(token), json=CONSENT_BODY)
+    assert again.status_code == 200
+    assert again.json()["items"] == [first]
+    revoked = client.post(path + f"/{first['id']}/revoke", headers=headers(token), json={})
+    assert revoked.status_code == 200
+    old = revoked.json()["items"][0]
+    assert not old["effective"] and old["status"] == "revoked"
+    assert old["accepted_at"] == first["accepted_at"]
+    assert old["revoked_at"] and old["revoked_by"] == str(editor[0])
+    assert client.post(path + f"/{first['id']}/revoke", headers=headers(token)).status_code == 409
+
+    renewed = client.post(path, headers=headers(token), json=CONSENT_BODY).json()["items"]
+    assert len(renewed) == 2
+    assert [r["cycle"] for r in renewed if r["effective"]] == [2]
+    assert any(r["id"] == first["id"] and r["status"] == "revoked" for r in renewed)
+    with owner.connect() as connection:
+        events = (
+            connection.execute(
+                text(
+                    "SELECT action FROM security_audit_events WHERE resource_id=:profile "
+                    "AND action IN ('consent.accepted','consent.revoked') ORDER BY happened_at"
+                ),
+                {"profile": profile},
+            )
+            .scalars()
+            .all()
+        )
+    assert events == ["consent.accepted", "consent.revoked", "consent.accepted"]
+
+
+def test_consent_scope_uses_session_role_and_explicit_unexpired_grants(protected):
+    client, owner, profile, users = protected
+    tokens = [authenticate(client, u[0], u[1]).json()["token"] for u in users]
+    path = f"/api/v1/auth/profiles/{profile}/consents"
+    assert client.get(path).status_code == 401
+    read = client.get(path, headers=headers(tokens[1]))
+    assert read.status_code == 200
+    assert not read.json()["can_record"] and not read.json()["can_revoke"]
+    assert client.post(path, headers=headers(tokens[1]), json=CONSENT_BODY).status_code == 403
+    for token in tokens[2:]:
+        assert client.get(path, headers=headers(token)).status_code == 404
+        assert client.post(path, headers=headers(token), json=CONSENT_BODY).status_code == 404
+    assert (
+        client.get(
+            path, headers={**headers(tokens[0]), "X-Workspace-ID": str(SECOND_WORKSPACE)}
+        ).status_code
+        == 400
+    )
+    with owner.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE profile_access SET expires_at=now()-interval '1 second' "
+                "WHERE profile_id=:profile AND user_id=:user"
+            ),
+            {"profile": profile, "user": users[0][0]},
+        )
+    assert client.get(path, headers=headers(tokens[0])).status_code == 404
+    assert client.post(path, headers=headers(tokens[0]), json=CONSENT_BODY).status_code == 404
+
+
+def test_consent_expiry_versions_and_archival_do_not_enable_processing(protected):
+    client, owner, profile, users = protected
+    token = authenticate(client, users[0][0], users[0][1]).json()["token"]
+    path = f"/api/v1/auth/profiles/{profile}/consents"
+    accepted = client.post(path, headers=headers(token), json=CONSENT_BODY).json()["items"][0]
+    with owner.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE profile_consents SET accepted_at=now()-interval '31 days',"
+                "expires_at=now()-interval '1 day' WHERE id=:id"
+            ),
+            {"id": UUID(accepted["id"])},
+        )
+    expired = client.get(path, headers=headers(token)).json()["items"][0]
+    assert not expired["effective"]
+    renewed = client.post(path, headers=headers(token), json=CONSENT_BODY)
+    assert renewed.status_code == 200
+    assert len(renewed.json()["items"]) == 2
+    assert len([r for r in renewed.json()["items"] if r["effective"]]) == 1
+    # An old document version is visible as history, never a current acceptance.
+    with owner.begin() as connection:
+        connection.execute(
+            text("UPDATE profile_consents SET version='obsolete-v0' WHERE profile_id=:profile"),
+            {"profile": profile},
+        )
+    assert not any(r["effective"] for r in client.get(path, headers=headers(token)).json()["items"])
+    current = client.post(path, headers=headers(token), json=CONSENT_BODY).json()["items"]
+    valid = next(r for r in current if r["effective"])
+    archived = client.post(f"/api/v1/profiles/{profile}/archive", headers=headers(token))
+    assert archived.status_code == 200
+    state = client.get(path, headers=headers(token)).json()
+    assert not state["can_record"] and state["can_revoke"]
+    assert client.post(path, headers=headers(token), json=CONSENT_BODY).status_code == 409
+    assert client.post(path + f"/{valid['id']}/revoke", headers=headers(token)).status_code == 200
+
+
+def test_consent_rejects_forged_scope_version_confirmation_and_stale_target(protected):
+    client, _, profile, users = protected
+    token = authenticate(client, users[0][0], users[0][1]).json()["token"]
+    path = f"/api/v1/auth/profiles/{profile}/consents"
+    for invalid in [
+        {**CONSENT_BODY, "confirmed": False},
+        {**CONSENT_BODY, "confirmed": 1},
+        {**CONSENT_BODY, "version": "not-reviewed"},
+        {**CONSENT_BODY, "purpose": "anything"},
+        {**CONSENT_BODY, "organization_id": str(SECOND_WORKSPACE)},
+        {**CONSENT_BODY, "accepted_at": datetime.now(UTC).isoformat()},
+    ]:
+        assert client.post(path, headers=headers(token), json=invalid).status_code == 422
+    assert client.post(path + f"/{uuid4()}/revoke", headers=headers(token)).status_code == 409
+    assert client.get(path, headers=headers(token)).json()["items"] == []
+
+
+def test_parallel_acceptance_creates_only_one_current_cycle(protected):
+    client, _, profile, users = protected
+    token = authenticate(client, users[0][0], users[0][1]).json()["token"]
+    path = f"/api/v1/auth/profiles/{profile}/consents"
+
+    def accept(_):
+        return client.post(path, headers=headers(token), json=CONSENT_BODY)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(accept, range(2)))
+    assert all(r.status_code == 200 for r in results)
+    state = client.get(path, headers=headers(token)).json()
+    assert len(state["items"]) == 1 and state["items"][0]["effective"]
+
+
+def test_consent_rolls_back_when_audit_storage_fails(protected):
+    client, owner, profile, users = protected
+    token = authenticate(client, users[0][0], users[0][1]).json()["token"]
+    path = f"/api/v1/auth/profiles/{profile}/consents"
+    # Isolated test DB only: fail the real INSERT nested inside SECURITY DEFINER.
+    try:
+        with owner.begin() as connection:
+            connection.execute(
+                text("""
+                CREATE FUNCTION test_reject_consent_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                  IF NEW.action='consent.accepted' THEN
+                    RAISE EXCEPTION 'Synthetic audit failure';
+                  END IF;
+                  RETURN NEW;
+                END $$;
+                CREATE TRIGGER test_consent_audit_failure BEFORE INSERT ON security_audit_events
+                  FOR EACH ROW EXECUTE FUNCTION test_reject_consent_audit();
+            """)
+            )
+        assert client.post(path, headers=headers(token), json=CONSENT_BODY).status_code == 500
+        with owner.connect() as connection:
+            count = connection.execute(
+                text("SELECT count(*) FROM profile_consents WHERE profile_id=:profile"),
+                {"profile": profile},
+            ).scalar_one()
+        assert count == 0
+    finally:
+        with owner.begin() as connection:
+            connection.execute(
+                text("DROP TRIGGER IF EXISTS test_consent_audit_failure ON security_audit_events")
+            )
+            connection.execute(text("DROP FUNCTION IF EXISTS test_reject_consent_audit()"))

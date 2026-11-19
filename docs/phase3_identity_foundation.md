@@ -292,3 +292,52 @@ Comando, una vez levantados los servicios privados de pruebas:
 `npx playwright test --config playwright.private.config.ts` desde `frontend`.
 La suite pública existente sigue separada. La aceptación global de fase 3
 continúa pendiente y esta incorporación no activa funcionalidades en la demo.
+
+## Consentimientos privados de prueba (incremento 0009)
+
+El expediente privado dispone de un panel de consentimientos por finalidad:
+captura de imágenes, análisis de postura, elaboración de reportes y conservación
+de imágenes. El registro es **exclusivamente ficticio**; no acredita una aceptación
+legal, no identifica a un paciente ni a su representante y no habilita capturas,
+procesamiento de IA, exportaciones ni almacenamiento de imágenes reales.
+
+- `GET /api/v1/auth/profiles/{id}/consents`: estado verificado por servidor e
+  historial. Exige sesión activa y concesión vigente sobre el expediente.
+- `POST` sobre esa misma ruta: requiere un administrador o especialista con
+  permiso de edición, expediente activo, finalidad válida, versión
+  `bv-synthetic-v1` y confirmación explícita de tipo booleano.
+- `POST /api/v1/auth/profiles/{id}/consents/{consent_id}/revoke`: revoca la
+  aceptación concreta, incluso si el expediente ya está archivado. Exige el
+  mismo permiso de edición; el rol de consulta solo puede leer.
+
+Las aceptaciones tienen una vigencia de prueba de **30 días**. Las fechas y la
+identidad del responsable se obtienen del servidor. Cada finalidad y versión
+mantiene ciclos independientes: renovar una aceptación vencida o revocada
+crea otro ciclo y conserva el anterior. Reintentar una aceptación todavía
+vigente devuelve el estado existente, sin duplicarla. La consulta incluye las
+últimas cien filas de historial y el ciclo más reciente de cada finalidad
+actual, aunque sea anterior a esas cien filas. Una versión obsoleta o una
+aceptación vencida nunca se presenta como vigente.
+
+La función PostgreSQL deriva actor y organización del token verificado,
+comprueba la concesión explícita y su vencimiento y serializa los cambios del
+mismo expediente. Los roles operativos siguen sin permiso directo sobre
+`profile_consents`. Aceptaciones, revocaciones y consultas autorizadas se
+auditan dentro de la misma transacción, sin tokens ni contenido del formulario.
+Si falla la auditoría, se revierte el cambio de consentimiento. Las denegaciones
+no generan eventos de éxito; su auditoría independiente sigue pendiente.
+
+La interfaz pide una casilla de confirmación por finalidad, muestra las
+fechas de vencimiento e historial y toma las capacidades de edición del
+servidor. El backend siempre vuelve a comprobarlas. El panel solo existe en
+la modalidad privada de desarrollo; la demostración pública y su esquema
+`0002_data_core` en Neon permanecen iguales. La migración 0009 se prueba en
+PostgreSQL desechable. Su reversión rechaza datos que contengan varias
+renovaciones de una misma versión, para no eliminar ni alterar ese historial.
+
+El cálculo manual de avance de esta rama pasa de 49% a **52%**, al evaluar
+seguridad e identidad en 40% por los incrementos probados de sesiones,
+permisos, auditoría parcial y consentimientos. Esto no cierra la fase 3:
+quedan bootstrap administrativo, recuperación de cuentas, MFA, vinculación
+con el titular o representante, evidencia y textos legales revisados,
+integración de consentimiento en futuros procesamientos y revisión de privacidad.

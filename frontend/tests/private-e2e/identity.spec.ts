@@ -128,6 +128,30 @@ test("private identity, user creation, RLS grants, revocation and logout work to
 
   await page.getByRole("button", { name: "Actualizar", exact: true }).click();
   await expect(page.getByRole("cell", { name: "Permiso revocado", exact: true }).first()).toBeVisible();
+
+  await page.getByRole("link", { name: "Expedientes", exact: true }).click();
+  await page.getByRole("button", { name: "+ Nuevo expediente", exact: true }).click();
+  await page.getByRole("textbox", { name: "Nombre de referencia (opcional)", exact: true }).fill("Consentimientos ficticios E2E");
+  await page.getByRole("button", { name: "Crear expediente", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Consentimientos ficticios E2E", exact: true })).toBeVisible();
+  const consents = page.getByRole("region", { name: "Consentimientos por finalidad", exact: true });
+  const capture = consents.getByRole("article", { name: "Captura de imágenes", exact: true });
+  await expect(capture.getByText("Sin aceptación vigente", { exact: true })).toBeVisible();
+  const confirmation = consents.getByRole("checkbox");
+  await expect(confirmation).not.toBeChecked();
+  await expect(consents.getByRole("button", { name: "Registrar aceptación ficticia", exact: true })).toBeDisabled();
+  await confirmation.check();
+  await consents.getByRole("button", { name: "Registrar aceptación ficticia", exact: true }).click();
+  await expect(capture.getByText("Vigente", { exact: true })).toBeVisible();
+  await expect(confirmation).not.toBeChecked();
+  await capture.getByRole("button", { name: "Revocar consentimiento de Captura de imágenes", exact: true }).click();
+  await expect(capture.getByText("Sin aceptación vigente", { exact: true })).toBeVisible();
+  await consents.getByText("Historial de aceptaciones y revocaciones", { exact: true }).click();
+  await expect(consents.getByText(/Revocado · Ciclo 1/)).toBeVisible();
+  await confirmation.check();
+  await consents.getByRole("button", { name: "Registrar aceptación ficticia", exact: true }).click();
+  await expect(capture.getByText("Vigente", { exact: true })).toBeVisible();
+  await expect(consents.getByText(/Vigente · Ciclo 2/)).toBeVisible();
   await signOut(page);
   const adminLoggedOut = await page.request.get("/api/v1/auth/me", {
     headers: { Authorization: `Bearer ${admin.token}` },

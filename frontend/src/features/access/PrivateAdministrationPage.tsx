@@ -8,6 +8,9 @@ import {
 import "./private-administration.css";
 
 const eventNames: Record<string, string> = {
+  "consent.read": "Consulta de consentimientos",
+  "consent.accepted": "Aceptación de consentimiento",
+  "consent.revoked": "Revocación de consentimiento",
   "auth.login": "Inicio de sesión",
   "auth.logout": "Cierre de sesión",
   "admin.user_provisioned": "Usuario creado",

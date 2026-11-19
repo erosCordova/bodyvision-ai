@@ -58,8 +58,8 @@ export function ProjectProgressPage() {
         ))}
       </section>
       <section className="project-next-step" aria-label="Próxima prioridad">
-        <div><span>PRÓXIMA PRIORIDAD</span><h2>Autenticación y control de acceso</h2>
-          <p>Implementar identidad, roles, permisos por expediente y consentimiento persistente antes de permitir capturas o análisis reales.</p>
+        <div><span>PRÓXIMA PRIORIDAD</span><h2>Recuperación y protección de cuentas</h2>
+          <p>Completar el alta administrativa inicial, recuperación de cuentas, MFA y revisión de privacidad antes de permitir capturas o análisis reales.</p>
         </div>
         <Link to="/administration">Ver seguridad y administración →</Link>
       </section>
