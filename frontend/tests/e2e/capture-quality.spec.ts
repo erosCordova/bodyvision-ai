@@ -50,7 +50,7 @@ test("local capture checks an image and transfers only indicators to analysis", 
     name: "Fotografía local utilizada únicamente para la revisión de pose",
   })).toBeVisible();
   // Fail-closed if a locally bundled runtime asset is missing; no fake landmarks.
-  await page.route("**/pose/vision_bundle.mjs",
+  await page.route("**/src/vendor/vision_bundle.mjs*",
     route => route.abort());
   await page.getByRole("button", { name: "Detectar pose con IA" }).click();
   await expect(page.getByRole("alert")).toContainText("No se pudo ejecutar el detector local");
