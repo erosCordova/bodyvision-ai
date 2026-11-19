@@ -119,7 +119,7 @@ def upgrade() -> None:
         CREATE FUNCTION record_private_simulation_event(
           event_identifier uuid, correlation uuid, target_profile uuid, event_name text
         ) RETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-        SET search_path=pg_catalog,public AS $
+        SET search_path=pg_catalog,public AS $$
         DECLARE tenant uuid; actor uuid; writable boolean;
         BEGIN
           tenant := NULLIF(current_setting('app.organization_id',true),'')::uuid;
@@ -158,7 +158,7 @@ def upgrade() -> None:
             'profile',target_profile,'allowed'
           );
           RETURN true;
-        END $;
+        END $$;
         REVOKE ALL ON FUNCTION record_private_simulation_event(
           uuid,uuid,uuid,text
         ) FROM PUBLIC,bodyvision_auth_app;
