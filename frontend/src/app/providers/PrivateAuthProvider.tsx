@@ -31,28 +31,57 @@ export type LoginCredentials = {
   organization_id: string;
   email: string;
   password: string;
+  mfa_code?: string;
 };
+
+type EnrollmentConfirmation = LoginCredentials & { code: string };
+
+export class PrivateAuthError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "PrivateAuthError";
+  }
+}
 
 type AuthContextType = {
   session: PrivateSession | null;
   login: (credentials: LoginCredentials) => Promise<PrivateSession>;
+  beginMfaEnrollment: (credentials: LoginCredentials) => Promise<string>;
+  confirmMfaEnrollment: (credentials: EnrollmentConfirmation) => Promise<string[]>;
   logout: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-async function readSession(response: Response): Promise<PrivateSession> {
-  if (response.status === 401) {
-    throw new Error("Organización, correo o contraseña incorrectos.");
-  }
-  if (!response.ok) {
-    throw new Error("No se pudo iniciar sesión. Comprueba la configuración del entorno privado.");
-  }
-  const parsed = sessionSchema.safeParse(await response.json());
+async function authError(response: Response): Promise<never> {
+  const body: unknown = await response.json().catch(() => null);
+  const result = z.object({ code: z.string() }).safeParse(body);
+  const code = result.success ? result.data.code : "AUTH_ERROR";
+  const messages: Record<string, string> = {
+    INVALID_CREDENTIALS: "Organización, correo o contraseña incorrectos.",
+    MFA_SETUP_REQUIRED: "Configura la verificación de dos factores para ingresar.",
+    MFA_CODE_REQUIRED: "Introduce el código de tu aplicación autenticadora.",
+    MFA_CODE_INVALID: "El código es inválido, ya se utilizó o ha caducado.",
+    MFA_ALREADY_ENABLED: "La verificación ya está configurada en esta cuenta.",
+    LOGIN_RATE_LIMITED: "Demasiados intentos. Inténtalo de nuevo en 15 minutos.",
+  };
+  throw new PrivateAuthError(
+    code,
+    messages[code] ?? "No fue posible completar la verificación del acceso privado.",
+  );
+}
+
+function validateSession(body: unknown): PrivateSession {
+  const parsed = sessionSchema.safeParse(body);
   if (!parsed.success || Date.parse(parsed.data.expires_at) <= Date.now()) {
     throw new Error("El servidor no devolvió una sesión válida.");
   }
   return parsed.data;
+}
+
+async function readSession(response: Response): Promise<PrivateSession> {
+  if (!response.ok) return authError(response);
+  return validateSession(await response.json());
 }
 
 export function PrivateAuthProvider({ children }: PropsWithChildren) {
@@ -99,6 +128,50 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     [queryClient],
   );
 
+  const beginMfaEnrollment = useCallback(async (credentials: LoginCredentials): Promise<string> => {
+    if (!privateAuthEnabled()) throw new Error("Acceso privado no disponible.");
+    const response = await fetch("/api/v1/auth/mfa/enrollment", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organization_id: credentials.organization_id,
+        email: credentials.email,
+        password: credentials.password,
+      }),
+    });
+    if (!response.ok) return authError(response);
+    const parsed = z.object({
+      status: z.literal("pending"),
+      otpauth_uri: z.string().min(20),
+    }).safeParse(await response.json());
+    if (!parsed.success) throw new Error("No se recibió una configuración válida.");
+    return parsed.data.otpauth_uri;
+  }, []);
+
+  const confirmMfaEnrollment = useCallback(async (
+    credentials: EnrollmentConfirmation,
+  ): Promise<string[]> => {
+    if (!privateAuthEnabled()) throw new Error("Acceso privado no disponible.");
+    const response = await fetch("/api/v1/auth/mfa/confirm", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(credentials),
+    });
+    if (!response.ok) return authError(response);
+    const body: unknown = await response.json();
+    const parsed = z.object({
+      recovery_codes: z.array(z.string().length(32)).length(8),
+    }).safeParse(body);
+    if (!parsed.success) throw new Error("No se recibieron los códigos de recuperación.");
+    const verified = validateSession(body);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    setSession(verified);
+    return parsed.data.recovery_codes;
+  }, [queryClient]);
+
   const logout = useCallback(async (): Promise<boolean> => {
     const prior = session;
     setSession(null);
@@ -120,7 +193,10 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     }
   }, [queryClient, session]);
 
-  const value = useMemo(() => ({ session, login, logout }), [session, login, logout]);
+  const value = useMemo(
+    () => ({ session, login, beginMfaEnrollment, confirmMfaEnrollment, logout }),
+    [session, login, beginMfaEnrollment, confirmMfaEnrollment, logout],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
