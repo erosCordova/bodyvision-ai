@@ -14,6 +14,8 @@ import {
 import { Modal } from "../../components/ui/Modal";
 import { MeasurementForm } from "../measurements/MeasurementForm";
 import { MeasurementComparison } from "../analytics/MeasurementComparison";
+import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { ConsentPanel } from "./ConsentPanel";
 const HistoryChart = lazy(() =>
   import("../analytics/HistoryChart").then((module) => ({
     default: module.HistoryChart,
@@ -395,6 +397,7 @@ export function ProfileDetail() {
           )}
         </>
       )}
+      {privateAuthEnabled() && <ConsentPanel key={profileId} profileId={profileId} />}
       {form && catalog.data && (
         <MeasurementForm
           profileId={profileId}
