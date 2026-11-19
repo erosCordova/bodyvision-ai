@@ -11,6 +11,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.core.config import Settings
 from app.core.logging import JsonFormatter
+from app.core.mfa import generate_mfa_encryption_key
 from app.main import create_app
 
 
@@ -144,6 +145,29 @@ def test_unsafe_configuration_is_rejected(override):
     config = {"database_url": "postgresql+psycopg://app:test@localhost/test", **override}
     with pytest.raises(ValidationError):
         Settings(**config)
+
+
+def test_mfa_never_starts_without_private_identity_and_a_valid_secret():
+    base = {
+        "app_env": "test",
+        "database_url": "postgresql+psycopg://app:test@localhost/test",
+        "auth_database_url": "postgresql+psycopg://auth:test@localhost/test",
+    }
+    with pytest.raises(ValidationError):
+        Settings(**base, mfa_enabled=True, identity_enabled=False)
+    with pytest.raises(ValidationError):
+        Settings(**base, mfa_enabled=True, identity_enabled=True)
+    with pytest.raises(ValidationError):
+        Settings(
+            **base, mfa_enabled=True, identity_enabled=True, mfa_encryption_key="invalid-key"
+        )
+    config = Settings(
+        **base,
+        mfa_enabled=True,
+        identity_enabled=True,
+        mfa_encryption_key=generate_mfa_encryption_key(),
+    )
+    assert config.mfa_enabled
 
 
 def test_openapi_contains_foundation_only(client):
