@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
@@ -40,22 +41,52 @@ export function CapturePage() {
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
-  const [details, setDetails] = useState<{ width: number; height: number } | null>(null);
+  const [review, setReview] = useState<CaptureReview | null>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [validationError, setValidationError] = useState("");
   useEffect(() => {
-    if (!file) { setPreview(""); setDetails(null); return; }
+    if (!file) {
+      setPreview("");
+      setReview(null);
+      setIsReviewing(false);
+      return;
+    }
+    let active = true;
     const url = URL.createObjectURL(file);
     setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    setIsReviewing(true);
+    setValidationError("");
+    void reviewLocalCapture(file)
+      .then(result => {
+        if (!active) return;
+        setReview(result);
+        setIsReviewing(false);
+      })
+      .catch(error => {
+        if (!active) return;
+        setReview(null);
+        setIsReviewing(false);
+        setValidationError(error instanceof Error ? error.message : "La imagen no pudo revisarse.");
+      });
+    return () => { active = false; URL.revokeObjectURL(url); };
   }, [file]);
   const fileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0] ?? null;
-    setFile(next && next.type.startsWith("image/") && next.size <= 10 * 1024 * 1024 ? next : null);
+    setValidationError("");
+    setReview(null);
+    if (next && !["image/jpeg", "image/png", "image/webp"].includes(next.type)) {
+      setFile(null);
+      setValidationError("Selecciona una imagen JPG, PNG o WebP.");
+    } else if (next && (next.size === 0 || next.size > 10 * 1024 * 1024)) {
+      setFile(null);
+      setValidationError("La imagen debe ocupar más de 0 bytes y menos de 10 MB.");
+    } else {
+      setFile(next);
+    }
     event.target.value = "";
   };
-  const imageWarning = details && (Math.min(details.width, details.height) < 720 ?
-    "Resolución baja para un análisis de pose fiable." : "Resolución suficiente para continuar con una validación técnica; aún no se evaluó la postura.");
   return <div className="enterprise-module">
-    <PageTitle eyebrow="CAPTURA GUIADA · PRIVACIDAD PRIMERO" title="Captura corporal" description="Prepara fotografías con postura, encuadre y luz uniformes. El documento exige consentimiento antes de almacenarlas o analizarlas."/>
+    <PageTitle eyebrow="CAPTURA GUIADA · PRIVACIDAD PRIMERO" title="Captura corporal" description="Selecciona una imagen ficticia o autorizada y revisa resolución, luz, contraste y orientación en tu navegador, sin cargarla al servidor."/>
     <div className="enterprise-capture-grid">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Guía de toma fotográfica</h2><span>ANTES DE PROCESAR</span></div>
@@ -76,19 +107,38 @@ export function CapturePage() {
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Vista previa de captura</h2>
         {preview && file ? <>
-          <img className="enterprise-capture-preview" src={preview} alt="Vista previa local de la imagen seleccionada" onLoad={e => setDetails({ width:e.currentTarget.naturalWidth,height:e.currentTarget.naturalHeight })}/>
+          <img className="enterprise-capture-preview" src={preview} alt="Vista previa local de la imagen seleccionada"/>
           <p className="enterprise-file-detail">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>
-          {details && <p className="enterprise-file-detail">{details.width} × {details.height} píxeles</p>}
-          {imageWarning && <p className="enterprise-quality-note">{imageWarning}</p>}
+          {isReviewing && <p role="status" className="enterprise-quality-note">Revisando la calidad localmente…</p>}
+          {validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
+          {review && <div className="enterprise-quality-review" aria-label="Resultados de calidad local">
+            <h3>Revisión automática de calidad</h3>
+            <p className="enterprise-file-detail">{review.width} × {review.height} px · Brillo {review.averageBrightness}/255 · Contraste {review.contrast}/128</p>
+            <p role="status" className="enterprise-quality-note">{review.passed
+              ? "Sin alertas técnicas básicas. La postura y la presencia de un cuerpo NO se han comprobado."
+              : "Se encontraron condiciones que conviene mejorar antes de una futura estimación de pose."}</p>
+            <ul>{review.checks.map(check => <li key={check.id}>
+              <strong>{check.passed ? "✓" : "!"} {check.label}</strong>
+              <span>{check.detail}</span>
+            </li>)}</ul>
+            <Link className="secondary-button" to="/analysis" state={{ localCaptureReview: review }}>
+              Ver control de calidad en el módulo de análisis
+            </Link>
+          </div>}
           <button className="secondary-button" onClick={() => setFile(null)}>Descartar imagen</button>
         </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>La vista previa aparecerá aquí sin enviar archivos a la API.</p></div>}
-        <Limitation>La subida privada, el registro de consentimiento y la validación automática de calidad aún requieren backend y control de acceso. No introduzcas fotografías médicas reales.</Limitation>
+        {!file && validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
+        <Limitation>La revisión de resolución, brillo, contraste y orientación se ejecuta en este navegador; no detecta postura ni valida consentimiento clínico. La subida privada y la IA de pose permanecen pendientes. No introduzcas fotografías médicas reales.</Limitation>
       </aside>
     </div>
   </div>;
 }
 
 export function AnalysisPage() {
+  const location = useLocation();
+  const state = location.state as { localCaptureReview?: CaptureReview } | null;
+  const localReview = state?.localCaptureReview?.checks?.length === 4
+    ? state.localCaptureReview : null;
   const stages = [
     { name:"Autorización", detail:"Comprobación del expediente y consentimiento", status:"Pendiente de implementar" },
     { name:"Control de calidad", detail:"Encuadre, resolución, iluminación y postura", status:"Pendiente de implementar" },
@@ -100,6 +150,14 @@ export function AnalysisPage() {
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>ESQUEMA EXPLICATIVO</span></div>
+        {localReview && <div className="enterprise-quality-review enterprise-review-handoff" aria-label="Control de calidad recibido">
+          <h3>Control técnico de la captura</h3>
+          <p>{localReview.width} × {localReview.height} px · {localReview.checks.filter(item => item.passed).length} de 4 criterios cumplidos.</p>
+          <ul>{localReview.checks.map(check => <li key={check.id}>
+            <strong>{check.passed ? "✓" : "!"} {check.label}</strong><span>{check.detail}</span>
+          </li>)}</ul>
+          <p className="enterprise-hint">Solo se transfirieron los indicadores de calidad en memoria de navegación; nunca se transfirió la fotografía. Esto NO es una detección de pose ni confirma el consentimiento.</p>
+        </div>}
         <div className="enterprise-pose-visual">
           <div className="enterprise-pose-model">
             <svg viewBox="0 0 220 360" aria-label="Esquema de puntos corporales, no resultado de inteligencia artificial" role="img">
