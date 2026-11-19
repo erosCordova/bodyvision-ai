@@ -49,8 +49,8 @@ test("local capture checks an image and transfers only indicators to analysis", 
   await expect(page.getByRole("img", {
     name: "Fotografía local utilizada únicamente para la revisión de pose",
   })).toBeVisible();
-  // A failed external runtime must not return manufactured body landmarks.
-  await page.route("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/vision_bundle.mjs",
+  // Fail-closed if a locally bundled runtime asset is missing; no fake landmarks.
+  await page.route("**/pose/vision_bundle.mjs",
     route => route.abort());
   await page.getByRole("button", { name: "Detectar pose con IA" }).click();
   await expect(page.getByRole("alert")).toContainText("No se pudo ejecutar el detector local");
