@@ -39,7 +39,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       if (!alive.current) return;
       setState("failed");
       setFailure(
-        "No se pudo ejecutar el detector local. Comprueba la conexión para descargar el modelo, " +
+        "No se pudo ejecutar el detector local. Comprueba que esta versión incluya los archivos verificados, " +
         "la compatibilidad de WebAssembly y vuelve a intentarlo. La imagen no se ha enviado a la API.",
       );
     }
@@ -67,7 +67,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
         </button>
       </div>
       <p className="enterprise-pose-privacy">
-        Descarga inicial de software y pesos: requiere internet. Versión SDK {POSE_SDK_VERSION},
+        Motor y modelo incluidos en esta versión de BODYVISION. SDK {POSE_SDK_VERSION},
         modelo {POSE_MODEL_VERSION}; ejecución local con CPU, sin guardar imágenes ni coordenadas.
         Utiliza únicamente fotografías ficticias para esta demostración.
       </p>
