@@ -108,6 +108,7 @@ def protected():
             auth_database_url=auth_url,
             identity_enabled=True,
             capture_encryption_key=Fernet.generate_key().decode("ascii"),
+            capture_retention_enabled=False,
         )
         with TestClient(create_app(settings, app_engine)) as client:
             yield client, owner, profile_id, users
