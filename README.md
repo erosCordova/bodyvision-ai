@@ -1,4 +1,10 @@
-# BODYVISION AI — Fase 2
+# BODYVISION AI — Núcleo ficticio y desarrollo privado F3
+
+La rama de identidad añade administración de cuentas, consentimientos, permisos,
+cambio de contraseña propia, cierre de sesiones y auditoría encadenada verificable.
+Es una modalidad optativa de desarrollo/CI, distinta de la demostración pública.
+Su configuración y límites están en [fundación de identidad F3](docs/phase3_identity_foundation.md).
+No hay cuentas públicas, MFA terminado ni habilitación de datos reales.
 
 Núcleo local para registrar expedientes y mediciones **ficticias**, conservar correcciones y consultar evolución. **No es un dispositivo médico.** Identidad, consentimiento y uso con datos reales siguen bloqueados. El backend es Python/FastAPI según la especificación adjunta.
 

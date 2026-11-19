@@ -199,3 +199,58 @@ test("private identity, user creation, RLS grants, revocation and logout work to
   });
   expect(adminLoggedOut.status()).toBe(401);
 });
+
+test("own password, active sessions and audit verification work through the real API", async ({ page, browser }) => {
+  const admin = await signIn(page, "browser.admin@example.invalid");
+  const email = `browser.self.${Date.now()}@example.invalid`;
+  const created = await page.request.post("/api/v1/auth/users", {
+    headers: { Authorization: `Bearer ${admin.token}` }, data: {
+      display_name: "Cuenta de seguridad propia", email, password, role: "member",
+    },
+  });
+  expect(created.status()).toBe(201);
+  const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  const own = await context.newPage();
+  try {
+    const current = await signIn(own, email);
+    const other = await own.request.post("/api/v1/auth/login", { data: { organization_id: organization, email, password } });
+    expect(other.status()).toBe(200);
+    const otherToken = (await other.json() as { token: string }).token;
+    await own.getByRole("link", { name: /Acceso y seguridad/ }).click();
+    const sessions = own.getByRole("region", { name: "Mis sesiones activas", exact: true });
+    await expect(sessions.getByText("2 sesiones activas", { exact: true })).toBeVisible();
+    await sessions.getByLabel("Confirmar contraseña para cerrar sesiones", { exact: true }).fill(password);
+    await sessions.getByRole("listitem").filter({ hasText: "Otra sesión" }).getByRole("button").click();
+    await expect(sessions.getByText("1 sesión activa", { exact: true })).toBeVisible();
+    expect((await own.request.get("/api/v1/auth/me", { headers: { Authorization: `Bearer ${otherToken}` } })).status()).toBe(401);
+    expect((await own.request.get("/api/v1/auth/me", { headers: { Authorization: `Bearer ${current.token}` } })).status()).toBe(200);
+
+    const additional = await own.request.post("/api/v1/auth/login", { data: { organization_id: organization, email, password } });
+    expect(additional.status()).toBe(200);
+    const additionalToken = (await additional.json() as { token: string }).token;
+    await sessions.getByRole("button", { name: "Actualizar sesiones", exact: true }).click();
+    await expect(sessions.getByText("2 sesiones activas", { exact: true })).toBeVisible();
+    const passwordForm = own.getByRole("region", { name: "Cambiar mi contraseña", exact: true });
+    const replacement = "Browser self-service replacement 2026!";
+    await passwordForm.getByLabel("Contraseña actual", { exact: true }).fill(password);
+    await passwordForm.getByLabel("Mi nueva contraseña", { exact: true }).fill(replacement);
+    await passwordForm.getByLabel("Repetir mi nueva contraseña", { exact: true }).fill(replacement);
+    await passwordForm.getByRole("button", { name: "Cambiar contraseña y cerrar sesiones", exact: true }).click();
+    await expect(own.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
+    await expect(own.getByRole("status")).toContainText("Contraseña actualizada");
+    for (const token of [current.token, additionalToken]) {
+      expect((await own.request.get("/api/v1/auth/me", { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(401);
+    }
+    const fresh = await signIn(own, email, organization, replacement);
+    await own.getByRole("link", { name: /Acceso y seguridad/ }).click();
+    await own.getByLabel("Confirmar contraseña para cerrar sesiones", { exact: true }).fill(replacement);
+    await own.getByRole("button", { name: "Cerrar todas mis sesiones, incluida esta", exact: true }).click();
+    await expect(own.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
+    expect((await own.request.get("/api/v1/auth/me", { headers: { Authorization: `Bearer ${fresh.token}` } })).status()).toBe(401);
+  } finally { await context.close(); }
+  await page.getByRole("link", { name: "Administración", exact: true }).click();
+  const integrity = page.getByRole("region", { name: "Integridad de auditoría", exact: true });
+  await integrity.getByRole("button", { name: "Verificar integridad de auditoría", exact: true }).click();
+  await expect(integrity.getByRole("status")).toContainText("Cadena íntegra en el punto verificado");
+  await signOut(page);
+});

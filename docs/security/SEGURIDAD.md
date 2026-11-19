@@ -11,3 +11,19 @@ Modelo de amenazas inicial: suplantación → identidad/MFA F3; alteración de d
 ## Actualización F2
 
 Se añadieron filtros por tenant/expediente y RLS en siete tablas de negocio, con pruebas SQL directas usando rol limitado; inmutabilidad mediante privilegios y triggers; idempotencia y restricciones de catálogo. El selector local de espacios ficticios NO es autenticación y se permite exclusivamente porque no hay datos personales y staging/producción siguen bloqueados. No debe reutilizarse como mecanismo de confianza en F3.
+
+## Incremento privado F3 (0012)
+
+La rama de identidad añade autenticación optativa local/test, permisos por expediente,
+consentimientos ficticios, soporte administrativo, cambio de contraseña propia y
+revocación de sesiones. El usuario solo puede gestionar sesiones de su propia cuenta.
+Los cambios de contraseña revocan todas las sesiones activas y comparten el bloqueo
+de usuario con la emisión de tokens para impedir accesos con verificadores anteriores.
+
+Todos los eventos existentes y nuevos reciben secuencia y hashes por organización.
+Las cabeceras y eventos permanecen inaccesibles directamente para ambos roles
+operativos. La verificación es administrativa y detecta alteraciones o borrados
+frente a la cabecera conservada. El propietario de base puede reconstruir ambos:
+no se afirma protección contra un administrador de base con privilegios completos.
+Véase [ADR 0008](../adr/0008-account-security-audit-chain.md). MFA y el cierre del gate
+de privacidad siguen pendientes; el modo privado continúa bloqueado en producción.

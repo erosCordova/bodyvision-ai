@@ -434,3 +434,41 @@ inicial, recuperación autónoma y aprobación de privacidad para uso real.
 La versión pública conserva Neon en `0002_data_core`; la migración 0011 se
 valida únicamente en PostgreSQL desechable de desarrollo/CI. Render aloja
 solo el backend. La rama de trabajo conserva la condición de borrador.
+
+## Cuenta propia y auditoría verificable (incremento 0012)
+
+La pantalla **Acceso y seguridad**, con una sesión privada activa, permite:
+
+- Cambiar la contraseña propia (12–128 caracteres y distinta de la actual).
+  Tras guardar se invalidan todas las sesiones y se solicita identificación
+  nueva. Los permisos y el rol permanecen.
+- Consultar las sesiones activas propias, paginadas, con apertura y caducidad.
+  Se identifica la sesión actual sin inventar dispositivos o ubicaciones.
+- Cerrar una sesión concreta o todas, confirmando la contraseña vigente.
+  El cierre de la sesión actual descarta también su token y caché en el navegador.
+
+Endpoints nuevos: `GET /auth/sessions`, `POST /auth/sessions/{id}/revoke`,
+`POST /auth/sessions/revoke-all`, `POST /auth/password` y `POST /auth/audit/verify`,
+todos bajo `/api/v1`. Los cuerpos rechazan campos adicionales. Las confirmaciones
+tienen contador compartido de cuenta propia (cinco por quince minutos), separado
+de los intentos de login y de los controles administrativos. La contraseña se
+limpia de los formularios tras una petición exitosa o fallida. Las denegaciones
+se confirman como eventos antes de devolver el error HTTP.
+
+La migración `0012_account_security` añade una cadena SHA-256 por organización
+para todos los eventos de seguridad. Se ordena por una secuencia serializada,
+no por fecha; la cabecera independiente detecta también borrados de la cola.
+El panel administrativo incluye una comprobación explícita de la cadena completa
+y muestra el punto verificado, aunque la tabla visual continúe limitada a treinta
+eventos. La comprobación se audita después del punto informado. Un fallo al auditar
+revierte el cambio de contraseña, las revocaciones y el avance de la cadena.
+
+El encadenamiento de registros previos crea una línea base a partir de la migración;
+no acredita su integridad histórica previa. El propietario de PostgreSQL conserva
+capacidades administrativas: esta cadena no sustituye un anclaje externo ni un
+respaldo. Detalles y formato canónico: [ADR 0008](adr/0008-account-security-audit-chain.md).
+
+Estimación manual: **56% global**, **75% en seguridad e identidad**. Continúan
+pendientes MFA, alta administrativa inicial, recuperación autónoma, cobertura
+integral de denegaciones y revisión de privacidad. Los cambios siguen en la rama
+de pruebas, sin despliegue; Neon público conserva `0002_data_core`.

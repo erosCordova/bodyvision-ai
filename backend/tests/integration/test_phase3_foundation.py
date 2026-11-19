@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0011_user_management"
+            == "0012_account_security"
         )
         for table in (
             "user_role_assignments",
@@ -85,6 +85,9 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
             "private_permission_catalog(char(64),uuid,text)",
             "set_synthetic_account_status(char(64),uuid,text,text,uuid,uuid)",
             "private_admin_audit(char(64),integer)",
+            "private_own_sessions(char(64),integer,integer)",
+            "private_own_security_change(char(64),text,uuid,text,text,uuid,uuid)",
+            "verify_private_audit_chain(char(64),uuid,uuid)",
         ):
             for role, permitted in (("bodyvision_app", False), ("bodyvision_auth_app", True)):
                 assert (

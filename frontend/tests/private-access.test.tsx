@@ -59,6 +59,9 @@ describe("private BODYVISION authentication UI", () => {
         role: "specialist",
         expires_at,
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [], total: 0, limit: 20, offset: 0, checked_at: new Date().toISOString(),
+      })))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetcher);
     withProviders(
@@ -83,8 +86,8 @@ describe("private BODYVISION authentication UI", () => {
     expect(localStorage.length).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Salir" }));
     expect(await screen.findByText("Sin sesión")).toBeInTheDocument();
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
-    const [logoutPath, logoutOptions] = fetcher.mock.calls[1] as [string, RequestInit];
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    const [logoutPath, logoutOptions] = fetcher.mock.calls[2] as [string, RequestInit];
     expect(logoutPath).toBe("/api/v1/auth/logout");
     expect((logoutOptions.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
     expect(sessionStorage.length).toBe(0);

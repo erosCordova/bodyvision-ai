@@ -58,3 +58,8 @@
   border:1px solid #b17b88;background:#403041;color:#ffe0e5
 }
 .private-admin-permission-actions .private-admin-revoke:hover{background:#543447}
+.private-admin-integrity{border-top:1px solid var(--border,#33566c);padding-top:20px;margin-top:22px}
+.private-admin-integrity h3{font-size:15px;margin:0 0 8px}
+.private-admin-integrity>small{display:block;font-size:11px;line-height:1.7;color:var(--text-muted,#9fb3c8);margin-top:12px}
+.private-admin-integrity code{overflow-wrap:anywhere;font-size:11px}
+.private-admin-integrity details{margin-top:10px}

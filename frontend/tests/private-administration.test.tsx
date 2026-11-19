@@ -28,6 +28,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 function withDirectory(fetcher: (url: string, init?: RequestInit) => Promise<Response>) {
   let grant: "read" | null = null;
   return async (url: string, init?: RequestInit) => {
+    if (url.startsWith("/api/v1/auth/sessions?")) return jsonResponse({
+      items: [], total: 0, limit: 20, offset: 0, checked_at: new Date().toISOString(),
+    });
     if (url.startsWith("/api/v1/auth/users?")) return jsonResponse({
       items: [{ id: CREATED, display_name: "Cuenta ficticia", email: "member@example.invalid", role: "member", status: "active", manageable: true }],
       total: 1, limit: 50, offset: 0,
@@ -155,7 +158,7 @@ describe("private administrator interface", () => {
     expect(await screen.findByRole("heading", { name: "Administración y seguridad" })).toBeInTheDocument();
     expect(screen.getByText("Esta sección es exclusiva de administradores con una sesión verificada.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Correo ficticio")).not.toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/audit"))).toBe(false);
   });
 
   it("refuses out-of-scope emails before creating an account", async () => {

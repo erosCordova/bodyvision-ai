@@ -1,0 +1,15 @@
+.account-security{border-top:1px solid #33566c;margin-top:28px;padding-top:6px}
+.account-security section{padding-top:18px;margin-top:12px}
+.account-security h3{font-size:17px;color:#e7f6ff;margin:8px 0}
+.account-security p,.account-security small{font-size:11px;line-height:1.65;color:#b5cfe0}
+.account-security label{display:block;margin:14px 0 8px;font-size:11px;font-weight:650}
+.account-session-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.account-security button:not(.private-access-submit):not(.private-access-secondary){border:1px solid #56718d;border-radius:7px;padding:9px;background:#173950;color:#deeff9;font-size:11px;cursor:pointer}
+.account-security button:disabled{opacity:.6;cursor:default}
+.account-session-list{list-style:none;padding:0;margin:16px 0;display:grid;gap:10px}
+.account-session-list li{border:1px solid #33566c;border-radius:9px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.account-session-list strong{display:block;color:#e7f6ff;font-size:12px;margin-bottom:5px}
+.account-session-list time,.account-session-list small{display:block;font-size:10px;color:#b5cfe0;line-height:1.7}
+.account-security .account-security-success{border:1px solid #499e9b;background:#124345;border-radius:8px;padding:12px;color:#c1fff3}
+.account-session-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px}
+.private-access:has(.account-security){align-items:start}

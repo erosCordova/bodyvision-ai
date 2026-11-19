@@ -10,8 +10,14 @@ import {
 import "./private-administration.css";
 import { UserDirectoryPanel } from "./UserDirectoryPanel";
 import { PasswordResetPanel } from "./PasswordResetPanel";
+import { AuditIntegrityPanel } from "./AuditIntegrityPanel";
 
 const eventNames: Record<string, string> = {
+  "account.password_change": "Contraseña propia actualizada",
+  "account.password_change_denied": "Cambio de contraseña propia denegado",
+  "account.session_revoke": "Sesiones propias revocadas",
+  "account.session_revoke_denied": "Revocación de sesión propia denegada",
+  "audit.integrity_check": "Verificación de integridad",
   "admin.account_disabled": "Cuenta suspendida",
   "admin.account_enabled": "Cuenta reactivada",
   "admin.account_status_denied": "Cambio de estado denegado",
@@ -294,6 +300,7 @@ export function PrivateAdministrationPage() {
               </table>
             </div>
           )}
+          {session && <AuditIntegrityPanel token={session.token} onVerified={() => setAuditRevision(value => value + 1)} />}
         </section>
       </div>
       <section className="enterprise-panel private-admin-permissions" aria-label="Permisos por expediente">

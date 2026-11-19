@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { privateAuthEnabled, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
 import "./private-access.css";
+import { AccountSecurityPanel } from "./AccountSecurityPanel";
+import { invalidatePrivateSession } from "../../services/api/sessionInvalidation";
 
 const roleLabel = {
   administrator: "Administrador",
@@ -20,6 +22,7 @@ export function PrivateAccessPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [logoutWarning, setLogoutWarning] = useState("");
+  const [securityNotice, setSecurityNotice] = useState("");
 
   if (!privateAuthEnabled()) {
     return <p role="alert">El acceso privado está deshabilitado en este entorno.</p>;
@@ -28,6 +31,7 @@ export function PrivateAccessPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSecurityNotice("");
     setBusy(true);
     try {
       await login({
@@ -82,12 +86,17 @@ export function PrivateAccessPage() {
             <button className="private-access-secondary" onClick={() => void signOut()} disabled={busy}>
               {busy ? "Cerrando…" : "Cerrar sesión"}
             </button>
+            <AccountSecurityPanel key={session.token} token={session.token} onSessionEnded={notice => {
+              setSecurityNotice(notice);
+              invalidatePrivateSession(session.token);
+            }} />
           </>
         ) : (
           <>
             <p className="eyebrow">IDENTIFICACIÓN DE USUARIO</p>
             <h2>Iniciar sesión</h2>
             <p className="private-access-description">Introduzca las credenciales ficticias entregadas por el administrador de pruebas. No utilice credenciales personales.</p>
+            {securityNotice && <p role="status" className="account-security-success">{securityNotice}</p>}
             <form onSubmit={event => void submit(event)}>
               <label htmlFor="private-org-id">Identificador de organización</label>
               <input id="private-org-id" type="text" required value={organizationId}

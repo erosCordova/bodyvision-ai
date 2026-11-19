@@ -122,13 +122,9 @@ def protected():
                 text("DELETE FROM private_profile_permission_changes WHERE profile_id=:profile"),
                 {"profile": profile_id},
             )
-            conn.execute(
-                text(
-                    "DELETE FROM security_audit_events "
-                    "WHERE actor_id = ANY(:ids) OR resource_id = ANY(:ids)"
-                ),
-                {"ids": [x[0] for x in users]},
-            )
+            # Owner-only reset on the disposable CI database. Runtime roles
+            # cannot prune the append-only audit or its verification heads.
+            conn.execute(text("TRUNCATE security_audit_events,private_audit_heads"))
             conn.execute(
                 text("DELETE FROM auth_sessions WHERE user_id = ANY(:ids)"),
                 {"ids": [x[0] for x in users]},
