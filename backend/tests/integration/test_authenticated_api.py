@@ -358,6 +358,30 @@ def test_login_throttle_survives_independent_connections(protected):
     assert authenticate(client, editor[0], editor[1]).status_code == 429
 
 
+def test_public_api_cannot_bootstrap_an_administrator(protected):
+    client, owner, _, users = protected
+    administrator = users[3]
+    token = authenticate(client, administrator[0], administrator[1]).json()["token"]
+    payload = {
+        "display_name": "Administrador sin verificación",
+        "email": "unapproved.admin@example.invalid",
+        "password": PASSWORD,
+        "role": "administrator",
+    }
+    response = client.post("/api/v1/auth/users", json=payload, headers=headers(token))
+    assert response.status_code == 422
+    no_session = client.post(
+        "/api/v1/auth/users",
+        json={**payload, "role": "member"},
+    )
+    assert no_session.status_code == 401
+    with owner.connect() as connection:
+        assert connection.execute(
+            text("SELECT count(*) FROM users WHERE lower(email)=:email"),
+            {"email": payload["email"]},
+        ).scalar_one() == 0
+
+
 def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(protected):
     client, owner, profile, users = protected
     admin, member, outsider = users[3], users[1], users[2]
