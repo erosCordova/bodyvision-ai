@@ -52,9 +52,7 @@ def test_demo_ready_uses_data_core_revision(client, engine):
         response = demo.get("/api/v1/health/ready")
         assert response.status_code == 200
         assert response.json()["schema_revision"] == "0002_data_core"
-        connection.execute.return_value.scalar_one.return_value = (
-            "0017_synthetic_captures"
-        )
+        connection.execute.return_value.scalar_one.return_value = "0017_synthetic_captures"
         assert demo.get("/api/v1/health/ready").status_code == 503
 
 
