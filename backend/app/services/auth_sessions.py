@@ -8,7 +8,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy import text
 
 from app.core.errors import DomainError
@@ -26,6 +26,7 @@ class LoginInput(BaseModel):
     organization_id: UUID
     email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(min_length=1, max_length=128)
+    mfa_code: SecretStr | None = Field(default=None, max_length=64)
 
 
 class SessionRead(BaseModel):
@@ -76,6 +77,17 @@ def resolve_identity(request: Request) -> Identity:
             .mappings()
             .first()
         )
+        if (
+            row is not None
+            and request.app.state.settings.mfa_enabled
+            and row["assigned_role"] in {"administrator", "specialist"}
+        ):
+            verified = connection.execute(
+                text("SELECT private_mfa_session_verified(CAST(:digest AS char(64)))"),
+                {"digest": digest},
+            ).scalar_one()
+            if not verified:
+                raise DomainError(401, "MFA_REQUIRED", "Se requiere verificación de dos factores.")
     if row is None or row["assigned_role"] not in {
         "administrator",
         "specialist",
@@ -147,6 +159,28 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
         ).scalar_one()
         if session_data is None:
             raise DomainError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.")
+        # Provisional token and factor counter commit together, never separately.
+        from app.services.mfa_service import require_login_mfa
+
+        stepped_up = require_login_mfa(
+            request, connection, credentials.organization_id, user_id,
+            verifier, session_data["role"], credentials.mfa_code
+        )
+        if stepped_up:
+            marked = connection.execute(
+                text(
+                    "SELECT private_mfa_mark_session("
+                    ":org,:actor,:verifier,CAST(:digest AS char(64)))"
+                ),
+                {
+                    "org": credentials.organization_id,
+                    "actor": user_id,
+                    "verifier": verifier,
+                    "digest": digest,
+                },
+            ).scalar_one()
+            if not marked:
+                raise DomainError(401, "MFA_CODE_INVALID", "Verificación rechazada.")
         # Clear the counter only if the session insertion also commits.
         connection.execute(
             text("SELECT clear_auth_login_attempts(:org,CAST(:digest AS char(64)))"),
