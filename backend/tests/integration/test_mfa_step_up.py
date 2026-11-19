@@ -2,7 +2,6 @@
 
 from urllib.parse import parse_qs, urlparse
 
-import pytest
 from pydantic import SecretStr
 from sqlalchemy import text
 from test_authenticated_api import PASSWORD, authenticate, headers
