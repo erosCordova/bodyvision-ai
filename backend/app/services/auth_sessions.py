@@ -163,8 +163,13 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
         from app.services.mfa_service import require_login_mfa
 
         stepped_up = require_login_mfa(
-            request, connection, credentials.organization_id, user_id,
-            verifier, session_data["role"], credentials.mfa_code
+            request,
+            connection,
+            credentials.organization_id,
+            user_id,
+            verifier,
+            session_data["role"],
+            credentials.mfa_code,
         )
         if stepped_up:
             marked = connection.execute(
