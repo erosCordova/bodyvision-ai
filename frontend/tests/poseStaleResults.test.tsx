@@ -44,11 +44,11 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  vi.stubGlobal("URL", {
-    ...URL,
+  const NativeURL = URL;
+  vi.stubGlobal("URL", Object.assign(class extends NativeURL {}, {
     createObjectURL: vi.fn(() => "blob:synthetic-pose"),
     revokeObjectURL: vi.fn(),
-  });
+  }));
   vi.mocked(detectPoseOnDevice).mockReset();
 });
 afterEach(() => {
