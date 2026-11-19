@@ -54,16 +54,20 @@ def test_privileged_step_up_enrollment_replay_and_recovery_are_atomic(protected,
     seed = parse_qs(urlparse(uri).query)["secret"][0]
     assert uri.startswith("otpauth://totp/")
 
-    wrong = client.post(
-        "/api/v1/auth/mfa/confirm", json={**credentials, "code": "12345x"}
-    )
+    wrong = client.post("/api/v1/auth/mfa/confirm", json={**credentials, "code": "12345x"})
     assert wrong.status_code == 422
     with owner.connect() as db:
-        stored = db.execute(
-            text("SELECT encrypted_totp_seed,confirmed_at FROM private_mfa_credentials "
-                 "WHERE user_id=:user"),
-            {"user": user[0]},
-        ).mappings().one()
+        stored = (
+            db.execute(
+                text(
+                    "SELECT encrypted_totp_seed,confirmed_at FROM private_mfa_credentials "
+                    "WHERE user_id=:user"
+                ),
+                {"user": user[0]},
+            )
+            .mappings()
+            .one()
+        )
         assert seed not in stored["encrypted_totp_seed"]
         assert stored["confirmed_at"] is None
 
@@ -78,17 +82,27 @@ def test_privileged_step_up_enrollment_replay_and_recovery_are_atomic(protected,
     assert client.get("/api/v1/auth/me", headers=headers(payload["token"])).status_code == 200
     assert client.get("/api/v1/auth/me", headers=headers(old)).status_code == 401
     with owner.connect() as db:
-        stored = db.execute(
-            text("SELECT last_accepted_step,confirmed_at FROM private_mfa_credentials "
-                 "WHERE user_id=:user"),
-            {"user": user[0]},
-        ).mappings().one()
+        stored = (
+            db.execute(
+                text(
+                    "SELECT last_accepted_step,confirmed_at FROM private_mfa_credentials "
+                    "WHERE user_id=:user"
+                ),
+                {"user": user[0]},
+            )
+            .mappings()
+            .one()
+        )
         assert stored["confirmed_at"] is not None
         assert stored["last_accepted_step"] == clock[0] // 30
-        rows = db.execute(
-            text("SELECT code_verifier FROM private_mfa_recovery_codes WHERE user_id=:user"),
-            {"user": user[0]},
-        ).scalars().all()
+        rows = (
+            db.execute(
+                text("SELECT code_verifier FROM private_mfa_recovery_codes WHERE user_id=:user"),
+                {"user": user[0]},
+            )
+            .scalars()
+            .all()
+        )
         assert len(rows) == 8
         assert not any(code in "".join(rows) for code in payload["recovery_codes"])
 
@@ -112,8 +126,10 @@ def test_privileged_step_up_enrollment_replay_and_recovery_are_atomic(protected,
     assert next_code.json()["role"] == "administrator"
     with owner.connect() as db:
         verified = db.execute(
-            text("SELECT mfa_verified_at FROM auth_sessions WHERE token_sha256="
-                 "encode(sha256(convert_to(:token,'UTF8')),'hex')"),
+            text(
+                "SELECT mfa_verified_at FROM auth_sessions WHERE token_sha256="
+                "encode(sha256(convert_to(:token,'UTF8')),'hex')"
+            ),
             {"token": next_code.json()["token"]},
         ).scalar_one()
         assert verified is not None
@@ -124,18 +140,19 @@ def test_privileged_step_up_enrollment_replay_and_recovery_are_atomic(protected,
     again = client.post("/api/v1/auth/login", json={**credentials, "mfa_code": recovery})
     assert again.status_code == 401
     assert again.json()["code"] == "MFA_CODE_INVALID"
-    assert client.get(
-        "/api/v1/auth/me", headers=headers(recovered.json()["token"])
-    ).status_code == 200
+    assert (
+        client.get("/api/v1/auth/me", headers=headers(recovered.json()["token"])).status_code == 200
+    )
 
 
 def test_enrollment_is_opt_in_and_cannot_use_wrong_password(protected, monkeypatch):
     client, _, _, users = protected
     credentials = _credentials(users[0])
     assert client.post("/api/v1/auth/mfa/enrollment", json=credentials).status_code == 404
-    assert client.post(
-        "/api/v1/auth/mfa/confirm", json={**credentials, "code": "123456"}
-    ).status_code == 404
+    assert (
+        client.post("/api/v1/auth/mfa/confirm", json={**credentials, "code": "123456"}).status_code
+        == 404
+    )
     _enable_mfa(client, monkeypatch)
     wrong = client.post(
         "/api/v1/auth/mfa/enrollment",
@@ -143,9 +160,10 @@ def test_enrollment_is_opt_in_and_cannot_use_wrong_password(protected, monkeypat
     )
     assert wrong.status_code == 401
     assert "otpauth_uri" not in wrong.text
-    assert client.post(
-        "/api/v1/auth/mfa/confirm", json={**credentials, "code": "123456"}
-    ).status_code == 401
+    assert (
+        client.post("/api/v1/auth/mfa/confirm", json={**credentials, "code": "123456"}).status_code
+        == 401
+    )
 
 
 def test_two_factor_challenges_are_tenant_and_account_scoped(protected, monkeypatch):
@@ -156,11 +174,15 @@ def test_two_factor_challenges_are_tenant_and_account_scoped(protected, monkeypa
     started = client.post("/api/v1/auth/mfa/enrollment", json=first)
     assert started.status_code == 200
     stolen_uri = started.json()["otpauth_uri"]
-    assert client.post(
-        "/api/v1/auth/mfa/confirm",
-        json={**foreign, "code": totp_code(
-            parse_qs(urlparse(stolen_uri).query)["secret"][0], 1_800_000_000
-        )},
-    ).status_code == 401
+    assert (
+        client.post(
+            "/api/v1/auth/mfa/confirm",
+            json={
+                **foreign,
+                "code": totp_code(parse_qs(urlparse(stolen_uri).query)["secret"][0], 1_800_000_000),
+            },
+        ).status_code
+        == 401
+    )
     assert authenticate(client, *users[0][:2]).status_code == 428
     assert authenticate(client, *users[2][:2]).status_code == 428
