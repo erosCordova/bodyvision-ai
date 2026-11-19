@@ -358,6 +358,10 @@ del restablecimiento y el número de sesiones revocadas. Contraseñas, hashes
 y tokens nunca se añaden al registro de auditoría. Los campos de contraseña
 de la interfaz se limpian después del envío, tanto al completarse como al
 fallar; la confirmación de la contraseña nueva no se envía al servidor.
+Cuando una petición privada recibe HTTP 401, se descarta la sesión
+correspondiente y su caché de datos, y la navegación protegida vuelve a
+pedir identificación. Una respuesta tardía de un token anterior no elimina
+una sesión nueva. La notificación es interna y solo en memoria.
 
 El cambio de contraseña, la revocación de todas las sesiones anteriores,
 la limpieza de su bloqueo temporal por intentos fallidos y la auditoría

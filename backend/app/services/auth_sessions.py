@@ -14,6 +14,7 @@ from sqlalchemy import text
 from app.core.errors import DomainError
 from app.core.identity import (
     Identity,
+    Role,
     hash_session_token,
     issue_session_token,
     login_bucket_digest,
@@ -32,13 +33,13 @@ class SessionRead(BaseModel):
     expires_at: datetime
     organization_id: UUID
     user_id: UUID
-    role: str
+    role: Role
 
 
 class IdentityRead(BaseModel):
     organization_id: UUID
     user_id: UUID
-    role: str
+    role: Role
 
 
 # No recognizable account is a required first-user setup feature. This fake

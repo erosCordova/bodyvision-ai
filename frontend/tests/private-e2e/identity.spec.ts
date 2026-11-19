@@ -129,6 +129,8 @@ test("private identity, user creation, RLS grants, revocation and logout work to
       headers: { Authorization: `Bearer ${recoverySession.token}` },
     });
     expect(recoveredOldToken.status()).toBe(401);
+    await memberPage.getByRole("link", { name: "Expedientes", exact: true }).click();
+    await expect(memberPage.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
     const oldPasswordLogin = await memberPage.request.post("/api/v1/auth/login", { data: {
       organization_id: organization, email, password,
     } });

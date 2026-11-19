@@ -172,6 +172,7 @@ def test_login_requires_real_credentials_and_ignores_untrusted_tenant_selector(p
     login = authenticate(client, editor[0], editor[1])
     assert login.status_code == 200, login.text
     session = login.json()
+    assert session["role"] == "specialist"
     token = session["token"]
     assert len(token) >= 40
     me = client.get("/api/v1/auth/me", headers=headers(token))

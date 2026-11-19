@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { invalidatePrivateSession } from "./sessionInvalidation";
 
 const auditEventSchema = z.object({
   id: z.string().uuid(),
@@ -66,7 +67,10 @@ async function secureRequest(
       "Content-Type": "application/json",
     },
   });
-  if (response.status === 401) throw new Error("La sesión ha caducado. Inicia sesión de nuevo.");
+  if (response.status === 401) {
+    invalidatePrivateSession(token);
+    throw new Error("La sesión ha caducado. Inicia sesión de nuevo.");
+  }
   if (response.status === 403 || response.status === 429) {
     const body = await response.clone().json().catch(() => ({})) as { code?: string };
     if (body.code === "RESET_REAUTH_REQUIRED") throw new Error("Confirma la contraseña del administrador.");

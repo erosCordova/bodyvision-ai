@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError } from "./client";
+import { invalidatePrivateSession } from "./sessionInvalidation";
 
 export const profileSchema = z.object({
   id: z.string().uuid(),
@@ -117,6 +118,7 @@ export async function dataRequest<T>(
       },
     });
     if (!response.ok) {
+      if (response.status === 401 && token) invalidatePrivateSession(token);
       const body = await response.json().catch(() => ({}));
       throw new ApiError(
         response.headers.get("X-Correlation-ID") ?? correlationId,

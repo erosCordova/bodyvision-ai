@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { onPrivateSessionInvalidated } from "../../services/api/sessionInvalidation";
 
 /**
  * This switch is deliberately impossible in a production Vite build.
@@ -62,12 +63,19 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!session) return;
+    const unsubscribe = onPrivateSessionInvalidated(token => {
+      // A late response from an older request must not discard a newer login.
+      if (token !== session.token) return;
+      setSession(null);
+      void queryClient.cancelQueries();
+      queryClient.clear();
+    });
     const remaining = Date.parse(session.expires_at) - Date.now();
     const timeout = window.setTimeout(() => {
       setSession(null);
       queryClient.clear();
     }, Math.max(0, Math.min(remaining, 2147483647)));
-    return () => window.clearTimeout(timeout);
+    return () => { window.clearTimeout(timeout); unsubscribe(); };
   }, [session, queryClient]);
 
   const login = useCallback(

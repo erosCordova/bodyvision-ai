@@ -26,7 +26,7 @@ def upgrade() -> None:
         ) RETURNS jsonb
         LANGUAGE plpgsql VOLATILE SECURITY DEFINER
         SET search_path=pg_catalog,public,pg_temp AS $$
-        DECLARE stored_verifier text; current_role text; expiration timestamptz;
+        DECLARE stored_verifier text; resolved_user_role text; expiration timestamptz;
         BEGIN
           SELECT u.password_hash INTO stored_verifier
           FROM public.users u JOIN public.organizations o ON o.id=u.organization_id
@@ -36,19 +36,19 @@ def upgrade() -> None:
           FOR UPDATE OF u;
           IF NOT FOUND OR stored_verifier IS NULL OR expected_verifier IS NULL
             OR stored_verifier<>expected_verifier THEN RETURN NULL; END IF;
-          SELECT r.role INTO current_role FROM public.user_role_assignments r
+          SELECT r.role INTO resolved_user_role FROM public.user_role_assignments r
           WHERE r.organization_id=tenant AND r.user_id=actor
             AND (r.expires_at IS NULL OR r.expires_at>now())
           ORDER BY CASE r.role WHEN 'administrator' THEN 1
             WHEN 'specialist' THEN 2 ELSE 3 END LIMIT 1;
-          IF current_role IS NULL THEN RETURN NULL; END IF;
+          IF resolved_user_role IS NULL THEN RETURN NULL; END IF;
           IF session_digest IS NULL OR session_digest !~ '^[0-9a-f]{64}$'
             THEN RAISE EXCEPTION 'Invalid session digest' USING ERRCODE='22023';
           END IF;
           expiration := now()+interval '8 hours';
           INSERT INTO public.auth_sessions(id,organization_id,user_id,token_sha256,expires_at)
           VALUES(session_identifier,tenant,actor,session_digest,expiration);
-          RETURN jsonb_build_object('expires_at',expiration,'role',current_role);
+          RETURN jsonb_build_object('expires_at',expiration,'role',resolved_user_role);
         END $$;
         REVOKE ALL ON FUNCTION issue_private_session(uuid,uuid,text,uuid,char(64))
           FROM PUBLIC,bodyvision_app;
