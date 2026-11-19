@@ -1686,3 +1686,161 @@ def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected
     assert purged.status_code == 200, purged.text
     assert purged.json() == {"deleted": 1}
     assert client.delete(f"{path}/{image_id}", headers=writer).status_code == 404
+
+
+def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
+    import hashlib
+
+    from pydantic import SecretStr
+
+    client, owner, profile_id, users = protected
+    editor, reader, outsider, admin = users
+    editor_token = authenticate(client, editor[0], editor[1]).json()["token"]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    writer, administrator = headers(editor_token), headers(admin_token)
+    path = f"/api/v1/profiles/{profile_id}/captures"
+    for purpose in ("capture", "storage"):
+        assert client.post(
+            f"/api/v1/auth/profiles/{profile_id}/consents",
+            headers=writer,
+            json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+        ).status_code == 200
+
+    data = _synthetic_png()
+    created = client.post(
+        path,
+        content=data,
+        headers={**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
+    )
+    assert created.status_code == 201, created.text
+    capture_id = created.json()["id"]
+    legacy = Fernet.generate_key()
+    legacy_ciphertext = Fernet(legacy).encrypt(data)
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO profile_access(
+              id,organization_id,profile_id,user_id,access_level
+            ) VALUES (:id,:org,:profile,:user,'manage')"""),
+            {
+                "id": uuid4(), "org": FIRST_WORKSPACE, "profile": profile_id,
+                "user": admin[0],
+            },
+        )
+        conn.execute(
+            text("UPDATE synthetic_capture_objects SET ciphertext=:ciphertext WHERE id=:id"),
+            {"id": capture_id, "ciphertext": legacy_ciphertext},
+        )
+
+    settings = client.app.state.settings
+    try:
+        # Missing predecessor key: fail closed, no mutation.
+        assert client.get(f"{path}/{capture_id}", headers=writer).status_code == 500
+        missing = client.post(path + "/rotate-key", headers=administrator)
+        assert missing.status_code == 409, missing.text
+        assert missing.json()["code"] == "CAPTURE_KEY_UNAVAILABLE"
+        with owner.connect() as conn:
+            assert bytes(conn.execute(text(
+                "SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"
+            ), {"id": capture_id}).scalar_one()) == legacy_ciphertext
+
+        client.app.state.settings = settings.model_copy(
+            update={"capture_decryption_keys": [SecretStr(legacy.decode())]}
+        )
+        assert client.get(f"{path}/{capture_id}", headers=writer).content == data
+        assert client.post(path + "/rotate-key", headers=writer).status_code == 403
+        rotated = client.post(path + "/rotate-key", headers=administrator)
+        assert rotated.status_code == 200, rotated.text
+        assert rotated.json() == {
+            "examined": 1, "rotated": 1, "key_material_exposed": False
+        }
+        again = client.post(path + "/rotate-key", headers=administrator)
+        assert again.status_code == 200
+        assert again.json()["rotated"] == 0
+
+        client.app.state.settings = settings
+        assert client.get(f"{path}/{capture_id}", headers=writer).content == data
+        with owner.connect() as conn:
+            encrypted = bytes(conn.execute(text(
+                "SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"
+            ), {"id": capture_id}).scalar_one())
+        primary = Fernet(settings.capture_encryption_key.get_secret_value().encode())
+        assert primary.decrypt(encrypted) == data
+        assert hashlib.sha256(data).hexdigest() == created.json()["sha256_digest"]
+
+        # A digest mismatch must abort the update without losing the token.
+        wrong = Fernet(legacy).encrypt(b"corrupt-fictional-pixels")
+        with owner.begin() as conn:
+            conn.execute(
+                text("UPDATE synthetic_capture_objects SET ciphertext=:ciphertext WHERE id=:id"),
+                {"id": capture_id, "ciphertext": wrong},
+            )
+        client.app.state.settings = settings.model_copy(
+            update={"capture_decryption_keys": [SecretStr(legacy.decode())]}
+        )
+        invalid = client.post(path + "/rotate-key", headers=administrator)
+        assert invalid.status_code == 409
+        assert invalid.json()["code"] == "CAPTURE_INTEGRITY_FAILURE"
+        with owner.connect() as conn:
+            assert bytes(conn.execute(text(
+                "SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"
+            ), {"id": capture_id}).scalar_one()) == wrong
+    finally:
+        client.app.state.settings = settings
+
+
+def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
+    import hashlib
+
+    from app.workers.capture_retention import purge_due
+
+    client, owner, profile_id, users = protected
+    editor = users[0]
+    image = _synthetic_png()
+    secret = Fernet.generate_key()
+    expired_id, active_id = uuid4(), uuid4()
+    entries = [
+        (expired_id, True),
+        (active_id, False),
+    ]
+    with owner.begin() as conn:
+        for identifier, expired in entries:
+            conn.execute(
+                text("""INSERT INTO synthetic_capture_objects(
+                  id,organization_id,profile_id,created_by,original_bytes,
+                  width,height,sha256_digest,ciphertext,created_at,expires_at
+                ) VALUES (
+                  :id,:org,:profile,:actor,:size,32,64,:digest,:encrypted,
+                  CASE WHEN :expired THEN now()-interval '8 days' ELSE now() END,
+                  CASE WHEN :expired THEN now()-interval '1 day'
+                       ELSE now()+interval '7 days' END
+                )"""),
+                {
+                    "id": identifier, "org": FIRST_WORKSPACE, "profile": profile_id,
+                    "actor": editor[0], "size": len(image),
+                    "digest": hashlib.sha256(image).hexdigest(),
+                    "encrypted": Fernet(secret).encrypt(image), "expired": expired,
+                },
+            )
+
+    # A request-scoped tenant must not be able to run global cleanup.
+    with owner.connect() as conn:
+        with pytest.raises(DBAPIError):
+            with conn.begin():
+                conn.execute(text("SET LOCAL ROLE bodyvision_app"))
+                conn.execute(
+                    text("SELECT set_config('app.organization_id',:org,true)"),
+                    {"org": str(FIRST_WORKSPACE)},
+                )
+                conn.execute(text("SELECT purge_expired_synthetic_capture_batch(100)"))
+    assert purge_due(client.app.state.engine, batch_size=1, max_batches=3) == 1
+    assert purge_due(client.app.state.engine, batch_size=1) == 0
+    with owner.connect() as conn:
+        remaining = conn.execute(
+            text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
+            {"profile": profile_id},
+        ).scalars().all()
+        assert remaining == [active_id]
+        assert conn.execute(
+            text("""SELECT count(*) FROM synthetic_capture_maintenance_events
+              WHERE action='retention.purge' AND deleted_count=1"""),
+        ).scalar_one() >= 1
