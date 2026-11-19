@@ -134,15 +134,15 @@ async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
 export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
   // Reject mislabeled or oversized files before loading the CPU inference model.
   await validatePoseImageFile(file);
-  // The checked ESM is loaded lazily once; repeated analyses reuse only the
-  // detector instance, with no saved photos, canvases or landmark results.
-  const landmarker = await loadPoseLandmarker();
+  // Repeated analyses reuse only the detector, never photo pixels or results.
+  // Delay its initialization until the decoded dimensions pass validation.
   let bitmap: ImageBitmap | null = null;
   let canvas: HTMLCanvasElement | null = null;
   let context: CanvasRenderingContext2D | null = null;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     validatePoseImageDimensions(bitmap.width, bitmap.height);
+    const landmarker = await loadPoseLandmarker();
     const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
     canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
