@@ -5,7 +5,7 @@ import json
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from sqlalchemy import text
 
 from app.api.deps import workspace
@@ -48,10 +48,15 @@ def _scenario(scope: Workspace, profile_id: UUID, scenario_id: UUID) -> dict:
 def list_scenarios(
     profile_id: UUID,
     scope: Scope,
+    request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
     records.profile(scope, profile_id)
+    # Public Neon is still at revision 0002 and has no scenario table.
+    # Show a truthful empty synthetic archive rather than querying a missing table.
+    if request.app.state.settings.app_env == "demo":
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
     params = {"org": scope.organization_id, "profile": profile_id, "limit": limit, "offset": offset}
     rows = (
         scope.connection.execute(
@@ -75,8 +80,12 @@ def list_scenarios(
 @router.get(
     "/profiles/{profile_id}/scenarios/{scenario_id}/versions", response_model=list[ScenarioRead]
 )
-def scenario_versions(profile_id: UUID, scenario_id: UUID, scope: Scope):
+def scenario_versions(
+    profile_id: UUID, scenario_id: UUID, scope: Scope, request: Request
+):
     records.profile(scope, profile_id)
+    if request.app.state.settings.app_env == "demo":
+        raise DomainError(404, "NOT_FOUND", "Escenario ficticio no disponible.")
     selected = _scenario(scope, profile_id, scenario_id)
     versions = [
         dict(row)
