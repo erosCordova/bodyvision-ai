@@ -126,20 +126,25 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       <div className="enterprise-pose-photo" style={{ aspectRatio: `${review.width} / ${review.height}` }}>
         {imageUrl && <img src={imageUrl} alt="Fotografía local utilizada únicamente para la revisión de pose"/>}
         {showSkeleton && (showPoints || showConnections) && (
-          <svg viewBox="0 0 1 1" preserveAspectRatio="none"
+          <svg viewBox={`0 0 ${review.width} ${review.height}`}
             aria-label="Puntos corporales detectados por el modelo" role="img">
-            {showConnections && <g stroke="#65e5f8" strokeWidth="0.004" strokeLinecap="round">
+            {showConnections && <g stroke="#65e5f8"
+              strokeWidth={Math.max(2, Math.min(review.width, review.height) * 0.004)}
+              strokeLinecap="round">
               {POSE_EDGES.filter(([a, b]) => displayedPoint(a) && displayedPoint(b))
                 .map(([a, b]) => {
                   const first = estimate!.landmarks[a];
                   const second = estimate!.landmarks[b];
                   return <line key={a + "-" + b}
-                    x1={first.x} y1={first.y} x2={second.x} y2={second.y}/>;
+                    x1={first.x * review.width} y1={first.y * review.height}
+                    x2={second.x * review.width} y2={second.y * review.height}/>;
                 })}
             </g>}
-            {showPoints && <g fill="#fff6b1" stroke="#034057" strokeWidth="0.0017">
+            {showPoints && <g fill="#fff6b1" stroke="#034057"
+              strokeWidth={Math.max(1, Math.min(review.width, review.height) * 0.0017)}>
               {estimate!.landmarks.map((point, index) => displayedPoint(index) ?
-                <circle key={index} cx={point.x} cy={point.y} r="0.006"/> : null)}
+                <circle key={index} cx={point.x * review.width} cy={point.y * review.height}
+                  r={Math.max(3, Math.min(review.width, review.height) * 0.006)}/> : null)}
             </g>}
           </svg>
         )}
