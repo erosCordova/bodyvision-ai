@@ -7,8 +7,17 @@ import {
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
-const file = (bytes: Uint8Array, type: string) =>
-  new File([bytes.slice().buffer as ArrayBuffer], "ficticia", { type });
+const file = (bytes: Uint8Array, type: string) => {
+  const input = new File([bytes.slice().buffer as ArrayBuffer], "ficticia", { type });
+  // jsdom's Blob does not implement arrayBuffer(); real browsers do.
+  // Keep the browser-equivalent header read deterministic in unit tests.
+  Object.defineProperty(input, "slice", {
+    value: (start: number, end: number) => ({
+      arrayBuffer: async () => bytes.slice(start, end).buffer as ArrayBuffer,
+    }),
+  });
+  return input;
+};
 
 describe("pose input gates (synthetic local analysis only)", () => {
   it.each([
