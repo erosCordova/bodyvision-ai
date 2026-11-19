@@ -1512,4 +1512,3 @@ def test_private_simulation_scenarios_enforce_session_roles_and_audit(protected)
             ).scalar_one()
             == 0
         )
-
