@@ -58,6 +58,10 @@ class EnrollmentConfirmedRead(SessionRead):
     recovery_codes: list[str]
 
 
+class RecoveryCredentials(EnrollmentCredentials):
+    recovery_code: SecretStr = Field(min_length=32, max_length=64)
+
+
 def _totp_now() -> int:
     return int(time.time())
 
@@ -264,6 +268,53 @@ def confirm_enrollment(
             request, connection, credentials.organization_id, user, verifier, bucket
         )
     return EnrollmentConfirmedRead(**session.model_dump(), recovery_codes=codes)
+
+
+def begin_factor_recovery(
+    request: Request, credentials: RecoveryCredentials
+) -> EnrollmentRead:
+    """Reset an enrolled factor using both the password and a one-use recovery code.
+
+    The SQL operation serializes with session issuance. Every prior session and
+    recovery verifier is revoked before a replacement seed is revealed.
+    """
+    key = require_mfa_enabled(request)
+    _throttle(request, credentials.organization_id, credentials.email.strip().lower())
+    with request.app.state.auth_engine.begin() as connection:
+        user, verifier, email = _verify_password(connection, credentials)
+        snapshot = _snapshot(connection, credentials.organization_id, user, verifier)
+        if snapshot["status"] != "enrolled":
+            raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
+        matching = None
+        code = credentials.recovery_code.get_secret_value()
+        for item in snapshot["recovery"]:
+            if verify_recovery_code(code, item["verifier"]):
+                matching = item
+                break
+        if matching is None:
+            raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
+
+        replacement_seed = new_totp_seed()
+        replacement_cipher = encrypt_totp_seed(replacement_seed, key)
+        result = connection.execute(
+            text(
+                "SELECT private_mfa_reset_with_recovery("
+                ":org,:actor,:verifier,:code_id,:code_verifier,:ciphertext,:event,:correlation)"
+            ),
+            {
+                "org": credentials.organization_id,
+                "actor": user,
+                "verifier": verifier,
+                "code_id": UUID(matching["id"]),
+                "code_verifier": matching["verifier"],
+                "ciphertext": replacement_cipher,
+                "event": uuid4(),
+                "correlation": UUID(request.state.correlation_id),
+            },
+        ).scalar_one()
+        if result != "ok":
+            raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
+    return EnrollmentRead(otpauth_uri=totp_enrollment_uri(replacement_seed, email))
 
 
 def require_login_mfa(
