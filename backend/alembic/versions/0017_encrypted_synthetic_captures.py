@@ -2,7 +2,7 @@
 
 from alembic import op
 
-revision = "0017_encrypted_synthetic_captures"
+revision = "0017_synthetic_captures"
 down_revision = "0016_simulation_scenarios"
 branch_labels = None
 depends_on = None
@@ -152,7 +152,7 @@ def upgrade() -> None:
           FOR EACH ROW EXECUTE FUNCTION purge_revoked_synthetic_captures();
         REVOKE ALL ON FUNCTION purge_revoked_synthetic_captures()
           FROM PUBLIC,bodyvision_app,bodyvision_auth_app;
-        UPDATE system_schema_state SET revision='0017_encrypted_synthetic_captures';
+        UPDATE system_schema_state SET revision='0017_synthetic_captures';
     """)
 
 
