@@ -6,3 +6,4 @@ playwright-report
 
 # Artifacts must be freshly hash-verified within Docker build
 public/pose/
+src/vendor/vision_bundle.mjs
