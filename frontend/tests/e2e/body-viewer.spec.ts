@@ -193,3 +193,25 @@ test("self-hosted pose model analyses a screenshot of the licensed synthetic ana
   expect(externalPoseRequests).toEqual([]);
   await page.screenshot({ path: "test-results/pose-synthetic-anatomical-body.png", fullPage: true });
 });
+
+test("3D simulation opens the same avatar snapshot in local AI pose analysis", async ({ page }) => {
+  test.setTimeout(150000);
+  await sourceFixtures(page);
+  await page.goto("/simulation");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Frente", exact: true }).click();
+  await page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" }).fill("185");
+  const analyze = page.getByRole("button", { name: "Analizar esta vista 3D con IA" });
+  await expect(analyze).toBeEnabled();
+  await analyze.click();
+  await expect(page).toHaveURL(/\/analysis$/);
+  await expect(page.getByRole("region", { name: "Control de calidad recibido" })).toBeVisible();
+  await expect(page.getByRole("img", {
+    name: "Fotografía local utilizada únicamente para la revisión de pose",
+  })).toBeVisible();
+  await page.getByRole("button", { name: "Detectar pose con IA" }).click();
+  await expect(page.getByRole("region", { name: "Estimación local de pose con IA" }))
+    .toContainText("Pose detectada.", { timeout: 90000 });
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toBeVisible();
+});
