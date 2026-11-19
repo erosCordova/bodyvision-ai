@@ -270,9 +270,7 @@ def confirm_enrollment(
     return EnrollmentConfirmedRead(**session.model_dump(), recovery_codes=codes)
 
 
-def begin_factor_recovery(
-    request: Request, credentials: RecoveryCredentials
-) -> EnrollmentRead:
+def begin_factor_recovery(request: Request, credentials: RecoveryCredentials) -> EnrollmentRead:
     """Reset an enrolled factor using both the password and a one-use recovery code.
 
     The SQL operation serializes with session issuance. Every prior session and
