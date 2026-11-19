@@ -10,8 +10,10 @@
     "build": "tsc -b && vite build",
     "assets:pose": "node scripts/prepare_pose_assets.mjs",
     "preview": "vite preview --host 127.0.0.1",
+    "pretypecheck": "node scripts/prepare_pose_assets.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint . --max-warnings 0",
+    "pretest": "node scripts/prepare_pose_assets.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
