@@ -1,0 +1,14 @@
+/* Live inference is opt-in; all pixels remain within this tab. */
+.enterprise-pose-review{display:grid;gap:15px;margin:18px 20px;padding:19px;border:1px solid #426d88;border-radius:14px;background:#102c43}
+.enterprise-pose-review-head{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;flex-wrap:wrap}
+.enterprise-pose-review-head h3{font-size:17px;color:#e8f8ff;margin:7px 0}
+.enterprise-pose-review-head p,.enterprise-pose-privacy,.enterprise-pose-idle{max-width:720px;color:#b4cddf;font-size:11px;line-height:1.7;margin:6px 0}
+.enterprise-pose-review-head button{flex-shrink:0;cursor:pointer;border-radius:9px;padding:12px 17px;font:inherit;font-size:12px}
+.enterprise-pose-review-head button:disabled{cursor:wait;opacity:.65}
+.enterprise-pose-photo{position:relative;max-width:560px;width:100%;margin:auto;overflow:hidden;border-radius:12px;background:#071421;border:1px solid #3e617d}
+.enterprise-pose-photo img{display:block;width:100%;height:100%;object-fit:fill}
+.enterprise-pose-photo svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 0 2px #001526)}
+.enterprise-pose-error{border-left:3px solid #f2979a;padding:12px;background:#482d3a;color:#ffe3e5;font-size:12px;line-height:1.6}
+.enterprise-pose-result{padding:12px 15px;border:1px solid #477c94;background:#173b50;border-radius:11px;color:#ddf5ff;font-size:12px}
+.enterprise-pose-result p{margin:5px 0;line-height:1.65}
+@media(max-width:700px){.enterprise-pose-review{margin:12px 4px;padding:13px}.enterprise-pose-review-head button{width:100%}}
