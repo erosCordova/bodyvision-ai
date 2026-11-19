@@ -4,8 +4,7 @@ import hashlib
 
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
-from pydantic import ValidationError
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings
 from app.services.capture_crypto import CaptureCipher
