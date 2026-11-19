@@ -415,6 +415,7 @@ test("split reference and scenario share one 3D canvas and block ambiguous pose 
   await expect(page.locator(".studio-compare-divider")).toHaveCSS("left", /70%|[0-9]+px/);
   await page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" }).fill("195");
   await expect(page.getByLabel("Comparación dividida del mismo modelo 3D")).toContainText("195 cm");
+  await page.screenshot({ path: "test-results/anatomy-split-comparison.png", fullPage: true });
   await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
   await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeEnabled();
   await expect(page.getByLabel("Comparación dividida del mismo modelo 3D")).toHaveCount(0);
