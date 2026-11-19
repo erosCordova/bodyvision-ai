@@ -57,7 +57,7 @@ test("private capture archives only synthetic PNG after both consents, then dele
     expect(accepted.status()).toBe(200);
   }
   // Re-mounting the capture module refreshes the consent query.
-  await page.getByRole("link", { name: "Panel principal", exact: true }).click();
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
   await page.getByRole("link", { name: "Captura corporal", exact: true }).click();
   await page.getByRole("checkbox", {
     name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
