@@ -11,7 +11,9 @@ export async function validatePoseImageFile(file: File): Promise<void> {
       file.size === 0 || file.size > MAX_POSE_FILE_BYTES) {
     throw new Error("La fotografía no supera la validación local.");
   }
-  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  // PNG stores dimensions in IHDR, before compressed pixels are decoded.
+  // JPEG and WebP are still bounded after decoding; do not claim a preflight for them.
+  const bytes = new Uint8Array(await file.slice(0, file.type === "image/png" ? 24 : 12).arrayBuffer());
   const valid =
     (file.type === "image/jpeg" &&
       bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
@@ -27,6 +29,16 @@ export async function validatePoseImageFile(file: File): Promise<void> {
       bytes[10] === 0x42 && bytes[11] === 0x50);
   if (!valid) {
     throw new Error("El contenido de la fotografía no corresponde al formato declarado.");
+  }
+  if (file.type === "image/png") {
+    if (bytes.length < 24 ||
+        bytes[8] !== 0 || bytes[9] !== 0 || bytes[10] !== 0 || bytes[11] !== 13 ||
+        bytes[12] !== 0x49 || bytes[13] !== 0x48 ||
+        bytes[14] !== 0x44 || bytes[15] !== 0x52) {
+      throw new Error("La cabecera PNG no contiene dimensiones válidas.");
+    }
+    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    validatePoseImageDimensions(header.getUint32(16), header.getUint32(20));
   }
 }
 
