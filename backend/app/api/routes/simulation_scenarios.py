@@ -12,6 +12,7 @@ from app.api.deps import workspace
 from app.core.errors import DomainError
 from app.models.context import Workspace
 from app.repositories import records
+from app.services.simulation_audit import record_simulation_event
 from app.schemas.scenarios import (
     ALGORITHM_REVISION,
     ATLAS_REVISION,
@@ -67,6 +68,7 @@ def list_scenarios(
           WHERE organization_id=:org AND profile_id=:profile"""),
         params,
     ).scalar_one()
+    record_simulation_event(scope, "simulation.list", profile_id)
     return {"items": [dict(row) for row in rows], "total": total, "limit": limit, "offset": offset}
 
 
@@ -76,7 +78,7 @@ def list_scenarios(
 def scenario_versions(profile_id: UUID, scenario_id: UUID, scope: Scope):
     records.profile(scope, profile_id)
     selected = _scenario(scope, profile_id, scenario_id)
-    return [
+    versions = [
         dict(row)
         for row in scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM simulation_scenarios
@@ -87,6 +89,8 @@ def scenario_versions(profile_id: UUID, scenario_id: UUID, scope: Scope):
         .mappings()
         .all()
     ]
+    record_simulation_event(scope, "simulation.read", profile_id)
+    return versions
 
 
 @router.post("/profiles/{profile_id}/scenarios", response_model=ScenarioRead, status_code=201)
@@ -99,6 +103,9 @@ def save_scenario(
     # Serializes writes for a fictitious profile and checks its write grant.
     # Append-only records and observations remain independent by construction.
     records.profile(scope, profile_id, write=True)
+    # An authenticated member must not reuse an obsolete write grant.
+    if scope.authenticated and scope.role not in {"administrator", "specialist"}:
+        raise DomainError(403, "FORBIDDEN", "No tienes permisos de edición.")
     payload = json.dumps(
         {"profile_id": str(profile_id), **data.model_dump(mode="json")},
         sort_keys=True,
@@ -176,4 +183,5 @@ def save_scenario(
           VALUES (:org,:actor,:key,:digest,:scenario)"""),
         {**key_params, "digest": digest, "scenario": new_id},
     )
+    record_simulation_event(scope, "simulation.create", profile_id)
     return dict(created)
