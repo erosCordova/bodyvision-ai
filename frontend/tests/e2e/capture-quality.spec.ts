@@ -44,7 +44,20 @@ test("local capture checks an image and transfers only indicators to analysis", 
   }).click();
   await expect(page.getByRole("heading", { name: "Análisis corporal con IA" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Control de calidad recibido" })).toContainText("4 de 4 criterios cumplidos");
-  await expect(page.getByText(/nunca se transfirió la fotografía/)).toBeVisible();
+  await expect(page.getByText(/sin subirse a la API ni guardarse en el historial/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Detectar pose con IA" })).toBeVisible();
+  await expect(page.getByRole("img", {
+    name: "Fotografía local utilizada únicamente para la revisión de pose",
+  })).toBeVisible();
+  // A failed external runtime must not return manufactured body landmarks.
+  await page.route("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/vision_bundle.mjs",
+    route => route.abort());
+  await page.getByRole("button", { name: "Detectar pose con IA" }).click();
+  await expect(page.getByRole("alert")).toContainText("No se pudo ejecutar el detector local");
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toHaveCount(0);
+  await page.getByRole("button", { name: "Descartar fotografía del análisis" }).click();
+  await expect(page.getByRole("button", { name: "Detectar pose con IA" })).toHaveCount(0);
   expect(writes).toEqual([]);
 });
 
