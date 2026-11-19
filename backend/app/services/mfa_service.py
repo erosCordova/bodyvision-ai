@@ -89,15 +89,19 @@ def _verify_password(connection, credentials: EnrollmentCredentials) -> tuple[UU
     connection.execute(
         text("SELECT set_config('app.organization_id',:org,true)"), {"org": str(organization)}
     )
-    row = connection.execute(
-        text("""
+    row = (
+        connection.execute(
+            text("""
             SELECT id,password_hash FROM users
             WHERE organization_id=:org AND lower(email)=:email
               AND account_status='active' AND NOT is_local_operator
             LIMIT 1
         """),
-        {"org": organization, "email": email},
-    ).mappings().first()
+            {"org": organization, "email": email},
+        )
+        .mappings()
+        .first()
+    )
     verifier = row["password_hash"] if row and row["password_hash"] else DUMMY_VERIFIER
     if not verify_password(credentials.password.get_secret_value(), verifier) or row is None:
         raise DomainError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.")
@@ -284,14 +288,18 @@ def require_login_mfa(
     code = submitted.get_secret_value().strip()
     if re.fullmatch(r"[0-9]{6}", code):
         seed = decrypt_totp_seed(snapshot["ciphertext"], key)
-        accepted = verify_totp(
-            seed, code, _totp_now(), last_accepted_step=snapshot["last_step"]
-        )
+        accepted = verify_totp(seed, code, _totp_now(), last_accepted_step=snapshot["last_step"])
         if accepted is None:
             raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
         _transition(
-            request, connection, organization, user, verifier, "totp",
-            ciphertext=snapshot["ciphertext"], step=accepted
+            request,
+            connection,
+            organization,
+            user,
+            verifier,
+            "totp",
+            ciphertext=snapshot["ciphertext"],
+            step=accepted,
         )
     else:
         matching = None
@@ -302,7 +310,13 @@ def require_login_mfa(
         if matching is None:
             raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
         _transition(
-            request, connection, organization, user, verifier, "recovery",
-            recovery_id=UUID(matching["id"]), recovery_verifier=matching["verifier"]
+            request,
+            connection,
+            organization,
+            user,
+            verifier,
+            "recovery",
+            recovery_id=UUID(matching["id"]),
+            recovery_verifier=matching["verifier"],
         )
     return True
