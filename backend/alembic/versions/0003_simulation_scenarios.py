@@ -1,6 +1,5 @@
 """Append-only synthetic simulation scenarios, separate from observed measurements."""
 
-import sqlalchemy as sa
 from alembic import op
 
 revision = "0003_simulation_scenarios"
@@ -42,7 +41,7 @@ def upgrade() -> None:
               AND revision_note IS NULL)
             OR
             (version>1 AND prior_version_id IS NOT NULL
-              AND length(trim(revision_note))>=5)
+              AND revision_note IS NOT NULL AND length(trim(revision_note))>=5)
           )
         );
         CREATE INDEX scenario_history_by_profile ON simulation_scenarios
