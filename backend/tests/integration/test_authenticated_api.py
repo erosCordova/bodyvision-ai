@@ -1700,11 +1700,14 @@ def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
     writer, administrator = headers(editor_token), headers(admin_token)
     path = f"/api/v1/profiles/{profile_id}/captures"
     for purpose in ("capture", "storage"):
-        assert client.post(
-            f"/api/v1/auth/profiles/{profile_id}/consents",
-            headers=writer,
-            json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
-        ).status_code == 200
+        assert (
+            client.post(
+                f"/api/v1/auth/profiles/{profile_id}/consents",
+                headers=writer,
+                json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+            ).status_code
+            == 200
+        )
 
     data = _synthetic_png()
     created = client.post(
@@ -1722,7 +1725,9 @@ def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
               id,organization_id,profile_id,user_id,access_level
             ) VALUES (:id,:org,:profile,:user,'manage')"""),
             {
-                "id": uuid4(), "org": FIRST_WORKSPACE, "profile": profile_id,
+                "id": uuid4(),
+                "org": FIRST_WORKSPACE,
+                "profile": profile_id,
                 "user": admin[0],
             },
         )
@@ -1739,9 +1744,15 @@ def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
         assert missing.status_code == 409, missing.text
         assert missing.json()["code"] == "CAPTURE_KEY_UNAVAILABLE"
         with owner.connect() as conn:
-            assert bytes(conn.execute(text(
-                "SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"
-            ), {"id": capture_id}).scalar_one()) == legacy_ciphertext
+            assert (
+                bytes(
+                    conn.execute(
+                        text("SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"),
+                        {"id": capture_id},
+                    ).scalar_one()
+                )
+                == legacy_ciphertext
+            )
 
         client.app.state.settings = settings.model_copy(
             update={"capture_decryption_keys": [SecretStr(legacy.decode())]}
@@ -1750,9 +1761,7 @@ def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
         assert client.post(path + "/rotate-key", headers=writer).status_code == 403
         rotated = client.post(path + "/rotate-key", headers=administrator)
         assert rotated.status_code == 200, rotated.text
-        assert rotated.json() == {
-            "examined": 1, "rotated": 1, "key_material_exposed": False
-        }
+        assert rotated.json() == {"examined": 1, "rotated": 1, "key_material_exposed": False}
         again = client.post(path + "/rotate-key", headers=administrator)
         assert again.status_code == 200
         assert again.json()["rotated"] == 0
@@ -1760,9 +1769,12 @@ def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
         client.app.state.settings = settings
         assert client.get(f"{path}/{capture_id}", headers=writer).content == data
         with owner.connect() as conn:
-            encrypted = bytes(conn.execute(text(
-                "SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"
-            ), {"id": capture_id}).scalar_one())
+            encrypted = bytes(
+                conn.execute(
+                    text("SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"),
+                    {"id": capture_id},
+                ).scalar_one()
+            )
         primary = Fernet(settings.capture_encryption_key.get_secret_value().encode())
         assert primary.decrypt(encrypted) == data
         assert hashlib.sha256(data).hexdigest() == created.json()["sha256_digest"]
@@ -1781,9 +1793,15 @@ def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
         assert invalid.status_code == 409
         assert invalid.json()["code"] == "CAPTURE_INTEGRITY_FAILURE"
         with owner.connect() as conn:
-            assert bytes(conn.execute(text(
-                "SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"
-            ), {"id": capture_id}).scalar_one()) == wrong
+            assert (
+                bytes(
+                    conn.execute(
+                        text("SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"),
+                        {"id": capture_id},
+                    ).scalar_one()
+                )
+                == wrong
+            )
     finally:
         client.app.state.settings = settings
 
@@ -1815,10 +1833,14 @@ def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
                        ELSE now()+interval '7 days' END
                 )"""),
                 {
-                    "id": identifier, "org": FIRST_WORKSPACE, "profile": profile_id,
-                    "actor": editor[0], "size": len(image),
+                    "id": identifier,
+                    "org": FIRST_WORKSPACE,
+                    "profile": profile_id,
+                    "actor": editor[0],
+                    "size": len(image),
                     "digest": hashlib.sha256(image).hexdigest(),
-                    "encrypted": Fernet(secret).encrypt(image), "expired": expired,
+                    "encrypted": Fernet(secret).encrypt(image),
+                    "expired": expired,
                 },
             )
 
@@ -1835,12 +1857,19 @@ def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
     assert purge_due(client.app.state.engine, batch_size=1, max_batches=3) == 1
     assert purge_due(client.app.state.engine, batch_size=1) == 0
     with owner.connect() as conn:
-        remaining = conn.execute(
-            text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
-            {"profile": profile_id},
-        ).scalars().all()
+        remaining = (
+            conn.execute(
+                text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
+                {"profile": profile_id},
+            )
+            .scalars()
+            .all()
+        )
         assert remaining == [active_id]
-        assert conn.execute(
-            text("""SELECT count(*) FROM synthetic_capture_maintenance_events
+        assert (
+            conn.execute(
+                text("""SELECT count(*) FROM synthetic_capture_maintenance_events
               WHERE action='retention.purge' AND deleted_count=1"""),
-        ).scalar_one() >= 1
+            ).scalar_one()
+            >= 1
+        )
