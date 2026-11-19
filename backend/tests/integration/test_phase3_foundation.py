@@ -93,6 +93,10 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
             "private_own_sessions(char(64),integer,integer)",
             "private_own_security_change(char(64),text,uuid,text,text,uuid,uuid)",
             "verify_private_audit_chain(char(64),uuid,uuid)",
+            "private_mfa_snapshot(uuid,uuid,text)",
+            "private_mfa_transition(uuid,uuid,text,text,text,bigint,uuid,text,jsonb,uuid,uuid)",
+            "private_mfa_mark_session(uuid,uuid,text,char(64))",
+            "private_mfa_session_verified(char(64))",
         ):
             for role, permitted in (("bodyvision_app", False), ("bodyvision_auth_app", True)):
                 assert (
