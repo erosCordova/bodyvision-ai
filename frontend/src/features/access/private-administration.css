@@ -41,6 +41,7 @@
 
 .private-admin-permissions{max-width:100%}
 .private-admin-permissions .private-admin-form{max-width:650px}
+.private-admin-reset .private-admin-form{max-width:650px}
 .private-admin-permission-actions{display:flex;flex-wrap:wrap;gap:10px}
 .private-admin-permission-actions button{flex:1;min-width:180px}
 .private-admin-permission-actions .private-admin-revoke{

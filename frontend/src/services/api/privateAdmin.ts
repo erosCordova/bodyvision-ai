@@ -41,6 +41,16 @@ export type NewTestAccount = {
 };
 export type CreatedTestAccount = z.infer<typeof createdUserSchema>;
 
+const passwordResetSchema = z.object({
+  user_id: z.string().uuid(),
+  status: z.literal("reset"),
+  revoked_sessions: z.number().int().nonnegative(),
+});
+export type PasswordResetInput = {
+  administrator_password: string;
+  new_password: string;
+};
+
 async function secureRequest(
   token: string,
   path: string,
@@ -57,6 +67,11 @@ async function secureRequest(
     },
   });
   if (response.status === 401) throw new Error("La sesión ha caducado. Inicia sesión de nuevo.");
+  if (response.status === 403 || response.status === 429) {
+    const body = await response.clone().json().catch(() => ({})) as { code?: string };
+    if (body.code === "RESET_REAUTH_REQUIRED") throw new Error("Confirma la contraseña del administrador.");
+    if (body.code === "RESET_RATE_LIMITED") throw new Error("Demasiados intentos. Espera 15 minutos.");
+  }
   if (response.status === 403) throw new Error("No tienes permisos de administrador.");
   if (response.status === 409) throw new Error("Ya existe una cuenta con ese correo.");
   if (!response.ok) {
@@ -67,6 +82,10 @@ async function secureRequest(
 
 export function privateAdminApi(token: string) {
   return {
+    resetPassword: async (userId: string, input: PasswordResetInput) =>
+      passwordResetSchema.parse(await secureRequest(token, `/users/${userId}/reset-password`, {
+        method: "POST", body: JSON.stringify(input),
+      })),
     createUser: async (account: NewTestAccount): Promise<CreatedTestAccount> => {
       const body = createdUserSchema.parse(
         await secureRequest(token, "/users", {

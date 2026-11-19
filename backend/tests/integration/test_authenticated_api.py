@@ -969,3 +969,269 @@ def test_consent_function_uses_public_tables_when_runtime_has_temporary_namesake
             assert result["items"] == [] and result["can_record"]
     finally:
         runtime.dispose()
+
+
+RESET_PASSWORD = "New fictional passphrase 2026!"
+RESET_BODY = {"administrator_password": PASSWORD, "new_password": RESET_PASSWORD}
+
+
+def test_admin_reset_revokes_all_old_sessions_preserves_grants_and_audits(protected):
+    client, owner, profile, users = protected
+    member, admin = users[1], users[3]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    old_tokens = [authenticate(client, member[0], member[1]).json()["token"] for _ in range(2)]
+    for _ in range(6):
+        failed = client.post(
+            "/api/v1/auth/login",
+            json={
+                "organization_id": str(member[1]),
+                "email": f"fictional-{member[0].hex[:12]}@example.invalid",
+                "password": "Wrong password before recovery",
+            },
+        )
+    assert failed.status_code == 429
+    path = f"/api/v1/auth/users/{member[0]}/reset-password"
+    response = client.post(path, headers=headers(admin_token), json=RESET_BODY)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"user_id": str(member[0]), "status": "reset", "revoked_sessions": 2}
+    for old_token in old_tokens:
+        assert client.get("/api/v1/auth/me", headers=headers(old_token)).status_code == 401
+    assert authenticate(client, member[0], member[1]).status_code == 401
+    new_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "organization_id": str(member[1]),
+            "email": f"fictional-{member[0].hex[:12]}@example.invalid",
+            "password": RESET_PASSWORD,
+        },
+    )
+    assert new_login.status_code == 200 and new_login.json()["role"] == "member"
+    assert (
+        client.get(
+            f"/api/v1/profiles/{profile}", headers=headers(new_login.json()["token"])
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/v1/auth/me", headers=headers(admin_token)).status_code == 200
+    audit = client.get("/api/v1/auth/audit?limit=50", headers=headers(admin_token))
+    assert any(
+        e["action"] == "admin.password_reset" and e["resource_id"] == str(member[0])
+        for e in audit.json()
+    )
+    for secret in (PASSWORD, RESET_PASSWORD, admin_token, *old_tokens):
+        assert secret not in audit.text and secret not in response.text
+    with owner.connect() as connection:
+        assert (
+            connection.execute(
+                text(
+                    "SELECT access_level FROM profile_access "
+                    "WHERE profile_id=:profile AND user_id=:user"
+                ),
+                {"profile": profile, "user": member[0]},
+            ).scalar_one()
+            == "read"
+        )
+
+
+def test_reset_rejects_non_admin_cross_tenant_self_admin_and_disabled_accounts(protected):
+    client, owner, _, users = protected
+    tokens = [authenticate(client, u[0], u[1]).json()["token"] for u in users]
+    target = users[1][0]
+    path = f"/api/v1/auth/users/{target}/reset-password"
+    assert client.post(path, json=RESET_BODY).status_code == 401
+    for token in tokens[:3]:
+        assert client.post(path, headers=headers(token), json=RESET_BODY).status_code == 403
+    for subject in (users[2][0], users[3][0], uuid4()):
+        result = client.post(
+            f"/api/v1/auth/users/{subject}/reset-password",
+            headers=headers(tokens[3]),
+            json=RESET_BODY,
+        )
+        assert result.status_code == 404
+    with owner.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO user_role_assignments(id,organization_id,user_id,role) "
+                "VALUES (:id,:org,:user,'administrator')"
+            ),
+            {"id": uuid4(), "org": FIRST_WORKSPACE, "user": users[0][0]},
+        )
+        connection.execute(
+            text("UPDATE users SET account_status='disabled' WHERE id=:id"), {"id": target}
+        )
+    assert (
+        client.post(
+            f"/api/v1/auth/users/{users[0][0]}/reset-password",
+            headers=headers(tokens[3]),
+            json=RESET_BODY,
+        ).status_code
+        == 404
+    )
+    assert client.post(path, headers=headers(tokens[3]), json=RESET_BODY).status_code == 404
+    with owner.connect() as connection:
+        assert (
+            connection.execute(
+                text(
+                    "SELECT count(*) FROM security_audit_events "
+                    "WHERE action='admin.password_reset_denied' AND actor_id=ANY(:ids)"
+                ),
+                {"ids": [u[0] for u in users]},
+            ).scalar_one()
+            == 8
+        )
+
+
+def test_reset_requires_admin_reauthentication_with_a_separate_shared_throttle(protected):
+    client, owner, _, users = protected
+    member, admin = users[1], users[3]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    member_token = authenticate(client, member[0], member[1]).json()["token"]
+    path = f"/api/v1/auth/users/{member[0]}/reset-password"
+    for _ in range(5):
+        wrong = client.post(
+            path,
+            headers=headers(admin_token),
+            json={**RESET_BODY, "administrator_password": "Wrong admin password"},
+        )
+        assert wrong.status_code == 403 and wrong.json()["code"] == "RESET_REAUTH_REQUIRED"
+    blocked = client.post(path, headers=headers(admin_token), json=RESET_BODY)
+    assert blocked.status_code == 429 and blocked.json()["code"] == "RESET_RATE_LIMITED"
+    assert client.get("/api/v1/auth/me", headers=headers(member_token)).status_code == 200
+    assert authenticate(client, admin[0], admin[1]).status_code == 200
+    digest = login_bucket_digest(admin[1], f"password-reset:{admin[0]}")
+    with owner.connect() as connection:
+        count = connection.execute(
+            text(
+                "SELECT attempt_count FROM auth_login_attempts "
+                "WHERE organization_id=:org AND email_sha256=:digest"
+            ),
+            {"org": admin[1], "digest": digest},
+        ).scalar_one()
+    assert count == 6
+
+
+def test_reset_rejects_supplied_scope_and_invalid_secret_lengths(protected):
+    client, _, _, users = protected
+    token = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    path = f"/api/v1/auth/users/{users[1][0]}/reset-password"
+    for invalid in [
+        {**RESET_BODY, "new_password": "short"},
+        {**RESET_BODY, "new_password": "x" * 129},
+        {**RESET_BODY, "organization_id": str(SECOND_WORKSPACE)},
+        {**RESET_BODY, "role": "administrator"},
+    ]:
+        assert client.post(path, headers=headers(token), json=invalid).status_code == 422
+    assert (
+        client.post(
+            path,
+            headers={**headers(token), "X-Workspace-ID": str(SECOND_WORKSPACE)},
+            json=RESET_BODY,
+        ).status_code
+        == 400
+    )
+
+
+def test_login_verified_before_reset_cannot_issue_a_new_session_after_reset(protected):
+    from threading import Event
+
+    client, _, _, users = protected
+    member, admin = users[1], users[3]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    ready, release = Event(), Event()
+    engine = client.app.state.auth_engine
+
+    def pause_issuance(connection, cursor, statement, parameters, context, executemany):
+        if "issue_private_session" in statement or "INSERT INTO auth_sessions" in statement:
+            ready.set()
+            assert release.wait(5), "Reset did not complete before session issuance"
+
+    event.listen(engine, "before_cursor_execute", pause_issuance)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            old_login = pool.submit(authenticate, client, member[0], member[1])
+            try:
+                assert ready.wait(5), "Login did not reach session issuance"
+                reset = client.post(
+                    f"/api/v1/auth/users/{member[0]}/reset-password",
+                    headers=headers(admin_token),
+                    json=RESET_BODY,
+                )
+                assert reset.status_code == 200
+            finally:
+                release.set()
+            assert old_login.result(timeout=5).status_code == 401
+    finally:
+        release.set()
+        event.remove(engine, "before_cursor_execute", pause_issuance)
+
+
+def test_reset_audit_failure_rolls_back_credentials_and_session_revocation(protected):
+    client, owner, _, users = protected
+    member, admin = users[1], users[3]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    member_token = authenticate(client, member[0], member[1]).json()["token"]
+    try:
+        with owner.begin() as connection:
+            connection.execute(
+                text("""
+                CREATE FUNCTION test_reject_reset_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                  IF NEW.action='admin.password_reset' THEN
+                    RAISE EXCEPTION 'Synthetic audit failure';
+                  END IF;
+                  RETURN NEW;
+                END $$;
+                CREATE TRIGGER test_reset_audit_failure BEFORE INSERT ON security_audit_events
+                  FOR EACH ROW EXECUTE FUNCTION test_reject_reset_audit();
+            """)
+            )
+        result = client.post(
+            f"/api/v1/auth/users/{member[0]}/reset-password",
+            headers=headers(admin_token),
+            json=RESET_BODY,
+        )
+        assert result.status_code == 500
+        assert client.get("/api/v1/auth/me", headers=headers(member_token)).status_code == 200
+        assert authenticate(client, member[0], member[1]).status_code == 200
+    finally:
+        with owner.begin() as connection:
+            connection.execute(
+                text("DROP TRIGGER IF EXISTS test_reset_audit_failure ON security_audit_events")
+            )
+            connection.execute(text("DROP FUNCTION IF EXISTS test_reject_reset_audit()"))
+
+
+def test_reset_uses_trusted_tables_even_with_temporary_authentication_namesakes(protected):
+    client, owner, _, users = protected
+    member, admin = users[1], users[3]
+    token = authenticate(client, admin[0], admin[1]).json()["token"]
+    with owner.connect() as connection:
+        verifier = connection.execute(
+            text("SELECT password_hash FROM users WHERE id=:id"), {"id": admin[0]}
+        ).scalar_one()
+    runtime = create_engine(os.environ["AUTH_DATABASE_URL"], hide_parameters=True)
+    try:
+        with runtime.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE users(shadow integer); "
+                    "CREATE TEMP TABLE auth_sessions(shadow integer)"
+                )
+            )
+            result = connection.execute(
+                text(
+                    "SELECT reset_synthetic_password(CAST(:digest AS char(64)),:subject,"
+                    ":admin_verifier,:new_verifier,:event,:correlation)"
+                ),
+                {
+                    "digest": hash_session_token(token),
+                    "subject": member[0],
+                    "admin_verifier": verifier,
+                    "new_verifier": hash_password(RESET_PASSWORD),
+                    "event": uuid4(),
+                    "correlation": uuid4(),
+                },
+            ).scalar_one()
+            assert result["status"] == "reset"
+    finally:
+        runtime.dispose()

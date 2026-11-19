@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0009_private_consents"
+SCHEMA_REVISION = "0010_admin_password_reset"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 

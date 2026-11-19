@@ -24,6 +24,7 @@ from app.services.auth_sessions import (
     resolve_identity,
 )
 from app.services.consents import ConsentAcceptance, ConsentHistory, consent_operation
+from app.services.password_reset import PasswordResetInput, PasswordResetRead, reset_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authenticated identity"])
 
@@ -51,6 +52,13 @@ def end_session(request: Request) -> None:
 @router.post("/users", response_model=NewSyntheticUserRead, status_code=201)
 def create_synthetic_user(request: Request, data: NewSyntheticUser) -> NewSyntheticUserRead:
     return provision_user(request, data)
+
+
+@router.post("/users/{user_id}/reset-password", response_model=PasswordResetRead)
+def reset_synthetic_user_password(
+    request: Request, user_id: UUID, data: PasswordResetInput
+) -> PasswordResetRead:
+    return reset_password(request, user_id, data)
 
 
 @router.get("/audit", response_model=list[AuditEventRead])

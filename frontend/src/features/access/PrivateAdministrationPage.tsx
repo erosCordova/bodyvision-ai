@@ -6,8 +6,11 @@ import {
   type NewTestAccount,
 } from "../../services/api/privateAdmin";
 import "./private-administration.css";
+import { PasswordResetPanel } from "./PasswordResetPanel";
 
 const eventNames: Record<string, string> = {
+  "admin.password_reset": "Restablecimiento de contraseña",
+  "admin.password_reset_denied": "Restablecimiento denegado",
   "consent.read": "Consulta de consentimientos",
   "consent.accepted": "Aceptación de consentimiento",
   "consent.revoked": "Revocación de consentimiento",
@@ -274,6 +277,9 @@ export function PrivateAdministrationPage() {
           </div>
         </form>
       </section>
+      {api && <PasswordResetPanel api={api} onChanged={() => {
+        setAuditStatus("loading"); setAuditRevision(previous => previous + 1);
+      }} />}
       <div className="enterprise-panel private-admin-guardrails">
         <strong>Controles pendientes para uso real</strong>
         <p>El registro actual cubre operaciones de identidad; todavía no representa la auditoría clínica completa. Falta verificación administrativa inicial, MFA, políticas de consentimiento y trazabilidad de cada expediente.</p>

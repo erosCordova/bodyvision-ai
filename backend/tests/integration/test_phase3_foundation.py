@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0009_private_consents"
+            == "0010_admin_password_reset"
         )
         for table in (
             "user_role_assignments",
@@ -56,6 +56,7 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
                 "auth_login_attempts",
                 "private_profile_permission_changes",
                 "profile_consents",
+                "auth_sessions",
             ):
                 for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                     assert not connection.execute(
@@ -65,6 +66,11 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
         assert not connection.execute(
             text("SELECT has_table_privilege('bodyvision_auth_app','users','INSERT')")
         ).scalar_one()
+        for table, privilege in (("users", "UPDATE"), ("auth_sessions", "INSERT")):
+            assert not connection.execute(
+                text("SELECT has_any_column_privilege('bodyvision_auth_app',:table,:privilege)"),
+                {"table": table, "privilege": privilege},
+            ).scalar_one()
         assert connection.execute(
             text(
                 "SELECT has_function_privilege("

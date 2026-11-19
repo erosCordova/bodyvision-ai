@@ -341,3 +341,52 @@ permisos, auditoría parcial y consentimientos. Esto no cierra la fase 3:
 quedan bootstrap administrativo, recuperación de cuentas, MFA, vinculación
 con el titular o representante, evidencia y textos legales revisados,
 integración de consentimiento en futuros procesamientos y revisión de privacidad.
+
+## Restablecimiento administrado de acceso (incremento 0010)
+
+El panel privado añade un formulario de restablecimiento para cuentas
+**ficticias de consulta y especialistas**. `POST
+/api/v1/auth/users/{user_id}/reset-password` exige una sesión administradora
+vigente, confirmación de su propia contraseña y una nueva contraseña de
+12 a 128 caracteres. No permite cambiar la propia cuenta administradora,
+otras cuentas administradoras, cuentas de otra organización ni cuentas
+deshabilitadas. No hay un flujo público de recuperación ni envío de correos.
+
+La contraseña nueva se almacena mediante el hash con sal ya usado por el
+proyecto. La respuesta solo devuelve el identificador del usuario, el estado
+del restablecimiento y el número de sesiones revocadas. Contraseñas, hashes
+y tokens nunca se añaden al registro de auditoría. Los campos de contraseña
+de la interfaz se limpian después del envío, tanto al completarse como al
+fallar; la confirmación de la contraseña nueva no se envía al servidor.
+
+El cambio de contraseña, la revocación de todas las sesiones anteriores,
+la limpieza de su bloqueo temporal por intentos fallidos y la auditoría
+se confirman dentro de una sola transacción. Los roles y permisos de
+expedientes se conservan. Las cuentas bloqueadas administrativamente no
+se reactivan mediante este procedimiento.
+
+Los intentos de confirmar la contraseña administradora tienen un contador
+PostgreSQL independiente del inicio de sesión: cinco intentos por
+administrador en quince minutos; el sexto recibe HTTP 429. Las denegaciones
+autenticadas se registran como `admin.password_reset_denied`, sin asociar
+identificadores de destinos que no se hayan autorizado. Un restablecimiento
+correcto registra `admin.password_reset` con administrador y usuario afectado.
+Las denegaciones se confirman antes de devolver su error HTTP; un fallo de
+auditoría impide confirmar un cambio de contraseña o revocación de sesiones.
+
+Para evitar una carrera con un login simultáneo, la emisión de sesiones
+pasa por una función restringida que bloquea la fila del usuario y vuelve
+a comprobar el hash verificado. Si la contraseña cambió desde que se
+verificó, no se emite esa sesión. Si la sesión se creó primero, el
+restablecimiento posterior la revoca. El rol operativo pierde el permiso
+de insertar sesiones directamente. Las funciones participantes fijan la
+búsqueda de tablas para impedir su sustitución por tablas temporales.
+
+La modalidad sigue limitada a desarrollo y CI con datos ficticios. Neon
+conserva el esquema de demostración `0002_data_core`; estas migraciones
+solo se prueban sobre PostgreSQL desechable. Render no aloja PostgreSQL.
+No se ha habilitado esta función en la versión pública ni se ha cerrado la
+fase de seguridad. Quedan recuperación autónoma verificada, primer alta
+administrativa, MFA, política de contraseñas para uso real y revisión de
+privacidad. La estimación manual de la rama pasa a **53%** global y **50%**
+en seguridad e identidad.

@@ -4,11 +4,11 @@ const organization = "10000000-0000-4000-8000-000000000001";
 const otherOrganization = "10000000-0000-4000-8000-000000000002";
 const password = "Browser fixtures only 2026!";
 
-async function signIn(page: Page, email: string, org = organization) {
+async function signIn(page: Page, email: string, org = organization, passphrase = password) {
   await page.goto("/access");
   await page.getByLabel("Identificador de organización", { exact: true }).fill(org);
   await page.getByLabel("Correo electrónico", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill(password);
+  await page.getByLabel("Contraseña", { exact: true }).fill(passphrase);
   const responsePromise = page.waitForResponse(response =>
     response.url().endsWith("/api/v1/auth/login") && response.request().method() === "POST",
   );
@@ -113,6 +113,28 @@ test("private identity, user creation, RLS grants, revocation and logout work to
     expect(loggedOut.status()).toBe(401);
     await memberPage.goBack();
     await expect(memberPage.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
+
+    const recoverySession = await signIn(memberPage, email);
+    const reset = page.getByRole("region", { name: "Restablecer acceso de prueba", exact: true });
+    const replacementPassword = "Recovered fictional password 2026!";
+    await reset.getByLabel("Usuario al que se restablecerá el acceso", { exact: true }).fill(account.id);
+    await reset.getByLabel("Tu contraseña de administrador", { exact: true }).fill(password);
+    await reset.getByLabel("Nueva contraseña del usuario", { exact: true }).fill(replacementPassword);
+    await reset.getByLabel("Confirmar nueva contraseña", { exact: true }).fill(replacementPassword);
+    await reset.getByRole("button", { name: "Restablecer contraseña y revocar sesiones", exact: true }).click();
+    await expect(reset.getByRole("status")).toHaveText("Acceso restablecido. Sesiones revocadas: 1.");
+    await expect(reset.getByLabel("Tu contraseña de administrador", { exact: true })).toHaveValue("");
+    await expect(reset.getByLabel("Nueva contraseña del usuario", { exact: true })).toHaveValue("");
+    const recoveredOldToken = await memberPage.request.get("/api/v1/auth/me", {
+      headers: { Authorization: `Bearer ${recoverySession.token}` },
+    });
+    expect(recoveredOldToken.status()).toBe(401);
+    const oldPasswordLogin = await memberPage.request.post("/api/v1/auth/login", { data: {
+      organization_id: organization, email, password,
+    } });
+    expect(oldPasswordLogin.status()).toBe(401);
+    await signIn(memberPage, email, organization, replacementPassword);
+    await signOut(memberPage);
 
     // A member of a different organization cannot read the same profile.
     const outsider = await signIn(memberPage, "browser.outsider@example.invalid", otherOrganization);

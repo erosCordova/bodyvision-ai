@@ -4,7 +4,7 @@ Never trusts X-Workspace-ID, email, or user IDs for authorization. Only a
 server-verified opaque bearer token may select the active database tenant.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import Request
@@ -19,8 +19,6 @@ from app.core.identity import (
     login_bucket_digest,
     verify_password,
 )
-
-SESSION_LIFETIME_HOURS = 8
 
 
 class LoginInput(BaseModel):
@@ -133,36 +131,21 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
             text("SELECT set_config('app.actor_id',:actor,true)"),
             {"actor": str(user_id)},
         )
-        roles = connection.execute(
-            text("""
-                SELECT role FROM user_role_assignments
-                WHERE organization_id=:org AND user_id=:actor
-                  AND (expires_at IS NULL OR expires_at>now())
-                ORDER BY CASE role
-                  WHEN 'administrator' THEN 1
-                  WHEN 'specialist' THEN 2 ELSE 3 END
-                LIMIT 1
-            """),
-            {"org": credentials.organization_id, "actor": user_id},
-        ).scalar_one_or_none()
-        if roles is None:
-            raise DomainError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.")
         token, digest = issue_session_token()
-        expires_at = datetime.now(UTC) + timedelta(hours=SESSION_LIFETIME_HOURS)
-        connection.execute(
-            text("""
-                INSERT INTO auth_sessions
-                  (id,organization_id,user_id,token_sha256,expires_at)
-                VALUES (:id,:org,:actor,:digest,:expires_at)
-            """),
+        session_data = connection.execute(
+            text(
+                "SELECT issue_private_session(:org,:actor,:verifier,:id,CAST(:digest AS char(64)))"
+            ),
             {
-                "id": uuid4(),
                 "org": credentials.organization_id,
                 "actor": user_id,
+                "verifier": verifier,
+                "id": uuid4(),
                 "digest": digest,
-                "expires_at": expires_at,
             },
-        )
+        ).scalar_one()
+        if session_data is None:
+            raise DomainError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.")
         # Clear the counter only if the session insertion also commits.
         connection.execute(
             text("SELECT clear_auth_login_attempts(:org,CAST(:digest AS char(64)))"),
@@ -181,10 +164,10 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
         ).scalar_one()
     return SessionRead(
         token=token,
-        expires_at=expires_at,
+        expires_at=session_data["expires_at"],
         organization_id=credentials.organization_id,
         user_id=user_id,
-        role=roles,
+        role=session_data["role"],
     )
 
 
