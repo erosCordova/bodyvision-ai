@@ -200,21 +200,19 @@ def test_correction_is_committed_before_http_response(client, database):
     assert [row["id"] for row in visible.json()["items"]] == [new_id]
 
 
-def test_workspace_write_dependency_commits_before_response(client):
-    from fastapi.routing import APIRoute
+def test_workspace_write_dependency_commits_before_response():
+    from typing import get_args
+
+    from fastapi.params import Depends
 
     from app.api.deps import workspace
+    from app.api.routes.data_core import Scope
 
-    routes = [
-        route
-        for route in client.app.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/api/v1/")
-    ]
-    assert routes
-    for route in routes:
-        for dependency in route.dependant.dependencies:
-            if dependency.call is workspace:
-                assert dependency.scope == "function", route.path
+    dependency = next(
+        metadata for metadata in get_args(Scope)[1:] if isinstance(metadata, Depends)
+    )
+    assert dependency.dependency is workspace
+    assert dependency.scope == "function"
 
 
 def test_outlier_requires_confirmation(client):
