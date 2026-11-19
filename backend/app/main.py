@@ -14,6 +14,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.health import router as health_router
 from app.api.routes.data_core import router as data_router
+from app.api.routes.simulation_scenarios import router as scenarios_router
 from app.core.config import Settings
 from app.core.errors import DomainError
 from app.core.logging import configure_logging
@@ -145,4 +146,5 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     app.include_router(health_router)
     app.include_router(data_router)
+    app.include_router(scenarios_router)
     return app

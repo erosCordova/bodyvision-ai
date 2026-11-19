@@ -44,6 +44,25 @@ export const measurementSchema = z.object({
   data_type: z.literal("OBSERVADO"),
 });
 export type Measurement = z.infer<typeof measurementSchema>;
+export const scenarioSchema = z.object({
+  id: z.string().uuid(),
+  profile_id: z.string().uuid(),
+  series_id: z.string().uuid(),
+  version: z.number().int().min(1),
+  prior_version_id: z.string().uuid().nullable(),
+  reference_kg: z.number(),
+  variation_percent: z.number().int(),
+  stature_cm: z.number().int(),
+  simulated_kg: z.number(),
+  model_revision: z.string(),
+  algorithm_revision: z.string(),
+  revision_note: z.string().nullable(),
+  created_by: z.string().uuid(),
+  created_at: z.string(),
+  data_type: z.literal("SIMULADO"),
+});
+export type SimulationScenario = z.infer<typeof scenarioSchema>;
+
 const pageOf = <T extends z.ZodType>(schema: T) =>
   z.object({
     items: z.array(schema),
@@ -192,5 +211,13 @@ export function recordsApi(workspace: string) {
         `/profiles/${id}/analytics/series?metric_code=${metric}&period=${period}`,
         z.array(measurementSchema),
       ),
+    scenarios: (profileId: string, offset = 0) =>
+      get(`/profiles/${profileId}/scenarios?limit=20&offset=${offset}`,
+        pageOf(scenarioSchema)),
+    scenarioVersions: (profileId: string, scenarioId: string) =>
+      get(`/profiles/${profileId}/scenarios/${scenarioId}/versions`,
+        z.array(scenarioSchema)),
+    saveScenario: (profileId: string, body: unknown, key: string) =>
+      write(`/profiles/${profileId}/scenarios`, "POST", body, scenarioSchema, key),
   };
 }
