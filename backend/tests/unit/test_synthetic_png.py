@@ -11,8 +11,10 @@ from app.services.synthetic_capture_png import MAX_CAPTURE_BYTES, validate_synth
 
 def chunk(name: bytes, content: bytes) -> bytes:
     payload = name + content
-    return struct.pack(">I", len(content)) + payload + struct.pack(
-        ">I", zlib.crc32(payload) & 0xFFFFFFFF
+    return (
+        struct.pack(">I", len(content))
+        + payload
+        + struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF)
     )
 
 
@@ -42,7 +44,8 @@ def test_accepts_minimal_rgb_png_without_metadata():
         small_png().replace(b"IEND", b"IDAT"),
         small_png()[:35] + b"x" + small_png()[36:],
         small_png(1024, 1024),
-        b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 64, 8, 6, 0, 0, 1))
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 64, 8, 6, 0, 0, 1))
         + chunk(b"IDAT", zlib.compress(bytes([0] + [0] * 32 * 4) * 64))
         + chunk(b"IEND", b""),
     ],
