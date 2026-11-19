@@ -262,7 +262,7 @@ export function createAnatomyScene(
       entry.state === "pending" && mesh.visible,
     ).sort((a, b) => triangleCount(b[1].high) - triangleCount(a[1].high))[0];
     if (!candidate) return;
-    const [mesh, entry] = candidate;
+    const [, entry] = candidate;
     entry.state = "building";
     lodBusy = true;
     // Yield to the first 3D frame and to input handling. Do not simplify every
