@@ -16,8 +16,6 @@ from sqlalchemy import text
 
 from app.core.errors import DomainError
 from app.core.identity import (
-    hash_password,
-    hash_session_token,
     issue_session_token,
     login_bucket_digest,
     verify_password,
@@ -204,7 +202,7 @@ def _issue_verified_session(
 
 def begin_enrollment(request: Request, credentials: EnrollmentCredentials) -> EnrollmentRead:
     key = require_mfa_enabled(request)
-    bucket = _throttle(request, credentials.organization_id, credentials.email.strip().lower())
+    _throttle(request, credentials.organization_id, credentials.email.strip().lower())
     with request.app.state.auth_engine.begin() as connection:
         user, verifier, email = _verify_password(connection, credentials)
         snapshot = _snapshot(connection, credentials.organization_id, user, verifier)
@@ -224,7 +222,6 @@ def begin_enrollment(request: Request, credentials: EnrollmentCredentials) -> En
             ciphertext=cipher,
         )
         # Do not clear the throttle on enrollment: password attempts remain bounded.
-        _ = bucket
     return EnrollmentRead(otpauth_uri=totp_enrollment_uri(seed, email))
 
 
