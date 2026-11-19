@@ -3,6 +3,8 @@
  * to same-origin, SHA-256-verified build assets; images never leave the tab.
  * Third-party provenance and clinical privacy approval remain separate.
  */
+import { validatePoseImageDimensions, validatePoseImageFile } from "./poseInputValidation";
+
 export const POSE_SDK_VERSION = "0.10.32";
 export const POSE_MODEL_VERSION = "pose_landmarker_lite/float16/1";
 export const POSE_WASM_URL =
@@ -130,10 +132,8 @@ async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
 }
 
 export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-      !file.size || file.size > 10 * 1024 * 1024) {
-    throw new Error("La fotografía no supera la validación local.");
-  }
+  // Reject mislabeled or oversized files before loading the CPU inference model.
+  await validatePoseImageFile(file);
   // The checked ESM is loaded lazily once; repeated analyses reuse only the
   // detector instance, with no saved photos, canvases or landmark results.
   const landmarker = await loadPoseLandmarker();
@@ -142,9 +142,7 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
   let context: CanvasRenderingContext2D | null = null;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-    if (!bitmap.width || !bitmap.height) {
-      throw new Error("La fotografía no tiene dimensiones válidas.");
-    }
+    validatePoseImageDimensions(bitmap.width, bitmap.height);
     const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
     canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
