@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
 import { PoseReview } from "../capture/PoseReview";
+import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
 import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
@@ -237,10 +238,11 @@ export function CapturePage() {
               Ver control de calidad en el módulo de análisis
             </Link>
           </div>}
+          {privateAuthEnabled() && review && <SyntheticCaptureArchive file={file} review={review}/>}
           <button className="secondary-button" onClick={() => setFile(null)}>Descartar imagen</button>
         </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>La vista previa aparecerá aquí sin enviar archivos a la API.</p></div>}
         {!file && validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
-        <Limitation>La revisión de resolución, brillo, contraste y orientación se ejecuta en este navegador; no detecta postura ni valida consentimiento clínico. La subida privada y la IA de pose permanecen pendientes. No introduzcas fotografías médicas reales.</Limitation>
+        <Limitation>La revisión de calidad y la IA de pose se ejecutan localmente y no permiten uso clínico. El archivo cifrado opcional admite exclusivamente PNG ficticios en modo privado de pruebas, con aceptaciones verificadas. No introduzcas fotografías médicas reales.</Limitation>
       </aside>
     </div>
   </div>;
