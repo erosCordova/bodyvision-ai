@@ -475,6 +475,7 @@ export function AnatomyAtlas() {
             <span>Resolución: {renderStats.bufferWidth} × {renderStats.bufferHeight} píxeles</span>
             <span>Geometrías: {renderStats.meshes} · Mallas: {renderStats.overlays}</span>
             <span>Operaciones gráficas: {renderStats.drawCalls} · Triángulos: {renderStats.triangles.toLocaleString("es-PE")}</span>
+            <span>LOD geométrico: {renderStats.lodMeshes} mallas simplificadas · {renderStats.lodTrianglesSaved.toLocaleString("es-PE")} triángulos reducidos</span>
             <span>Pasadas por fotograma: {renderStats.renderPasses}</span>
             <span>Preparación CPU: {renderStats.cpuSubmissionMs === null ? "Sin muestra" : renderStats.cpuSubmissionMs.toFixed(2) + " ms"}</span>
             <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
