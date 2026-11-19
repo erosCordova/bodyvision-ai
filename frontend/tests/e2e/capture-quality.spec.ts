@@ -132,9 +132,17 @@ test("self-hosted MediaPipe executes real inference on a synthetic no-person ima
     buffer: Buffer.from(encoded, "base64"),
   });
   await page.getByRole("link", { name: "Ver control de calidad en el módulo de análisis" }).click();
+  const modelRequests: string[] = [];
+  page.on("request", request => {
+    if (request.url().includes("pose_landmarker_lite.task")) modelRequests.push(request.url());
+  });
   await page.getByRole("button", { name: "Detectar pose con IA" }).click();
   await expect(page.getByText(/No se detectó una pose humana/)).toBeVisible({ timeout: 90000 });
   await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
     .toHaveCount(0);
+  await expect(page.getByText("Resultado técnico: Sin detección")).toBeVisible();
+  await page.getByRole("button", { name: "Repetir detección" }).click();
+  await expect(page.getByText(/No se detectó una pose humana/)).toBeVisible({ timeout: 90000 });
+  expect(modelRequests.length, "Repeated analysis should reuse the local model instance").toBe(1);
   expect(thirdPartyRequests).toEqual([]);
 });
