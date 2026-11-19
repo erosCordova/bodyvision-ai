@@ -86,3 +86,42 @@ de privacidad. El panel actual admite solo datos ficticios.
   detección y revisión de especialistas, antes de cerrar F5.
 
 El avance de F5 se considera **parcial** hasta esa validación real.
+
+
+## Revisión de calidad y pruebas de robustez sintética
+
+La pantalla de Análisis IA ahora presenta puntos visibles por zonas: rostro,
+hombros, codos, muñecas, caderas, rodillas y tobillos. El operador puede
+variar el umbral de visibilidad en [0,30; 0,90] y activar o desactivar los
+puntos y sus conexiones. Las posiciones de los puntos se dibujan en
+coordenadas de imagen, sin distorsionar su radio entre retrato y paisaje.
+
+La clasificación local de **revisión visual experimental** combina:
+
+- presencia efectiva de 33 landmarks devueltos por el modelo;
+- umbral de visibilidad y puntos dentro del encuadre normalizado;
+- cobertura de los ocho puntos clave de hombros, caderas, rodillas y tobillos;
+- advertencias previas de resolución, brillo, contraste y orientación.
+
+Los estados son `Sin detección`, `Puntos insuficientes`,
+`Requiere revisión` y `Visible para revisión visual`. No deben
+interpretarse como probabilidad, precisión, sensibilidad clínica ni una
+medición anatómica fiable.
+
+Se agregó una matriz automatizada de condiciones reproducibles sobre
+capturas **exclusivamente sintéticas** del atlas elegido: luz reducida,
+resolución baja y recorte inferior del encuadre. El test conserva las
+observaciones del detector real en
+`test-results/pose-robustness-matrix.json` (incluido en los artefactos de
+GitHub Actions) y exige advertencias cuando falta iluminación o resolución.
+No establece umbrales de precisión clínica ni deduce que una persona real
+sea apta para análisis a partir de estas pruebas. Una imagen sintética
+sin personas verifica además el comportamiento sin detección.
+
+La instancia del modelo CPU/WASM se reutiliza durante la navegación de
+la misma pestaña para evitar descargas y compilaciones repetidas.
+Solo se retiene el motor del modelo; las imágenes y los landmarks de
+una captura se descartan al salir del análisis. El motor se cierra al
+abandonar la página. El control visual y la calidad continúan siendo
+experimentales y requieren evaluación sobre un conjunto de referencia
+debidamente autorizado.
