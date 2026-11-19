@@ -111,6 +111,23 @@ def protected():
             yield client, owner, profile_id, users
     finally:
         with owner.begin() as conn:
+            # Owner-only synthetic fixture reset; no runtime role can do this.
+            # Disable the immutable scenario trigger solely for disposable test cleanup.
+            conn.execute(
+                text("""DELETE FROM simulation_request_keys WHERE scenario_id IN
+                    (SELECT id FROM simulation_scenarios WHERE profile_id=:id)"""),
+                {"id": profile_id},
+            )
+            conn.execute(
+                text("ALTER TABLE simulation_scenarios DISABLE TRIGGER immutable_simulation_scenarios")
+            )
+            conn.execute(
+                text("DELETE FROM simulation_scenarios WHERE profile_id=:id"),
+                {"id": profile_id},
+            )
+            conn.execute(
+                text("ALTER TABLE simulation_scenarios ENABLE TRIGGER immutable_simulation_scenarios")
+            )
             conn.execute(
                 text("DELETE FROM profile_consents WHERE profile_id=:id"), {"id": profile_id}
             )
@@ -1431,3 +1448,63 @@ def test_status_confirmation_is_limited_independently_of_login(protected):
     )
     assert blocked.status_code == 429 and blocked.json()["code"] == "ACCOUNT_RATE_LIMITED"
     assert authenticate(client, users[3][0], users[3][1]).status_code == 200
+
+
+def test_private_simulation_scenarios_enforce_session_roles_and_audit(protected):
+    client, owner, profile, users = protected
+    specialist, member, outsider = users[:3]
+    editor_login = authenticate(client, specialist[0], specialist[1])
+    member_login = authenticate(client, member[0], member[1])
+    outsider_login = authenticate(client, outsider[0], outsider[1])
+    assert editor_login.status_code == 200, editor_login.text
+    assert member_login.status_code == 200, member_login.text
+    assert outsider_login.status_code == 200, outsider_login.text
+    editor = headers(editor_login.json()["token"])
+    viewer = headers(member_login.json()["token"])
+    foreign = headers(outsider_login.json()["token"])
+    path = f"/api/v1/profiles/{profile}/scenarios"
+
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers=foreign).status_code == 404
+    assert client.get(path, headers=viewer).status_code == 200
+    assert client.get(path, headers={**editor, "X-Workspace-ID": str(FIRST_WORKSPACE)}).status_code == 400
+
+    sample = {"reference_kg": 70, "variation_percent": 20, "stature_cm": 180}
+    denied = client.post(
+        path, json=sample, headers={**viewer, "Idempotency-Key": str(uuid4())}
+    )
+    assert denied.status_code in {403, 404}
+    outside = client.post(
+        path, json=sample, headers={**foreign, "Idempotency-Key": str(uuid4())}
+    )
+    assert outside.status_code == 404
+
+    created = client.post(
+        path, json=sample, headers={**editor, "Idempotency-Key": str(uuid4())}
+    )
+    assert created.status_code == 201, created.text
+    scenario_id = created.json()["id"]
+    assert created.json()["data_type"] == "SIMULADO"
+    assert client.get(
+        f"{path}/{scenario_id}/versions", headers=editor
+    ).status_code == 200
+    assert client.get(path, headers=editor).json()["total"] == 1
+    assert client.get(
+        f"{path}/{scenario_id}/versions", headers=foreign
+    ).status_code == 404
+
+    with owner.connect() as conn:
+        events = conn.execute(
+            text("""SELECT action,actor_id FROM security_audit_events
+                WHERE resource_id=:profile AND action LIKE 'simulation.%'"""),
+            {"profile": profile},
+        ).mappings().all()
+        assert {"simulation.create", "simulation.list", "simulation.read"} <= {
+            row["action"] for row in events
+        }
+        assert all(row["actor_id"] in {specialist[0], member[0]} for row in events)
+        assert conn.execute(
+            text("SELECT count(*) FROM measurements WHERE profile_id=:profile"),
+            {"profile": profile},
+        ).scalar_one() == 0
+
