@@ -62,17 +62,27 @@ de privacidad. El panel actual admite solo datos ficticios.
 
 ## Comportamiento y pruebas
 
-- El visor anatómico mantiene el personaje base 3D elegido y su simulación
-  de peso, estatura y malla. La pose se dibuja **sobre la fotografía**, no se
-  aplica automáticamente a la malla 3D (no existe retargeting ni un rig).
+- El visor anatómico mantiene el personaje base 3D elegido, sus capas,
+  el peso, la estatura y la malla. En **Visión 3D → Simulación** se puede
+  pulsar **Analizar esta vista 3D con IA**: el navegador captura el lienzo
+  WebGL del personaje ficticio y lo envía solo en memoria a Análisis IA.
+  No hace falta subir una fotografía ni añadir otro personaje.
+- La detección real ha sido comprobada con una captura sintética de ese
+  mismo atlas: el modelo devuelve una pose de 33 landmarks y el navegador
+  superpone los puntos correspondientes sobre la imagen capturada.
+- La pose se dibuja **sobre la fotografía o captura del atlas**, no se aplica
+  automáticamente a la malla 3D (no existe retargeting ni un rig).
 - Pruebas unitarias: 33 puntos, cero puntos cuando no hay persona, máscara
   de coordenadas inválidas y cobertura del encuadre.
-- Prueba de navegador: captura y transferencia en memoria, carga bajo
-  demanda, error si el CDN no responde, descarte de imagen y ausencia de
-  POST de la fotografía.
+- Pruebas de navegador: captura en memoria, detección real sobre una
+  imagen sintética sin personas (sin falsos positivos), detección positiva
+  sobre el cuerpo 3D del atlas, acción de captura directa Visión 3D → Análisis,
+  ausencia de solicitudes del detector a terceros y ausencia de POST del archivo.
+  El error por ausencia del chunk local se presenta sin inventar puntos.
 - No hay promesas de precisión clínica, identidad ni calibración antropométrica.
-- Falta probar inferencia real sobre un conjunto de imágenes sintéticas
-  representativas y registrar versiones/hashes de modelo antes de marcar
-  F5 como completada.
+- El SDK/modelo ya se empacan con SHA-256 y hay pruebas reales
+  repetibles sobre imágenes sintéticas. Falta evaluar un **conjunto variado**
+  de poses, cámaras, condiciones de luz y dispositivos, con métricas de
+  detección y revisión de especialistas, antes de cerrar F5.
 
 El avance de F5 se considera **parcial** hasta esa validación real.
