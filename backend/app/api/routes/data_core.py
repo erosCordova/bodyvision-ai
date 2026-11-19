@@ -26,7 +26,7 @@ from app.services.measurements import derived, save
 from app.services.profile_audit import record_profile_event
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
-Scope = Annotated[Workspace, Depends(workspace)]
+Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 
 
 def require_writer(scope: Workspace) -> None:
