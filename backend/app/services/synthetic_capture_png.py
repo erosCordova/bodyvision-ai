@@ -79,7 +79,9 @@ def validate_synthetic_png(payload: bytes) -> tuple[int, int]:
     decoder = zlib.decompressobj()
     try:
         raw = decoder.decompress(bytes(collected_idat), expected_size + 1)
-        raw += decoder.flush(expected_size + 1 - len(raw))
+        remaining = expected_size + 1 - len(raw)
+        if remaining > 0:
+            raw += decoder.flush(remaining)
     except zlib.error as exc:
         raise DomainError(422, "INVALID_PNG", "PNG comprimido inválido.") from exc
     if len(raw) != expected_size or not decoder.eof or decoder.unused_data:
