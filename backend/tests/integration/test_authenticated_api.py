@@ -130,8 +130,7 @@ def protected():
             )
             conn.execute(
                 text(
-                    "ALTER TABLE simulation_scenarios "
-                    "ENABLE TRIGGER immutable_simulation_scenarios"
+                    "ALTER TABLE simulation_scenarios ENABLE TRIGGER immutable_simulation_scenarios"
                 )
             )
             conn.execute(
@@ -1479,41 +1478,38 @@ def test_private_simulation_scenarios_enforce_session_roles_and_audit(protected)
     )
 
     sample = {"reference_kg": 70, "variation_percent": 20, "stature_cm": 180}
-    denied = client.post(
-        path, json=sample, headers={**viewer, "Idempotency-Key": str(uuid4())}
-    )
+    denied = client.post(path, json=sample, headers={**viewer, "Idempotency-Key": str(uuid4())})
     assert denied.status_code in {403, 404}
-    outside = client.post(
-        path, json=sample, headers={**foreign, "Idempotency-Key": str(uuid4())}
-    )
+    outside = client.post(path, json=sample, headers={**foreign, "Idempotency-Key": str(uuid4())})
     assert outside.status_code == 404
 
-    created = client.post(
-        path, json=sample, headers={**editor, "Idempotency-Key": str(uuid4())}
-    )
+    created = client.post(path, json=sample, headers={**editor, "Idempotency-Key": str(uuid4())})
     assert created.status_code == 201, created.text
     scenario_id = created.json()["id"]
     assert created.json()["data_type"] == "SIMULADO"
-    assert client.get(
-        f"{path}/{scenario_id}/versions", headers=editor
-    ).status_code == 200
+    assert client.get(f"{path}/{scenario_id}/versions", headers=editor).status_code == 200
     assert client.get(path, headers=editor).json()["total"] == 1
-    assert client.get(
-        f"{path}/{scenario_id}/versions", headers=foreign
-    ).status_code == 404
+    assert client.get(f"{path}/{scenario_id}/versions", headers=foreign).status_code == 404
 
     with owner.connect() as conn:
-        events = conn.execute(
-            text("""SELECT action,actor_id FROM security_audit_events
+        events = (
+            conn.execute(
+                text("""SELECT action,actor_id FROM security_audit_events
                 WHERE resource_id=:profile AND action LIKE 'simulation.%'"""),
-            {"profile": profile},
-        ).mappings().all()
+                {"profile": profile},
+            )
+            .mappings()
+            .all()
+        )
         assert {"simulation.create", "simulation.list", "simulation.read"} <= {
             row["action"] for row in events
         }
         assert all(row["actor_id"] in {specialist[0], member[0]} for row in events)
-        assert conn.execute(
-            text("SELECT count(*) FROM measurements WHERE profile_id=:profile"),
-            {"profile": profile},
-        ).scalar_one() == 0
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM measurements WHERE profile_id=:profile"),
+                {"profile": profile},
+            ).scalar_one()
+            == 0
+        )
 
