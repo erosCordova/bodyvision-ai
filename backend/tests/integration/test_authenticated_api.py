@@ -1566,17 +1566,23 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
         )
         assert accepted.status_code == 200, accepted.text
     assert client.post(path, content=image, headers=writer).status_code == 422
-    assert client.post(
-        path, content=image, headers={**writer, "Content-Type": "image/jpeg",
-                                      "X-Synthetic-Only": "confirmed"}
-    ).status_code == 415
-    assert client.post(
-        path, content=b"GIF89a" + b"0" * 100, headers=asserted
-    ).status_code == 422
-    assert client.post(
-        path, content=image, headers={**member, "Content-Type": "image/png",
-                                      "X-Synthetic-Only": "confirmed"}
-    ).status_code == 403
+    assert (
+        client.post(
+            path,
+            content=image,
+            headers={**writer, "Content-Type": "image/jpeg", "X-Synthetic-Only": "confirmed"},
+        ).status_code
+        == 415
+    )
+    assert client.post(path, content=b"GIF89a" + b"0" * 100, headers=asserted).status_code == 422
+    assert (
+        client.post(
+            path,
+            content=image,
+            headers={**member, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
+        ).status_code
+        == 403
+    )
     assert client.get(path, headers=foreign).status_code == 404
 
     saved = client.post(path, content=image, headers=asserted)
@@ -1591,26 +1597,35 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
     assert client.get(f"{path}/{capture_id}", headers=member).content == image
     assert client.get(f"{path}/{capture_id}", headers=foreign).status_code == 404
     assert client.delete(f"{path}/{capture_id}", headers=member).status_code == 403
-    assert client.get(f"{path}/{capture_id}", headers=writer).headers[
-        "content-disposition"
-    ].startswith("attachment;")
+    assert (
+        client.get(f"{path}/{capture_id}", headers=writer)
+        .headers["content-disposition"]
+        .startswith("attachment;")
+    )
 
     with owner.connect() as conn:
-        record = conn.execute(
-            text("""SELECT ciphertext,sha256_digest FROM synthetic_capture_objects
+        record = (
+            conn.execute(
+                text("""SELECT ciphertext,sha256_digest FROM synthetic_capture_objects
                 WHERE id=:id"""),
-            {"id": capture_id},
-        ).mappings().one()
+                {"id": capture_id},
+            )
+            .mappings()
+            .one()
+        )
         assert not bytes(record["ciphertext"]).startswith(b"\x89PNG")
         assert b"patient" not in bytes(record["ciphertext"])
-        assert conn.execute(
-            text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
-            {"id": profile_id},
-        ).scalar_one() == 0
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
+                {"id": profile_id},
+            ).scalar_one()
+            == 0
+        )
 
-    history = client.get(
-        f"/api/v1/auth/profiles/{profile_id}/consents", headers=writer
-    ).json()["items"]
+    history = client.get(f"/api/v1/auth/profiles/{profile_id}/consents", headers=writer).json()[
+        "items"
+    ]
     storage = next(item for item in history if item["purpose"] == "storage")
     revoked = client.post(
         f"/api/v1/auth/profiles/{profile_id}/consents/{storage['id']}/revoke",
@@ -1619,15 +1634,23 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
     assert revoked.status_code == 200, revoked.text
     assert client.get(path, headers=writer).status_code == 403
     with owner.connect() as conn:
-        assert conn.execute(
-            text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
-            {"id": capture_id},
-        ).scalar_one() == 0
-        assert conn.execute(
-            text("SELECT count(*) FROM security_audit_events WHERE resource_id=:id "
-                 "AND action LIKE 'capture.%'"),
-            {"id": profile_id},
-        ).scalar_one() >= 3
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
+                {"id": capture_id},
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM security_audit_events WHERE resource_id=:id "
+                    "AND action LIKE 'capture.%'"
+                ),
+                {"id": profile_id},
+            ).scalar_one()
+            >= 3
+        )
 
 
 def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected):
@@ -1644,7 +1667,8 @@ def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected
         )
         assert result.status_code == 200
     saved = client.post(
-        path, content=_synthetic_png(),
+        path,
+        content=_synthetic_png(),
         headers={**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
     )
     assert saved.status_code == 201, saved.text
