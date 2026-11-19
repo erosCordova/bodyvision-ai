@@ -16,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.data_core import router as data_router
+from app.api.routes.simulation_scenarios import router as simulation_router
 from app.core.config import Settings
 from app.core.errors import DomainError
 from app.core.logging import configure_logging
