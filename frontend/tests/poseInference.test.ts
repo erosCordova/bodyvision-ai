@@ -43,7 +43,9 @@ describe("MediaPipe pose result parsing", () => {
       }))],
     });
     expect(result.found).toBe(true);
-    expect(result.landmarks[0]).toEqual({ x: 0, y: 0, z: 0, visibility: 1 });
+    expect(result.landmarks[0]).toEqual({ x: 0, y: 0, z: 0, visibility: 0 });
+    expect(result.visiblePoints).toBe(0);
+    expect(result.fullBodyReview).toBe(false);
     expect(result.landmarks.every(point =>
       Object.values(point).every(Number.isFinite))).toBe(true);
   });
