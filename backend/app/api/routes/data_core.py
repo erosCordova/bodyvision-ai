@@ -25,7 +25,7 @@ from app.schemas.core import (
 from app.services.measurements import derived, save
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
-Scope = Annotated[Workspace, Depends(workspace)]
+Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 
 
 @router.get("/workspaces")
