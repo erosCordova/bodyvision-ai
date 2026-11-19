@@ -593,6 +593,7 @@ export function createAnatomyScene(
     }
     if (selectedLayer && !visible.has(selectedLayer)) showSelection(null, null);
     applyAll();
+    queueGeometryLod();
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
   const setWeightVariation = (percent: number) => {
