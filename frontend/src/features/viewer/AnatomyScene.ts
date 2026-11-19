@@ -162,6 +162,8 @@ export function createAnatomyScene(
   const volume = { value: 0 };
   const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
   let showWireMesh = false;
+  let comparison = false;
+  let comparisonDivider = 50;
   let statureCm = 175;
   let mode: RenderMode = "realista";
   let quality: SceneQuality = "alta";
@@ -177,7 +179,40 @@ export function createAnatomyScene(
   let raf = 0;
 
   const render = () => {
-    if (!disposed && !contextUnavailable) renderer.render(scene, camera);
+    if (disposed || contextUnavailable) return;
+    if (!comparison || canvas.width < 2) {
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, canvas.width, canvas.height);
+      renderer.render(scene, camera);
+      return;
+    }
+    // Two render passes of the SAME anatomical mesh, camera and materials.
+    // The scissor never permits one scenario to spill into the other.
+    const width = canvas.width;
+    const height = canvas.height;
+    const dividerPx = Math.round(width * comparisonDivider / 100);
+    const actualVolume = volume.value;
+    const actualY = root.scale.y;
+    try {
+      renderer.setScissorTest(true);
+      renderer.setViewport(0, 0, width, height);
+      renderer.setScissor(0, 0, dividerPx, height);
+      volume.value = 0;
+      root.scale.y = root.scale.x;
+      root.updateMatrixWorld(true);
+      renderer.render(scene, camera);
+      renderer.setScissor(dividerPx, 0, width - dividerPx, height);
+      volume.value = actualVolume;
+      root.scale.y = actualY;
+      root.updateMatrixWorld(true);
+      renderer.render(scene, camera);
+    } finally {
+      volume.value = actualVolume;
+      root.scale.y = actualY;
+      root.updateMatrixWorld(true);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, width, height);
+    }
   };
   const resize = () => {
     if (disposed) return;
@@ -479,6 +514,12 @@ export function createAnatomyScene(
     if (enabled) for (const [layer, group] of objects) ensureWireOverlays(layer, group);
     applyAll();
   };
+  const setComparison = (enabled: boolean, divider = comparisonDivider) => {
+    comparison = enabled;
+    comparisonDivider = Number.isFinite(divider)
+      ? THREE.MathUtils.clamp(divider, 15, 85) : 50;
+    render();
+  };
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
   const resetCamera = () => {
@@ -616,6 +657,7 @@ export function createAnatomyScene(
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
   const capturePng = async (): Promise<Blob> => {
     if (disposed || !canvas.isConnected) throw new Error("Visor 3D no disponible");
+    if (comparison) throw new Error("Desactiva la comparación dividida antes de analizar una vista 3D");
     // Capture immediately after a fresh render. This preserves the existing
     // single scene, camera, mesh and shader without enabling a costly persistent
     // WebGL drawing buffer or introducing another character.
@@ -631,5 +673,5 @@ export function createAnatomyScene(
       }
     });
   };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, retryLayer, dispose };
 }

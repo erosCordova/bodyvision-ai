@@ -129,6 +129,8 @@ export function AnatomyAtlas() {
   const [weightVariation, setWeightVariation] = useState(0);
   const [statureCm, setStatureCm] = useState(BASELINE_HEIGHT_CM);
   const [baselinePreview, setBaselinePreview] = useState(false);
+  const [comparison, setComparison] = useState(false);
+  const [comparisonDivider, setComparisonDivider] = useState(50);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [captureError, setCaptureError] = useState("");
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
@@ -227,6 +229,7 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation), [weightVariation, baselinePreview, restart]);
   useEffect(() => controller.current?.setStature(baselinePreview ? BASELINE_HEIGHT_CM : statureCm), [statureCm, baselinePreview, restart]);
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
+  useEffect(() => controller.current?.setComparison(comparison, comparisonDivider), [comparison, comparisonDivider, restart]);
   useEffect(() => {
     const changed = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", changed);
@@ -325,10 +328,11 @@ export function AnatomyAtlas() {
     setWeightVariation(0);
     setStatureCm(BASELINE_HEIGHT_CM);
     setBaselinePreview(false);
+    setComparison(false);
     setSavedScenario(null);
   };
   const analyzeCurrentAvatar = async () => {
-    if (captureBusy || !controller.current || layerStates.skin !== "ready" ||
+    if (captureBusy || comparison || !controller.current || layerStates.skin !== "ready" ||
       !visible.includes("skin") || error) return;
     setCaptureBusy(true);
     setCaptureError("");
@@ -426,6 +430,14 @@ export function AnatomyAtlas() {
 
         <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")}>
           <div className="studio-canvas" ref={host} />
+          {comparison && !error && (
+            <div className="studio-compare" aria-label="Comparación dividida del mismo modelo 3D">
+              <div className="studio-compare-divider" style={{ left: `${comparisonDivider}%` }} />
+              <span className="studio-compare-before">REFERENCIA · {referenceKg} kg / {BASELINE_HEIGHT_CM} cm</span>
+              <span className="studio-compare-after">ESCENARIO · {simulatedWeight} kg / {statureCm} cm</span>
+              <span className="studio-compare-caption">Dos estados del mismo cuerpo · comparación gráfica, no clínica</span>
+            </div>
+          )}
           <div className="studio-view-top">
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
             <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
@@ -453,7 +465,7 @@ export function AnatomyAtlas() {
             </div>
           )}
           {(weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM) && (
-            <div className="studio-weight-indicator" role="status">
+            <div className="studio-weight-indicator" role="status" style={comparison ? { display: "none" } : undefined}>
               <span>SIMULACIÓN HIPOTÉTICA · NO CLÍNICA</span>
               <strong>{baselinePreview ? referenceKg : simulatedWeight} kg · {baselinePreview ? BASELINE_HEIGHT_CM : statureCm} cm <small>{baselinePreview ? "Referencia" : "Escenario"}</small></strong>
               <p>{baselinePreview ? "Vista base temporal" : (weightVariation > 0 ? "+" : "") + weightVariation + "% frente a la referencia"}</p>
@@ -559,14 +571,28 @@ export function AnatomyAtlas() {
                   </label>
                 </div>
                 <div className="studio-sim-actions">
-                  <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview} onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
+                  <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview}
+                    disabled={comparison}
+                    onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
+                  <button className={comparison ? "active" : ""} aria-pressed={comparison}
+                    onClick={() => { setBaselinePreview(false); setComparison(value => !value); }}>
+                    {comparison ? "Cerrar comparación dividida" : "Comparar lado a lado"}
+                  </button>
                   <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation, statureCm })}>Guardar comparación en esta vista</button>
                   <button onClick={resetSimulation}>Restaurar valores</button>
                   <button type="button" onClick={() => void analyzeCurrentAvatar()}
-                    disabled={captureBusy || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
+                    disabled={captureBusy || comparison || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
                     {captureBusy ? "Preparando captura 3D…" : "Analizar esta vista 3D con IA"}
                   </button>
                 </div>
+                {comparison && <label className="studio-sim-slider studio-comparison-control">
+                  <span>Posición de la comparación <strong>{comparisonDivider}%</strong></span>
+                  <input type="range" min="15" max="85" step="5"
+                    aria-label="Mover separación entre referencia y escenario"
+                    value={comparisonDivider} onChange={event => setComparisonDivider(Number(event.target.value))}/>
+                  <small>Izquierda: referencia · Derecha: escenario. Se renderizan dos estados del mismo modelo, sin duplicarlo.</small>
+                </label>}
+                {comparison && <p className="studio-sim-disclaimer">Para analizar esta vista con IA, cierra la comparación dividida: el detector local debe recibir una sola figura.</p>}
                 {captureError && <p role="alert" className="studio-sim-disclaimer">{captureError}</p>}
                 <p className="studio-sim-lead">Esta prueba utiliza exclusivamente una imagen del cuerpo anatómico ficticio del atlas. No identifica personas ni reconstruye cuerpos reales.</p>
                 {savedScenario && <div className="studio-sim-saved" role="status">

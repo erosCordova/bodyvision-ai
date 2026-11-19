@@ -390,3 +390,33 @@ test("anatomical canvas accepts keyboard rotation, zoom, and responds to a simul
   // The events above test UI recovery; actual GPU driver recovery requires real-device validation.
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
 });
+
+test("split reference and scenario share one 3D canvas and block ambiguous pose captures", async ({ page }) => {
+  test.setTimeout(110000);
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Frente", exact: true }).click();
+  const canvas = page.locator(".studio-canvas canvas");
+  const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  await slider.fill("20");
+  const modified = await canvas.screenshot();
+  const compare = page.getByRole("button", { name: "Comparar lado a lado", exact: true });
+  await compare.click();
+  await expect(page.getByLabel("Comparación dividida del mismo modelo 3D")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeDisabled();
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  const divided = await canvas.screenshot();
+  expect(modified.equals(divided), "The left portion must show the original reference").toBe(false);
+  const divider = page.getByRole("slider", { name: "Mover separación entre referencia y escenario" });
+  await divider.fill("70");
+  const moved = await canvas.screenshot();
+  expect(divided.equals(moved), "Moving the divider must change how the same mesh is rendered").toBe(false);
+  await expect(page.locator(".studio-compare-divider")).toHaveCSS("left", /70%|[0-9]+px/);
+  await page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" }).fill("195");
+  await expect(page.getByLabel("Comparación dividida del mismo modelo 3D")).toContainText("195 cm");
+  await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
+  await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeEnabled();
+  await expect(page.getByLabel("Comparación dividida del mismo modelo 3D")).toHaveCount(0);
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});
