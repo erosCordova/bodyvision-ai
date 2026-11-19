@@ -35,6 +35,7 @@ export type LoginCredentials = {
 };
 
 type EnrollmentConfirmation = LoginCredentials & { code: string };
+type RecoveryCredentials = LoginCredentials & { recovery_code: string };
 
 export class PrivateAuthError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -48,6 +49,7 @@ type AuthContextType = {
   login: (credentials: LoginCredentials) => Promise<PrivateSession>;
   beginMfaEnrollment: (credentials: LoginCredentials) => Promise<string>;
   confirmMfaEnrollment: (credentials: EnrollmentConfirmation) => Promise<string[]>;
+  recoverMfaFactor: (credentials: RecoveryCredentials) => Promise<string>;
   logout: () => Promise<boolean>;
 };
 
@@ -172,6 +174,25 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     return parsed.data.recovery_codes;
   }, [queryClient]);
 
+  const recoverMfaFactor = useCallback(async (
+    credentials: RecoveryCredentials,
+  ): Promise<string> => {
+    if (!privateAuthEnabled()) throw new Error("Acceso privado no disponible.");
+    const response = await fetch("/api/v1/auth/mfa/recover", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(credentials),
+    });
+    if (!response.ok) return authError(response);
+    const parsed = z.object({
+      status: z.literal("pending"),
+      otpauth_uri: z.string().min(20),
+    }).safeParse(await response.json());
+    if (!parsed.success) throw new Error("No se recibió la nueva configuración.");
+    return parsed.data.otpauth_uri;
+  }, []);
+
   const logout = useCallback(async (): Promise<boolean> => {
     const prior = session;
     setSession(null);
@@ -194,8 +215,8 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   }, [queryClient, session]);
 
   const value = useMemo(
-    () => ({ session, login, beginMfaEnrollment, confirmMfaEnrollment, logout }),
-    [session, login, beginMfaEnrollment, confirmMfaEnrollment, logout],
+    () => ({ session, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
+    [session, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
