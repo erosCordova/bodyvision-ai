@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0015_mfa_recovery_reset"
+SCHEMA_REVISION = "0016_simulation_scenarios"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 
