@@ -245,13 +245,17 @@ def rotate_synthetic_capture_keys(profile_id: UUID, scope: Scope, request: Reque
     examined = 0
     cursor: UUID | None = None
     while True:
-        rows = scope.connection.execute(
-            text("""SELECT id,ciphertext,sha256_digest FROM synthetic_capture_objects
+        rows = (
+            scope.connection.execute(
+                text("""SELECT id,ciphertext,sha256_digest FROM synthetic_capture_objects
               WHERE organization_id=:org AND profile_id=:profile AND expires_at>now()
                 AND (CAST(:cursor AS uuid) IS NULL OR id>:cursor)
               ORDER BY id LIMIT 100 FOR UPDATE"""),
-            {"org": scope.organization_id, "profile": profile_id, "cursor": cursor},
-        ).mappings().all()
+                {"org": scope.organization_id, "profile": profile_id, "cursor": cursor},
+            )
+            .mappings()
+            .all()
+        )
         if not rows:
             break
         examined += len(rows)
