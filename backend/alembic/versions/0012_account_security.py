@@ -23,13 +23,13 @@ def upgrade() -> None:
         REVOKE ALL ON public.private_audit_heads FROM PUBLIC,bodyvision_app,bodyvision_auth_app;
 
         CREATE FUNCTION public.private_audit_hash(
-          position bigint, prior text, identifier uuid, tenant uuid, actor uuid,
+          chain_index bigint, chain_prior text, identifier uuid, tenant uuid, actor uuid,
           correlation uuid, operation text, resource text, target uuid,
           result text, event_time timestamptz
         ) RETURNS text LANGUAGE sql IMMUTABLE
         SET search_path=pg_catalog,public,pg_temp AS $$
           SELECT encode(sha256(convert_to(jsonb_build_array(
-            'bodyvision-audit-v1',position,prior,identifier,tenant,actor,correlation,
+            'bodyvision-audit-v1',chain_index,chain_prior,identifier,tenant,actor,correlation,
             operation,resource,target,result,extract(epoch FROM event_time)::text
           )::text,'UTF8')),'hex')
         $$;
@@ -40,21 +40,21 @@ def upgrade() -> None:
         -- Backfill only establishes a baseline; it cannot prove the integrity
         -- of events recorded before this migration.
         DO $$
-        DECLARE entry record; tenant uuid; position bigint; prior text; digest text;
+        DECLARE entry record; tenant uuid; chain_index bigint; chain_prior text; digest text;
         BEGIN
           FOR tenant IN SELECT DISTINCT organization_id FROM public.security_audit_events LOOP
-            position := 0; prior := repeat('0',64);
+            chain_index := 0; chain_prior := repeat('0',64);
             FOR entry IN SELECT * FROM public.security_audit_events
               WHERE organization_id=tenant ORDER BY happened_at,id LOOP
-              position := position+1;
-              digest := public.private_audit_hash(position,prior,entry.id,tenant,
+              chain_index := chain_index+1;
+              digest := public.private_audit_hash(chain_index,chain_prior,entry.id,tenant,
                 entry.actor_id,entry.correlation_id,entry.action,entry.resource_type,
                 entry.resource_id,entry.outcome,entry.happened_at);
-              UPDATE public.security_audit_events SET chain_sequence=position,
-                previous_hash=prior,event_hash=digest WHERE id=entry.id;
-              prior := digest;
+              UPDATE public.security_audit_events SET chain_sequence=chain_index,
+                previous_hash=chain_prior,event_hash=digest WHERE id=entry.id;
+              chain_prior := digest;
             END LOOP;
-            INSERT INTO public.private_audit_heads VALUES(tenant,position,prior);
+            INSERT INTO public.private_audit_heads VALUES(tenant,chain_index,chain_prior);
           END LOOP;
         END $$;
         ALTER TABLE public.security_audit_events
@@ -69,15 +69,15 @@ def upgrade() -> None:
         CREATE FUNCTION public.append_private_audit_chain() RETURNS trigger
         LANGUAGE plpgsql VOLATILE SECURITY DEFINER
         SET search_path=pg_catalog,public,pg_temp AS $$
-        DECLARE position bigint; prior text;
+        DECLARE chain_index bigint; chain_prior text;
         BEGIN
           INSERT INTO public.private_audit_heads VALUES(NEW.organization_id,0,repeat('0',64))
             ON CONFLICT(organization_id) DO NOTHING;
-          SELECT last_sequence,last_hash INTO position,prior FROM public.private_audit_heads
+          SELECT last_sequence,last_hash INTO chain_index,chain_prior FROM public.private_audit_heads
             WHERE organization_id=NEW.organization_id FOR UPDATE;
-          NEW.chain_sequence := position+1;
-          NEW.previous_hash := prior;
-          NEW.event_hash := public.private_audit_hash(NEW.chain_sequence,prior,
+          NEW.chain_sequence := chain_index+1;
+          NEW.previous_hash := chain_prior;
+          NEW.event_hash := public.private_audit_hash(NEW.chain_sequence,chain_prior,
             NEW.id,NEW.organization_id,NEW.actor_id,NEW.correlation_id,NEW.action,
             NEW.resource_type,NEW.resource_id,NEW.outcome,NEW.happened_at);
           UPDATE public.private_audit_heads SET last_sequence=NEW.chain_sequence,
@@ -186,7 +186,7 @@ def upgrade() -> None:
         ) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER
         SET search_path=pg_catalog,public,pg_temp AS $$
         DECLARE tenant uuid; actor uuid; actor_role text; entry record;
-          position bigint := 0; prior text := repeat('0',64); calculated text;
+          chain_index bigint := 0; chain_prior text := repeat('0',64); calculated text;
           expected_position bigint; expected_hash text; invalid_position bigint := NULL;
           result jsonb;
         BEGIN
@@ -203,21 +203,21 @@ def upgrade() -> None:
             FROM public.private_audit_heads WHERE organization_id=tenant FOR UPDATE;
           FOR entry IN SELECT * FROM public.security_audit_events
             WHERE organization_id=tenant ORDER BY chain_sequence LOOP
-            position := position+1;
-            calculated := public.private_audit_hash(entry.chain_sequence,prior,
+            chain_index := chain_index+1;
+            calculated := public.private_audit_hash(entry.chain_sequence,chain_prior,
               entry.id,tenant,entry.actor_id,entry.correlation_id,entry.action,
               entry.resource_type,entry.resource_id,entry.outcome,entry.happened_at);
-            IF entry.chain_sequence<>position OR entry.previous_hash<>prior
+            IF entry.chain_sequence<>chain_index OR entry.previous_hash<>chain_prior
               OR entry.event_hash<>calculated THEN
-              invalid_position := position; EXIT;
+              invalid_position := chain_index; EXIT;
             END IF;
-            prior := entry.event_hash;
+            chain_prior := entry.event_hash;
           END LOOP;
           IF invalid_position IS NULL AND
-            (position<>expected_position OR prior<>expected_hash)
-            THEN invalid_position := position+1; END IF;
+            (chain_index<>expected_position OR chain_prior<>expected_hash)
+            THEN invalid_position := chain_index+1; END IF;
           result := jsonb_build_object('valid',invalid_position IS NULL,
-            'checked_events',position,'checkpoint_sequence',expected_position,
+            'checked_events',chain_index,'checkpoint_sequence',expected_position,
             'checkpoint_hash',expected_hash,'first_invalid_sequence',invalid_position,
             'checked_at',clock_timestamp(),'algorithm','sha256-chain-v1');
           INSERT INTO public.security_audit_events(
