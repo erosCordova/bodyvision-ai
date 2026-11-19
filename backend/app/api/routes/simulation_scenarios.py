@@ -80,9 +80,7 @@ def list_scenarios(
 @router.get(
     "/profiles/{profile_id}/scenarios/{scenario_id}/versions", response_model=list[ScenarioRead]
 )
-def scenario_versions(
-    profile_id: UUID, scenario_id: UUID, scope: Scope, request: Request
-):
+def scenario_versions(profile_id: UUID, scenario_id: UUID, scope: Scope, request: Request):
     records.profile(scope, profile_id)
     if request.app.state.settings.app_env == "demo":
         raise DomainError(404, "NOT_FOUND", "Escenario ficticio no disponible.")
