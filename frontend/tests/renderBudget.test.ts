@@ -17,6 +17,23 @@ describe("anatomical atlas GPU pixel budget", () => {
     expect(fluid).toBeLessThan(ratio);
     expect(1920 * 1080 * fluid ** 2).toBeLessThanOrEqual(950_001);
   });
+  it("reduces fragment pixel count during touch gestures and restores selected quality", () => {
+    const width = 390, height = 844, dpr = 3;
+    const idle = atlasPixelRatio(width, height, dpr, "fluida");
+    const interacting = atlasPixelRatio(width, height, dpr, "fluida", true);
+    const restored = atlasPixelRatio(width, height, dpr, "fluida", false);
+    expect(interacting).toBeLessThan(idle);
+    expect(interacting).toBeLessThanOrEqual(0.85);
+    expect(width * height * interacting ** 2).toBeLessThan(650_001);
+    expect(restored).toBe(idle);
+  });
+  it("caps large desktop gesture fill-rate without changing permanent high quality", () => {
+    const normal = atlasPixelRatio(1920, 1080, 2, "alta");
+    const gesturing = atlasPixelRatio(1920, 1080, 2, "alta", true);
+    expect(gesturing).toBeLessThan(normal);
+    expect(1920 * 1080 * gesturing ** 2).toBeLessThanOrEqual(650_001);
+    expect(atlasPixelRatio(1920, 1080, 2, "alta", false)).toBe(normal);
+  });
   it("respects natural 1x screens and invalid ratios without NaNs", () => {
     expect(atlasPixelRatio(600, 800, 1, "alta")).toBe(1);
     expect(atlasPixelRatio(600, 800, NaN, "fluida")).toBe(1);
