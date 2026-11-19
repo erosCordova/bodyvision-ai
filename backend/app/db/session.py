@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0017_encrypted_synthetic_captures"
+SCHEMA_REVISION = "0017_synthetic_captures"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 
