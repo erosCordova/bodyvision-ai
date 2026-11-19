@@ -167,6 +167,51 @@ def test_correction_preserves_values_and_history(client, database):
             conn.execute(text("DELETE FROM measurements WHERE id=:id"), {"id": corrected["id"]})
 
 
+def test_correction_is_committed_before_http_response(client, database):
+    """A second connection must see the corrected value as soon as HTTP 201 arrives."""
+    profile = new_profile(client)
+    original_data = entry(72)
+    original = post(client, profile, original_data)
+    assert original.status_code == 201, original.text
+    previous_id = original.json()["id"]
+    corrected = client.patch(
+        f"/api/v1/measurements/{previous_id}",
+        json={**original_data, "value": 71, "correction_reason": "Corrección ficticia inmediata"},
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    assert corrected.status_code == 201, corrected.text
+    new_id = corrected.json()["id"]
+    with database.connect() as conn:
+        rows = conn.execute(
+            text("SELECT id,is_current,value FROM measurements WHERE id IN (:old,:new)"),
+            {"old": previous_id, "new": new_id},
+        ).mappings().all()
+    by_id = {str(row["id"]): row for row in rows}
+    assert len(rows) == 2
+    assert by_id[previous_id]["is_current"] is False
+    assert by_id[new_id]["is_current"] is True
+    assert float(by_id[new_id]["value"]) == 71
+    visible = client.get(f"/api/v1/profiles/{profile}/measurements")
+    assert visible.status_code == 200, visible.text
+    assert [row["id"] for row in visible.json()["items"]] == [new_id]
+
+
+def test_workspace_write_dependency_commits_before_response(client):
+    from fastapi.routing import APIRoute
+
+    from app.api.deps import workspace
+
+    routes = [
+        route for route in client.app.routes
+        if isinstance(route, APIRoute) and route.path.startswith("/api/v1/")
+    ]
+    assert routes
+    for route in routes:
+        for dependency in route.dependant.dependencies:
+            if dependency.call is workspace:
+                assert dependency.scope == "function", route.path
+
+
 def test_outlier_requires_confirmation(client):
     profile = new_profile(client)
     assert (
