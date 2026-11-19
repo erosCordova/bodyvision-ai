@@ -13,6 +13,7 @@ import {
 } from "../../components/ui/States";
 import { Modal } from "../../components/ui/Modal";
 import { MeasurementForm } from "../measurements/MeasurementForm";
+import { MeasurementComparison } from "../analytics/MeasurementComparison";
 const HistoryChart = lazy(() =>
   import("../analytics/HistoryChart").then((module) => ({
     default: module.HistoryChart,
@@ -290,6 +291,11 @@ export function ProfileDetail() {
             ) : (
               <Suspense fallback={<LoadingState />}>
                 <HistoryChart
+                  rows={series.data}
+                  unit={selectedMetric?.unit ?? ""}
+                />
+                <MeasurementComparison
+                  key={`${metric}-${period}`}
                   rows={series.data}
                   unit={selectedMetric?.unit ?? ""}
                 />
