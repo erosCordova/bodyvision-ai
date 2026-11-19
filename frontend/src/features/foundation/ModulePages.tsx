@@ -111,7 +111,7 @@ export function CapturePage() {
           <p className="enterprise-file-detail">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>
           {isReviewing && <p role="status" className="enterprise-quality-note">Revisando la calidad localmente…</p>}
           {validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
-          {review && <div className="enterprise-quality-review" aria-label="Resultados de calidad local">
+          {review && <div className="enterprise-quality-review" role="region" aria-label="Resultados de calidad local">
             <h3>Revisión automática de calidad</h3>
             <p className="enterprise-file-detail">{review.width} × {review.height} px · Brillo {review.averageBrightness}/255 · Contraste {review.contrast}/128</p>
             <p role="status" className="enterprise-quality-note">{review.passed
@@ -150,7 +150,7 @@ export function AnalysisPage() {
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>ESQUEMA EXPLICATIVO</span></div>
-        {localReview && <div className="enterprise-quality-review enterprise-review-handoff" aria-label="Control de calidad recibido">
+        {localReview && <div className="enterprise-quality-review enterprise-review-handoff" role="region" aria-label="Control de calidad recibido">
           <h3>Control técnico de la captura</h3>
           <p>{localReview.width} × {localReview.height} px · {localReview.checks.filter(item => item.passed).length} de 4 criterios cumplidos.</p>
           <ul>{localReview.checks.map(check => <li key={check.id}>
