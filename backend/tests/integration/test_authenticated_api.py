@@ -1906,8 +1906,12 @@ def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
         )
     assert purge_due(client.app.state.engine, batch_size=1) == 1
     with owner.connect() as conn:
-        retained = conn.execute(
-            text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
-            {"profile": profile_id},
-        ).scalars().all()
+        retained = (
+            conn.execute(
+                text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
+                {"profile": profile_id},
+            )
+            .scalars()
+            .all()
+        )
         assert retained == [active_id]
