@@ -13,12 +13,12 @@ const target = join(base, "public", "pose");
 const sdk = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/";
 const model = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const assets = [
-  { path: "vision_bundle.mjs", source: sdk + "vision_bundle.mjs", min: 100000, max: 3000000, sha256: "" },
-  { path: "wasm/vision_wasm_internal.js", source: sdk + "wasm/vision_wasm_internal.js", min: 10000, max: 1000000, sha256: "" },
-  { path: "wasm/vision_wasm_internal.wasm", source: sdk + "wasm/vision_wasm_internal.wasm", min: 1000000, max: 20000000, sha256: "" },
-  { path: "wasm/vision_wasm_nosimd_internal.js", source: sdk + "wasm/vision_wasm_nosimd_internal.js", min: 10000, max: 1000000, sha256: "" },
-  { path: "wasm/vision_wasm_nosimd_internal.wasm", source: sdk + "wasm/vision_wasm_nosimd_internal.wasm", min: 1000000, max: 20000000, sha256: "" },
-  { path: "pose_landmarker_lite.task", source: model, min: 1000000, max: 12000000, sha256: "" },
+  { path: "vision_bundle.mjs", source: sdk + "vision_bundle.mjs", min: 100000, max: 3000000, sha256: "de83c48ff329717a27aeb528d5ef5f47f077c628a5302dc483aca5b513e7464b" },
+  { path: "wasm/vision_wasm_internal.js", source: sdk + "wasm/vision_wasm_internal.js", min: 10000, max: 1000000, sha256: "6f6b86509cf9e163ea1cfec7edc8cf53732699c04781e4c21c557c1ba402310e" },
+  { path: "wasm/vision_wasm_internal.wasm", source: sdk + "wasm/vision_wasm_internal.wasm", min: 1000000, max: 20000000, sha256: "cb3ec20026a9aecc2a81a93c25630ceb5389297ddb7a5f0bd61dd09cde606b9b" },
+  { path: "wasm/vision_wasm_nosimd_internal.js", source: sdk + "wasm/vision_wasm_nosimd_internal.js", min: 10000, max: 1000000, sha256: "9f8fc960e363f0fb2f42f7937b97ae9cf9a5630490f71031fa90caa9bb121938" },
+  { path: "wasm/vision_wasm_nosimd_internal.wasm", source: sdk + "wasm/vision_wasm_nosimd_internal.wasm", min: 1000000, max: 20000000, sha256: "924274fcd5ac8985f6570a8573e7971b7bd2d580ba1b8f3beb0ba8f95db6347c" },
+  { path: "pose_landmarker_lite.task", source: model, min: 1000000, max: 12000000, sha256: "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a" },
 ];
 const inspectOnly = process.argv.includes("--inspect");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
