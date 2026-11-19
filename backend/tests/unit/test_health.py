@@ -19,7 +19,7 @@ from app.main import create_app
 def engine():
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
-    connection.execute.return_value.scalar_one.return_value = "0017_encrypted_synthetic_captures"
+    connection.execute.return_value.scalar_one.return_value = "0017_synthetic_captures"
     return engine
 
 
@@ -41,7 +41,7 @@ def test_live_does_not_require_database(client, engine):
 def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
-    assert response.json()["schema_revision"] == "0017_encrypted_synthetic_captures"
+    assert response.json()["schema_revision"] == "0017_synthetic_captures"
 
 
 def test_demo_ready_uses_data_core_revision(client, engine):
@@ -53,7 +53,7 @@ def test_demo_ready_uses_data_core_revision(client, engine):
         assert response.status_code == 200
         assert response.json()["schema_revision"] == "0002_data_core"
         connection.execute.return_value.scalar_one.return_value = (
-            "0017_encrypted_synthetic_captures"
+            "0017_synthetic_captures"
         )
         assert demo.get("/api/v1/health/ready").status_code == 503
 
