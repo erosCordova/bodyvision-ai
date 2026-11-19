@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "r
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
+import { PoseReview } from "../capture/PoseReview";
+import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
@@ -227,7 +229,8 @@ export function CapturePage() {
               <strong>{check.passed ? "✓" : "!"} {check.label}</strong>
               <span>{check.detail}</span>
             </li>)}</ul>
-            <Link className="secondary-button" to="/analysis" state={{ localCaptureReview: review }}>
+            <Link className="secondary-button" to="/analysis" state={{ localCaptureReview: review }}
+              onClick={() => stageCaptureForAnalysis(file, review)}>
               Ver control de calidad en el módulo de análisis
             </Link>
           </div>}
@@ -242,29 +245,37 @@ export function CapturePage() {
 
 export function AnalysisPage() {
   const location = useLocation();
+  const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis());
+  useEffect(() => { discardStagedCapture(); }, []);
   const state = location.state as { localCaptureReview?: CaptureReview } | null;
-  const localReview = state?.localCaptureReview?.checks?.length === 4
-    ? state.localCaptureReview : null;
+  const localReview = localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
+    ? state.localCaptureReview : null);
   const stages = [
-    { name:"Autorización", detail:"Comprobación del expediente y consentimiento", status:"Pendiente de implementar" },
-    { name:"Control de calidad", detail:"Encuadre, resolución, iluminación y postura", status:"Pendiente de implementar" },
-    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker y coordenadas", status:"Pendiente de implementar" },
-    { name:"Revisión humana", detail:"Landmarks, versión del modelo y alertas de calidad", status:"Pendiente de implementar" },
+    { name:"Autorización", detail:"Verificación documental de consentimiento por expediente", status:"Pendiente para uso real" },
+    { name:"Control de calidad", detail:"Resolución, orientación, contraste e iluminación", status:"Revisión local disponible" },
+    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker con 33 landmarks posibles", status:"Local bajo demanda · requiere internet inicial" },
+    { name:"Revisión humana", detail:"Validación profesional de resultados y trazabilidad", status:"Pendiente para uso real" },
   ];
   return <div className="enterprise-module">
-    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="La documentación plantea identificar puntos de pose a partir de imágenes autorizadas, con control de calidad y resultados trazables."/>
+    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="Revisa capturas ficticias localmente con MediaPipe Pose Landmarker. La detección de 33 puntos es experimental y no genera mediciones clínicas."/>
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
-        <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>ESQUEMA EXPLICATIVO</span></div>
+        <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>{localCapture ? "IA LOCAL · RESULTADOS REALES" : "ESQUEMA EXPLICATIVO"}</span></div>
         {localReview && <div className="enterprise-quality-review enterprise-review-handoff" role="region" aria-label="Control de calidad recibido">
           <h3>Control técnico de la captura</h3>
           <p>{localReview.width} × {localReview.height} px · {localReview.checks.filter(item => item.passed).length} de 4 criterios cumplidos.</p>
           <ul>{localReview.checks.map(check => <li key={check.id}>
             <strong>{check.passed ? "✓" : "!"} {check.label}</strong><span>{check.detail}</span>
           </li>)}</ul>
-          <p className="enterprise-hint">Solo se transfirieron los indicadores de calidad en memoria de navegación; nunca se transfirió la fotografía. Esto NO es una detección de pose ni confirma el consentimiento.</p>
+          <p className="enterprise-hint">La imagen permanece únicamente en la memoria de esta pestaña, sin subirse a la API ni guardarse en el historial del navegador. El control de calidad no confirma consentimiento clínico.</p>
         </div>}
-        <div className="enterprise-pose-visual">
+        {localCapture && <>
+          <PoseReview file={localCapture.file} review={localCapture.review} />
+          <button type="button" className="secondary-button" onClick={() => setLocalCapture(null)}>
+            Descartar fotografía del análisis
+          </button>
+        </>}
+        {!localCapture && <div className="enterprise-pose-visual">
           <div className="enterprise-pose-model">
             <svg viewBox="0 0 220 360" aria-label="Esquema de puntos corporales, no resultado de inteligencia artificial" role="img">
               <g stroke="#70ebee" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -277,7 +288,7 @@ export function AnalysisPage() {
             <span>ILUSTRACIÓN · SIN DATOS DE PERSONAS</span>
           </div>
           <div><p className="enterprise-hint">Los colores y puntos son únicamente una referencia de interfaz. No se han detectado landmarks ni calculado composición corporal.</p><Link className="primary-button" to="/capture">Preparar captura ↗</Link></div>
-        </div>
+        </div>}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Flujo de análisis esperado</h2>
