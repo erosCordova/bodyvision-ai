@@ -41,12 +41,12 @@ async function simulationPanel(page: Page, profileId: string) {
 test("anonymous visitors cannot mount private viewer or request profile data", async ({ page }) => {
   const privateCalls: string[] = [];
   page.on("request", request => {
-    if (/\\/api\\/v1\\/profiles(?:\\/|\\?|$)/.test(request.url())) {
+    if (request.url().includes("/api/v1/profiles")) {
       privateCalls.push(request.url());
     }
   });
   await page.goto("/body-3d?panel=simulacion");
-  await expect(page).toHaveURL(/\\/access$/);
+  await expect(page).toHaveURL(/[/]access$/);
   await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Historial de escenarios simulados" })).toHaveCount(0);
   expect(privateCalls).toEqual([]);
