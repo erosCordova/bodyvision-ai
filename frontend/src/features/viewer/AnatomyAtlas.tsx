@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   anatomicalLayers, createAnatomyScene,
   type AnatomicalLayer, type LayerOpacity, type RenderMode,
@@ -8,6 +8,8 @@ import {
 import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario } from "./bodyVolume";
 import { BASELINE_HEIGHT_CM } from "./bodyStature";
+import { reviewLocalCapture } from "../capture/captureQuality";
+import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyNameKey } from "./anatomyNames";
 import "./anatomy-studio.css";
 
@@ -114,6 +116,7 @@ function findFromMesh(entries: AtlasEntry[], part: SelectedStructure | null) {
 }
 
 export function AnatomyAtlas() {
+  const navigate = useNavigate();
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<AtlasController | null>(null);
@@ -125,6 +128,8 @@ export function AnatomyAtlas() {
   const [weightVariation, setWeightVariation] = useState(0);
   const [statureCm, setStatureCm] = useState(BASELINE_HEIGHT_CM);
   const [baselinePreview, setBaselinePreview] = useState(false);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [captureError, setCaptureError] = useState("");
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
   const [quality, setQuality] = useState<SceneQuality>("alta");
@@ -300,6 +305,26 @@ export function AnatomyAtlas() {
     setStatureCm(BASELINE_HEIGHT_CM);
     setBaselinePreview(false);
     setSavedScenario(null);
+  };
+  const analyzeCurrentAvatar = async () => {
+    if (captureBusy || !controller.current || layerStates.skin !== "ready" ||
+      !visible.includes("skin") || error) return;
+    setCaptureBusy(true);
+    setCaptureError("");
+    try {
+      const snapshot = await controller.current.capturePng();
+      const file = new File([snapshot], "modelo-3d-sintetico.png", { type: "image/png" });
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error("La captura supera el límite de tamaño para el análisis.");
+      }
+      const review = await reviewLocalCapture(file);
+      stageCaptureForAnalysis(file, review);
+      setCaptureBusy(false);
+      navigate("/analysis", { state: { localCaptureReview: review, source: "atlas-synthetic" } });
+    } catch {
+      setCaptureError("No se pudo capturar la vista 3D. Comprueba el navegador o utiliza una fotografía de prueba desde Captura.");
+      setCaptureBusy(false);
+    }
   };
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -504,7 +529,13 @@ export function AnatomyAtlas() {
                   <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview} onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
                   <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation, statureCm })}>Guardar comparación en esta vista</button>
                   <button onClick={resetSimulation}>Restaurar valores</button>
+                  <button type="button" onClick={() => void analyzeCurrentAvatar()}
+                    disabled={captureBusy || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
+                    {captureBusy ? "Preparando captura 3D…" : "Analizar esta vista 3D con IA"}
+                  </button>
                 </div>
+                {captureError && <p role="alert" className="studio-sim-disclaimer">{captureError}</p>}
+                <p className="studio-sim-lead">Esta prueba utiliza exclusivamente una imagen del cuerpo anatómico ficticio del atlas. No identifica personas ni reconstruye cuerpos reales.</p>
                 {savedScenario && <div className="studio-sim-saved" role="status">
                   <strong>Referencia visual guardada</strong>
                   <p>Base {savedScenario.baseKg} kg / {BASELINE_HEIGHT_CM} cm → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg / {savedScenario.statureCm} cm.</p>
