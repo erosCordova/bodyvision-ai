@@ -6,6 +6,7 @@ import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapp
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
+import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
 import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount } from "./geometryLod";
@@ -29,46 +30,75 @@ export type LayerState = "loading" | "ready" | "error";
 
 const assetSource = anatomySource + "web/public/models/";
 
-/** GPU morph for illustrative soft-tissue volume changes, not calibrated to kg. */
+/** Soft-tissue GPU morph; visualization only, not a patient-specific model. */
 const BODYVOLUME_VERTEX = `
-  vec3 bvWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
-  float bvHeight = clamp((bvWorld.y - uBVBounds.x) / max(uBVBounds.y - uBVBounds.x, 0.00001), 0.0, 1.0);
-  float bvTorso = smoothstep(0.31, 0.46, bvHeight) * (1.0 - smoothstep(0.70, 0.83, bvHeight));
-  float bvHip = smoothstep(0.23, 0.33, bvHeight) * (1.0 - smoothstep(0.45, 0.56, bvHeight));
-  float bvLeg = smoothstep(0.10, 0.18, bvHeight) * (1.0 - smoothstep(0.37, 0.49, bvHeight));
-  float bvZone = clamp(max(bvTorso, max(bvHip * 0.85, bvLeg * 0.30)), 0.0, 1.0);
-  // Fade over the arms: they should not move outwards with the abdominal volume.
-  float bvArmFade = 1.0 - smoothstep(0.34, 0.57, abs(bvWorld.x - uBVBounds.z));
-  float bvAmount = uBVVolume * uBVStrength * bvZone * bvArmFade;
-  vec3 bvOffset = vec3(
-    (bvWorld.x - uBVBounds.z) * bvAmount * 1.06, 0.0,
-    (bvWorld.z - uBVBounds.w) * bvAmount * 1.12
-  );
-  vec3 bvAxisX = modelMatrix[0].xyz;
-  vec3 bvAxisY = modelMatrix[1].xyz;
-  vec3 bvAxisZ = modelMatrix[2].xyz;
-  transformed += vec3(
-    dot(bvOffset, bvAxisX) / max(dot(bvAxisX, bvAxisX), 0.00001),
-    dot(bvOffset, bvAxisY) / max(dot(bvAxisY, bvAxisY), 0.00001),
-    dot(bvOffset, bvAxisZ) / max(dot(bvAxisZ, bvAxisZ), 0.00001)
-  );
+  // Skip deformation work entirely at reference weight.
+  if (abs(uBVVolume) > 0.00001) {
+    vec3 bvWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+    float bvSpan = max(uBVBounds.y - uBVBounds.x, 0.00001);
+    float bvHeight = clamp((bvWorld.y - uBVBounds.x) / bvSpan, 0.0, 1.0);
+    float bvLateral = abs(bvWorld.x - uBVBounds.z) / bvSpan;
+    vec2 bvZones = bvProfile(bvHeight, bvLateral);
+    float bvDepthFromCenter = (bvWorld.z - uBVBounds.w) / bvSpan;
+    float bvFrontBias = mix(0.86, 1.14, smoothstep(-0.04, 0.055, bvDepthFromCenter));
+    float bvScaleX = clamp(1.0 + uBVVolume * uBVStrength * bvZones.x, 0.60, 1.40);
+    float bvScaleZ = clamp(1.0 + uBVVolume * uBVStrength * bvZones.y * bvFrontBias, 0.60, 1.40);
+    vec3 bvOffset = vec3(
+      (bvWorld.x - uBVBounds.z) * (bvScaleX - 1.0), 0.0,
+      (bvWorld.z - uBVBounds.w) * (bvScaleZ - 1.0)
+    );
+    // Convert world-space offsets back to the existing mesh's local geometry.
+    vec3 bvAxisX = modelMatrix[0].xyz;
+    vec3 bvAxisY = modelMatrix[1].xyz;
+    vec3 bvAxisZ = modelMatrix[2].xyz;
+    transformed += vec3(
+      dot(bvOffset, bvAxisX) / max(dot(bvAxisX, bvAxisX), 0.00001),
+      dot(bvOffset, bvAxisY) / max(dot(bvAxisY, bvAxisY), 0.00001),
+      dot(bvOffset, bvAxisZ) / max(dot(bvAxisZ, bvAxisZ), 0.00001)
+    );
+  }
 `;
+
+/** First-order normal correction so light follows the changed cross-section. */
+const BODYVOLUME_NORMAL = `
+  if (abs(uBVVolume) > 0.00001) {
+    vec3 bvNormalWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+    float bvNormalSpan = max(uBVBounds.y - uBVBounds.x, 0.00001);
+    float bvNormalHeight = clamp((bvNormalWorld.y - uBVBounds.x) / bvNormalSpan, 0.0, 1.0);
+    float bvNormalLateral = abs(bvNormalWorld.x - uBVBounds.z) / bvNormalSpan;
+    vec2 bvNormalZones = bvProfile(bvNormalHeight, bvNormalLateral);
+    float bvNormalDepth = (bvNormalWorld.z - uBVBounds.w) / bvNormalSpan;
+    float bvNormalBias = mix(0.86, 1.14, smoothstep(-0.04, 0.055, bvNormalDepth));
+    float bvNormalXScale = clamp(1.0 + uBVVolume * uBVStrength * bvNormalZones.x, 0.60, 1.40);
+    float bvNormalZScale = clamp(1.0 + uBVVolume * uBVStrength * bvNormalZones.y * bvNormalBias, 0.60, 1.40);
+    objectNormal.x /= bvNormalXScale;
+    objectNormal.z /= bvNormalZScale;
+    objectNormal = normalize(objectNormal);
+  }
+`;
+
 function attachBodyVolume(
   material: THREE.Material, layer: AnatomicalLayer,
   volume: { value: number }, bounds: { value: THREE.Vector4 },
 ) {
   const strength = layer === "skin" ? 1 : layer === "muscles" ? 0.18 : 0;
+  // No morph shader for hard anatomical structures, which must remain fixed.
+  if (strength === 0) return;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uBVVolume = volume;
     shader.uniforms.uBVBounds = bounds;
     shader.uniforms.uBVStrength = { value: strength };
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform float uBVVolume;\nuniform vec4 uBVBounds;\nuniform float uBVStrength;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + BODYVOLUME_VERTEX);
+      .replace("#include <common>", `#include <common>
+uniform float uBVVolume;
+uniform vec4 uBVBounds;
+uniform float uBVStrength;
+${SOFT_TISSUE_PROFILE_GLSL}`)
+      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\\n" + BODYVOLUME_NORMAL)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\\n" + BODYVOLUME_VERTEX);
   };
-  material.customProgramCacheKey = () => "bodyvision-volume-1-strength-" + strength;
+  material.customProgramCacheKey = () => SOFT_TISSUE_PROFILE_VERSION + "-strength-" + strength;
 }
-
 
 /**
  * The source is Z-Anatomy / BodyParts3D, processed by SeemaBansal1.
