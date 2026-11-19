@@ -12,9 +12,9 @@ from app.core.identity import (
     hash_password,
     hash_session_token,
     login_bucket_digest,
-    verify_password,
 )
-from app.services.auth_sessions import DUMMY_VERIFIER, bearer_token, resolve_identity
+from app.services.admin_confirmation import confirm_administrator
+from app.services.auth_sessions import bearer_token, resolve_identity
 
 
 class PasswordResetInput(BaseModel):
@@ -33,32 +33,12 @@ def reset_password(request: Request, user_id: UUID, data: PasswordResetInput) ->
     identity = resolve_identity(request)
     if request.headers.get("X-Workspace-ID"):
         raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
-    bucket = login_bucket_digest(identity.organization_id, f"password-reset:{identity.user_id}")
-    administrator_verifier = None
-    new_verifier = None
-    if identity.role == "administrator":
-        with request.app.state.auth_engine.begin() as limiter:
-            allowed = limiter.execute(
-                text("SELECT consume_auth_login_attempt(:org,CAST(:bucket AS char(64)))"),
-                {"org": identity.organization_id, "bucket": bucket},
-            ).scalar_one()
-        if not allowed:
-            raise DomainError(429, "RESET_RATE_LIMITED", "Demasiados intentos. Espera 15 minutos.")
-        with request.app.state.auth_engine.begin() as connection:
-            connection.execute(
-                text("SELECT set_config('app.organization_id',:org,true)"),
-                {"org": str(identity.organization_id)},
-            )
-            verifier = connection.execute(
-                text("SELECT password_hash FROM users WHERE organization_id=:org AND id=:actor"),
-                {"org": identity.organization_id, "actor": identity.user_id},
-            ).scalar_one_or_none()
-        valid = verify_password(
-            data.administrator_password.get_secret_value(), verifier or DUMMY_VERIFIER
-        )
-        if valid and verifier:
-            administrator_verifier = verifier
-            new_verifier = hash_password(data.new_password.get_secret_value())
+    administrator_verifier, bucket = confirm_administrator(
+        request, identity, data.administrator_password, "password-reset"
+    )
+    new_verifier = (
+        hash_password(data.new_password.get_secret_value()) if administrator_verifier else None
+    )
     with request.app.state.auth_engine.begin() as connection:
         result = connection.execute(
             text(

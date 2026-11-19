@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0010_admin_password_reset"
+            == "0011_user_management"
         )
         for table in (
             "user_role_assignments",
@@ -79,15 +79,21 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
                 "'EXECUTE')"
             )
         ).scalar_one()
-        signature = "private_profile_consents(char(64),uuid,text,text,uuid,uuid,uuid,uuid)"
-        for role, permitted in (("bodyvision_app", False), ("bodyvision_auth_app", True)):
-            assert (
-                connection.execute(
-                    text("SELECT has_function_privilege(:role,:signature,'EXECUTE')"),
-                    {"role": role, "signature": signature},
-                ).scalar_one()
-                is permitted
-            )
+        for signature in (
+            "private_profile_consents(char(64),uuid,text,text,uuid,uuid,uuid,uuid)",
+            "private_admin_users(char(64),text,integer,integer)",
+            "private_permission_catalog(char(64),uuid,text)",
+            "set_synthetic_account_status(char(64),uuid,text,text,uuid,uuid)",
+            "private_admin_audit(char(64),integer)",
+        ):
+            for role, permitted in (("bodyvision_app", False), ("bodyvision_auth_app", True)):
+                assert (
+                    connection.execute(
+                        text("SELECT has_function_privilege(:role,:signature,'EXECUTE')"),
+                        {"role": role, "signature": signature},
+                    ).scalar_one()
+                    is permitted
+                )
 
 
 def test_fixture_operators_are_disabled_for_login(database):

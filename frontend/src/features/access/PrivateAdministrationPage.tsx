@@ -4,11 +4,18 @@ import {
   privateAdminApi,
   type AuditEvent,
   type NewTestAccount,
+  type ManagedUser,
+  type PermissionChoice,
 } from "../../services/api/privateAdmin";
 import "./private-administration.css";
+import { UserDirectoryPanel } from "./UserDirectoryPanel";
 import { PasswordResetPanel } from "./PasswordResetPanel";
 
 const eventNames: Record<string, string> = {
+  "admin.account_disabled": "Cuenta suspendida",
+  "admin.account_enabled": "Cuenta reactivada",
+  "admin.account_status_denied": "Cambio de estado denegado",
+  "admin.account_status_unchanged": "Estado de cuenta confirmado",
   "admin.password_reset": "Restablecimiento de contraseña",
   "admin.password_reset_denied": "Restablecimiento denegado",
   "consent.read": "Consulta de consentimientos",
@@ -35,6 +42,8 @@ export function PrivateAdministrationPage() {
   const { session } = usePrivateAuth();
   const [account, setAccount] = useState<NewTestAccount>(initialAccount);
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditOutcome, setAuditOutcome] = useState("all");
   const [auditStatus, setAuditStatus] = useState<"loading" | "ready" | "error">("loading");
   const [auditError, setAuditError] = useState("");
   const [formError, setFormError] = useState("");
@@ -49,6 +58,16 @@ export function PrivateAdministrationPage() {
   const [permissionError, setPermissionError] = useState("");
   const [permissionSuccess, setPermissionSuccess] = useState("");
   const [auditRevision, setAuditRevision] = useState(0);
+  const [selectedAccount, setSelectedAccount] = useState<ManagedUser | null>(null);
+  const [profileChoices, setProfileChoices] = useState<PermissionChoice[]>([]);
+  const [profileSearch, setProfileSearch] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const selectAccount = useCallback((user: ManagedUser) => {
+    setSelectedAccount(user);
+    setPermission({ profile_id: "", user_id: user.id, access_level: "read" });
+    setPermissionSuccess(""); setPermissionError(""); setProfileSearch("");
+  }, []);
 
   const administrator = session?.role === "administrator";
   const api = useMemo(
@@ -76,6 +95,30 @@ export function PrivateAdministrationPage() {
     return () => { active = false; };
   }, [api, auditRevision]);
 
+  useEffect(() => {
+    if (!api || !selectedAccount) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setCatalogLoading(true); setCatalogError("");
+      api.permissionCatalog(selectedAccount.id, profileSearch).then(result => {
+        if (active) { setProfileChoices(result.items); setCatalogLoading(false); }
+      }).catch(cause => {
+        if (active) {
+          setCatalogError(cause instanceof Error ? cause.message : "No se pudo consultar el catálogo.");
+          setProfileChoices([]); setCatalogLoading(false);
+        }
+      });
+    }, 200);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [api, selectedAccount, profileSearch, auditRevision]);
+  const selectedProfile = profileChoices.find(item => item.id === permission.profile_id);
+  const permissionsReady = Boolean(selectedAccount?.status === "active"
+    && selectedAccount.id !== session?.user_id && selectedAccount.role !== "unassigned"
+    && selectedProfile && !catalogLoading && !catalogError);
+  const visibleEvents = events.filter(item => (auditOutcome === "all" || item.outcome === auditOutcome)
+    && [eventNames[item.action] ?? item.action, item.actor_label ?? "", item.target_label ?? ""]
+      .join(" ").toLowerCase().includes(auditSearch.toLowerCase()));
+
   const updateAccount = useCallback(
     <K extends keyof NewTestAccount>(key: K, value: NewTestAccount[K]) => {
       setAccount(current => ({ ...current, [key]: value }));
@@ -99,7 +142,7 @@ export function PrivateAdministrationPage() {
       const created = await api.createUser(account);
       setSuccess(`Cuenta ficticia creada: ${created.display_name} (${created.role === "member" ? "Consulta" : "Especialista"}).`);
       setAccount(initialAccount);
-      setPermission(previous => ({ ...previous, user_id: created.id }));
+      selectAccount({ ...created, manageable: true });
       setAuditStatus("loading");
       setAuditRevision(previous => previous + 1);
     } catch (error) {
@@ -114,8 +157,8 @@ export function PrivateAdministrationPage() {
   async function changePermission(operation: "grant" | "revoke") {
     if (!api || !administrator) return;
     const validUuid = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
-    if (!validUuid.test(permission.profile_id) || !validUuid.test(permission.user_id)) {
-      setPermissionError("Introduce identificadores UUID válidos.");
+    if (!permissionsReady || !validUuid.test(permission.profile_id) || !validUuid.test(permission.user_id)) {
+      setPermissionError("Selecciona una cuenta activa y un expediente del catálogo.");
       return;
     }
     setPermissionBusy(true);
@@ -164,6 +207,10 @@ export function PrivateAdministrationPage() {
         </div>
         <span className="private-admin-phase">SOLO PRUEBAS</span>
       </div>
+      {api && <UserDirectoryPanel api={api} revision={auditRevision} selected={selectedAccount}
+        onSelect={selectAccount} onChanged={account => {
+          setSelectedAccount(account); setAuditRevision(previous => previous + 1);
+        }} />}
       <div className="private-admin-grid">
         <section className="enterprise-panel" aria-label="Crear usuario ficticio">
           <h2>Crear usuario de prueba</h2>
@@ -216,17 +263,28 @@ export function PrivateAdministrationPage() {
             <p role="status">Aún no hay eventos de seguridad registrados.</p>
           )}
           {auditStatus === "ready" && events.length > 0 && (
+            <div className="private-admin-audit-filters">
+              <label>Filtrar auditoría<input type="search" value={auditSearch} onChange={event => setAuditSearch(event.target.value)} /></label>
+              <label>Resultado de auditoría<select value={auditOutcome} onChange={event => setAuditOutcome(event.target.value)}>
+                <option value="all">Todos</option><option value="allowed">Permitido</option><option value="denied">Denegado</option><option value="error">Error</option>
+              </select></label>
+            </div>
+          )}
+          {auditStatus === "ready" && events.length > 0 && visibleEvents.length === 0 && <p>No hay eventos con esos filtros entre los últimos 30 registros.</p>}
+          {auditStatus === "ready" && visibleEvents.length > 0 && (
             <div className="private-admin-table-scroll">
               <table className="private-admin-table">
                 <caption>Registro limitado a los últimos 30 eventos de identidad.</caption>
-                <thead><tr><th>Fecha</th><th>Operación</th><th>Resultado</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Operación</th><th>Responsable</th><th>Destino</th><th>Resultado</th></tr></thead>
                 <tbody>
-                  {events.map(item => (
+                  {visibleEvents.map(item => (
                     <tr key={item.id}>
                       <td><time dateTime={item.happened_at}>
                         {new Date(item.happened_at).toLocaleString("es-PE")}
                       </time></td>
                       <td>{eventNames[item.action] ?? "Evento de seguridad"}</td>
+                      <td>{item.actor_label ?? "Sistema"}</td>
+                      <td>{item.target_label ?? (item.resource_type === "session" ? "Sesión de acceso" : "Recurso de la organización")}</td>
                       <td><span className={item.outcome === "allowed" ? "private-admin-ok" : "private-admin-no"}>
                         {item.outcome === "allowed" ? "Permitido" : item.outcome === "denied" ? "Denegado" : "Error"}
                       </span></td>
@@ -240,44 +298,57 @@ export function PrivateAdministrationPage() {
       </div>
       <section className="enterprise-panel private-admin-permissions" aria-label="Permisos por expediente">
         <h2>Permisos por expediente</h2>
-        <p>Concede o revoca permisos sobre un expediente ficticio de tu organización. No puedes asignarte acceso a ti mismo. Las concesiones caducan a los 30 días.</p>
+        <p>Selecciona una cuenta en el directorio y un expediente por su código. Las concesiones caducan a los 30 días.</p>
+        <p><strong>Cuenta seleccionada:</strong> {selectedAccount ? `${selectedAccount.display_name} · ${selectedAccount.email}` : "Selecciona un usuario en el directorio."}</p>
+        {selectedAccount && selectedAccount.status !== "active" && <p>La cuenta no está activa. Sus permisos se conservan; las operaciones están bloqueadas.</p>}
+        {catalogError && <p role="alert" className="private-admin-error">{catalogError}</p>}
         <form className="private-admin-form" onSubmit={event => {
           event.preventDefault();
           void changePermission("grant");
         }}>
-          <label htmlFor="permission-profile">Identificador de expediente</label>
-          <input id="permission-profile" type="text" required value={permission.profile_id}
-            onChange={event => setPermission(old => ({ ...old, profile_id: event.target.value }))}
-            placeholder="UUID del expediente ficticio" />
-          <label htmlFor="permission-user">Identificador de usuario</label>
-          <input id="permission-user" type="text" required value={permission.user_id}
-            onChange={event => setPermission(old => ({ ...old, user_id: event.target.value }))}
-            placeholder="UUID del usuario de prueba" />
+          <label htmlFor="permission-search">Buscar expediente por código</label>
+          <input id="permission-search" type="search" value={profileSearch} disabled={!selectedAccount}
+            onChange={event => { setProfileSearch(event.target.value); setPermission(old => ({ ...old, profile_id: "" })); }} />
+          <label htmlFor="permission-profile">Expediente del catálogo</label>
+          <select id="permission-profile" required value={permission.profile_id}
+            disabled={!selectedAccount || catalogLoading || permissionBusy}
+            onChange={event => setPermission(old => ({ ...old, profile_id: event.target.value }))}>
+            <option value="">{catalogLoading ? "Consultando expedientes…" : "Selecciona un expediente"}</option>
+            {profileChoices.map(item => <option key={item.id} value={item.id}>
+              {item.display_code} · {item.status === "active" ? "Activo" : item.status === "archived" ? "Archivado" : "Restringido"}
+            </option>)}
+          </select>
+          {selectedProfile && <p className="private-admin-current-grant">
+            Permiso actual: {selectedProfile.access_level
+              ? `${({ read: "Lectura", write: "Lectura y edición", manage: "Gestión" })[selectedProfile.access_level]} · ${selectedProfile.effective ? "Vigente" : "Vencido"}`
+              : "Sin permiso"}
+            {selectedProfile.expires_at && ` · Vence ${new Date(selectedProfile.expires_at).toLocaleString("es-PE")}`}
+          </p>}
           <label htmlFor="permission-level">Nivel de acceso</label>
           <select id="permission-level" value={permission.access_level}
             onChange={event => setPermission(old => ({
               ...old, access_level: event.target.value as typeof old.access_level,
             }))}>
             <option value="read">Lectura</option>
-            <option value="write">Lectura y edición</option>
-            <option value="manage">Gestión del expediente</option>
+            <option value="write" disabled={selectedAccount?.role === "member"}>Lectura y edición</option>
+            <option value="manage" disabled={selectedAccount?.role === "member"}>Gestión del expediente</option>
           </select>
           <small>Los usuarios de consulta únicamente pueden recibir acceso de lectura.</small>
           {permissionError && <p className="private-admin-error" role="alert">{permissionError}</p>}
           {permissionSuccess && <p className="private-admin-success" role="status">{permissionSuccess}</p>}
           <div className="private-admin-permission-actions">
-            <button type="submit" disabled={permissionBusy}>
+            <button type="submit" disabled={permissionBusy || !permissionsReady || selectedProfile?.status !== "active"}>
               {permissionBusy ? "Guardando…" : "Conceder permiso"}
             </button>
             <button type="button" className="private-admin-revoke"
-              disabled={permissionBusy}
+              disabled={permissionBusy || !permissionsReady || !selectedProfile?.access_level}
               onClick={() => { void changePermission("revoke"); }}>
               Revocar permiso
             </button>
           </div>
         </form>
       </section>
-      {api && <PasswordResetPanel api={api} onChanged={() => {
+      {api && <PasswordResetPanel key={selectedAccount?.id + ":" + selectedAccount?.status} account={selectedAccount} api={api} onChanged={() => {
         setAuditStatus("loading"); setAuditRevision(previous => previous + 1);
       }} />}
       <div className="enterprise-panel private-admin-guardrails">

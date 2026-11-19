@@ -54,10 +54,13 @@ test("private identity, user creation, RLS grants, revocation and logout work to
   await page.getByRole("button", { name: "Crear cuenta ficticia", exact: true }).click();
   const created = await accountResponse;
   expect(created.status()).toBe(201);
-  const account = await created.json() as { id: string };
   await expect(page.getByRole("status").filter({ hasText: "Cuenta ficticia creada" })).toBeVisible();
   await expect(page.getByLabel("Contraseña de pruebas", { exact: true })).toHaveValue("");
-  await expect(page.getByLabel("Identificador de usuario", { exact: true })).toHaveValue(account.id);
+  await expect(page.getByRole("region", { name: "Permisos por expediente" })).toContainText(email);
+  const userDirectory = page.getByRole("region", { name: "Directorio de usuarios" });
+  await userDirectory.getByRole("searchbox", { name: "Buscar usuario por nombre o correo" }).fill(email);
+  await expect(userDirectory.getByText("1 cuenta encontrada", { exact: true })).toBeVisible();
+  await userDirectory.getByRole("button", { name: `Seleccionar ${email}`, exact: true }).click();
 
   const memberContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
   const memberPage = await memberContext.newPage();
@@ -75,7 +78,7 @@ test("private identity, user creation, RLS grants, revocation and logout work to
     const beforeGrant = await memberPage.request.get(profilePath, { headers: memberHeaders });
     expect(beforeGrant.status()).toBe(404);
 
-    await page.getByLabel("Identificador de expediente", { exact: true }).fill(profileId);
+    await page.getByLabel("Expediente del catálogo", { exact: true }).selectOption(profileId);
     await page.getByRole("button", { name: "Conceder permiso", exact: true }).click();
     await expect(page.getByText("Permiso ficticio concedido durante 30 días.", { exact: true })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Permiso concedido", exact: true }).first()).toBeVisible();
@@ -117,7 +120,7 @@ test("private identity, user creation, RLS grants, revocation and logout work to
     const recoverySession = await signIn(memberPage, email);
     const reset = page.getByRole("region", { name: "Restablecer acceso de prueba", exact: true });
     const replacementPassword = "Recovered fictional password 2026!";
-    await reset.getByLabel("Usuario al que se restablecerá el acceso", { exact: true }).fill(account.id);
+    await expect(reset).toContainText(email);
     await reset.getByLabel("Tu contraseña de administrador", { exact: true }).fill(password);
     await reset.getByLabel("Nueva contraseña del usuario", { exact: true }).fill(replacementPassword);
     await reset.getByLabel("Confirmar nueva contraseña", { exact: true }).fill(replacementPassword);
@@ -135,6 +138,20 @@ test("private identity, user creation, RLS grants, revocation and logout work to
       organization_id: organization, email, password,
     } });
     expect(oldPasswordLogin.status()).toBe(401);
+    const enabledSession = await signIn(memberPage, email, organization, replacementPassword);
+    const directory = page.getByRole("region", { name: "Directorio de usuarios", exact: true });
+    await directory.getByLabel("Confirmar contraseña para cambiar estado", { exact: true }).fill(password);
+    await directory.getByRole("button", { name: "Suspender cuenta", exact: true }).click();
+    await expect(directory.getByRole("status").filter({ hasText: "Cuenta suspendida." })).toContainText("Sesiones revocadas: 1");
+    const suspended = await memberPage.request.get("/api/v1/auth/me", { headers: { Authorization: `Bearer ${enabledSession.token}` } });
+    expect(suspended.status()).toBe(401);
+    const blockedLogin = await memberPage.request.post("/api/v1/auth/login", { data: { organization_id: organization, email, password: replacementPassword } });
+    expect(blockedLogin.status()).toBe(401);
+    await directory.getByLabel("Confirmar contraseña para cambiar estado", { exact: true }).fill(password);
+    await directory.getByRole("button", { name: "Reactivar cuenta", exact: true }).click();
+    await expect(directory.getByText("Cuenta reactivada. Debe iniciar una sesión nueva.")).toBeVisible();
+    const revokedAfterActivation = await memberPage.request.get("/api/v1/auth/me", { headers: { Authorization: `Bearer ${enabledSession.token}` } });
+    expect(revokedAfterActivation.status()).toBe(401);
     await signIn(memberPage, email, organization, replacementPassword);
     await signOut(memberPage);
 

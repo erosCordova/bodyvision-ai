@@ -25,6 +25,15 @@ from app.services.auth_sessions import (
 )
 from app.services.consents import ConsentAcceptance, ConsentHistory, consent_operation
 from app.services.password_reset import PasswordResetInput, PasswordResetRead, reset_password
+from app.services.user_management import (
+    AccountStatusInput,
+    AccountStatusRead,
+    PermissionCatalog,
+    UserDirectory,
+    change_status,
+    directory,
+    permission_catalog,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authenticated identity"])
 
@@ -52,6 +61,28 @@ def end_session(request: Request) -> None:
 @router.post("/users", response_model=NewSyntheticUserRead, status_code=201)
 def create_synthetic_user(request: Request, data: NewSyntheticUser) -> NewSyntheticUserRead:
     return provision_user(request, data)
+
+
+@router.get("/users", response_model=UserDirectory)
+def list_users(
+    request: Request,
+    search: str = Query("", max_length=100),
+    limit: int = Query(50, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+):
+    return directory(request, search, limit, offset)
+
+
+@router.get("/users/{user_id}/permission-catalog", response_model=PermissionCatalog)
+def list_permission_choices(
+    request: Request, user_id: UUID, search: str = Query("", max_length=100)
+):
+    return permission_catalog(request, user_id, search)
+
+
+@router.post("/users/{user_id}/status", response_model=AccountStatusRead)
+def update_account_status(request: Request, user_id: UUID, data: AccountStatusInput):
+    return change_status(request, user_id, data)
 
 
 @router.post("/users/{user_id}/reset-password", response_model=PasswordResetRead)

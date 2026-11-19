@@ -1236,3 +1236,170 @@ def test_reset_uses_trusted_tables_even_with_temporary_authentication_namesakes(
             assert result["status"] == "reset"
     finally:
         runtime.dispose()
+
+
+def test_admin_directory_search_pagination_and_scope(protected):
+    client, _, _, users = protected
+    admin = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    member = authenticate(client, users[1][0], users[1][1]).json()["token"]
+    path = "/api/v1/auth/users"
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers=headers(member)).status_code == 403
+    first = client.get(path + "?limit=1&offset=0", headers=headers(admin))
+    assert first.status_code == 200, first.text
+    assert first.json()["total"] == 3 and len(first.json()["items"]) == 1
+    second = client.get(path + "?limit=1&offset=1", headers=headers(admin)).json()
+    assert first.json()["items"][0]["id"] != second["items"][0]["id"]
+    email = f"fictional-{users[1][0].hex[:12]}@example.invalid"
+    match = client.get(path + "?search=" + email, headers=headers(admin)).json()
+    assert match["total"] == 1 and match["items"][0]["manageable"]
+    for row in client.get(path, headers=headers(admin)).json()["items"]:
+        assert row["id"] != str(users[2][0])
+        assert "password_hash" not in row and "password" not in row
+        if row["role"] == "administrator":
+            assert not row["manageable"]
+
+
+def test_suspend_reactivate_preserves_grants_and_never_restores_old_sessions(protected):
+    client, owner, profile, users = protected
+    admin = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    old = authenticate(client, users[1][0], users[1][1]).json()["token"]
+    path = f"/api/v1/auth/users/{users[1][0]}/status"
+    body = {"status": "disabled", "administrator_password": PASSWORD}
+    disabled = client.post(path, headers=headers(admin), json=body)
+    assert disabled.status_code == 200 and disabled.json()["revoked_sessions"] == 1
+    assert client.get("/api/v1/auth/me", headers=headers(old)).status_code == 401
+    assert authenticate(client, users[1][0], users[1][1]).status_code == 401
+    duplicate = client.post(path, headers=headers(admin), json=body)
+    assert duplicate.status_code == 200 and not duplicate.json()["changed"]
+    enabled = client.post(path, headers=headers(admin), json={**body, "status": "active"})
+    assert enabled.status_code == 200 and enabled.json()["changed"]
+    assert client.get("/api/v1/auth/me", headers=headers(old)).status_code == 401
+    new = authenticate(client, users[1][0], users[1][1])
+    assert new.status_code == 200
+    assert (
+        client.get(f"/api/v1/profiles/{profile}", headers=headers(new.json()["token"])).status_code
+        == 200
+    )
+    with owner.connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT access_level FROM profile_access WHERE profile_id=:p AND user_id=:u"),
+                {"p": profile, "u": users[1][0]},
+            ).scalar_one()
+            == "read"
+        )
+    audit = client.get("/api/v1/auth/audit", headers=headers(admin)).json()
+    assert {"admin.account_disabled", "admin.account_enabled"} <= {a["action"] for a in audit}
+    disabled_event = next(a for a in audit if a["action"] == "admin.account_disabled")
+    assert disabled_event["actor_label"] == f"fictional-{users[3][0].hex[:12]}@example.invalid"
+    assert disabled_event["target_label"] == f"fictional-{users[1][0].hex[:12]}@example.invalid"
+
+
+def test_account_changes_reject_wrong_password_self_admin_cross_tenant_and_locked(protected):
+    client, owner, _, users = protected
+    admin = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    member = authenticate(client, users[1][0], users[1][1]).json()["token"]
+    path = f"/api/v1/auth/users/{users[1][0]}/status"
+    body = {"status": "disabled", "administrator_password": PASSWORD}
+    assert client.post(path, headers=headers(member), json=body).status_code == 403
+    wrong = client.post(
+        path, headers=headers(admin), json={**body, "administrator_password": "Wrong"}
+    )
+    assert wrong.status_code == 403 and wrong.json()["code"] == "ACCOUNT_REAUTH_REQUIRED"
+    for subject in (users[3][0], users[2][0]):
+        assert (
+            client.post(
+                f"/api/v1/auth/users/{subject}/status", headers=headers(admin), json=body
+            ).status_code
+            == 404
+        )
+    with owner.begin() as connection:
+        connection.execute(
+            text("UPDATE users SET account_status='locked' WHERE id=:id"), {"id": users[1][0]}
+        )
+    assert (
+        client.post(path, headers=headers(admin), json={**body, "status": "active"}).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            path, headers=headers(admin), json={**body, "organization_id": str(SECOND_WORKSPACE)}
+        ).status_code
+        == 422
+    )
+
+
+def test_permission_catalog_exposes_codes_and_grants_without_clinical_contents(protected):
+    client, _, profile, users = protected
+    admin = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    member = authenticate(client, users[1][0], users[1][1]).json()["token"]
+    path = f"/api/v1/auth/users/{users[1][0]}/permission-catalog"
+    data = client.get(path, headers=headers(admin))
+    assert data.status_code == 200, data.text
+    row = next(r for r in data.json()["items"] if r["id"] == str(profile))
+    assert row["access_level"] == "read" and row["effective"]
+    assert set(row) == {"id", "display_code", "status", "access_level", "expires_at", "effective"}
+    assert client.get(path, headers=headers(member)).status_code == 403
+    assert (
+        client.get(
+            f"/api/v1/auth/users/{users[2][0]}/permission-catalog", headers=headers(admin)
+        ).status_code
+        == 404
+    )
+    # Administrative metadata is not authorization to read the expediente.
+    assert client.get(f"/api/v1/profiles/{profile}", headers=headers(admin)).status_code == 404
+    assert client.get(path + "?search=not-a-code", headers=headers(admin)).json()["items"] == []
+
+
+def test_status_audit_failure_rolls_back_suspension_and_session_revocation(protected):
+    client, owner, _, users = protected
+    admin = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    member = authenticate(client, users[1][0], users[1][1]).json()["token"]
+    try:
+        with owner.begin() as connection:
+            connection.execute(
+                text("""
+                CREATE FUNCTION test_status_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN IF NEW.action='admin.account_disabled' THEN
+                  RAISE EXCEPTION 'Synthetic audit failure'; END IF; RETURN NEW; END $$;
+                CREATE TRIGGER test_status_audit BEFORE INSERT ON security_audit_events
+                  FOR EACH ROW EXECUTE FUNCTION test_status_audit();
+            """)
+            )
+        result = client.post(
+            f"/api/v1/auth/users/{users[1][0]}/status",
+            headers=headers(admin),
+            json={"status": "disabled", "administrator_password": PASSWORD},
+        )
+        assert result.status_code == 500
+        assert client.get("/api/v1/auth/me", headers=headers(member)).status_code == 200
+        assert authenticate(client, users[1][0], users[1][1]).status_code == 200
+    finally:
+        with owner.begin() as connection:
+            connection.execute(
+                text("DROP TRIGGER IF EXISTS test_status_audit ON security_audit_events")
+            )
+            connection.execute(text("DROP FUNCTION IF EXISTS test_status_audit()"))
+
+
+def test_status_confirmation_is_limited_independently_of_login(protected):
+    client, _, _, users = protected
+    admin = authenticate(client, users[3][0], users[3][1]).json()["token"]
+    path = f"/api/v1/auth/users/{users[1][0]}/status"
+    for _ in range(5):
+        assert (
+            client.post(
+                path,
+                headers=headers(admin),
+                json={"status": "disabled", "administrator_password": "Wrong"},
+            ).status_code
+            == 403
+        )
+    blocked = client.post(
+        path,
+        headers=headers(admin),
+        json={"status": "disabled", "administrator_password": PASSWORD},
+    )
+    assert blocked.status_code == 429 and blocked.json()["code"] == "ACCOUNT_RATE_LIMITED"
+    assert authenticate(client, users[3][0], users[3][1]).status_code == 200

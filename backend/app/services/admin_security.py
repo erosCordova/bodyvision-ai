@@ -43,6 +43,8 @@ class AuditEventRead(BaseModel):
     resource_id: UUID | None
     outcome: str
     happened_at: datetime
+    actor_label: str | None = None
+    target_label: str | None = None
 
 
 def record_session_event(
@@ -109,19 +111,12 @@ def list_security_events(request: Request, limit: int) -> list[AuditEventRead]:
         raise DomainError(403, "FORBIDDEN", "Acceso a auditoría no permitido.")
 
     with request.app.state.auth_engine.connect() as connection:
-        rows = (
-            connection.execute(
-                text(
-                    "SELECT * FROM private_admin_security_events(CAST(:digest AS char(64)),:limit)"
-                ),
-                {
-                    "digest": hash_session_token(bearer_token(request)),
-                    "limit": limit,
-                },
-            )
-            .mappings()
-            .all()
-        )
+        rows = connection.execute(
+            text("SELECT private_admin_audit(CAST(:digest AS char(64)),:limit)"),
+            {"digest": hash_session_token(bearer_token(request)), "limit": limit},
+        ).scalar_one()
+    if isinstance(rows, dict):
+        raise DomainError(403, "FORBIDDEN", "Acceso a auditoría no permitido.")
     return [AuditEventRead.model_validate(row) for row in rows]
 
 

@@ -394,3 +394,43 @@ fase de seguridad. Quedan recuperación autónoma verificada, primer alta
 administrativa, MFA, política de contraseñas para uso real y revisión de
 privacidad. La estimación manual de la rama pasa a **53%** global y **50%**
 en seguridad e identidad.
+
+## Gestión administrativa integrada (incremento 0011)
+
+La administración privada incorpora un directorio paginado de cuentas
+ficticias de la organización, con búsqueda por nombre o correo, rol y estado.
+Seleccionar una cuenta alimenta los controles de permisos y restablecimiento
+de acceso: el operador trabaja con nombres y códigos de expediente. Los UUID
+siguen siendo identificadores internos del API y no se solicitan en los formularios.
+
+- `GET /api/v1/auth/users`: directorio exclusivo del administrador, hasta
+  cincuenta cuentas por página; excluye los operadores locales y otras organizaciones.
+- `GET /api/v1/auth/users/{id}/permission-catalog`: catálogo administrativo
+  filtrable por código, con estado del expediente, nivel concedido y vencimiento.
+  Devuelve únicamente esa metadata; los datos del expediente siguen requiriendo
+  la concesión explícita correspondiente. La pantalla muestra el permiso actual.
+- `POST /api/v1/auth/users/{id}/status`: suspende o reactiva cuentas ficticias
+  de consulta y especialistas. Exige confirmar la contraseña del administrador,
+  con contador PostgreSQL de intentos independiente del login y del restablecimiento.
+
+Suspender revoca las sesiones anteriores y bloquea los nuevos logins. Reactivar
+exige iniciar una nueva sesión; los tokens revocados no vuelven a servir.
+Los permisos existentes se conservan sujetos a sus vencimientos, y la pantalla
+los muestra como consulta mientras la cuenta está suspendida. Las cuentas
+administradoras, la propia cuenta y las cuentas bloqueadas no admiten estos
+cambios. Se auditan cambios, confirmaciones de estado y denegaciones. Un fallo
+de auditoría revierte tanto el cambio de estado como la revocación de sesiones.
+
+La auditoría muestra al responsable por correo y el destino por correo o código
+administrativo de expediente, siempre dentro de la organización verificada.
+Sus filtros de texto y resultado se aplican a los últimos treinta registros
+mostrados, sin prometer una búsqueda histórica completa. No devuelve contraseñas,
+hashes, tokens, nombres de pacientes ni valores de mediciones.
+
+Esta entrega agrupa directorio, ciclo de cuentas, selección de permisos y
+auditoría legible. La estimación manual de la rama es **55% global**, con
+seguridad e identidad en **65%**. Siguen pendientes MFA, alta administrativa
+inicial, recuperación autónoma y aprobación de privacidad para uso real.
+La versión pública conserva Neon en `0002_data_core`; la migración 0011 se
+valida únicamente en PostgreSQL desechable de desarrollo/CI. Render aloja
+solo el backend. La rama de trabajo conserva la condición de borrador.

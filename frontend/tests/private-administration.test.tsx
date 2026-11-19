@@ -25,6 +25,24 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function withDirectory(fetcher: (url: string, init?: RequestInit) => Promise<Response>) {
+  let grant: "read" | null = null;
+  return async (url: string, init?: RequestInit) => {
+    if (url.startsWith("/api/v1/auth/users?")) return jsonResponse({
+      items: [{ id: CREATED, display_name: "Cuenta ficticia", email: "member@example.invalid", role: "member", status: "active", manageable: true }],
+      total: 1, limit: 50, offset: 0,
+    });
+    if (url.includes("/permission-catalog?")) return jsonResponse({ items: [{
+      id: "a4000000-0000-4000-8000-000000000004", display_code: "FICT-01", status: "active", access_level: grant,
+      expires_at: null, effective: Boolean(grant),
+    }] });
+    const response = await fetcher(url, init);
+    if (url.endsWith("/profile-access/grant")) grant = "read";
+    if (url.endsWith("/profile-access/revoke")) grant = null;
+    return response;
+  };
+}
+
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -90,7 +108,7 @@ describe("private administrator interface", () => {
       }
       throw new Error("Unexpected URL");
     });
-    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("fetch", withDirectory(fetcher));
     mount();
     login();
     expect(await screen.findByRole("heading", { name: "Usuarios y auditoría" })).toBeInTheDocument();
@@ -131,7 +149,7 @@ describe("private administrator interface", () => {
     const fetcher = vi.fn().mockResolvedValue(
       jsonResponse({ ...credentials, role: "member" }),
     );
-    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("fetch", withDirectory(fetcher));
     mount();
     login();
     expect(await screen.findByRole("heading", { name: "Administración y seguridad" })).toBeInTheDocument();
@@ -146,7 +164,7 @@ describe("private administrator interface", () => {
       if (url === "/api/v1/auth/audit?limit=30") return jsonResponse([]);
       throw new Error("Unexpected private write");
     });
-    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("fetch", withDirectory(fetcher));
     mount();
     login();
     await screen.findByRole("heading", { name: "Usuarios y auditoría" });
@@ -167,7 +185,7 @@ describe("private administrator interface", () => {
   it("rejects invalid or expired sessions in direct API calls", async () => {
     await expect(privateAdminApi("short").audit()).rejects.toThrow("sesión");
     const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 403 }));
-    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("fetch", withDirectory(fetcher));
     await expect(privateAdminApi(TOKEN).audit()).rejects.toThrow("permisos");
   });
 });
@@ -189,21 +207,19 @@ describe("private per-expediente permission management", () => {
       }
       throw new Error("Unexpected API request");
     });
-    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("fetch", withDirectory(fetcher));
     mount();
     login();
     await screen.findByRole("heading", { name: "Usuarios y auditoría" });
-    fireEvent.change(screen.getByLabelText("Identificador de expediente"), {
-      target: { value: profile },
-    });
-    fireEvent.change(screen.getByLabelText("Identificador de usuario"), {
-      target: { value: CREATED },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "Seleccionar member@example.invalid" }));
+    await screen.findByRole("option", { name: "FICT-01 · Activo" });
+    fireEvent.change(screen.getByLabelText("Expediente del catálogo"), { target: { value: profile } });
     fireEvent.change(screen.getByLabelText("Nivel de acceso"), {
       target: { value: "read" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Conceder permiso" }));
     expect(await screen.findByText("Permiso ficticio concedido durante 30 días.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Revocar permiso" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Revocar permiso" }));
     expect(await screen.findByText(/Permiso revocado/)).toBeInTheDocument();
 
@@ -230,18 +246,12 @@ describe("private per-expediente permission management", () => {
       if (url === "/api/v1/auth/audit?limit=30") return jsonResponse([]);
       throw new Error("Unexpected write");
     });
-    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("fetch", withDirectory(fetcher));
     mount();
     login();
     await screen.findByRole("heading", { name: "Usuarios y auditoría" });
-    fireEvent.change(screen.getByLabelText("Identificador de expediente"), {
-      target: { value: "invalid" },
-    });
-    fireEvent.change(screen.getByLabelText("Identificador de usuario"), {
-      target: { value: CREATED },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Revocar permiso" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("identificadores UUID válidos");
+    expect(screen.getByRole("button", { name: "Conceder permiso" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Revocar permiso" })).toBeDisabled();
     expect(fetcher.mock.calls.filter(([url]) => String(url).includes("profile-access"))).toHaveLength(0);
   });
 });

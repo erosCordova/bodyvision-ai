@@ -9,6 +9,8 @@ const auditEventSchema = z.object({
   resource_id: z.string().uuid().nullable(),
   outcome: z.enum(["allowed", "denied", "error"]),
   happened_at: z.string(),
+  actor_label: z.string().nullable().optional(),
+  target_label: z.string().nullable().optional(),
 });
 
 const createdUserSchema = z.object({
@@ -42,6 +44,27 @@ export type NewTestAccount = {
 };
 export type CreatedTestAccount = z.infer<typeof createdUserSchema>;
 
+const managedUserSchema = z.object({
+  id: z.string().uuid(), display_name: z.string(), email: z.string(),
+  role: z.enum(["administrator", "specialist", "member", "unassigned"]),
+  status: z.enum(["active", "disabled", "locked"]), manageable: z.boolean(),
+});
+export type ManagedUser = z.infer<typeof managedUserSchema>;
+const directorySchema = z.object({
+  items: z.array(managedUserSchema), total: z.number(), limit: z.number(), offset: z.number(),
+});
+const catalogSchema = z.object({ items: z.array(z.object({
+  id: z.string().uuid(), display_code: z.string(),
+  status: z.enum(["active", "restricted", "archived"]),
+  access_level: z.enum(["read", "write", "manage"]).nullable(),
+  expires_at: z.string().nullable(), effective: z.boolean(),
+})) });
+export type PermissionChoice = z.infer<typeof catalogSchema>["items"][number];
+const accountStatusSchema = z.object({
+  user_id: z.string().uuid(), status: z.enum(["active", "disabled"]),
+  changed: z.boolean(), revoked_sessions: z.number().int().nonnegative(),
+});
+
 const passwordResetSchema = z.object({
   user_id: z.string().uuid(),
   status: z.literal("reset"),
@@ -73,11 +96,12 @@ async function secureRequest(
   }
   if (response.status === 403 || response.status === 429) {
     const body = await response.clone().json().catch(() => ({})) as { code?: string };
-    if (body.code === "RESET_REAUTH_REQUIRED") throw new Error("Confirma la contraseña del administrador.");
-    if (body.code === "RESET_RATE_LIMITED") throw new Error("Demasiados intentos. Espera 15 minutos.");
+    if (["RESET_REAUTH_REQUIRED", "ACCOUNT_REAUTH_REQUIRED"].includes(body.code ?? "")) throw new Error("Confirma la contraseña del administrador.");
+    if (["RESET_RATE_LIMITED", "ACCOUNT_RATE_LIMITED"].includes(body.code ?? "")) throw new Error("Demasiados intentos. Espera 15 minutos.");
   }
   if (response.status === 403) throw new Error("No tienes permisos de administrador.");
   if (response.status === 409) throw new Error("Ya existe una cuenta con ese correo.");
+  if (response.status === 404) throw new Error("El destino no está disponible para esta operación.");
   if (!response.ok) {
     throw new Error("No se pudo completar la operación. Comprueba el servidor de pruebas.");
   }
@@ -86,6 +110,16 @@ async function secureRequest(
 
 export function privateAdminApi(token: string) {
   return {
+    users: async (search = "", offset = 0) => directorySchema.parse(await secureRequest(
+      token, `/users?search=${encodeURIComponent(search)}&limit=50&offset=${offset}`,
+    )),
+    permissionCatalog: async (userId: string, search = "") => catalogSchema.parse(await secureRequest(
+      token, `/users/${userId}/permission-catalog?search=${encodeURIComponent(search)}`,
+    )),
+    changeAccountStatus: async (userId: string, status: "active" | "disabled", administratorPassword: string) =>
+      accountStatusSchema.parse(await secureRequest(token, `/users/${userId}/status`, {
+        method: "POST", body: JSON.stringify({ status, administrator_password: administratorPassword }),
+      })),
     resetPassword: async (userId: string, input: PasswordResetInput) =>
       passwordResetSchema.parse(await secureRequest(token, `/users/${userId}/reset-password`, {
         method: "POST", body: JSON.stringify(input),
