@@ -56,7 +56,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 async function authError(response: Response): Promise<never> {
   const body: unknown = await response.json().catch(() => null);
   const result = z.object({ code: z.string() }).safeParse(body);
-  const code = result.success ? result.data.code : "AUTH_ERROR";
+  const code = result.success ? result.data.code : response.status === 401 ? "INVALID_CREDENTIALS" : "AUTH_ERROR";
   const messages: Record<string, string> = {
     INVALID_CREDENTIALS: "Organización, correo o contraseña incorrectos.",
     MFA_SETUP_REQUIRED: "Configura la verificación de dos factores para ingresar.",
