@@ -4,7 +4,18 @@ import {
   validatePoseImageDimensions, validatePoseImageFile,
 } from "../src/features/capture/poseInputValidation";
 
-const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+const png = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+  0, 0, 4, 0, 0, 0, 4, 0,
+]);
+function pngDimensions(width: number, height: number): Uint8Array {
+  const header = png.slice();
+  const view = new DataView(header.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return header;
+}
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
 const file = (bytes: Uint8Array, type: string) => {
@@ -37,6 +48,29 @@ describe("pose input gates (synthetic local analysis only)", () => {
     await expect(validatePoseImageFile(file(new Uint8Array(), "image/png"))).rejects.toThrow(/validación/);
     await expect(validatePoseImageFile(file(png, "text/plain"))).rejects.toThrow(/validación/);
     await expect(validatePoseImageFile(file(png.slice(0, 3), "image/png"))).rejects.toThrow(/formato/);
+  });
+
+  it("rejects oversized PNG IHDR before any browser image decoding", async () => {
+    await expect(validatePoseImageFile(file(pngDimensions(8000, 8000), "image/png")))
+      .rejects.toThrow(/dimensiones/);
+    await expect(validatePoseImageFile(file(pngDimensions(16001, 100), "image/png")))
+      .rejects.toThrow(/dimensiones/);
+    await expect(validatePoseImageFile(file(pngDimensions(0, 1500), "image/png")))
+      .rejects.toThrow(/dimensiones/);
+  });
+
+  it("accepts a PNG IHDR exactly at the pixel and dimension budget", async () => {
+    await expect(validatePoseImageFile(file(pngDimensions(16000, 2000), "image/png")))
+      .resolves.toBeUndefined();
+  });
+
+  it("rejects truncated or malformed PNG IHDR before decoding", async () => {
+    await expect(validatePoseImageFile(file(png.slice(0, 20), "image/png")))
+      .rejects.toThrow(/cabecera/);
+    const corrupt = png.slice();
+    corrupt[15] = 0;
+    await expect(validatePoseImageFile(file(corrupt, "image/png")))
+      .rejects.toThrow(/cabecera/);
   });
 
   it("rejects files beyond the 10 MiB analysis budget", async () => {
