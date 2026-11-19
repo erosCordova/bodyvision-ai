@@ -1638,6 +1638,9 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
     )
     assert revoked.status_code == 200, revoked.text
     assert client.get(path, headers=writer).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=writer).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=member).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=foreign).status_code == 404
     with owner.connect() as conn:
         assert (
             conn.execute(
