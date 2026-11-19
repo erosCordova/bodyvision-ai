@@ -182,10 +182,14 @@ def test_correction_is_committed_before_http_response(client, database):
     assert corrected.status_code == 201, corrected.text
     new_id = corrected.json()["id"]
     with database.connect() as conn:
-        rows = conn.execute(
-            text("SELECT id,is_current,value FROM measurements WHERE id IN (:old,:new)"),
-            {"old": previous_id, "new": new_id},
-        ).mappings().all()
+        rows = (
+            conn.execute(
+                text("SELECT id,is_current,value FROM measurements WHERE id IN (:old,:new)"),
+                {"old": previous_id, "new": new_id},
+            )
+            .mappings()
+            .all()
+        )
     by_id = {str(row["id"]): row for row in rows}
     assert len(rows) == 2
     assert by_id[previous_id]["is_current"] is False
@@ -202,7 +206,8 @@ def test_workspace_write_dependency_commits_before_response(client):
     from app.api.deps import workspace
 
     routes = [
-        route for route in client.app.routes
+        route
+        for route in client.app.routes
         if isinstance(route, APIRoute) and route.path.startswith("/api/v1/")
     ]
     assert routes
