@@ -73,7 +73,8 @@ def upgrade() -> None:
         BEGIN
           INSERT INTO public.private_audit_heads VALUES(NEW.organization_id,0,repeat('0',64))
             ON CONFLICT(organization_id) DO NOTHING;
-          SELECT last_sequence,last_hash INTO chain_index,chain_prior FROM public.private_audit_heads
+          SELECT last_sequence,last_hash INTO chain_index,chain_prior
+            FROM public.private_audit_heads
             WHERE organization_id=NEW.organization_id FOR UPDATE;
           NEW.chain_sequence := chain_index+1;
           NEW.previous_hash := chain_prior;
