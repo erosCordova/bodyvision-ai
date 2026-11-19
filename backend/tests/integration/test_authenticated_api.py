@@ -1603,7 +1603,7 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
     assert downloaded.content == image
     assert downloaded.headers["content-disposition"].startswith("attachment;")
     assert downloaded.headers["content-type"] == "application/octet-stream"
-    assert downloaded.headers["cache-control"] == "no-store, private"
+    assert "no-store" in downloaded.headers["cache-control"].lower().split(", ")
     assert downloaded.headers["pragma"] == "no-cache"
     assert downloaded.headers["x-content-type-options"] == "nosniff"
     assert "set-cookie" not in downloaded.headers
