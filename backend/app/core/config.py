@@ -56,7 +56,9 @@ class Settings(BaseSettings):
                 raise ValueError("The authenticated database must use a distinct role")
         if self.mfa_enabled:
             if not self.identity_enabled or self.mfa_encryption_key is None:
-                raise ValueError("MFA requires private authentication and an external encryption key")
+                raise ValueError(
+                    "MFA requires private authentication and an external encryption key"
+                )
             try:
                 Fernet(self.mfa_encryption_key.get_secret_value().encode("ascii"))
             except (ValueError, UnicodeError) as exc:
