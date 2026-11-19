@@ -376,10 +376,13 @@ def test_public_api_cannot_bootstrap_an_administrator(protected):
     )
     assert no_session.status_code == 401
     with owner.connect() as connection:
-        assert connection.execute(
-            text("SELECT count(*) FROM users WHERE lower(email)=:email"),
-            {"email": payload["email"]},
-        ).scalar_one() == 0
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM users WHERE lower(email)=:email"),
+                {"email": payload["email"]},
+            ).scalar_one()
+            == 0
+        )
 
 
 def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(protected):
