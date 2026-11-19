@@ -11,6 +11,7 @@ type PoseState = "idle" | "running" | "ready" | "failed";
 
 export function PoseReview({ file, review }: { file: File; review: CaptureReview }) {
   const alive = useRef(true);
+  const requestSequence = useRef(0);
   const [imageUrl, setImageUrl] = useState("");
   const [state, setState] = useState<PoseState>("idle");
   const [estimate, setEstimate] = useState<PoseEstimate | null>(null);
@@ -21,25 +22,33 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
 
   useEffect(() => {
     alive.current = true;
+    // Any in-flight pose estimate belongs only to the image that started it.
+    requestSequence.current += 1;
+    setState("idle");
+    setEstimate(null);
+    setFailure("");
     const url = URL.createObjectURL(file);
     setImageUrl(url);
     return () => {
       alive.current = false;
+      requestSequence.current += 1;
       URL.revokeObjectURL(url);
     };
   }, [file]);
 
   const run = async () => {
+    const requestId = ++requestSequence.current;
+    const inputFile = file;
     setState("running");
     setFailure("");
     setEstimate(null);
     try {
-      const pose = await detectPoseOnDevice(file);
-      if (!alive.current) return;
+      const pose = await detectPoseOnDevice(inputFile);
+      if (!alive.current || requestId !== requestSequence.current) return;
       setEstimate(pose);
       setState("ready");
     } catch {
-      if (!alive.current) return;
+      if (!alive.current || requestId !== requestSequence.current) return;
       setState("failed");
       setFailure(
         "No se pudo ejecutar el detector local. Comprueba que esta versión incluya los archivos verificados, " +
