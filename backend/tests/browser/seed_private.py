@@ -34,7 +34,7 @@ def seed_private_browser_accounts() -> None:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-            if revision != "0016_simulation_scenarios":
+            if revision != "0017_encrypted_synthetic_captures":
                 raise RuntimeError("Private browser fixtures require combined revision 0016")
             for identifier, organization, role, email in [
                 (
