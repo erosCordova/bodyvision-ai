@@ -1881,3 +1881,33 @@ def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
             ).scalar_one()
             >= 1
         )
+
+    # Simulate a stale snapshot row being reintroduced in this disposable DB.
+    # This is a retention-replay test, not a database-provider restore drill.
+    replay_id = uuid4()
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO synthetic_capture_objects(
+                id,organization_id,profile_id,created_by,original_bytes,
+                width,height,sha256_digest,ciphertext,created_at,expires_at
+            ) VALUES (
+                :id,:org,:profile,:actor,:size,32,64,:digest,:encrypted,
+                now()-interval '8 days',now()-interval '1 day'
+            )"""),
+            {
+                "id": replay_id,
+                "org": FIRST_WORKSPACE,
+                "profile": profile_id,
+                "actor": editor[0],
+                "size": len(image),
+                "digest": hashlib.sha256(image).hexdigest(),
+                "encrypted": Fernet(secret).encrypt(image),
+            },
+        )
+    assert purge_due(client.app.state.engine, batch_size=1) == 1
+    with owner.connect() as conn:
+        retained = conn.execute(
+            text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
+            {"profile": profile_id},
+        ).scalars().all()
+        assert retained == [active_id]
