@@ -256,7 +256,9 @@ def rotate_synthetic_capture_keys(profile_id: UUID, scope: Scope, request: Reque
             break
         examined += len(rows)
         if examined > 5000:
-            raise DomainError(409, "CAPTURE_ROTATION_LIMIT", "Demasiados archivos para una sola rotación.")
+            raise DomainError(
+                409, "CAPTURE_ROTATION_LIMIT", "Demasiados archivos para una sola rotación."
+            )
         for row in rows:
             encrypted = bytes(row["ciphertext"])
             try:
