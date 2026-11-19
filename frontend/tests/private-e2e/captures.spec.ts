@@ -20,7 +20,7 @@ test("private capture archives only synthetic PNG after both consents, then dele
   const created = await page.request.post("/api/v1/profiles", {
     headers, data: { birth_year: 1998, display_name: "Foto sintética de CI" },
   });
-  expect(created.status()).toBe(201, await created.text());
+  expect(created.status()).toBe(201);
   const profile = (await created.json() as { id: string }).id;
 
   await page.getByRole("link", { name: "Captura corporal", exact: true }).click();
@@ -54,7 +54,7 @@ test("private capture archives only synthetic PNG after both consents, then dele
       `/api/v1/auth/profiles/${profile}/consents`,
       { headers, data: { purpose, version: "bv-synthetic-v1", confirmed: true } },
     );
-    expect(accepted.status()).toBe(200, await accepted.text());
+    expect(accepted.status()).toBe(200);
   }
   // Re-mounting the capture module refreshes the consent query.
   await page.getByRole("link", { name: "Panel principal", exact: true }).click();
@@ -82,7 +82,7 @@ test("private capture archives only synthetic PNG after both consents, then dele
   );
   await privateArchive.getByRole("button", { name: "Guardar PNG ficticio cifrado" }).click();
   const uploaded = await post;
-  expect(uploaded.status()).toBe(201, await uploaded.text());
+  expect(uploaded.status()).toBe(201);
   expect((await uploaded.json() as { data_type: string }).data_type).toBe("SIMULADO");
   await expect(privateArchive).toContainText("SIMULADO");
 
