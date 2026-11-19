@@ -101,3 +101,40 @@ test("camera requires consent and reports a denied permission without uploading"
   await expect(page.getByRole("alert")).toContainText("No se pudo acceder a la cámara");
   expect(writes).toEqual([]);
 });
+
+test("self-hosted MediaPipe executes real inference on a synthetic no-person image", async ({ page }) => {
+  test.setTimeout(120000);
+  const thirdPartyRequests: string[] = [];
+  page.on("request", request => {
+    if (/cdn\.jsdelivr\.net|storage\.googleapis\.com|unpkg\.com/.test(request.url())) {
+      thirdPartyRequests.push(request.url());
+    }
+  });
+  await page.goto("/capture");
+  await page.getByRole("checkbox", {
+    name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
+  }).check();
+  const encoded = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 1100;
+    const context = canvas.getContext("2d")!;
+    const sky = context.createLinearGradient(0, 0, 0, 1100);
+    sky.addColorStop(0, "#7aa7dd");
+    sky.addColorStop(1, "#dec9a3");
+    context.fillStyle = sky;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "paisaje-sintetico-sin-personas.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(encoded, "base64"),
+  });
+  await page.getByRole("link", { name: "Ver control de calidad en el módulo de análisis" }).click();
+  await page.getByRole("button", { name: "Detectar pose con IA" }).click();
+  await expect(page.getByText(/No se detectó una pose humana/)).toBeVisible({ timeout: 90000 });
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toHaveCount(0);
+  expect(thirdPartyRequests).toEqual([]);
+});
