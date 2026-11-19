@@ -96,23 +96,47 @@ type PoseVisionModule = {
   };
 };
 
+let reusableLandmarker: Promise<PoseLandmarkerInstance> | null = null;
+let pageUnloadHandlerRegistered = false;
+
+/** Reuse only the model runtime across images, never the image pixels or results. */
+async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
+  if (!reusableLandmarker) {
+    reusableLandmarker = (async () => {
+      const vision = await import("../../vendor/vision_bundle.mjs") as unknown as PoseVisionModule;
+      const fileset = await vision.FilesetResolver.forVisionTasks(POSE_WASM_URL);
+      return vision.PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" },
+        runningMode: "IMAGE",
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence: 0.5,
+        outputSegmentationMasks: false,
+      });
+    })().catch(error => {
+      reusableLandmarker = null;
+      throw error;
+    });
+  }
+  if (typeof window !== "undefined" && !pageUnloadHandlerRegistered) {
+    pageUnloadHandlerRegistered = true;
+    window.addEventListener("pagehide", () => {
+      const current = reusableLandmarker;
+      reusableLandmarker = null;
+      void current?.then(instance => instance.close()).catch(() => {});
+    });
+  }
+  return reusableLandmarker;
+}
+
 export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
       !file.size || file.size > 10 * 1024 * 1024) {
     throw new Error("La fotografía no supera la validación local.");
   }
-  // The vendored ESM file is verified at build time and loaded lazily as a Vite chunk.
-  // Only the model and WASM remain static same-origin resources.
-  const vision = await import("../../vendor/vision_bundle.mjs") as unknown as PoseVisionModule;
-  const fileset = await vision.FilesetResolver.forVisionTasks(POSE_WASM_URL);
-  const landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" },
-    runningMode: "IMAGE",
-    numPoses: 1,
-    minPoseDetectionConfidence: 0.5,
-    minPosePresenceConfidence: 0.5,
-    outputSegmentationMasks: false,
-  });
+  // The checked ESM is loaded lazily once; repeated analyses reuse only the
+  // detector instance, with no saved photos, canvases or landmark results.
+  const landmarker = await loadPoseLandmarker();
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -126,6 +150,5 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
     return summarizePoseResult(landmarker.detect(canvas));
   } finally {
     bitmap?.close();
-    landmarker.close();
   }
 }
