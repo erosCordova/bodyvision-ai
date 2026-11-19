@@ -61,7 +61,7 @@ test("real atlas meshes render, layers and tours respond without writing data", 
   await expect(page.getByText("Viaje por el esqueleto", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Restaurar visualización/ }).click();
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true");
-  await page.getByRole("button", { name: "Simular peso", exact: true }).click();
+  await page.getByRole("button", { name: "Peso y estatura", exact: true }).click();
   await page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico", exact: true }).fill("15");
   await expect(page.locator(".studio-weight-indicator")).toContainText("+15%");
   await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
@@ -101,6 +101,16 @@ test("weight morph and polygon overlay change the rendered 3D canvas", async ({ 
   await expect(page.locator(".studio-weight-indicator")).toContainText("+30%");
   const after = await canvas.screenshot();
   expect(after.equals(before), "The 3D surface should visibly deform at +30%").toBe(false);
+  const stature = page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" });
+  await stature.fill("205");
+  await expect(page.locator(".studio-weight-indicator")).toContainText("205 cm");
+  const taller = await canvas.screenshot();
+  expect(taller.equals(after), "The same 3D mesh should become taller").toBe(false);
+  await page.getByRole("button", { name: "Guardar comparación en esta vista" }).click();
+  await expect(page.locator(".studio-sim-saved")).toContainText("205 cm");
+  await page.getByRole("button", { name: "Comparar con el original" }).click();
+  await expect(page.locator(".studio-weight-indicator")).toContainText("175 cm");
+  await page.getByRole("button", { name: "Ver escenario modificado" }).click();
   await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
   const withWireframe = await canvas.screenshot();
   expect(withWireframe.equals(after), "The polygon mesh must render onto the same model").toBe(false);
@@ -111,6 +121,9 @@ test("weight morph and polygon overlay change the rendered 3D canvas", async ({ 
   await expect(page.getByRole("checkbox", { name: /Piel/ })).toBeChecked();
   await expect(page.getByText(/La piel está oculta/)).not.toBeVisible();
   await expect(page.locator(".studio-weight-indicator")).toContainText("+20%");
+  await page.getByRole("button", { name: "Restaurar valores" }).click();
+  await expect(stature).toHaveValue("175");
+  await expect(slider).toHaveValue("0");
   expect(errors).toEqual([]);
 });
 
