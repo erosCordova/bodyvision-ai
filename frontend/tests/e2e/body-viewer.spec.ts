@@ -336,6 +336,18 @@ test("mobile atlas uses a bounded GPU pixel budget and lazy polygon overlays on 
   const detailed = await pixels();
   expect(detailed.count).toBeGreaterThanOrEqual(low.count);
   expect(detailed.count).toBeLessThanOrEqual(2550000);
+  const canvas = page.locator(".studio-canvas canvas");
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+  await page.mouse.down();
+  const duringGesture = await pixels();
+  expect(duringGesture.count, "A gesture should temporarily reduce GPU fragment work")
+    .toBeLessThan(detailed.count);
+  await page.mouse.up();
+  const restored = await pixels();
+  expect(restored.count, "The chosen high-quality resolution must be restored")
+    .toBe(detailed.count);
   await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
   await page.getByRole("button", { name: "Detalles", exact: true }).click();
   await expect(panel).not.toContainText("Mallas: 0");
