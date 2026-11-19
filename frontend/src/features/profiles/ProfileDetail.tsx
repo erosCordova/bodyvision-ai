@@ -100,6 +100,9 @@ export function ProfileDetail() {
                 : "Archivado"}{" "}
             · Organización ficticia
           </p>
+          <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
+            Abrir simulador 3D y escenarios ficticios →
+          </Link>
         </div>
         <button
           className="primary-button"
