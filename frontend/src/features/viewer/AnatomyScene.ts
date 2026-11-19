@@ -8,6 +8,7 @@ import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
+import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount } from "./geometryLod";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
 export const anatomicalLayers = [
@@ -162,6 +163,11 @@ export function createAnatomyScene(
   const settings = new Map<AnatomicalLayer, { visible: boolean; opacity: number }>();
   const assets = new Map<AnatomicalLayer, Set<THREE.Material>>();
   const meshOverlays = new Map<AnatomicalLayer, THREE.MeshBasicMaterial>();
+  type LodEntry = { high: THREE.BufferGeometry; low: THREE.BufferGeometry | null; state: "pending" | "building" | "ready" | "failed" };
+  // The high-fidelity geometry always remains available for detailed study and picking.
+  const lodEntries = new Map<THREE.Mesh, LodEntry>();
+  let lodTimer: number | null = null;
+  let lodBusy = false;
   const volume = { value: 0 };
   const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
   let showWireMesh = false;
@@ -232,6 +238,67 @@ export function createAnatomyScene(
       cpuSubmissionMs = performance.now() - started;
       renderedFrames++;
     }
+  };
+  const applyGeometryLod = () => {
+    let changed = false;
+    for (const [mesh, entry] of lodEntries) {
+      // Selected anatomical structures must always keep the original geometry.
+      const next = quality === "fluida" && mesh !== selectedMesh && entry.low
+        ? entry.low : entry.high;
+      if (mesh.geometry === next) continue;
+      mesh.geometry = next;
+      for (const child of mesh.children) {
+        if (child instanceof THREE.Mesh && child.userData.bodyvisionMeshOverlay) {
+          child.geometry = next;
+        }
+      }
+      changed = true;
+    }
+    if (changed) render();
+  };
+  const queueGeometryLod = () => {
+    if (disposed || quality !== "fluida" || lodBusy || lodTimer !== null) return;
+    const candidate = [...lodEntries].filter(([mesh, entry]) =>
+      entry.state === "pending" && mesh.visible,
+    ).sort((a, b) => triangleCount(b[1].high) - triangleCount(a[1].high))[0];
+    if (!candidate) return;
+    const [mesh, entry] = candidate;
+    entry.state = "building";
+    lodBusy = true;
+    // Yield to the first 3D frame and to input handling. Do not simplify every
+    // model eagerly or run heavy mesh processing in the render loop.
+    lodTimer = window.setTimeout(() => {
+      lodTimer = null;
+      void (async () => {
+        if (disposed || quality !== "fluida") {
+          entry.state = "pending";
+          return;
+        }
+        const { SimplifyModifier } = await import("three/addons/modifiers/SimplifyModifier.js");
+        if (disposed) return;
+        const simplified = await new SimplifyModifier().modify(
+          entry.high, lodVerticesToRemove(entry.high),
+        );
+        if (disposed) {
+          simplified.dispose();
+          return;
+        }
+        if (isUsefulLod(entry.high, simplified)) {
+          entry.low = simplified;
+          entry.state = "ready";
+          applyGeometryLod();
+        } else {
+          simplified.dispose();
+          entry.state = "failed";
+        }
+      })().catch(() => { entry.state = "failed"; }).finally(() => {
+        lodBusy = false;
+        queueGeometryLod();
+      });
+    }, 80);
+    // Keep the mesh reference for geometry and material ownership, not a second
+    // character or an additional render scene.
+    void mesh;
   };
   const resize = () => {
     if (disposed) return;
@@ -323,6 +390,7 @@ export function createAnatomyScene(
     };
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map(highlight) : highlight(mesh.material);
     onSelected({ name: anatomyMeshName(mesh) || "Estructura sin nombre", layer });
+    applyGeometryLod();
     applyAll();
   };
 
@@ -488,6 +556,11 @@ export function createAnatomyScene(
           node.material = Array.isArray(node.material) ? node.material.map(replace) : replace(node.material);
         }
         old.forEach(material => material.dispose());
+        for (const node of originalMeshes) {
+          if (!(node instanceof THREE.SkinnedMesh) && eligibleForGeometryLod(node.geometry)) {
+            lodEntries.set(node, { high: node.geometry, low: null, state: "pending" });
+          }
+        }
         assets.set(layer, new Set([...cached.values(), wireMaterial]));
         objects.set(layer, group);
         anatomical.add(group);
@@ -495,6 +568,7 @@ export function createAnatomyScene(
         if (!fitted) frameBody();
         applyLayer(layer);
         render();
+        queueGeometryLod();
         onStatus("Modelo anatómico preparado · selecciona una estructura");
         onLayerState(layer, "ready");
         if (pendingFocus?.layer === layer) focus(pendingFocus.name, layer);
@@ -549,7 +623,12 @@ export function createAnatomyScene(
       ? THREE.MathUtils.clamp(divider, 15, 85) : 50;
     render();
   };
-  const setQuality = (next: SceneQuality) => { quality = next; resize(); };
+  const setQuality = (next: SceneQuality) => {
+    quality = next;
+    applyGeometryLod();
+    resize();
+    queueGeometryLod();
+  };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
   const resetCamera = () => {
     const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
@@ -683,6 +762,7 @@ export function createAnatomyScene(
     if (disposed) return;
     disposed = true;
     cancelAnimationFrame(raf);
+    if (lodTimer !== null) window.clearTimeout(lodTimer);
     resizeObserver.disconnect();
     document.removeEventListener("visibilitychange", visibilityChange);
     canvas.removeEventListener("webglcontextlost", contextLost);
@@ -698,6 +778,11 @@ export function createAnatomyScene(
     controls.dispose();
     restoreHighlight();
     for (const group of objects.values()) releaseRoot(group);
+    for (const entry of lodEntries.values()) {
+      entry.high.dispose();
+      entry.low?.dispose();
+    }
+    lodEntries.clear();
     for (const materials of assets.values()) materials.forEach(m => m.dispose());
     draco.dispose();
     renderer.dispose();
@@ -713,9 +798,13 @@ export function createAnatomyScene(
       if (node.userData.bodyvisionMeshOverlay) overlays++;
       else meshes++;
     });
+    const activeLods = [...lodEntries].filter(([mesh, entry]) => entry.low !== null && mesh.geometry === entry.low);
     return {
       mode: quality,
       interacting,
+      lodMeshes: activeLods.length,
+      lodTrianglesSaved: activeLods.reduce((total, [mesh, entry]) =>
+        total + triangleCount(entry.high) - triangleCount(mesh.geometry), 0),
       pixelRatio: renderer.getPixelRatio(),
       bufferWidth: Math.round(buffer.width),
       bufferHeight: Math.round(buffer.height),
