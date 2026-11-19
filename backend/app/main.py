@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
@@ -22,6 +23,7 @@ from app.core.config import Settings
 from app.core.errors import DomainError
 from app.core.logging import configure_logging
 from app.db.session import build_engine
+from app.workers.capture_retention import retention_loop
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -42,11 +44,23 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         logging.getLogger("bodyvision").info("service_started")
-        yield
-        database_engine.dispose()
-        if auth_engine is not None:
-            auth_engine.dispose()
-        logging.getLogger("bodyvision").info("service_stopped")
+        retention_task = None
+        if settings.identity_enabled and settings.capture_encryption_key is not None:
+            retention_task = asyncio.create_task(
+                retention_loop(database_engine, settings.capture_retention_interval_seconds),
+                name="private_synthetic_capture_retention",
+            )
+        try:
+            yield
+        finally:
+            if retention_task is not None:
+                retention_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await retention_task
+            database_engine.dispose()
+            if auth_engine is not None:
+                auth_engine.dispose()
+            logging.getLogger("bodyvision").info("service_stopped")
 
     app = FastAPI(
         title="BODYVISION AI — Synthetic data core",
