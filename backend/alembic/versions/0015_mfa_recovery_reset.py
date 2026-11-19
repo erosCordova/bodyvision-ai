@@ -75,9 +75,7 @@ def upgrade() -> None:
           RETURN 'ok';
         END $$;
     """)
-    signature = (
-        "private_mfa_reset_with_recovery(uuid,uuid,text,uuid,text,text,uuid,uuid)"
-    )
+    signature = "private_mfa_reset_with_recovery(uuid,uuid,text,uuid,text,text,uuid,uuid)"
     op.execute(f"REVOKE ALL ON FUNCTION public.{signature} FROM PUBLIC,bodyvision_app")
     op.execute(f"GRANT EXECUTE ON FUNCTION public.{signature} TO bodyvision_auth_app")
     op.execute("UPDATE system_schema_state SET revision='0015_mfa_recovery_reset'")
