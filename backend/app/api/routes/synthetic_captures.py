@@ -80,12 +80,16 @@ def _audit(scope: Workspace, action: str, profile_id: UUID) -> None:
 
 
 def _row(scope: Workspace, profile_id: UUID, capture_id: UUID) -> dict:
-    selected = scope.connection.execute(
-        text(f"""SELECT {FIELDS},ciphertext FROM synthetic_capture_objects
+    selected = (
+        scope.connection.execute(
+            text(f"""SELECT {FIELDS},ciphertext FROM synthetic_capture_objects
           WHERE organization_id=:org AND profile_id=:profile AND id=:id
             AND expires_at>now()"""),
-        {"org": scope.organization_id, "profile": profile_id, "id": capture_id},
-    ).mappings().one_or_none()
+            {"org": scope.organization_id, "profile": profile_id, "id": capture_id},
+        )
+        .mappings()
+        .one_or_none()
+    )
     if selected is None:
         raise DomainError(404, "NOT_FOUND", "Captura ficticia no disponible.")
     return dict(selected)
@@ -96,9 +100,7 @@ def _row(scope: Workspace, profile_id: UUID, capture_id: UUID) -> dict:
     response_model=SyntheticCaptureRead,
     status_code=201,
 )
-async def upload_synthetic_capture(
-    profile_id: UUID, scope: Scope, request: Request
-):
+async def upload_synthetic_capture(profile_id: UUID, scope: Scope, request: Request):
     cipher = _cipher(request)
     if not scope.authenticated or scope.role not in {"administrator", "specialist"}:
         raise DomainError(403, "FORBIDDEN", "Solo usuarios de prueba con permisos de edición.")
@@ -121,45 +123,54 @@ async def upload_synthetic_capture(
     width, height = validate_synthetic_png(contents)
     identifier = uuid4()
     params = {
-        "id": identifier, "org": scope.organization_id, "profile": profile_id,
-        "actor": scope.actor_id, "size": len(contents), "width": width,
-        "height": height, "sha": hashlib.sha256(contents).hexdigest(),
+        "id": identifier,
+        "org": scope.organization_id,
+        "profile": profile_id,
+        "actor": scope.actor_id,
+        "size": len(contents),
+        "width": width,
+        "height": height,
+        "sha": hashlib.sha256(contents).hexdigest(),
         "encrypted": cipher.encrypt(contents),
     }
-    row = scope.connection.execute(
-        text(f"""INSERT INTO synthetic_capture_objects(
+    row = (
+        scope.connection.execute(
+            text(f"""INSERT INTO synthetic_capture_objects(
           id,organization_id,profile_id,created_by,original_bytes,
           width,height,sha256_digest,ciphertext
         ) VALUES (
           :id,:org,:profile,:actor,:size,:width,:height,:sha,:encrypted
         ) RETURNING {FIELDS}"""),
-        params,
-    ).mappings().one()
+            params,
+        )
+        .mappings()
+        .one()
+    )
     _audit(scope, "capture.create", profile_id)
     return {**row, "data_type": "SIMULADO"}
 
 
-@router.get(
-    "/profiles/{profile_id}/captures", response_model=SyntheticCaptureList
-)
+@router.get("/profiles/{profile_id}/captures", response_model=SyntheticCaptureList)
 def list_synthetic_captures(profile_id: UUID, scope: Scope, request: Request):
     _cipher(request)
     records.profile(scope, profile_id)
     _consented(scope, profile_id)
-    rows = scope.connection.execute(
-        text(f"""SELECT {FIELDS} FROM synthetic_capture_objects
+    rows = (
+        scope.connection.execute(
+            text(f"""SELECT {FIELDS} FROM synthetic_capture_objects
           WHERE organization_id=:org AND profile_id=:profile AND expires_at>now()
           ORDER BY created_at DESC,id DESC LIMIT 50"""),
-        {"org": scope.organization_id, "profile": profile_id},
-    ).mappings().all()
+            {"org": scope.organization_id, "profile": profile_id},
+        )
+        .mappings()
+        .all()
+    )
     _audit(scope, "capture.list", profile_id)
     return {"items": [{**row, "data_type": "SIMULADO"} for row in rows], "total": len(rows)}
 
 
 @router.get("/profiles/{profile_id}/captures/{capture_id}")
-def download_synthetic_capture(
-    profile_id: UUID, capture_id: UUID, scope: Scope, request: Request
-):
+def download_synthetic_capture(profile_id: UUID, capture_id: UUID, scope: Scope, request: Request):
     cipher = _cipher(request)
     records.profile(scope, profile_id)
     _consented(scope, profile_id)
@@ -179,9 +190,7 @@ def download_synthetic_capture(
 
 
 @router.delete("/profiles/{profile_id}/captures/{capture_id}", status_code=204)
-def delete_synthetic_capture(
-    profile_id: UUID, capture_id: UUID, scope: Scope, request: Request
-):
+def delete_synthetic_capture(profile_id: UUID, capture_id: UUID, scope: Scope, request: Request):
     _cipher(request)
     if scope.role not in {"administrator", "specialist"}:
         raise DomainError(403, "FORBIDDEN", "El permiso de lectura no permite borrar.")
@@ -199,18 +208,20 @@ def delete_synthetic_capture(
 
 
 @router.post("/profiles/{profile_id}/captures/purge-expired")
-def purge_expired_synthetic_captures(
-    profile_id: UUID, scope: Scope, request: Request
-):
+def purge_expired_synthetic_captures(profile_id: UUID, scope: Scope, request: Request):
     _cipher(request)
     if scope.role not in {"administrator", "specialist"}:
         raise DomainError(403, "FORBIDDEN", "Se requiere permiso de edición.")
     records.profile(scope, profile_id, write=True)
-    deleted = scope.connection.execute(
-        text("""DELETE FROM synthetic_capture_objects
+    deleted = (
+        scope.connection.execute(
+            text("""DELETE FROM synthetic_capture_objects
           WHERE organization_id=:org AND profile_id=:profile AND expires_at<=now()
           RETURNING id"""),
-        {"org": scope.organization_id, "profile": profile_id},
-    ).scalars().all()
+            {"org": scope.organization_id, "profile": profile_id},
+        )
+        .scalars()
+        .all()
+    )
     _audit(scope, "capture.purge", profile_id)
     return {"deleted": len(deleted)}
