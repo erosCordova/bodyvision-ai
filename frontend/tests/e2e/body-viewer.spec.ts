@@ -307,3 +307,37 @@ test("pose quality matrix reviews dim light, lower resolution and cropped synthe
   }, null, 2));
   expect(observations).toHaveLength(3);
 });
+
+test("mobile atlas uses a bounded GPU pixel budget and lazy polygon overlays on the same body", async ({ page }) => {
+  test.setTimeout(100000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const fluid = page.getByRole("button", { name: "Fluida", exact: true });
+  const high = page.getByRole("button", { name: "Alta", exact: true });
+  await expect(fluid).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  const panel = page.getByLabel("Diagnóstico de renderizado");
+  await expect(panel).toContainText("Mallas: 0");
+  const pixels = async () => page.locator(".studio-canvas canvas").evaluate(
+    (canvas: HTMLCanvasElement) => ({ count: canvas.width * canvas.height, width: canvas.width, height: canvas.height })
+  );
+  const low = await pixels();
+  expect(low.count).toBeLessThanOrEqual(970000);
+  await expect(panel).toContainText("Resolución:");
+  await page.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+  await high.click();
+  await expect(high).toHaveAttribute("aria-pressed", "true");
+  const detailed = await pixels();
+  expect(detailed.count).toBeGreaterThanOrEqual(low.count);
+  expect(detailed.count).toBeLessThanOrEqual(2550000);
+  await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  await expect(panel).not.toContainText("Mallas: 0");
+  await page.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+  await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Malla 3D", exact: true })).toHaveAttribute("aria-pressed", "false");
+  // The skin's one and only original canvas is preserved across both modes.
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});

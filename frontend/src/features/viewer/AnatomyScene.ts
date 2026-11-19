@@ -7,6 +7,7 @@ import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?
 import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { heightScale } from "./bodyStature";
+import { atlasPixelRatio } from "./renderBudget";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
 export const anatomicalLayers = [
@@ -177,7 +178,8 @@ export function createAnatomyScene(
     if (disposed) return;
     const bounds = host.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === "alta" ? 1.65 : 1));
+    const ratio = atlasPixelRatio(bounds.width, bounds.height, window.devicePixelRatio || 1, quality);
+    if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
     renderer.setSize(bounds.width, bounds.height, false);
     camera.aspect = bounds.width / bounds.height;
     camera.updateProjectionMatrix();
@@ -189,8 +191,9 @@ export function createAnatomyScene(
   const tick = () => {
     raf = 0;
     if (disposed || !autoRotate || document.hidden) return;
+    // OrbitControls emits "change" and renders through its registered listener.
+    // A second synchronous render per animation frame would double GPU work.
     controls.update();
-    render();
     raf = requestAnimationFrame(tick);
   };
   const updateAnimation = () => {
@@ -336,6 +339,25 @@ export function createAnatomyScene(
     return true;
   };
 
+  /** Only allocate the polygon overlay when explicitly requested. Geometry stays shared. */
+  const ensureWireOverlays = (layer: AnatomicalLayer, group: THREE.Group) => {
+    const wire = meshOverlays.get(layer);
+    if (!wire) return;
+    const candidates: THREE.Mesh[] = [];
+    group.traverse(node => {
+      if (!(node instanceof THREE.Mesh) || node.userData.bodyvisionMeshOverlay) return;
+      if (!node.children.some(child => child.userData.bodyvisionMeshOverlay)) candidates.push(node);
+    });
+    for (const node of candidates) {
+      const overlay = new THREE.Mesh(node.geometry, wire);
+      overlay.userData.bodyvisionMeshOverlay = true;
+      overlay.name = "Malla poligonal " + layer;
+      overlay.frustumCulled = false;
+      overlay.renderOrder = 2;
+      node.add(overlay);
+    }
+  };
+
   const load = (layer: AnatomicalLayer) => {
     if (disposed || objects.has(layer) || loading.has(layer)) return;
     loading.add(layer);
@@ -359,13 +381,6 @@ export function createAnatomyScene(
         group.traverse(node => { if (node instanceof THREE.Mesh) originalMeshes.push(node); });
         for (const node of originalMeshes) {
           node.frustumCulled = false;
-          const overlay = new THREE.Mesh(node.geometry, wireMaterial);
-          overlay.userData.bodyvisionMeshOverlay = true;
-          overlay.name = "Malla poligonal " + layer;
-          overlay.frustumCulled = false;
-          overlay.renderOrder = 2;
-          overlay.visible = false;
-          node.add(overlay);
           const replace = (material: THREE.Material) => {
             old.add(material);
             const name = material.name || "generic";
@@ -390,6 +405,7 @@ export function createAnatomyScene(
         assets.set(layer, new Set([...cached.values(), wireMaterial]));
         objects.set(layer, group);
         anatomical.add(group);
+        if (showWireMesh) ensureWireOverlays(layer, group);
         if (!fitted) frameBody();
         applyLayer(layer);
         onStatus("Modelo anatómico preparado · selecciona una estructura");
@@ -435,7 +451,11 @@ export function createAnatomyScene(
     }
     render();
   };
-  const setMeshOverlay = (enabled: boolean) => { showWireMesh = enabled; applyAll(); };
+  const setMeshOverlay = (enabled: boolean) => {
+    showWireMesh = enabled;
+    if (enabled) for (const [layer, group] of objects) ensureWireOverlays(layer, group);
+    applyAll();
+  };
   const setQuality = (next: SceneQuality) => { quality = next; resize(); };
   const setIsolated = (enabled: boolean) => { isolated = enabled && !!selectedMesh; applyAll(); };
   const resetCamera = () => {
@@ -513,6 +533,26 @@ export function createAnatomyScene(
     renderer.forceContextLoss();
     canvas.remove();
   };
+  const getPerformanceStats = () => {
+    const buffer = renderer.getDrawingBufferSize(new THREE.Vector2());
+    let meshes = 0;
+    let overlays = 0;
+    for (const group of objects.values()) group.traverse(node => {
+      if (!(node instanceof THREE.Mesh)) return;
+      if (node.userData.bodyvisionMeshOverlay) overlays++;
+      else meshes++;
+    });
+    return {
+      mode: quality,
+      pixelRatio: renderer.getPixelRatio(),
+      bufferWidth: Math.round(buffer.width),
+      bufferHeight: Math.round(buffer.height),
+      drawCalls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      meshes,
+      overlays,
+    };
+  };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
   const capturePng = async (): Promise<Blob> => {
     if (disposed || !canvas.isConnected) throw new Error("Visor 3D no disponible");
@@ -531,5 +571,5 @@ export function createAnatomyScene(
       }
     });
   };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, retryLayer, dispose };
 }

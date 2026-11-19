@@ -8,6 +8,7 @@ import {
 import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario } from "./bodyVolume";
 import { BASELINE_HEIGHT_CM } from "./bodyStature";
+import { preferredAtlasQuality } from "./renderBudget";
 import { reviewLocalCapture } from "../capture/captureQuality";
 import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyNameKey } from "./anatomyNames";
@@ -132,7 +133,12 @@ export function AnatomyAtlas() {
   const [captureError, setCaptureError] = useState("");
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
-  const [quality, setQuality] = useState<SceneQuality>("alta");
+  const [quality, setQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
+    window.innerWidth,
+    window.matchMedia("(pointer: coarse)").matches,
+    (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+  ));
+  const [renderStats, setRenderStats] = useState<ReturnType<AtlasController["getPerformanceStats"]> | null>(null);
   const [spin, setSpin] = useState(false);
   const [isolated, setIsolated] = useState(false);
   const [showMarker, setShowMarker] = useState(true);
@@ -409,6 +415,14 @@ export function AnatomyAtlas() {
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
             <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
           </div>
+          {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado">
+            <strong>Diagnóstico de visualización</strong>
+            <span>Resolución: {renderStats.bufferWidth} × {renderStats.bufferHeight} píxeles</span>
+            <span>Geometrías: {renderStats.meshes} · Mallas: {renderStats.overlays}</span>
+            <span>Operaciones gráficas: {renderStats.drawCalls} · Triángulos: {renderStats.triangles.toLocaleString("es-PE")}</span>
+            <small>Datos del último fotograma, no son FPS ni un benchmark.</small>
+            <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
+          </aside>}
           <div className="studio-view-angles" role="group" aria-label="Cambiar ángulo">
             <button onClick={() => controller.current?.view("front")}>Frente</button>
             <button onClick={() => controller.current?.view("back")}>Espalda</button>
@@ -446,8 +460,10 @@ export function AnatomyAtlas() {
             </div>
             <div className="studio-dock-group">
               <span>RENDIMIENTO</span>
-              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => setQuality("alta")}>Alta</button>
-              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => setQuality("fluida")}>Fluida</button>
+              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => { setQuality("alta"); setRenderStats(null); }}>Alta</button>
+              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => { setQuality("fluida"); setRenderStats(null); }}>Fluida</button>
+              <button aria-pressed={!!renderStats} onClick={() => setRenderStats(current =>
+                current ? null : controller.current?.getPerformanceStats() ?? null)}>Detalles</button>
             </div>
             <div className="studio-dock-group">
               <span>HERRAMIENTAS</span>
