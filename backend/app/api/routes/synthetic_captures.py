@@ -1,6 +1,7 @@
 """Private encrypted storage of small synthetic PNGs, never clinical originals."""
 
 import hashlib
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -30,8 +31,8 @@ class SyntheticCaptureRead(BaseModel):
     width: int
     height: int
     sha256_digest: str
-    created_at: str
-    expires_at: str
+    created_at: datetime
+    expires_at: datetime
     data_type: str = "SIMULADO"
 
 
