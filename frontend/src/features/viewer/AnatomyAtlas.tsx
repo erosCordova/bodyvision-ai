@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
+import { dateTime } from "../../components/ui/States";
 import { Link, useNavigate } from "react-router-dom";
 import {
   anatomicalLayers, createAnatomyScene,
@@ -118,6 +122,8 @@ function findFromMesh(entries: AtlasEntry[], part: SelectedStructure | null) {
 
 export function AnatomyAtlas() {
   const navigate = useNavigate();
+  const { id: workspaceId, api, readOnly } = useWorkspace();
+  const queryClient = useQueryClient();
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<AtlasController | null>(null);
@@ -134,6 +140,51 @@ export function AnatomyAtlas() {
   const [captureBusy, setCaptureBusy] = useState(false);
   const [captureError, setCaptureError] = useState("");
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
+  const [scenarioProfileId, setScenarioProfileId] = useState(
+    () => new URLSearchParams(window.location.search).get("profile") ?? "",
+  );
+  const [scenarioParentId, setScenarioParentId] = useState("");
+  const [scenarioRevisionNote, setScenarioRevisionNote] = useState("");
+  const [scenarioVersionId, setScenarioVersionId] = useState("");
+  const [scenarioNotice, setScenarioNotice] = useState("");
+  const syntheticProfiles = useQuery({
+    queryKey: ["simulation-profile-options", workspaceId],
+    queryFn: () => api.profiles("", 0),
+    enabled: panel === "simulacion",
+  });
+  const linkedProfile = useQuery({
+    queryKey: ["simulation-linked-profile", workspaceId, scenarioProfileId],
+    queryFn: () => api.profile(scenarioProfileId),
+    enabled: panel === "simulacion" && !!scenarioProfileId,
+  });
+  const scenarioHistory = useQuery({
+    queryKey: ["simulation-history", workspaceId, scenarioProfileId],
+    queryFn: () => api.scenarios(scenarioProfileId),
+    enabled: panel === "simulacion" && !!scenarioProfileId,
+  });
+  const scenarioVersions = useQuery({
+    queryKey: ["simulation-versions", workspaceId, scenarioProfileId, scenarioVersionId],
+    queryFn: () => api.scenarioVersions(scenarioProfileId, scenarioVersionId),
+    enabled: panel === "simulacion" && !!scenarioProfileId && !!scenarioVersionId,
+  });
+  const saveVersion = useMutation({
+    mutationFn: () => api.saveScenario(scenarioProfileId, {
+      reference_kg: referenceKg,
+      variation_percent: weightVariation,
+      stature_cm: statureCm,
+      ...(scenarioParentId ? {
+        prior_version_id: scenarioParentId,
+        revision_note: scenarioRevisionNote.trim(),
+      } : {}),
+    }, crypto.randomUUID()),
+    onSuccess: async scenario => {
+      setScenarioParentId(scenario.id);
+      setScenarioRevisionNote("");
+      setScenarioNotice(`Versión ${scenario.version} registrada como SIMULADO. Las mediciones observadas no se modificaron.`);
+      await queryClient.invalidateQueries({ queryKey: ["simulation-history", workspaceId, scenarioProfileId] });
+      await queryClient.invalidateQueries({ queryKey: ["simulation-versions", workspaceId, scenarioProfileId] });
+    },
+  });
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
   const [qualityPreference, setQualityPreference] = useState<SceneQuality | "auto">("auto");
   const [recommendedQuality, setRecommendedQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
@@ -350,6 +401,21 @@ export function AnatomyAtlas() {
   const toggleMesh = () => {
     if (mode === "holograma") setMode("realista");
     setMeshOverlay(value => !value);
+  };
+  const restoreHistoryScenario = (row: {
+    id: string; reference_kg: number; variation_percent: number; stature_cm: number;
+  }) => {
+    setReferenceKg(row.reference_kg);
+    setWeightVariation(row.variation_percent);
+    setStatureCm(row.stature_cm);
+    setScenarioParentId(row.id);
+    setScenarioRevisionNote("");
+    setScenarioNotice("Escenario histórico recuperado sobre el mismo cuerpo 3D. Se requiere un motivo para guardar la siguiente versión.");
+    setBaselinePreview(false);
+    setComparison(false);
+    setVisible(["skin"]);
+    setOpacity({ ...initialOpacity });
+    setMode("realista");
   };
   const resetSimulation = () => {
     setReferenceKg(70);
@@ -634,6 +700,97 @@ export function AnatomyAtlas() {
                   <p>Base {savedScenario.baseKg} kg / {BASELINE_HEIGHT_CM} cm → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg / {savedScenario.statureCm} cm.</p>
                   <button onClick={() => { setReferenceKg(savedScenario.baseKg); setWeightVariation(savedScenario.delta); setStatureCm(savedScenario.statureCm); setBaselinePreview(false); }}>Recuperar escenario</button>
                 </div>}
+                <section className="studio-scenario-history" aria-label="Historial de escenarios simulados">
+                  <div className="studio-scenario-history-head">
+                    <div>
+                      <p className="studio-eyebrow">HISTORIAL VERSIONADO · SOLO DATOS FICTICIOS</p>
+                      <h3>Escenarios 3D por expediente</h3>
+                    </div>
+                    <DataTypeBadge type="SIMULADO" />
+                  </div>
+                  <p>Las versiones se guardan por separado de las mediciones observadas. Cada versión conserva su autor, fecha y relación con la anterior.</p>
+                  <label className="studio-sim-number">
+                    Expediente de prueba
+                    <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
+                      onChange={event => {
+                        setScenarioProfileId(event.target.value);
+                        setScenarioParentId("");
+                        setScenarioVersionId("");
+                        setScenarioRevisionNote("");
+                        setScenarioNotice("");
+                        saveVersion.reset();
+                      }}>
+                      <option value="">Seleccionar expediente ficticio</option>
+                      {linkedProfile.data && !syntheticProfiles.data?.items.some(row => row.id === linkedProfile.data?.id) && (
+                        <option value={linkedProfile.data.id}>{linkedProfile.data.display_name || linkedProfile.data.display_code}</option>
+                      )}
+                      {syntheticProfiles.data?.items.map(profile => (
+                        <option key={profile.id} value={profile.id}>{profile.display_name || profile.display_code}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {syntheticProfiles.isError && <p role="alert">No se pudo cargar la lista de expedientes ficticios.</p>}
+                  {linkedProfile.isError && scenarioProfileId && <p role="alert">El expediente seleccionado no está disponible en este espacio de trabajo.</p>}
+                  {scenarioProfileId && linkedProfile.data && (
+                    <>
+                      <p className="studio-sim-lead">Expediente: {linkedProfile.data.display_code} · {linkedProfile.data.status === "active" ? "Activo" : "Solo lectura"}</p>
+                      {scenarioParentId && (
+                        <label className="studio-sim-number">
+                          Motivo de nueva versión (mínimo 5 caracteres)
+                          <input type="text" maxLength={200} value={scenarioRevisionNote}
+                            placeholder="Por ejemplo: ajustar el escenario de peso"
+                            onChange={event => setScenarioRevisionNote(event.target.value)} />
+                        </label>
+                      )}
+                      <div className="studio-sim-actions">
+                        <button type="button" disabled={readOnly || linkedProfile.data.status !== "active" ||
+                            saveVersion.isPending || !!(scenarioParentId && scenarioRevisionNote.trim().length < 5)}
+                          onClick={() => { setScenarioNotice(""); saveVersion.mutate(); }}>
+                          {saveVersion.isPending ? "Guardando versión…" :
+                            scenarioParentId ? "Guardar siguiente versión" : "Crear escenario versionado"}
+                        </button>
+                        {scenarioParentId && <button type="button" onClick={() => {
+                          setScenarioParentId(""); setScenarioRevisionNote(""); setScenarioNotice("");
+                        }}>Comenzar otro escenario</button>}
+                      </div>
+                      {readOnly && <p className="studio-sim-lead">La demostración pública permite consultar el historial, pero no registrar cambios.</p>}
+                      {saveVersion.isError && <p role="alert">{saveVersion.error.message}</p>}
+                      {scenarioNotice && <p role="status" className="studio-sim-success">{scenarioNotice}</p>}
+                      <div className="studio-scenario-records">
+                        <h4>Historial registrado</h4>
+                        {scenarioHistory.isPending && <p>Cargando versiones…</p>}
+                        {scenarioHistory.isError && <p role="alert">No se pudo consultar el historial de simulaciones.</p>}
+                        {scenarioHistory.data?.items.length === 0 && <p>Aún no hay escenarios registrados.</p>}
+                        {scenarioHistory.data && <ol aria-label="Versiones de simulación guardadas">
+                          {scenarioHistory.data.items.map(row => (
+                            <li key={row.id}>
+                              <div>
+                                <strong>Escenario {row.series_id.slice(0, 8)} · v{row.version}</strong>
+                                <span>{row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}</span>
+                                {row.revision_note && <small>{row.revision_note}</small>}
+                              </div>
+                              <div className="studio-scenario-row-actions">
+                                <button type="button" onClick={() => restoreHistoryScenario(row)}>Cargar en 3D</button>
+                                <button type="button" onClick={() => setScenarioVersionId(row.id)}>Ver versiones</button>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>}
+                        {!!scenarioHistory.data && scenarioHistory.data.total > scenarioHistory.data.items.length &&
+                          <p>Se muestran las últimas 20 versiones de {scenarioHistory.data.total}. Consulta las cadenas de versiones para revisar el historial asociado.</p>}
+                      </div>
+                      {!!scenarioVersionId && <div className="studio-sim-saved" aria-label="Cadena de versiones del escenario">
+                        <strong>Cadena de versiones</strong>
+                        <button type="button" onClick={() => setScenarioVersionId("")}>Cerrar historial</button>
+                        {scenarioVersions.isPending && <p>Consultando versiones…</p>}
+                        {scenarioVersions.isError && <p role="alert">No se pudo recuperar la cadena de versiones.</p>}
+                        {scenarioVersions.data?.map(row => <p key={row.id}>
+                          v{row.version} · {row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}
+                        </p>)}
+                      </div>}
+                    </>
+                  )}
+                </section>
                 <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg y los cm son valores hipotéticos; la deformación 3D no calcula grasa, masa muscular, proporciones anatómicas reales ni predice la apariencia de una persona. No modifica mediciones, expedientes ni reportes.</p>
               </div>
             )}
