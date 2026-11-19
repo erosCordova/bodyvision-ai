@@ -184,18 +184,12 @@ test("self-hosted pose model analyses a screenshot of the licensed synthetic ana
   inAnalysis = true;
   await page.getByRole("button", { name: "Detectar pose con IA" }).click();
   const result = page.getByRole("region", { name: "Estimación local de pose con IA" });
-  await expect(result).toContainText(/Pose detectada|No se detectó una pose humana/, { timeout: 90000 });
-  const detected = await result.getByText(/Pose detectada/).count();
-  if (detected > 0) {
-    await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
-      .toBeVisible();
-  } else {
-    await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
-      .toHaveCount(0);
-  }
-  // The model's real output, including no-detection, is an acceptable test observation.
-  console.log("Local pose result on synthetic anatomical atlas: " +
-    (detected > 0 ? "33-landmark pose detected" : "no pose detected"));
+  await expect(result).toContainText("Pose detectada.", { timeout: 90000 });
+  await expect(result).toContainText("de 33 puntos");
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toBeVisible();
+  // This is real model output on the existing licensed synthetic 3D model, not mocked points.
+  console.log("Local MediaPipe pose detected on the synthetic BODYVISION anatomical atlas");
   expect(externalPoseRequests).toEqual([]);
   await page.screenshot({ path: "test-results/pose-synthetic-anatomical-body.png", fullPage: true });
 });
