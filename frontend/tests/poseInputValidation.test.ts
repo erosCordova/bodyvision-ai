@@ -8,14 +8,14 @@ const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
 const file = (bytes: Uint8Array, type: string) =>
-  new File([bytes.slice().buffer], "ficticia", { type });
+  new File([bytes.slice().buffer as ArrayBuffer], "ficticia", { type });
 
 describe("pose input gates (synthetic local analysis only)", () => {
   it.each([
-    ["image/png", png],
-    ["image/jpeg", jpeg],
-    ["image/webp", webp],
-  ])("accepts a matching %s header", async (type, signature) => {
+    { type: "image/png", signature: png },
+    { type: "image/jpeg", signature: jpeg },
+    { type: "image/webp", signature: webp },
+  ])("accepts a matching $type header", async ({ type, signature }) => {
     await expect(validatePoseImageFile(file(signature, type))).resolves.toBeUndefined();
   });
 
