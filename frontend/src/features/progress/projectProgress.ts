@@ -13,7 +13,7 @@ export type ProjectPhase = {
   pending: string;
   milestone: string;
 };
-export const reviewedAt = "2026-11-18";
+export const reviewedAt = "2026-11-19";
 export const phaseAssessment: ProjectPhase[] = [
   { id: 0, name: "Descubrimiento y diseño", progress: 85,
     completed: "Documentos maestros v2/v3, arquitectura y pantallas objetivo.",
@@ -43,9 +43,9 @@ export const phaseAssessment: ProjectPhase[] = [
     completed: "Atlas anatómico, selección/capas, rotación, malla, escalado de estatura y captura de la escena hacia IA local.",
     pending: "LOD móvil, pruebas de rendimiento en dispositivos y mejoras morfológicas calibradas.",
     milestone: "Visor 3D fluido, licenciado y validado en dispositivos objetivo." },
-  { id: 7, name: "Analítica y reportes", progress: 50,
-    completed: "Dashboard de datos ficticios, evolución, historial y vista previa/CSV.",
-    pending: "Informes PDF trazables, series completas, exportación autorizada y estadísticas más robustas.",
+  { id: 7, name: "Analítica y reportes", progress: 60,
+    completed: "Dashboard de datos ficticios, evolución, historial, comparación entre fechas desde API y vista previa/CSV.",
+    pending: "Informes PDF trazables, exportación autorizada y estadísticas longitudinales más robustas.",
     milestone: "Informes reproducibles con fuentes y pruebas." },
   { id: 8, name: "Simulación", progress: 65,
     completed: "Peso y estatura hipotéticos sobre el mismo 3D, malla, comparación local y análisis de una vista sintética.",
