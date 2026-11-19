@@ -166,6 +166,53 @@ test("regional weight changes are reversible on the same shaded 3D body, includi
   expect(errors).toEqual([]);
 });
 
+test("versioned fictitious 3D scenarios persist across visits without creating observations", async ({ page }) => {
+  test.setTimeout(120000);
+  const response = await page.request.post("/api/v1/profiles", {
+    data: { birth_year: 1997, display_name: "Prueba ficticia de escenarios 3D" },
+  });
+  expect(response.status()).toBe(201);
+  const profileId = (await response.json()).id as string;
+  await sourceFixtures(page);
+  await page.goto(`/body-3d?panel=simulacion&profile=${profileId}`);
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const section = page.getByRole("region", { name: "Historial de escenarios simulados" });
+  await expect(section.getByRole("combobox", { name: "Expediente ficticio para escenarios" }))
+    .toHaveValue(profileId);
+  await section.getByRole("button", { name: "Crear escenario versionado" }).click();
+  await expect(section).toContainText("Versión 1 registrada como SIMULADO");
+  await page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" })
+    .fill("20");
+  await section.getByRole("textbox", { name: /Motivo de nueva versión/ })
+    .fill("Escenario aumentado para comparación ficticia");
+  await section.getByRole("button", { name: "Guardar siguiente versión" }).click();
+  await expect(section).toContainText("Versión 2 registrada como SIMULADO");
+  await expect(section.getByRole("list", { name: "Versiones de simulación guardadas" }).locator("li"))
+    .toHaveCount(2);
+
+  await page.reload();
+  const restored = page.getByRole("region", { name: "Historial de escenarios simulados" });
+  await expect(restored.getByRole("list", { name: "Versiones de simulación guardadas" }).locator("li"))
+    .toHaveCount(2);
+  await restored.getByRole("button", { name: "Cargar en 3D" }).first().click();
+  await expect(page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" }))
+    .toHaveValue("20");
+  await restored.getByRole("button", { name: "Ver versiones" }).first().click();
+  const chain = restored.getByLabel("Cadena de versiones del escenario");
+  await expect(chain).toContainText("v1");
+  await expect(chain).toContainText("v2");
+
+  const observed = await page.request.get(`/api/v1/profiles/${profileId}/measurements`);
+  expect(observed.ok()).toBe(true);
+  expect((await observed.json()).total).toBe(0);
+  const historical = await page.request.get(`/api/v1/profiles/${profileId}/scenarios`);
+  expect(historical.ok()).toBe(true);
+  const history = await historical.json();
+  expect(history.total).toBe(2);
+  expect(history.items.every((row: { data_type: string }) => row.data_type === "SIMULADO"))
+    .toBe(true);
+});
+
 test("a failed anatomical layer can be retried", async ({ page }) => {
   await sourceFixtures(page);
   const skinUrl = anatomySource + "web/public/models/skin.glb";
