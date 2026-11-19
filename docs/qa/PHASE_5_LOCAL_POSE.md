@@ -22,26 +22,40 @@ visibilidad y comprobación básica de encuadre; si el detector no identifica
 a una persona, no se muestran puntos inventados. Los resultados de un
 detector externo **no** se convierten en altura, peso, grasa o medidas.
 
-## Dependencias y seguridad
+## Distribución local con integridad verificada
 
-- Módulo JS de `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/vision_bundle.mjs`
-- WASM de `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm`
-- Modelo `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`
+El navegador **ya no importa scripts ni modelos de un CDN**. Durante
+`npm run dev` o `npm run build`, el script
+`frontend/scripts/prepare_pose_assets.mjs` descarga las seis dependencias
+de las fuentes originales, comprueba sus SHA-256 contra valores fijados
+en el repositorio y coloca las versiones aprobadas bajo `public/pose/`:
 
-Las solicitudes externas son para **descargar software y pesos de modelo**, no
-para enviar fotografías. Sin conectividad, CORS disponible y compatibilidad
-WASM, la interfaz muestra un error recuperable en vez de un resultado ficticio.
+- `vision_bundle.mjs`: motor JS, versión exacta 0.10.32.
+- `wasm/vision_wasm_internal.{js,wasm}`: motor optimizado.
+- `wasm/vision_wasm_nosimd_internal.{js,wasm}`: alternativa sin SIMD.
+- `pose_landmarker_lite.task`: modelo Lite Float16, revisión 1.
 
-**Limitación de privacidad:** el SDK JavaScript se importa desde un CDN remoto
-sin verificación local de integridad criptográfica. Se limita a imágenes
-sintéticas de prueba; **no introducir fotografías médicas ni corporales
-privadas reales**, pues no se considera una cadena de suministro de confianza
-para datos sensibles. Antes de uso real: empaquetar los binarios y pesos
-localmente con hashes verificados, política CSP estricta, revisión de seguridad,
-controles de autorización/consentimiento verificables y retención.
+Fuentes verificadas durante el empaquetado:
 
-La autorización actual es una confirmación declarativa de uso ficticio,
-**no** consentimiento clínico validado. El modo privado no se activa.
+- JS/WASM: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/`
+- Modelo: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`
+
+Los ficheros se sirven desde el **mismo dominio** de BODYVISION. Ni el
+archivo fotográfico ni las coordenadas de su inferencia se transmiten a
+Google, jsDelivr ni al backend. Un hash distinto o una descarga fallida
+**interrumpe el proceso de compilación**. Los binarios verificados se
+mantienen fuera de Git y se generan en cada instalación o compilación.
+Una vez que el navegador tiene los recursos cargados, el procesamiento
+en CPU/WASM puede realizarse sin conexión; no se garantiza una caché
+offline persistente tras cerrar la pestaña.
+
+El software de MediaPipe se distribuye públicamente bajo Apache-2.0,
+aunque la revisión de obligaciones concretas de redistribución del modelo
+y los avisos de terceros debe cerrarse antes de uso comercial con datos
+privados. **No habilitamos fotografías médicas reales**: siguen faltando
+autorización por expediente, consentimiento verificable, controles de
+acceso y almacenamiento seguro. Esta mejora no sustituye las fases
+de privacidad. El panel actual admite solo datos ficticios.
 
 ## Comportamiento y pruebas
 
