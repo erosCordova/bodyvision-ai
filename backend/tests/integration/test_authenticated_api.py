@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import DBAPIError
@@ -106,6 +107,7 @@ def protected():
             database_url=admin_url,
             auth_database_url=auth_url,
             identity_enabled=True,
+            capture_encryption_key=Fernet.generate_key().decode("ascii"),
         )
         with TestClient(create_app(settings, app_engine)) as client:
             yield client, owner, profile_id, users
@@ -132,6 +134,10 @@ def protected():
                 text(
                     "ALTER TABLE simulation_scenarios ENABLE TRIGGER immutable_simulation_scenarios"
                 )
+            )
+            conn.execute(
+                text("DELETE FROM synthetic_capture_objects WHERE profile_id=:id"),
+                {"id": profile_id},
             )
             conn.execute(
                 text("DELETE FROM profile_consents WHERE profile_id=:id"), {"id": profile_id}
