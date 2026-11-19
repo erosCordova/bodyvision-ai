@@ -186,7 +186,12 @@ def download_synthetic_capture(profile_id: UUID, capture_id: UUID, scope: Scope,
     return Response(
         content=pixels,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": 'attachment; filename="captura-ficticia.png"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="captura-ficticia.png"',
+            "Cache-Control": "no-store, private",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
