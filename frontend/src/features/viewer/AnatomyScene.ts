@@ -343,16 +343,25 @@ export function createAnatomyScene(
         const originalColor = material.userData.baseColor as string | undefined;
         const reference = new THREE.Color(originalColor || anatomicalLayers.find(item => item.id === layer)?.color || "#c8d5e4");
         material.color.copy(mode === "holograma" ? new THREE.Color("#64cfe8") : mode === "radiografia" ? new THREE.Color("#c3e9f7") : reference);
-        material.wireframe = mode === "holograma";
-        material.opacity = mode === "radiografia" ? Math.min(s.opacity, 0.26) : mode === "holograma" ? Math.min(s.opacity, 0.83) : s.opacity;
-        material.transparent = material.opacity < 1;
-        material.depthWrite = material.opacity >= 1;
-        material.needsUpdate = true;
+        const wireframe = mode === "holograma";
+        const nextOpacity = mode === "radiografia" ? Math.min(s.opacity, 0.26) : mode === "holograma" ? Math.min(s.opacity, 0.83) : s.opacity;
+        const transparent = nextOpacity < 1;
+        const depthWrite = !transparent;
+        // Material uniforms update without recompiling the shader every time.
+        // Only variants that affect GPU programs should mark it dirty.
+        if (material.wireframe !== wireframe || material.transparent !== transparent ||
+            material.depthWrite !== depthWrite) {
+          material.wireframe = wireframe;
+          material.transparent = transparent;
+          material.depthWrite = depthWrite;
+          material.needsUpdate = true;
+        }
+        material.opacity = nextOpacity;
       }
     });
     const wire = meshOverlays.get(layer);
     if (wire) wire.opacity = Math.min(0.46, Math.max(0.12, s.opacity * 0.42));
-    render();
+    // Do not render per layer. The calling operation draws all layers once.
   };
   function applyAll() {
     for (const layer of anatomicalLayers) applyLayer(layer.id);
@@ -484,6 +493,7 @@ export function createAnatomyScene(
         if (showWireMesh) ensureWireOverlays(layer, group);
         if (!fitted) frameBody();
         applyLayer(layer);
+        render();
         onStatus("Modelo anatómico preparado · selecciona una estructura");
         onLayerState(layer, "ready");
         if (pendingFocus?.layer === layer) focus(pendingFocus.name, layer);
