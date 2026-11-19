@@ -7,6 +7,8 @@ import { PrivateAuthProvider, privateAuthEnabled, usePrivateAuth } from "../src/
 import { WorkspaceProvider } from "../src/app/providers/WorkspaceProvider";
 import { DataLayout } from "../src/app/layouts/DataLayout";
 import { PrivateAccessPage } from "../src/features/access/PrivateAccessPage";
+import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../src/features/capture/captureHandoff";
+import { invalidatePrivateSession } from "../src/services/api/sessionInvalidation";
 
 const ORG = "10000000-0000-4000-8000-000000000001";
 const USER = "a1000000-0000-4000-8000-000000000001";
@@ -36,6 +38,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
   sessionStorage.clear();
   localStorage.clear();
+  discardStagedCapture();
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -72,11 +75,20 @@ describe("private BODYVISION authentication UI", () => {
         </Routes>
       </MemoryRouter>,
     );
+    const syntheticReview = {
+      width: 800, height: 1100, averageBrightness: 120, contrast: 30,
+      checks: [], passed: true,
+    };
+    stageCaptureForAnalysis(new File(["synthetic-photo"], "before-login.png", { type: "image/png" }), syntheticReview);
+    expect(peekCaptureForAnalysis()?.file.name).toBe("before-login.png");
     fireEvent.change(screen.getByLabelText("Identificador de organización"), { target: { value: ORG } });
     fireEvent.change(screen.getByLabelText("Correo electrónico"), { target: { value: "fictional@example.invalid" } });
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "Synthetic test passphrase 2026!" } });
     fireEvent.click(screen.getByRole("button", { name: "Ingresar al espacio privado" }));
     expect(await screen.findByText("Sesión verificada")).toBeInTheDocument();
+    expect(peekCaptureForAnalysis()).toBeNull();
+    stageCaptureForAnalysis(new File(["synthetic-photo"], "before-logout.png", { type: "image/png" }), syntheticReview);
+    expect(peekCaptureForAnalysis()?.file.name).toBe("before-logout.png");
     const [path, options] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(path).toBe("/api/v1/auth/login");
     expect(options.cache).toBe("no-store");
@@ -85,12 +97,51 @@ describe("private BODYVISION authentication UI", () => {
     expect(sessionStorage.length).toBe(0);
     expect(localStorage.length).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Salir" }));
+    expect(peekCaptureForAnalysis()).toBeNull();
     expect(await screen.findByText("Sin sesión")).toBeInTheDocument();
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
     const [logoutPath, logoutOptions] = fetcher.mock.calls[2] as [string, RequestInit];
     expect(logoutPath).toBe("/api/v1/auth/logout");
     expect((logoutOptions.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("discards a photo handoff immediately when the server invalidates the active private session", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        token: TOKEN, organization_id: ORG, user_id: USER, role: "member",
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    withProviders(
+      <MemoryRouter initialEntries={["/access"]}>
+        <Routes>
+          <Route path="/access" element={<PrivateAccessPage />} />
+          <Route path="/" element={<ProtectedHome />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText("Identificador de organización"), {
+      target: { value: ORG },
+    });
+    fireEvent.change(screen.getByLabelText("Correo electrónico"), {
+      target: { value: "synthetic@example.invalid" },
+    });
+    fireEvent.change(screen.getByLabelText("Contraseña"), {
+      target: { value: "Synthetic password for tests" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar al espacio privado" }));
+    expect(await screen.findByText("Sesión verificada")).toBeInTheDocument();
+    stageCaptureForAnalysis(
+      new File(["pixels"], "sensitive-handoff.png", { type: "image/png" }),
+      { width: 800, height: 1100, averageBrightness: 120, contrast: 25,
+        passed: true, checks: [] },
+    );
+    expect(peekCaptureForAnalysis()?.file.name).toBe("sensitive-handoff.png");
+    invalidatePrivateSession(TOKEN);
+    await waitFor(() => expect(screen.getByText("Sin sesión")).toBeInTheDocument());
+    expect(peekCaptureForAnalysis()).toBeNull();
   });
 
   it("reports failed credentials without storing them or changing routes", async () => {

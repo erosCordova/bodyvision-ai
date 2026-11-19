@@ -120,6 +120,11 @@ test("seeded dashboard, mobile layout and historical chart", async ({
     .getByRole("combobox", { name: "Periodo", exact: true })
     .selectOption("all");
   await expect(page.getByRole("img", { name: /Gráfico con/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Comparar dos fechas" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Medición inicial" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Medición final" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Diferencia de mediciones observadas" }))
+    .toContainText("Variación");
   await expect(
     page.getByText("⚑ Atípico confirmado", { exact: true }),
   ).toBeVisible();

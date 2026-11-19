@@ -14,3 +14,7 @@ playwright-report/
 test-results/
 *.log
 *.tsbuildinfo
+
+# SHA-256-verified MediaPipe artifacts created during local or hosted build
+frontend/public/pose/
+frontend/src/vendor/vision_bundle.mjs

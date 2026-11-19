@@ -34,8 +34,8 @@ def seed_private_browser_accounts() -> None:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-            if revision != "0015_mfa_recovery_reset":
-                raise RuntimeError("Browser fixtures require the reviewed phase 3 test schema")
+            if revision != "0018_capture_maintenance":
+                raise RuntimeError("Private browser fixtures require combined revision 0018")
             for identifier, organization, role, email in [
                 (
                     UUID("30000000-0000-4000-8000-000000000001"),

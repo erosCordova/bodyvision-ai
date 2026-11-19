@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { onPrivateSessionInvalidated } from "../../services/api/sessionInvalidation";
+import { discardStagedCapture } from "../../features/capture/captureHandoff";
 
 /**
  * This switch is deliberately impossible in a production Vite build.
@@ -97,12 +98,14 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     const unsubscribe = onPrivateSessionInvalidated(token => {
       // A late response from an older request must not discard a newer login.
       if (token !== session.token) return;
+      discardStagedCapture();
       setSession(null);
       void queryClient.cancelQueries();
       queryClient.clear();
     });
     const remaining = Date.parse(session.expires_at) - Date.now();
     const timeout = window.setTimeout(() => {
+      discardStagedCapture();
       setSession(null);
       queryClient.clear();
     }, Math.max(0, Math.min(remaining, 2147483647)));
@@ -122,6 +125,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
         body: JSON.stringify(credentials),
       });
       const verified = await readSession(response);
+      discardStagedCapture();
       await queryClient.cancelQueries();
       queryClient.clear();
       setSession(verified);
@@ -168,6 +172,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     }).safeParse(body);
     if (!parsed.success) throw new Error("No se recibieron los códigos de recuperación.");
     const verified = validateSession(body);
+    discardStagedCapture();
     await queryClient.cancelQueries();
     queryClient.clear();
     setSession(verified);
@@ -195,6 +200,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async (): Promise<boolean> => {
     const prior = session;
+    discardStagedCapture();
     setSession(null);
     await queryClient.cancelQueries();
     queryClient.clear();

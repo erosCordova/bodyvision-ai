@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
@@ -16,10 +17,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.data_core import router as data_router
+from app.api.routes.simulation_scenarios import router as simulation_router
+from app.api.routes.synthetic_captures import router as capture_router
 from app.core.config import Settings
 from app.core.errors import DomainError
 from app.core.logging import configure_logging
 from app.db.session import build_engine
+from app.workers.capture_retention import retention_loop
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -40,11 +44,27 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         logging.getLogger("bodyvision").info("service_started")
-        yield
-        database_engine.dispose()
-        if auth_engine is not None:
-            auth_engine.dispose()
-        logging.getLogger("bodyvision").info("service_stopped")
+        retention_task = None
+        if (
+            settings.identity_enabled
+            and settings.capture_encryption_key is not None
+            and settings.capture_retention_enabled
+        ):
+            retention_task = asyncio.create_task(
+                retention_loop(database_engine, settings.capture_retention_interval_seconds),
+                name="private_synthetic_capture_retention",
+            )
+        try:
+            yield
+        finally:
+            if retention_task is not None:
+                retention_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await retention_task
+            database_engine.dispose()
+            if auth_engine is not None:
+                auth_engine.dispose()
+            logging.getLogger("bodyvision").info("service_stopped")
 
     app = FastAPI(
         title="BODYVISION AI — Synthetic data core",
@@ -63,12 +83,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=[
             "X-Correlation-ID",
             "Content-Type",
             "X-Workspace-ID",
             "Idempotency-Key",
+            "X-Synthetic-Only",
             *(["Authorization"] if settings.identity_enabled else []),
         ],
         expose_headers=["X-Correlation-ID"],
@@ -166,6 +187,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     app.include_router(health_router)
     app.include_router(data_router)
+    app.include_router(simulation_router)
     if settings.identity_enabled:
         app.include_router(auth_router)
+        app.include_router(capture_router)
     return app

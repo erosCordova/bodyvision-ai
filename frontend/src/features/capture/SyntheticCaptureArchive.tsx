@@ -1,0 +1,187 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
+import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import { dateTime } from "../../components/ui/States";
+import { consentsApi } from "../../services/api/consents";
+import {
+  prepareSyntheticPng, syntheticCapturesApi,
+} from "../../services/api/syntheticCaptures";
+import type { CaptureReview } from "./captureQuality";
+
+/** Optional encrypted repository of fictional samples. No clinical photos. */
+export function SyntheticCaptureArchive({
+  file, review,
+}: { file: File; review: CaptureReview }) {
+  const { session } = usePrivateAuth();
+  const { api } = useWorkspace();
+  const cache = useQueryClient();
+  const [profileId, setProfileId] = useState("");
+  const [attested, setAttested] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [busyDownload, setBusyDownload] = useState("");
+  const scope = session ? [session.organization_id, session.user_id] : [];
+  const profiles = useQuery({
+    queryKey: ["synthetic-capture-profiles", ...scope],
+    queryFn: () => api.profiles("", 0),
+    enabled: Boolean(session),
+  });
+  const consent = useQuery({
+    queryKey: ["synthetic-capture-consents", ...scope, profileId],
+    queryFn: () => consentsApi(
+      session!.organization_id, session!.token, profileId,
+    ).history(),
+    enabled: Boolean(session && profileId),
+  });
+  const consentOk = Boolean(["capture", "storage"].every(purpose =>
+    consent.data?.items.some(item => item.purpose === purpose && item.effective),
+  ));
+  const archive = useQuery({
+    queryKey: ["synthetic-capture-archive", ...scope, profileId],
+    queryFn: () => syntheticCapturesApi(session!.token, profileId).list(),
+    enabled: Boolean(session && profileId && consentOk),
+  });
+  useEffect(() => {
+    setAttested(false);
+    setNotice("");
+    setError("");
+  }, [file, profileId]);
+  const canWrite = Boolean(session && session.role !== "member" && consent.data?.can_record);
+  const upload = useMutation({
+    mutationFn: async () => {
+      if (!session || !profileId || !attested || !consentOk) {
+        throw new Error("Debes confirmar el expediente, la ficción de la imagen y los consentimientos.");
+      }
+      const png = await prepareSyntheticPng(file);
+      return syntheticCapturesApi(session.token, profileId).create(png);
+    },
+    onSuccess: async () => {
+      setAttested(false);
+      setError("");
+      setNotice("Imagen ficticia cifrada. Caduca en siete días y el servidor privado eliminará los registros vencidos durante sus comprobaciones periódicas.");
+      await cache.invalidateQueries({ queryKey: ["synthetic-capture-archive", ...scope, profileId] });
+    },
+    onError: problem => setError(problem.message),
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      if (!session) throw new Error("Se requiere una sesión privada.");
+      await syntheticCapturesApi(session.token, profileId).remove(id);
+    },
+    onSuccess: async () => {
+      setNotice("Imagen ficticia borrada de la base de datos de prueba.");
+      await cache.invalidateQueries({ queryKey: ["synthetic-capture-archive", ...scope, profileId] });
+    },
+    onError: problem => setError(problem.message),
+  });
+  const download = async (id: string) => {
+    if (!session) return;
+    setBusyDownload(id);
+    setError("");
+    try {
+      const data = await syntheticCapturesApi(session.token, profileId).download(id);
+      const url = URL.createObjectURL(data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "captura-ficticia.png";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "No se pudo recuperar la captura.");
+    } finally {
+      setBusyDownload("");
+    }
+  };
+
+  if (!session) return null;
+  return (
+    <section className="enterprise-panel enterprise-capture-archive"
+      aria-label="Archivo cifrado de imágenes ficticias">
+      <div className="enterprise-panel-title">
+        <h2>Archivo privado de prueba</h2>
+        <span>SOLO DATOS FICTICIOS</span>
+      </div>
+      <p>Esta función es exclusiva del entorno privado local/test. Conserva un PNG
+        de prueba cifrado en PostgreSQL, máximo 256 KiB, hasta 7 días.
+        No admite imágenes médicas auténticas ni las utiliza para diagnósticos.</p>
+      <label>
+        Expediente ficticio autorizado
+        <select aria-label="Expediente de captura ficticia" value={profileId}
+          onChange={event => setProfileId(event.target.value)}>
+          <option value="">Seleccionar expediente ficticio</option>
+          {profiles.data?.items.map(profile => (
+            <option key={profile.id} value={profile.id}>
+              {profile.display_name || profile.display_code}
+            </option>
+          ))}
+        </select>
+      </label>
+      {profiles.isError && <p role="alert">No se pudo consultar los expedientes autorizados.</p>}
+      {profileId && <div>
+        {consent.isPending && <p role="status">Comprobando consentimientos vigentes…</p>}
+        {consent.isError && <p role="alert">No se pudieron verificar los consentimientos.</p>}
+        {consent.data && !consentOk && <p role="alert">
+          Antes de guardar, registra las aceptaciones ficticias vigentes de
+          captura y conservación en el expediente.
+          {" "}<Link to={`/profiles/${profileId}`}>Revisar consentimientos</Link>
+        </p>}
+        {consentOk && <p role="status">Aceptaciones ficticias de captura y conservación verificadas.</p>}
+      </div>}
+      <label className="enterprise-consent">
+        <input type="checkbox" checked={attested}
+          disabled={!consentOk || !canWrite || upload.isPending}
+          onChange={event => setAttested(event.target.checked)} />
+        Confirmo que esta imagen es exclusivamente ficticia, que no identifica a una
+        persona real y que acepto su almacenamiento temporal de prueba.
+      </label>
+      <button type="button" className="primary-button"
+        disabled={!attested || !consentOk || !canWrite || upload.isPending ||
+          !review.passed}
+        onClick={() => { setError(""); setNotice(""); upload.mutate(); }}>
+        {upload.isPending ? "Cifrando y guardando…" : "Guardar PNG ficticio cifrado"}
+      </button>
+      {!review.passed && <p>Corrige las advertencias de calidad antes de conservar esta imagen.</p>}
+      {profileId && consentOk && <>
+        <h3>Capturas cifradas del expediente</h3>
+        {archive.isPending && <p role="status">Consultando capturas…</p>}
+        {archive.isError && <p role="alert">{archive.error.message}</p>}
+        {archive.data && (archive.data.items.length ? (
+          <ol className="enterprise-capture-archive-list">
+            {archive.data.items.map(item => (
+              <li key={item.id}>
+                <strong>SIMULADO · {item.width} × {item.height} px</strong>
+                <small>Guardado: {dateTime(item.created_at)} · Vence: {dateTime(item.expires_at)}</small>
+                <div className="enterprise-camera-buttons">
+                  <button type="button" className="secondary-button"
+                    disabled={busyDownload === item.id}
+                    onClick={() => void download(item.id)}>
+                    Descargar PNG
+                  </button>
+                  {canWrite && <button type="button" className="secondary-button"
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      setError("");
+                      remove.mutate(item.id);
+                    }}>
+                    Borrar definitivamente
+                  </button>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : <p>No hay PNG ficticios guardados en este expediente.</p>)}
+      </>}
+      {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
+      <small>La revocación de captura o conservación borra los objetos cifrados.
+        La caducidad bloquea su descarga; el servidor privado elimina registros
+        vencidos periódicamente mientras está funcionando. Esto no garantiza el
+        borrado inmediato de copias de seguridad o WAL. No se conservan archivos
+        en el almacenamiento persistente del navegador.</small>
+    </section>
+  );
+}

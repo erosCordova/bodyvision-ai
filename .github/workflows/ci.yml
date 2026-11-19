@@ -81,6 +81,8 @@ jobs:
           VITE_ENABLE_PRIVATE_AUTH: 'true'
           API_PROXY_TARGET: http://127.0.0.1:8001
         run: |
+          # Ephemeral key exists only in this disposable private CI process.
+          export CAPTURE_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
           cd backend
           PYTHONPATH=. python tests/browser/seed_private.py
           uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8001 --no-access-log > /tmp/private-api.log 2>&1 &

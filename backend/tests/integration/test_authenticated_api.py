@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import DBAPIError
@@ -106,11 +107,39 @@ def protected():
             database_url=admin_url,
             auth_database_url=auth_url,
             identity_enabled=True,
+            capture_encryption_key=Fernet.generate_key().decode("ascii"),
+            capture_retention_enabled=False,
         )
         with TestClient(create_app(settings, app_engine)) as client:
             yield client, owner, profile_id, users
     finally:
         with owner.begin() as conn:
+            # Owner-only synthetic fixture reset; no runtime role can do this.
+            # Disable the immutable scenario trigger solely for disposable test cleanup.
+            conn.execute(
+                text("""DELETE FROM simulation_request_keys WHERE scenario_id IN
+                    (SELECT id FROM simulation_scenarios WHERE profile_id=:id)"""),
+                {"id": profile_id},
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE simulation_scenarios "
+                    "DISABLE TRIGGER immutable_simulation_scenarios"
+                )
+            )
+            conn.execute(
+                text("DELETE FROM simulation_scenarios WHERE profile_id=:id"),
+                {"id": profile_id},
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE simulation_scenarios ENABLE TRIGGER immutable_simulation_scenarios"
+                )
+            )
+            conn.execute(
+                text("DELETE FROM synthetic_capture_objects WHERE profile_id=:id"),
+                {"id": profile_id},
+            )
             conn.execute(
                 text("DELETE FROM profile_consents WHERE profile_id=:id"), {"id": profile_id}
             )
@@ -1431,3 +1460,458 @@ def test_status_confirmation_is_limited_independently_of_login(protected):
     )
     assert blocked.status_code == 429 and blocked.json()["code"] == "ACCOUNT_RATE_LIMITED"
     assert authenticate(client, users[3][0], users[3][1]).status_code == 200
+
+
+def test_private_simulation_scenarios_enforce_session_roles_and_audit(protected):
+    client, owner, profile, users = protected
+    specialist, member, outsider = users[:3]
+    editor_login = authenticate(client, specialist[0], specialist[1])
+    member_login = authenticate(client, member[0], member[1])
+    outsider_login = authenticate(client, outsider[0], outsider[1])
+    assert editor_login.status_code == 200, editor_login.text
+    assert member_login.status_code == 200, member_login.text
+    assert outsider_login.status_code == 200, outsider_login.text
+    editor = headers(editor_login.json()["token"])
+    viewer = headers(member_login.json()["token"])
+    foreign = headers(outsider_login.json()["token"])
+    path = f"/api/v1/profiles/{profile}/scenarios"
+
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers=foreign).status_code == 404
+    assert client.get(path, headers=viewer).status_code == 200
+    assert (
+        client.get(path, headers={**editor, "X-Workspace-ID": str(FIRST_WORKSPACE)}).status_code
+        == 400
+    )
+
+    sample = {"reference_kg": 70, "variation_percent": 20, "stature_cm": 180}
+    denied = client.post(path, json=sample, headers={**viewer, "Idempotency-Key": str(uuid4())})
+    assert denied.status_code in {403, 404}
+    outside = client.post(path, json=sample, headers={**foreign, "Idempotency-Key": str(uuid4())})
+    assert outside.status_code == 404
+
+    created = client.post(path, json=sample, headers={**editor, "Idempotency-Key": str(uuid4())})
+    assert created.status_code == 201, created.text
+    scenario_id = created.json()["id"]
+    assert created.json()["data_type"] == "SIMULADO"
+    assert client.get(f"{path}/{scenario_id}/versions", headers=editor).status_code == 200
+    assert client.get(path, headers=editor).json()["total"] == 1
+    assert client.get(f"{path}/{scenario_id}/versions", headers=foreign).status_code == 404
+
+    with owner.connect() as conn:
+        events = (
+            conn.execute(
+                text("""SELECT action,actor_id FROM security_audit_events
+                WHERE resource_id=:profile AND action LIKE 'simulation.%'"""),
+                {"profile": profile},
+            )
+            .mappings()
+            .all()
+        )
+        assert {"simulation.create", "simulation.list", "simulation.read"} <= {
+            row["action"] for row in events
+        }
+        assert all(row["actor_id"] in {specialist[0], member[0]} for row in events)
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM measurements WHERE profile_id=:profile"),
+                {"profile": profile},
+            ).scalar_one()
+            == 0
+        )
+
+
+def _synthetic_png():
+    import struct
+    import zlib
+
+    def block(kind, data):
+        payload = kind + data
+        return (
+            struct.pack(">I", len(data))
+            + payload
+            + struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF)
+        )
+
+    image = bytes([0] + [100, 120, 140] * 32) * 64
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + block(b"IHDR", struct.pack(">IIBBBBB", 32, 64, 8, 2, 0, 0, 0))
+        + block(b"IDAT", zlib.compress(image))
+        + block(b"IEND", b"")
+    )
+
+
+def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected):
+    client, owner, profile_id, users = protected
+    editor, reader, outsider = users[:3]
+    writer_login = authenticate(client, editor[0], editor[1])
+    reader_login = authenticate(client, reader[0], reader[1])
+    outsider_login = authenticate(client, outsider[0], outsider[1])
+    assert writer_login.status_code == 200
+    assert reader_login.status_code == 200
+    assert outsider_login.status_code == 200
+    writer = headers(writer_login.json()["token"])
+    member = headers(reader_login.json()["token"])
+    foreign = headers(outsider_login.json()["token"])
+    path = f"/api/v1/profiles/{profile_id}/captures"
+    image = _synthetic_png()
+    asserted = {**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"}
+
+    assert client.post(path, content=image, headers=asserted).status_code == 403
+    for purpose in ("capture", "storage"):
+        accepted = client.post(
+            f"/api/v1/auth/profiles/{profile_id}/consents",
+            headers=writer,
+            json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+        )
+        assert accepted.status_code == 200, accepted.text
+    assert client.post(path, content=image, headers=writer).status_code == 422
+    assert (
+        client.post(
+            path,
+            content=image,
+            headers={**writer, "Content-Type": "image/jpeg", "X-Synthetic-Only": "confirmed"},
+        ).status_code
+        == 415
+    )
+    assert client.post(path, content=b"GIF89a" + b"0" * 100, headers=asserted).status_code == 422
+    assert (
+        client.post(
+            path,
+            content=image,
+            headers={**member, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
+        ).status_code
+        == 403
+    )
+    assert client.get(path, headers=foreign).status_code == 404
+
+    saved = client.post(path, content=image, headers=asserted)
+    assert saved.status_code == 201, saved.text
+    result = saved.json()
+    assert result["profile_id"] == str(profile_id)
+    assert result["data_type"] == "SIMULADO"
+    assert result["format"] == "image/png"
+    assert result["width"] == 32
+    capture_id = result["id"]
+    assert client.get(path, headers=member).json()["total"] == 1
+    assert client.get(f"{path}/{capture_id}", headers=member).content == image
+    assert client.get(f"{path}/{capture_id}", headers=foreign).status_code == 404
+    assert client.delete(f"{path}/{capture_id}", headers=member).status_code == 403
+    downloaded = client.get(f"{path}/{capture_id}", headers=writer)
+    assert downloaded.status_code == 200
+    assert downloaded.content == image
+    assert downloaded.headers["content-disposition"].startswith("attachment;")
+    assert downloaded.headers["content-type"] == "application/octet-stream"
+    assert "no-store" in downloaded.headers["cache-control"].lower().split(", ")
+    assert downloaded.headers["pragma"] == "no-cache"
+    assert downloaded.headers["x-content-type-options"] == "nosniff"
+    assert "set-cookie" not in downloaded.headers
+
+    with owner.connect() as conn:
+        record = (
+            conn.execute(
+                text("""SELECT ciphertext,sha256_digest FROM synthetic_capture_objects
+                WHERE id=:id"""),
+                {"id": capture_id},
+            )
+            .mappings()
+            .one()
+        )
+        assert not bytes(record["ciphertext"]).startswith(b"\x89PNG")
+        assert b"patient" not in bytes(record["ciphertext"])
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
+                {"id": profile_id},
+            ).scalar_one()
+            == 0
+        )
+
+    history = client.get(f"/api/v1/auth/profiles/{profile_id}/consents", headers=writer).json()[
+        "items"
+    ]
+    storage = next(item for item in history if item["purpose"] == "storage")
+    revoked = client.post(
+        f"/api/v1/auth/profiles/{profile_id}/consents/{storage['id']}/revoke",
+        headers=writer,
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert client.get(path, headers=writer).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=writer).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=member).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=foreign).status_code == 404
+    with owner.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
+                {"id": capture_id},
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM security_audit_events WHERE resource_id=:id "
+                    "AND action LIKE 'capture.%'"
+                ),
+                {"id": profile_id},
+            ).scalar_one()
+            >= 3
+        )
+
+
+def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected):
+    client, owner, profile_id, users = protected
+    editor = users[0]
+    token = authenticate(client, editor[0], editor[1]).json()["token"]
+    writer = headers(token)
+    path = f"/api/v1/profiles/{profile_id}/captures"
+    for purpose in ("capture", "storage"):
+        result = client.post(
+            f"/api/v1/auth/profiles/{profile_id}/consents",
+            headers=writer,
+            json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+        )
+        assert result.status_code == 200
+    saved = client.post(
+        path,
+        content=_synthetic_png(),
+        headers={**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
+    )
+    assert saved.status_code == 201, saved.text
+    image_id = saved.json()["id"]
+    with owner.begin() as conn:
+        conn.execute(
+            text("""UPDATE synthetic_capture_objects
+              SET created_at=now()-interval '8 days',
+                  expires_at=now()-interval '1 day' WHERE id=:id"""),
+            {"id": image_id},
+        )
+    assert client.get(f"{path}/{image_id}", headers=writer).status_code == 404
+    assert client.get(path, headers=writer).json()["total"] == 0
+    purged = client.post(f"{path}/purge-expired", headers=writer)
+    assert purged.status_code == 200, purged.text
+    assert purged.json() == {"deleted": 1}
+    assert client.delete(f"{path}/{image_id}", headers=writer).status_code == 404
+
+
+def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
+    import hashlib
+
+    from pydantic import SecretStr
+
+    client, owner, profile_id, users = protected
+    editor, reader, outsider, admin = users
+    editor_token = authenticate(client, editor[0], editor[1]).json()["token"]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    writer, administrator = headers(editor_token), headers(admin_token)
+    path = f"/api/v1/profiles/{profile_id}/captures"
+    for purpose in ("capture", "storage"):
+        assert (
+            client.post(
+                f"/api/v1/auth/profiles/{profile_id}/consents",
+                headers=writer,
+                json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+            ).status_code
+            == 200
+        )
+
+    data = _synthetic_png()
+    created = client.post(
+        path,
+        content=data,
+        headers={**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
+    )
+    assert created.status_code == 201, created.text
+    capture_id = created.json()["id"]
+    legacy = Fernet.generate_key()
+    legacy_ciphertext = Fernet(legacy).encrypt(data)
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO profile_access(
+              id,organization_id,profile_id,user_id,access_level
+            ) VALUES (:id,:org,:profile,:user,'manage')"""),
+            {
+                "id": uuid4(),
+                "org": FIRST_WORKSPACE,
+                "profile": profile_id,
+                "user": admin[0],
+            },
+        )
+        conn.execute(
+            text("UPDATE synthetic_capture_objects SET ciphertext=:ciphertext WHERE id=:id"),
+            {"id": capture_id, "ciphertext": legacy_ciphertext},
+        )
+
+    settings = client.app.state.settings
+    try:
+        # Missing predecessor key: fail closed, no mutation.
+        assert client.get(f"{path}/{capture_id}", headers=writer).status_code == 500
+        missing = client.post(path + "/rotate-key", headers=administrator)
+        assert missing.status_code == 409, missing.text
+        assert missing.json()["code"] == "CAPTURE_KEY_UNAVAILABLE"
+        with owner.connect() as conn:
+            assert (
+                bytes(
+                    conn.execute(
+                        text("SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"),
+                        {"id": capture_id},
+                    ).scalar_one()
+                )
+                == legacy_ciphertext
+            )
+
+        client.app.state.settings = settings.model_copy(
+            update={"capture_decryption_keys": [SecretStr(legacy.decode())]}
+        )
+        assert client.get(f"{path}/{capture_id}", headers=writer).content == data
+        assert client.post(path + "/rotate-key", headers=writer).status_code == 403
+        rotated = client.post(path + "/rotate-key", headers=administrator)
+        assert rotated.status_code == 200, rotated.text
+        assert rotated.json() == {"examined": 1, "rotated": 1, "key_material_exposed": False}
+        again = client.post(path + "/rotate-key", headers=administrator)
+        assert again.status_code == 200
+        assert again.json()["rotated"] == 0
+
+        client.app.state.settings = settings
+        assert client.get(f"{path}/{capture_id}", headers=writer).content == data
+        with owner.connect() as conn:
+            encrypted = bytes(
+                conn.execute(
+                    text("SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"),
+                    {"id": capture_id},
+                ).scalar_one()
+            )
+        primary = Fernet(settings.capture_encryption_key.get_secret_value().encode())
+        assert primary.decrypt(encrypted) == data
+        assert hashlib.sha256(data).hexdigest() == created.json()["sha256_digest"]
+
+        # A digest mismatch must abort the update without losing the token.
+        wrong = Fernet(legacy).encrypt(b"corrupt-fictional-pixels")
+        with owner.begin() as conn:
+            conn.execute(
+                text("UPDATE synthetic_capture_objects SET ciphertext=:ciphertext WHERE id=:id"),
+                {"id": capture_id, "ciphertext": wrong},
+            )
+        client.app.state.settings = settings.model_copy(
+            update={"capture_decryption_keys": [SecretStr(legacy.decode())]}
+        )
+        invalid = client.post(path + "/rotate-key", headers=administrator)
+        assert invalid.status_code == 409
+        assert invalid.json()["code"] == "CAPTURE_INTEGRITY_FAILURE"
+        with owner.connect() as conn:
+            assert (
+                bytes(
+                    conn.execute(
+                        text("SELECT ciphertext FROM synthetic_capture_objects WHERE id=:id"),
+                        {"id": capture_id},
+                    ).scalar_one()
+                )
+                == wrong
+            )
+    finally:
+        client.app.state.settings = settings
+
+
+def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
+    import hashlib
+
+    from app.workers.capture_retention import purge_due
+
+    client, owner, profile_id, users = protected
+    editor = users[0]
+    image = _synthetic_png()
+    secret = Fernet.generate_key()
+    expired_id, active_id = uuid4(), uuid4()
+    entries = [
+        (expired_id, True),
+        (active_id, False),
+    ]
+    with owner.begin() as conn:
+        for identifier, expired in entries:
+            conn.execute(
+                text("""INSERT INTO synthetic_capture_objects(
+                  id,organization_id,profile_id,created_by,original_bytes,
+                  width,height,sha256_digest,ciphertext,created_at,expires_at
+                ) VALUES (
+                  :id,:org,:profile,:actor,:size,32,64,:digest,:encrypted,
+                  CASE WHEN :expired THEN now()-interval '8 days' ELSE now() END,
+                  CASE WHEN :expired THEN now()-interval '1 day'
+                       ELSE now()+interval '7 days' END
+                )"""),
+                {
+                    "id": identifier,
+                    "org": FIRST_WORKSPACE,
+                    "profile": profile_id,
+                    "actor": editor[0],
+                    "size": len(image),
+                    "digest": hashlib.sha256(image).hexdigest(),
+                    "encrypted": Fernet(secret).encrypt(image),
+                    "expired": expired,
+                },
+            )
+
+    # A request-scoped tenant must not be able to run global cleanup.
+    with owner.connect() as conn:
+        with pytest.raises(DBAPIError):
+            with conn.begin():
+                conn.execute(text("SET LOCAL ROLE bodyvision_app"))
+                conn.execute(
+                    text("SELECT set_config('app.organization_id',:org,true)"),
+                    {"org": str(FIRST_WORKSPACE)},
+                )
+                conn.execute(text("SELECT purge_expired_synthetic_capture_batch(100)"))
+    assert purge_due(client.app.state.engine, batch_size=1, max_batches=3) == 1
+    assert purge_due(client.app.state.engine, batch_size=1) == 0
+    with owner.connect() as conn:
+        remaining = (
+            conn.execute(
+                text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
+                {"profile": profile_id},
+            )
+            .scalars()
+            .all()
+        )
+        assert remaining == [active_id]
+        assert (
+            conn.execute(
+                text("""SELECT count(*) FROM synthetic_capture_maintenance_events
+              WHERE action='retention.purge' AND deleted_count=1"""),
+            ).scalar_one()
+            >= 1
+        )
+
+    # Simulate a stale snapshot row being reintroduced in this disposable DB.
+    # This is a retention-replay test, not a database-provider restore drill.
+    replay_id = uuid4()
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO synthetic_capture_objects(
+                id,organization_id,profile_id,created_by,original_bytes,
+                width,height,sha256_digest,ciphertext,created_at,expires_at
+            ) VALUES (
+                :id,:org,:profile,:actor,:size,32,64,:digest,:encrypted,
+                now()-interval '8 days',now()-interval '1 day'
+            )"""),
+            {
+                "id": replay_id,
+                "org": FIRST_WORKSPACE,
+                "profile": profile_id,
+                "actor": editor[0],
+                "size": len(image),
+                "digest": hashlib.sha256(image).hexdigest(),
+                "encrypted": Fernet(secret).encrypt(image),
+            },
+        )
+    assert purge_due(client.app.state.engine, batch_size=1) == 1
+    with owner.connect() as conn:
+        retained = (
+            conn.execute(
+                text("SELECT id FROM synthetic_capture_objects WHERE profile_id=:profile"),
+                {"profile": profile_id},
+            )
+            .scalars()
+            .all()
+        )
+        assert retained == [active_id]

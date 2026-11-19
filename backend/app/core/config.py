@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     auth_database_url: SecretStr | None = None
     mfa_enabled: bool = False
     mfa_encryption_key: SecretStr | None = None
+    capture_encryption_key: SecretStr | None = None
+    capture_decryption_keys: list[SecretStr] = []
+    capture_retention_interval_seconds: int = 900
+    capture_retention_enabled: bool = True
 
     @field_validator("database_url")
     @classmethod
@@ -63,6 +67,30 @@ class Settings(BaseSettings):
                 Fernet(self.mfa_encryption_key.get_secret_value().encode("ascii"))
             except (ValueError, UnicodeError) as exc:
                 raise ValueError("Invalid MFA encryption key") from exc
+        if not 60 <= self.capture_retention_interval_seconds <= 86400:
+            raise ValueError("Capture retention interval must be between 60 and 86400 seconds")
+        if self.capture_decryption_keys and self.capture_encryption_key is None:
+            raise ValueError("Previous capture keys require an active encryption key")
+        if self.capture_encryption_key is not None:
+            if not self.identity_enabled or self.app_env not in {"local", "test"}:
+                raise ValueError("Synthetic capture encryption requires private local/test mode")
+            try:
+                Fernet(self.capture_encryption_key.get_secret_value().encode("ascii"))
+            except (ValueError, UnicodeError) as exc:
+                raise ValueError("Invalid synthetic capture encryption key") from exc
+            active = self.capture_encryption_key.get_secret_value()
+            if self.mfa_encryption_key and active == self.mfa_encryption_key.get_secret_value():
+                raise ValueError("Capture encryption and MFA secrets must be distinct")
+            seen = {active}
+            for previous in self.capture_decryption_keys:
+                raw = previous.get_secret_value()
+                if raw in seen:
+                    raise ValueError("Capture encryption keys must be unique")
+                seen.add(raw)
+                try:
+                    Fernet(raw.encode("ascii"))
+                except (ValueError, UnicodeError) as exc:
+                    raise ValueError("Invalid previous capture decryption key") from exc
         if self.app_env == "demo":
             hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
             if hostname and re.fullmatch(r"[a-zA-Z0-9.-]+", hostname):
