@@ -122,7 +122,9 @@ export function createAnatomyScene(
   renderer.toneMappingExposure = 1.1;
   const canvas = renderer.domElement;
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "Cuerpo humano anatómico 3D. Arrastra para rotar; pulsa una estructura para seleccionarla.");
+  canvas.setAttribute("aria-label", "Cuerpo humano anatómico 3D. Arrastra para rotar o usa flechas con el lienzo enfocado; más y menos para zoom, Inicio para centrar y Escape para limpiar selección.");
+  canvas.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight ArrowUp ArrowDown + - Home Escape");
+  canvas.tabIndex = 0;
   host.append(canvas);
 
   const scene = new THREE.Scene();
@@ -164,6 +166,7 @@ export function createAnatomyScene(
   let mode: RenderMode = "realista";
   let quality: SceneQuality = "alta";
   let disposed = false;
+  let contextUnavailable = false;
   let fitted = false;
   let autoRotate = false;
   let isolated = false;
@@ -173,14 +176,19 @@ export function createAnatomyScene(
   let pendingFocus: SelectedStructure | null = null;
   let raf = 0;
 
-  const render = () => { if (!disposed) renderer.render(scene, camera); };
+  const render = () => {
+    if (!disposed && !contextUnavailable) renderer.render(scene, camera);
+  };
   const resize = () => {
     if (disposed) return;
     const bounds = host.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     const ratio = atlasPixelRatio(bounds.width, bounds.height, window.devicePixelRatio || 1, quality);
-    if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
-    renderer.setSize(bounds.width, bounds.height, false);
+    const currentSize = renderer.getSize(new THREE.Vector2());
+    if (currentSize.x !== bounds.width || currentSize.y !== bounds.height) {
+      renderer.setSize(bounds.width, bounds.height, false);
+    }
+    if (Math.abs(renderer.getPixelRatio() - ratio) > 0.0001) renderer.setPixelRatio(ratio);
     camera.aspect = bounds.width / bounds.height;
     camera.updateProjectionMatrix();
     render();
@@ -190,7 +198,7 @@ export function createAnatomyScene(
 
   const tick = () => {
     raf = 0;
-    if (disposed || !autoRotate || document.hidden) return;
+    if (disposed || contextUnavailable || !autoRotate || document.hidden) return;
     // OrbitControls emits "change" and renders through its registered listener.
     // A second synchronous render per animation frame would double GPU work.
     controls.update();
@@ -199,7 +207,7 @@ export function createAnatomyScene(
   const updateAnimation = () => {
     cancelAnimationFrame(raf);
     raf = 0;
-    if (autoRotate && !document.hidden && !disposed) raf = requestAnimationFrame(tick);
+    if (autoRotate && !document.hidden && !disposed && !contextUnavailable) raf = requestAnimationFrame(tick);
   };
   const setAutoRotate = (enabled: boolean) => {
     autoRotate = enabled && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -209,8 +217,23 @@ export function createAnatomyScene(
   };
   const visibilityChange = () => updateAnimation();
   document.addEventListener("visibilitychange", visibilityChange);
-  const contextLost = (event: Event) => { event.preventDefault(); onError("El navegador perdió la conexión gráfica. Recarga el visor para volver a abrir el modelo."); };
+  const contextLost = (event: Event) => {
+    event.preventDefault();
+    contextUnavailable = true;
+    updateAnimation();
+    onError("Se interrumpió la conexión gráfica. Se intentará recuperar el visor; si el cuerpo no regresa, pulsa «Recargar visor».");
+    onStatus("Conexión gráfica interrumpida · esperando recuperación");
+  };
+  const contextRestored = () => {
+    if (disposed) return;
+    contextUnavailable = false;
+    resize();
+    onError("");
+    onStatus("Conexión gráfica restablecida · modelo anatómico disponible");
+    updateAnimation();
+  };
   canvas.addEventListener("webglcontextlost", contextLost);
+  canvas.addEventListener("webglcontextrestored", contextRestored);
 
   const restoreHighlight = () => {
     if (selectedMesh && previousMaterials) {
@@ -489,11 +512,45 @@ export function createAnatomyScene(
     render();
   };
   const clearSelection = () => showSelection(null, null);
+  const keyboard = (event: KeyboardEvent) => {
+    if (disposed || contextUnavailable || event.ctrlKey || event.altKey || event.metaKey) return;
+    const yaw = event.key === "ArrowLeft" ? -Math.PI / 18 :
+      event.key === "ArrowRight" ? Math.PI / 18 : 0;
+    const pitch = event.key === "ArrowUp" ? -Math.PI / 18 :
+      event.key === "ArrowDown" ? Math.PI / 18 : 0;
+    if (yaw || pitch) {
+      event.preventDefault();
+      const displacement = camera.position.clone().sub(controls.target);
+      const spherical = new THREE.Spherical().setFromVector3(displacement);
+      spherical.theta += yaw;
+      spherical.phi = THREE.MathUtils.clamp(spherical.phi + pitch, 0.09, Math.PI - 0.09);
+      camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
+      camera.lookAt(controls.target);
+      controls.update();
+      render();
+      return;
+    }
+    switch (event.key) {
+      case "+":
+      case "=":
+        event.preventDefault(); zoom(0.85); break;
+      case "-":
+      case "_":
+        event.preventDefault(); zoom(1.18); break;
+      case "Home":
+        event.preventDefault(); resetCamera(); break;
+      case "Escape":
+        event.preventDefault(); clearSelection(); break;
+    }
+  };
 
   const raycaster = new THREE.Raycaster();
   const point = new THREE.Vector2();
   let down: { x: number; y: number } | null = null;
-  const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
+  const pointerDown = (event: PointerEvent) => {
+    canvas.focus({ preventScroll: true });
+    down = { x: event.clientX, y: event.clientY };
+  };
   const pointerUp = (event: PointerEvent) => {
     if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) { down = null; return; }
     down = null;
@@ -512,6 +569,7 @@ export function createAnatomyScene(
   };
   canvas.addEventListener("pointerdown", pointerDown);
   canvas.addEventListener("pointerup", pointerUp);
+  canvas.addEventListener("keydown", keyboard);
   controls.addEventListener("change", render);
   resize();
 
@@ -522,8 +580,10 @@ export function createAnatomyScene(
     resizeObserver.disconnect();
     document.removeEventListener("visibilitychange", visibilityChange);
     canvas.removeEventListener("webglcontextlost", contextLost);
+    canvas.removeEventListener("webglcontextrestored", contextRestored);
     canvas.removeEventListener("pointerdown", pointerDown);
     canvas.removeEventListener("pointerup", pointerUp);
+    canvas.removeEventListener("keydown", keyboard);
     controls.dispose();
     restoreHighlight();
     for (const group of objects.values()) releaseRoot(group);

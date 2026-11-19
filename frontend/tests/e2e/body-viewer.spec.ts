@@ -341,3 +341,52 @@ test("mobile atlas uses a bounded GPU pixel budget and lazy polygon overlays on 
   // The skin's one and only original canvas is preserved across both modes.
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
 });
+
+// Regression coverage: the same anatomy canvas works without pointer-only controls.
+test("atlas quality automatically follows viewport changes until manually overridden", async ({ page }) => {
+  test.setTimeout(110000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const auto = page.getByRole("button", { name: "Auto", exact: true });
+  const high = page.getByRole("button", { name: "Alta", exact: true });
+  const fluid = page.getByRole("button", { name: "Fluida", exact: true });
+  await expect(auto).toHaveAttribute("aria-pressed", "true");
+  await expect(fluid).toHaveAttribute("aria-pressed", "true");
+  await page.setViewportSize({ width: 1330, height: 860 });
+  await expect(high).toHaveAttribute("aria-pressed", "true");
+  await fluid.click();
+  await expect(auto).toHaveAttribute("aria-pressed", "false");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1330, height: 860 });
+  await expect(fluid).toHaveAttribute("aria-pressed", "true");
+  await auto.click();
+  await expect(high).toHaveAttribute("aria-pressed", "true");
+});
+
+test("anatomical canvas accepts keyboard rotation, zoom, and responds to a simulated context interruption", async ({ page }) => {
+  test.setTimeout(110000);
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const canvas = page.getByRole("img", { name: /Cuerpo humano anatómico 3D/ });
+  await canvas.focus();
+  await expect(canvas).toBeFocused();
+  const before = await canvas.screenshot();
+  await canvas.press("ArrowRight");
+  const rotated = await canvas.screenshot();
+  expect(before.equals(rotated), "Right arrow should rotate the original atlas camera").toBe(false);
+  await canvas.press("+");
+  const zoomed = await canvas.screenshot();
+  expect(rotated.equals(zoomed), "Plus key should zoom the original atlas camera").toBe(false);
+  await canvas.press("Home");
+  await canvas.press("Escape");
+  await canvas.evaluate(node => node.dispatchEvent(new Event("webglcontextlost", { cancelable: true })));
+  await expect(viewport(page).getByRole("alert")).toContainText("Se interrumpió la conexión gráfica");
+  await canvas.evaluate(node => node.dispatchEvent(new Event("webglcontextrestored")));
+  await expect(viewport(page).getByRole("alert")).toHaveCount(0);
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true");
+  // The events above test UI recovery; actual GPU driver recovery requires real-device validation.
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});

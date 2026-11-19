@@ -133,11 +133,13 @@ export function AnatomyAtlas() {
   const [captureError, setCaptureError] = useState("");
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
-  const [quality, setQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
+  const [qualityPreference, setQualityPreference] = useState<SceneQuality | "auto">("auto");
+  const [recommendedQuality, setRecommendedQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
     window.innerWidth,
     window.matchMedia("(pointer: coarse)").matches,
     (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
   ));
+  const quality = qualityPreference === "auto" ? recommendedQuality : qualityPreference;
   const [renderStats, setRenderStats] = useState<ReturnType<AtlasController["getPerformanceStats"]> | null>(null);
   const [spin, setSpin] = useState(false);
   const [isolated, setIsolated] = useState(false);
@@ -158,6 +160,19 @@ export function AnatomyAtlas() {
   const [voice, setVoice] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const pointer = window.matchMedia("(pointer: coarse)");
+    const refresh = () => setRecommendedQuality(preferredAtlasQuality(
+      window.innerWidth, pointer.matches,
+      (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+    ));
+    window.addEventListener("resize", refresh);
+    pointer.addEventListener("change", refresh);
+    return () => {
+      window.removeEventListener("resize", refresh);
+      pointer.removeEventListener("change", refresh);
+    };
+  }, []);
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => { setReducedMotion(query.matches); if (query.matches) setSpin(false); };
@@ -444,7 +459,7 @@ export function AnatomyAtlas() {
               <p>{baselinePreview ? "Vista base temporal" : (weightVariation > 0 ? "+" : "") + weightVariation + "% frente a la referencia"}</p>
             </div>
           )}
-          <div className="studio-viewport-help">Arrastra para rotar · Rueda para acercar · Selecciona una estructura</div>
+          <div className="studio-viewport-help">Arrastra o usa un dedo para rotar · Pellizca para zoom · Con teclado: flechas, + / −, Inicio y Esc</div>
           <div className="studio-view-status" role="status">{status}</div>
           <div className="studio-zoom">
             <button aria-label="Acercar" onClick={() => controller.current?.zoom(0.78)}>+</button>
@@ -460,8 +475,10 @@ export function AnatomyAtlas() {
             </div>
             <div className="studio-dock-group">
               <span>RENDIMIENTO</span>
-              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => { setQuality("alta"); setRenderStats(null); }}>Alta</button>
-              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => { setQuality("fluida"); setRenderStats(null); }}>Fluida</button>
+              <button className={qualityPreference === "auto" ? "active" : ""} aria-pressed={qualityPreference === "auto"}
+                title="Adaptar la calidad a la pantalla y al dispositivo" onClick={() => { setQualityPreference("auto"); setRenderStats(null); }}>Auto</button>
+              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => { setQualityPreference("alta"); setRenderStats(null); }}>Alta</button>
+              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => { setQualityPreference("fluida"); setRenderStats(null); }}>Fluida</button>
               <button aria-pressed={!!renderStats} onClick={() => setRenderStats(current =>
                 current ? null : controller.current?.getPerformanceStats() ?? null)}>Detalles</button>
             </div>

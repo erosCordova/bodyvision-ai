@@ -347,3 +347,9 @@
 .studio-render-info small{color:#9ebdd2;font-size:10px;line-height:1.45}
 .studio-render-info button{justify-self:start;border:1px solid #537894;border-radius:7px;background:#193c55;color:#e0f5ff;padding:6px 11px}
 @media(max-width:700px){.studio-render-info{right:12px;top:90px;width:min(260px,calc(100% - 24px));font-size:10px}}
+
+/* Keyboard navigable 3D canvas, without changing its responsive geometry. */
+.studio-canvas canvas:focus-visible {
+  outline: 3px solid #75ddf4;
+  outline-offset: -5px;
+}
