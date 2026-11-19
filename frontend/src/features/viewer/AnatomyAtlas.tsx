@@ -7,6 +7,7 @@ import {
 } from "./AnatomyScene";
 import { anatomySource } from "./atlasSource";
 import { bodyVolumeScenario } from "./bodyVolume";
+import { BASELINE_HEIGHT_CM } from "./bodyStature";
 import { anatomyNameKey } from "./anatomyNames";
 import "./anatomy-studio.css";
 
@@ -122,8 +123,9 @@ export function AnatomyAtlas() {
   const [meshOverlay, setMeshOverlay] = useState(false);
   const [referenceKg, setReferenceKg] = useState(70);
   const [weightVariation, setWeightVariation] = useState(0);
+  const [statureCm, setStatureCm] = useState(BASELINE_HEIGHT_CM);
   const [baselinePreview, setBaselinePreview] = useState(false);
-  const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number } | null>(null);
+  const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
   const [quality, setQuality] = useState<SceneQuality>("alta");
   const [spin, setSpin] = useState(false);
@@ -197,6 +199,7 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
   useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
   useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation), [weightVariation, baselinePreview, restart]);
+  useEffect(() => controller.current?.setStature(baselinePreview ? BASELINE_HEIGHT_CM : statureCm), [statureCm, baselinePreview, restart]);
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
   useEffect(() => {
     const changed = () => setIsFullscreen(!!document.fullscreenElement);
@@ -294,6 +297,7 @@ export function AnatomyAtlas() {
   const resetSimulation = () => {
     setReferenceKg(70);
     setWeightVariation(0);
+    setStatureCm(BASELINE_HEIGHT_CM);
     setBaselinePreview(false);
     setSavedScenario(null);
   };
@@ -377,7 +381,7 @@ export function AnatomyAtlas() {
         <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")}>
           <div className="studio-canvas" ref={host} />
           <div className="studio-view-top">
-            <span><i /> {weightVariation !== 0 ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE VOLUMEN · MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
+            <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
             <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
           </div>
           <div className="studio-view-angles" role="group" aria-label="Cambiar ángulo">
@@ -394,10 +398,10 @@ export function AnatomyAtlas() {
               <button onClick={() => { controller.current?.clearSelection(); setSelectedEntry(null); setIsolated(false); }}>×</button>
             </div>
           )}
-          {weightVariation !== 0 && (
+          {(weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM) && (
             <div className="studio-weight-indicator" role="status">
               <span>SIMULACIÓN HIPOTÉTICA · NO CLÍNICA</span>
-              <strong>{baselinePreview ? referenceKg : simulatedWeight} kg <small>{baselinePreview ? "Referencia" : "Escenario"}</small></strong>
+              <strong>{baselinePreview ? referenceKg : simulatedWeight} kg · {baselinePreview ? BASELINE_HEIGHT_CM : statureCm} cm <small>{baselinePreview ? "Referencia" : "Escenario"}</small></strong>
               <p>{baselinePreview ? "Vista base temporal" : (weightVariation > 0 ? "+" : "") + weightVariation + "% frente a la referencia"}</p>
             </div>
           )}
@@ -425,7 +429,7 @@ export function AnatomyAtlas() {
               <button className={meshOverlay ? "active" : ""} aria-pressed={meshOverlay} onClick={toggleMesh} title="Superponer malla poligonal sobre la anatomía">Malla 3D</button>
               <button className={showMarker ? "active" : ""} aria-pressed={showMarker} onClick={() => setShowMarker(v => !v)}>Etiqueta</button>
               <button className={spin ? "active" : ""} aria-pressed={spin} disabled={reducedMotion} onClick={() => setSpin(v => !v)}>Giro</button>
-              <button className={panel === "simulacion" ? "active" : ""} aria-pressed={panel === "simulacion"} onClick={openSimulation}>Simular peso</button>
+              <button className={panel === "simulacion" ? "active" : ""} aria-pressed={panel === "simulacion"} onClick={openSimulation}>Peso y estatura</button>
               <button onClick={() => controller.current?.resetCamera()}>Restablecer</button>
             </div>
           </div>
@@ -443,11 +447,13 @@ export function AnatomyAtlas() {
             {panel === "simulacion" && (
               <div className="studio-simulation">
                 <p className="studio-eyebrow">SIMULACIÓN · SOBRE EL MODELO 3D</p>
-                <h2>Simulador de peso corporal</h2>
-                <p className="studio-sim-lead">Aumenta o disminuye el volumen de la figura anatómica real que estás viendo. No utilizamos una silueta separada.</p>
+                <h2>Simulador de peso y estatura</h2>
+                <p className="studio-sim-lead">Modifica la estatura y el peso hipotéticos sobre el mismo cuerpo anatómico 3D. La malla, las capas y la navegación permanecen integradas.</p>
                 <div className="studio-sim-values">
                   <div><span>REFERENCIA ILUSTRATIVA</span><strong>{referenceKg} <small>kg</small></strong></div>
                   <div><span>PESO HIPOTÉTICO</span><strong>{simulatedWeight} <small>kg</small></strong></div>
+                   <div><span>ESTATURA DE REFERENCIA</span><strong>{BASELINE_HEIGHT_CM} <small>cm</small></strong></div>
+                   <div><span>ESTATURA HIPOTÉTICA</span><strong>{statureCm} <small>cm</small></strong></div>
                 </div>
                 <label className="studio-sim-number">
                   Peso de referencia (solo demostración)
@@ -466,7 +472,17 @@ export function AnatomyAtlas() {
                     }} />
                   <span className="studio-sim-limits"><small>−30% · menor volumen</small><small>+30% · mayor volumen</small></span>
                 </label>
-                {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
+                <label className="studio-sim-slider">
+                   <span>Estatura del mismo modelo 3D <strong>{statureCm} cm</strong></span>
+                   <input type="range" aria-label="Ajustar estatura del modelo anatómico"
+                     min="145" max="205" step="1" value={statureCm}
+                     onChange={event => {
+                       setStatureCm(Number(event.target.value));
+                       setBaselinePreview(false);
+                     }} />
+                   <span className="studio-sim-limits"><small>145 cm · más bajo</small><small>205 cm · más alto</small></span>
+                 </label>
+                 {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
                 <p>La piel está oculta. Activa la superficie corporal para ver el cambio de volumen.</p>
                 <button onClick={() => {
                   setVisible(previous => ["skin", ...previous.filter(layer => layer !== "skin")]);
@@ -477,7 +493,7 @@ export function AnatomyAtlas() {
               <div className="studio-sim-state">
                   <span className="studio-sim-state-icon">{weightVariation > 0 ? "↗" : weightVariation < 0 ? "↘" : "◈"}</span>
                   <div><strong>{weightVariation === 0 ? "Modelo corporal de referencia" : weightVariation > 0 ? "Incremento visual de volumen" : "Reducción visual de volumen"}</strong>
-                    <p>El cambio se aplica a la piel y, con menor intensidad, a músculos. Huesos y nervios conservan sus dimensiones.</p></div>
+                    <p>El peso ilustra cambios de volumen en piel y músculos; la estatura escala verticalmente todas las capas del atlas. Son efectos gráficos no clínicos.</p></div>
                 </div>
                 <div className="studio-sim-mesh">
                   <label><input type="checkbox" checked={meshOverlay} onChange={toggleMesh} />
@@ -486,15 +502,15 @@ export function AnatomyAtlas() {
                 </div>
                 <div className="studio-sim-actions">
                   <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview} onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
-                  <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation })}>Guardar comparación en esta vista</button>
+                  <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation, statureCm })}>Guardar comparación en esta vista</button>
                   <button onClick={resetSimulation}>Restaurar valores</button>
                 </div>
                 {savedScenario && <div className="studio-sim-saved" role="status">
                   <strong>Referencia visual guardada</strong>
-                  <p>Base {savedScenario.baseKg} kg → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg.</p>
-                  <button onClick={() => { setReferenceKg(savedScenario.baseKg); setWeightVariation(savedScenario.delta); setBaselinePreview(false); }}>Recuperar escenario</button>
+                  <p>Base {savedScenario.baseKg} kg / {BASELINE_HEIGHT_CM} cm → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg / {savedScenario.statureCm} cm.</p>
+                  <button onClick={() => { setReferenceKg(savedScenario.baseKg); setWeightVariation(savedScenario.delta); setStatureCm(savedScenario.statureCm); setBaselinePreview(false); }}>Recuperar escenario</button>
                 </div>}
-                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg son etiquetas hipotéticas; la deformación 3D no calcula grasa, masa muscular ni la distribución real del tejido. No modifica mediciones, expedientes ni reportes.</p>
+                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg y los cm son valores hipotéticos; la deformación 3D no calcula grasa, masa muscular, proporciones anatómicas reales ni predice la apariencia de una persona. No modifica mediciones, expedientes ni reportes.</p>
               </div>
             )}
             {panel === "informacion" && (
