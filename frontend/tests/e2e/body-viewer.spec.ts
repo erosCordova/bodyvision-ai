@@ -132,6 +132,40 @@ test("weight morph and polygon overlay change the rendered 3D canvas", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("regional weight changes are reversible on the same shaded 3D body, including polygon mesh", async ({ page }) => {
+  test.setTimeout(110000);
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error" && /THREE\\.|WebGL|shader/i.test(message.text())) errors.push(message.text());
+  });
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Frente", exact: true }).click();
+  const canvas = page.locator(".studio-canvas canvas");
+  const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  await slider.fill("0");
+  const reference = await canvas.screenshot();
+  await slider.fill("30");
+  const heavier = await canvas.screenshot();
+  expect(heavier.equals(reference), "Increasing weight must alter the same avatar's contours").toBe(false);
+  await slider.fill("-30");
+  const lighter = await canvas.screenshot();
+  expect(lighter.equals(reference), "Decreasing weight must alter the same avatar's contours").toBe(false);
+  expect(lighter.equals(heavier), "Positive and negative weight scenarios should be visually distinct").toBe(false);
+  await slider.fill("0");
+  const restored = await canvas.screenshot();
+  expect(restored.equals(reference), "Returning to 0% must restore the original shaded atlas").toBe(true);
+  await slider.fill("25");
+  await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
+  const mesh = await canvas.screenshot();
+  expect(mesh.equals(restored), "The original model's polygon overlay follows the regional volume shader").toBe(false);
+  await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 test("a failed anatomical layer can be retried", async ({ page }) => {
   await sourceFixtures(page);
   const skinUrl = anatomySource + "web/public/models/skin.glb";
