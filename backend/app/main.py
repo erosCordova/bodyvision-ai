@@ -17,6 +17,7 @@ from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.simulation_scenarios import router as simulation_router
+from app.api.routes.synthetic_captures import router as capture_router
 from app.core.config import Settings
 from app.core.errors import DomainError
 from app.core.logging import configure_logging
@@ -64,12 +65,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=[
             "X-Correlation-ID",
             "Content-Type",
             "X-Workspace-ID",
             "Idempotency-Key",
+            "X-Synthetic-Only",
             *(["Authorization"] if settings.identity_enabled else []),
         ],
         expose_headers=["X-Correlation-ID"],
@@ -170,4 +172,5 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(simulation_router)
     if settings.identity_enabled:
         app.include_router(auth_router)
+        app.include_router(capture_router)
     return app
