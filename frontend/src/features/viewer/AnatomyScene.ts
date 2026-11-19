@@ -170,6 +170,7 @@ export function createAnatomyScene(
   let statureCm = 175;
   let mode: RenderMode = "realista";
   let quality: SceneQuality = "alta";
+  let interacting = false;
   let disposed = false;
   let contextUnavailable = false;
   let fitted = false;
@@ -236,7 +237,7 @@ export function createAnatomyScene(
     if (disposed) return;
     const bounds = host.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    const ratio = atlasPixelRatio(bounds.width, bounds.height, window.devicePixelRatio || 1, quality);
+    const ratio = atlasPixelRatio(bounds.width, bounds.height, window.devicePixelRatio || 1, quality, interacting);
     const currentSize = renderer.getSize(new THREE.Vector2());
     if (currentSize.x !== bounds.width || currentSize.y !== bounds.height) {
       renderer.setSize(bounds.width, bounds.height, false);
@@ -616,12 +617,32 @@ export function createAnatomyScene(
   const raycaster = new THREE.Raycaster();
   const point = new THREE.Vector2();
   let down: { x: number; y: number } | null = null;
+  const activePointers = new Set<number>();
+  const finishPointer = (pointerId: number) => {
+    if (!activePointers.delete(pointerId) || activePointers.size > 0) return;
+    interacting = false;
+    resize(); // Restore the selected full-quality resolution after the gesture.
+  };
+  const cancelGesture = () => {
+    down = null;
+    if (!activePointers.size) return;
+    activePointers.clear();
+    interacting = false;
+    resize();
+  };
   const pointerDown = (event: PointerEvent) => {
     canvas.focus({ preventScroll: true });
-    down = { x: event.clientX, y: event.clientY };
+    activePointers.add(event.pointerId);
+    if (!interacting) {
+      interacting = true;
+      resize(); // Reduce fragment work immediately, including on touch devices.
+    }
+    down = activePointers.size === 1
+      ? { x: event.clientX, y: event.clientY } : null;
   };
   const pointerUp = (event: PointerEvent) => {
-    if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) { down = null; return; }
+    finishPointer(event.pointerId);
+    if (activePointers.size || !down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) { down = null; return; }
     down = null;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -636,8 +657,24 @@ export function createAnatomyScene(
     }
     if (layer) showSelection(hit.object as THREE.Mesh, layer);
   };
+  const pointerCancel = (event: PointerEvent) => {
+    down = null;
+    finishPointer(event.pointerId);
+  };
+  const pointerWindowUp = (event: PointerEvent) => {
+    // OrbitControls may release capture outside the original canvas.
+    if (activePointers.has(event.pointerId)) pointerCancel(event);
+  };
+  const gestureVisibilityChange = () => {
+    if (document.hidden) cancelGesture();
+  };
   canvas.addEventListener("pointerdown", pointerDown);
   canvas.addEventListener("pointerup", pointerUp);
+  canvas.addEventListener("pointercancel", pointerCancel);
+  window.addEventListener("pointerup", pointerWindowUp);
+  window.addEventListener("pointercancel", pointerWindowUp);
+  window.addEventListener("blur", cancelGesture);
+  document.addEventListener("visibilitychange", gestureVisibilityChange);
   canvas.addEventListener("keydown", keyboard);
   controls.addEventListener("change", render);
   resize();
@@ -652,6 +689,11 @@ export function createAnatomyScene(
     canvas.removeEventListener("webglcontextrestored", contextRestored);
     canvas.removeEventListener("pointerdown", pointerDown);
     canvas.removeEventListener("pointerup", pointerUp);
+    canvas.removeEventListener("pointercancel", pointerCancel);
+    window.removeEventListener("pointerup", pointerWindowUp);
+    window.removeEventListener("pointercancel", pointerWindowUp);
+    window.removeEventListener("blur", cancelGesture);
+    document.removeEventListener("visibilitychange", gestureVisibilityChange);
     canvas.removeEventListener("keydown", keyboard);
     controls.dispose();
     restoreHighlight();
@@ -673,6 +715,7 @@ export function createAnatomyScene(
     });
     return {
       mode: quality,
+      interacting,
       pixelRatio: renderer.getPixelRatio(),
       bufferWidth: Math.round(buffer.width),
       bufferHeight: Math.round(buffer.height),
