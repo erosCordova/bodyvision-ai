@@ -1518,3 +1518,147 @@ def test_private_simulation_scenarios_enforce_session_roles_and_audit(protected)
             ).scalar_one()
             == 0
         )
+
+
+def _synthetic_png():
+    import struct
+    import zlib
+
+    def block(kind, data):
+        payload = kind + data
+        return (
+            struct.pack(">I", len(data))
+            + payload
+            + struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF)
+        )
+
+    image = bytes([0] + [100, 120, 140] * 32) * 64
+    return (
+        b"\\x89PNG\\r\\n\\x1a\\n"
+        + block(b"IHDR", struct.pack(">IIBBBBB", 32, 64, 8, 2, 0, 0, 0))
+        + block(b"IDAT", zlib.compress(image))
+        + block(b"IEND", b"")
+    )
+
+
+def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected):
+    client, owner, profile_id, users = protected
+    editor, reader, outsider = users[:3]
+    writer_login = authenticate(client, editor[0], editor[1])
+    reader_login = authenticate(client, reader[0], reader[1])
+    outsider_login = authenticate(client, outsider[0], outsider[1])
+    assert writer_login.status_code == 200
+    assert reader_login.status_code == 200
+    assert outsider_login.status_code == 200
+    writer = headers(writer_login.json()["token"])
+    member = headers(reader_login.json()["token"])
+    foreign = headers(outsider_login.json()["token"])
+    path = f"/api/v1/profiles/{profile_id}/captures"
+    image = _synthetic_png()
+    asserted = {**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"}
+
+    assert client.post(path, content=image, headers=asserted).status_code == 403
+    for purpose in ("capture", "storage"):
+        accepted = client.post(
+            f"/api/v1/auth/profiles/{profile_id}/consents",
+            headers=writer,
+            json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+        )
+        assert accepted.status_code == 200, accepted.text
+    assert client.post(path, content=image, headers=writer).status_code == 422
+    assert client.post(
+        path, content=image, headers={**writer, "Content-Type": "image/jpeg",
+                                      "X-Synthetic-Only": "confirmed"}
+    ).status_code == 415
+    assert client.post(
+        path, content=b"GIF89a" + b"0" * 100, headers=asserted
+    ).status_code == 422
+    assert client.post(
+        path, content=image, headers={**member, "Content-Type": "image/png",
+                                      "X-Synthetic-Only": "confirmed"}
+    ).status_code == 403
+    assert client.get(path, headers=foreign).status_code == 404
+
+    saved = client.post(path, content=image, headers=asserted)
+    assert saved.status_code == 201, saved.text
+    result = saved.json()
+    assert result["profile_id"] == str(profile_id)
+    assert result["data_type"] == "SIMULADO"
+    assert result["format"] == "image/png"
+    assert result["width"] == 32
+    capture_id = result["id"]
+    assert client.get(path, headers=member).json()["total"] == 1
+    assert client.get(f"{path}/{capture_id}", headers=member).content == image
+    assert client.get(f"{path}/{capture_id}", headers=foreign).status_code == 404
+    assert client.delete(f"{path}/{capture_id}", headers=member).status_code == 403
+    assert client.get(f"{path}/{capture_id}", headers=writer).headers[
+        "content-disposition"
+    ].startswith("attachment;")
+
+    with owner.connect() as conn:
+        record = conn.execute(
+            text("""SELECT ciphertext,sha256_digest FROM synthetic_capture_objects
+                WHERE id=:id"""),
+            {"id": capture_id},
+        ).mappings().one()
+        assert not bytes(record["ciphertext"]).startswith(b"\\x89PNG")
+        assert b"patient" not in bytes(record["ciphertext"])
+        assert conn.execute(
+            text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
+            {"id": profile_id},
+        ).scalar_one() == 0
+
+    history = client.get(
+        f"/api/v1/auth/profiles/{profile_id}/consents", headers=writer
+    ).json()["items"]
+    storage = next(item for item in history if item["purpose"] == "storage")
+    revoked = client.post(
+        f"/api/v1/auth/profiles/{profile_id}/consents/{storage['id']}/revoke",
+        headers=writer,
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert client.get(path, headers=writer).status_code == 403
+    with owner.connect() as conn:
+        assert conn.execute(
+            text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
+            {"id": capture_id},
+        ).scalar_one() == 0
+        assert conn.execute(
+            text("SELECT count(*) FROM security_audit_events WHERE resource_id=:id "
+                 "AND action LIKE 'capture.%'"),
+            {"id": profile_id},
+        ).scalar_one() >= 3
+
+
+def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected):
+    client, owner, profile_id, users = protected
+    editor = users[0]
+    token = authenticate(client, editor[0], editor[1]).json()["token"]
+    writer = headers(token)
+    path = f"/api/v1/profiles/{profile_id}/captures"
+    for purpose in ("capture", "storage"):
+        result = client.post(
+            f"/api/v1/auth/profiles/{profile_id}/consents",
+            headers=writer,
+            json={"purpose": purpose, "version": "bv-synthetic-v1", "confirmed": True},
+        )
+        assert result.status_code == 200
+    saved = client.post(
+        path, content=_synthetic_png(),
+        headers={**writer, "Content-Type": "image/png", "X-Synthetic-Only": "confirmed"},
+    )
+    assert saved.status_code == 201, saved.text
+    image_id = saved.json()["id"]
+    with owner.begin() as conn:
+        conn.execute(
+            text("""UPDATE synthetic_capture_objects
+              SET created_at=now()-interval '8 days',
+                  expires_at=now()-interval '1 day' WHERE id=:id"""),
+            {"id": image_id},
+        )
+    assert client.get(f"{path}/{image_id}", headers=writer).status_code == 404
+    assert client.get(path, headers=writer).json()["total"] == 0
+    purged = client.post(f"{path}/purge-expired", headers=writer)
+    assert purged.status_code == 200, purged.text
+    assert purged.json() == {"deleted": 1}
+    assert client.delete(f"{path}/{image_id}", headers=writer).status_code == 404
