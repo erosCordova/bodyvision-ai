@@ -257,9 +257,9 @@ def test_recovery_replaces_factor_and_revokes_sessions_and_prior_codes(protected
     new_codes = rotated.json()["recovery_codes"]
     assert len(new_codes) == 8
     assert set(new_codes).isdisjoint(set(old_codes))
-    assert client.get(
-        "/api/v1/auth/me", headers=headers(rotated.json()["token"])
-    ).status_code == 200
+    assert (
+        client.get("/api/v1/auth/me", headers=headers(rotated.json()["token"])).status_code == 200
+    )
 
     # A previously valid code, not just the consumed code, must be invalidated.
     rejected = client.post(
