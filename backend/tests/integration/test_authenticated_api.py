@@ -119,14 +119,20 @@ def protected():
                 {"id": profile_id},
             )
             conn.execute(
-                text("ALTER TABLE simulation_scenarios DISABLE TRIGGER immutable_simulation_scenarios")
+                text(
+                    "ALTER TABLE simulation_scenarios "
+                    "DISABLE TRIGGER immutable_simulation_scenarios"
+                )
             )
             conn.execute(
                 text("DELETE FROM simulation_scenarios WHERE profile_id=:id"),
                 {"id": profile_id},
             )
             conn.execute(
-                text("ALTER TABLE simulation_scenarios ENABLE TRIGGER immutable_simulation_scenarios")
+                text(
+                    "ALTER TABLE simulation_scenarios "
+                    "ENABLE TRIGGER immutable_simulation_scenarios"
+                )
             )
             conn.execute(
                 text("DELETE FROM profile_consents WHERE profile_id=:id"), {"id": profile_id}
@@ -1467,7 +1473,10 @@ def test_private_simulation_scenarios_enforce_session_roles_and_audit(protected)
     assert client.get(path).status_code == 401
     assert client.get(path, headers=foreign).status_code == 404
     assert client.get(path, headers=viewer).status_code == 200
-    assert client.get(path, headers={**editor, "X-Workspace-ID": str(FIRST_WORKSPACE)}).status_code == 400
+    assert (
+        client.get(path, headers={**editor, "X-Workspace-ID": str(FIRST_WORKSPACE)}).status_code
+        == 400
+    )
 
     sample = {"reference_kg": 70, "variation_percent": 20, "stature_cm": 180}
     denied = client.post(
