@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     auth_database_url: SecretStr | None = None
     mfa_enabled: bool = False
     mfa_encryption_key: SecretStr | None = None
+    capture_encryption_key: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -63,6 +64,13 @@ class Settings(BaseSettings):
                 Fernet(self.mfa_encryption_key.get_secret_value().encode("ascii"))
             except (ValueError, UnicodeError) as exc:
                 raise ValueError("Invalid MFA encryption key") from exc
+        if self.capture_encryption_key is not None:
+            if not self.identity_enabled or self.app_env not in {"local", "test"}:
+                raise ValueError("Synthetic capture encryption requires private local/test mode")
+            try:
+                Fernet(self.capture_encryption_key.get_secret_value().encode("ascii"))
+            except (ValueError, UnicodeError) as exc:
+                raise ValueError("Invalid synthetic capture encryption key") from exc
         if self.app_env == "demo":
             hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
             if hostname and re.fullmatch(r"[a-zA-Z0-9.-]+", hostname):
