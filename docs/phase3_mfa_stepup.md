@@ -71,14 +71,61 @@ rotación de claves, depósito y recuperación administrativa.
   solicitudes concurrentes, y validación de marcador MFA en sesiones existentes.
 - Auditoría del inicio de inscripción, confirmación, uso de TOTP y consumo de
   recuperación, sin guardar el código ni la semilla.
-- Actualización de migración a `0014_mfa_step_up`, reversible solo en una
-  base desechable de pruebas.
+- Migraciones hasta `0015_mfa_recovery_reset`, reversibles solo en bases
+  desechables de pruebas.
+
+## Recuperación de autenticador extraviado (cuentas ficticias)
+
+La recuperación nunca se basa únicamente en contraseña ni en un enlace enviado
+al correo electrónico. Requiere **contraseña actual + un código de recuperación
+válido y no utilizado**:
+
+1. Desde la pantalla de acceso, elegir «Perdí el acceso a mi autenticador»;
+   introducir la organización, correo, contraseña y un código de recuperación.
+2. `POST /api/v1/auth/mfa/recover` verifica las credenciales, aplica el mismo
+   limitador persistido que el inicio de sesión y valida el verificador salado
+   del código. No admite restablecer factores para perfiles sin MFA confirmado.
+3. La función `private_mfa_reset_with_recovery` bloquea la fila del usuario
+   para serializarse con los inicios de sesión. Verifica que el código continúa
+   disponible, consume el código, revoca **todas** las sesiones, elimina los ocho
+   verificadores anteriores y establece una semilla TOTP nueva como `pending`.
+   Todo esto y el evento de auditoría se confirman **en una sola transacción**.
+4. Se devuelve el nuevo URI `otpauth://` solo después de una transacción
+   confirmada. Hasta completar `/mfa/confirm` con el nuevo TOTP, la cuenta
+   privilegiada no puede obtener una sesión. La confirmación emite ocho códigos
+   de recuperación nuevos; se muestran una sola vez.
+5. Si la persona **perdió tanto su autenticador como todos los códigos de
+   recuperación**, el sistema falla cerrado y no ofrece recuperación por
+   contraseña. Se requiere un proceso de verificación de identidad asistido,
+   documentado y auditado, todavía no implementado.
+
+Este mecanismo no permite al administrador crear, editar ni recuperar factores
+de terceros mediante un selector de cuenta arbitrario. Las peticiones están
+ligadas a las credenciales del propio usuario dentro de su organización
+sintética.
+
+## Custodia y rotación de la clave cifrante
+
+La semilla TOTP se cifra mediante la clave `MFA_ENCRYPTION_KEY` externa.
+**No** sustituir dicha clave mientras existan semillas cifradas con ella:
+las cuentas perderían su autenticación de dos factores. La rotación real
+requiere un flujo transaccional de recifrado por lotes, auditoría, respaldo
+cifrado y verificación de rollback; aún no existe. Está prohibido introducir
+la clave en el repositorio, en logs, o en capturas de interfaz.
+
+## Alta administrativa inicial
+
+El alta inicial de un administrador **no** se expone como endpoint de
+autoregistro. Las cuentas de prueba se provisionan solamente en la base
+desechable del CI, y la API de provisión de usuarios no puede otorgar el
+rol `administrator`. La identidad legal y autorización del primer
+administrador de una organización real deberán verificarse por un proceso
+externo aprobado antes de habilitar el sistema en producción.
 
 ## Pendiente antes de producción
 
 **No considerar la seguridad clínica completa.** Falta un mecanismo verificable
-de alta inicial del administrador, recuperación asistida con comprobación de
-identidad, regeneración y revocación de factores, notificaciones de seguridad,
+de alta inicial del administrador, recuperación asistida sin códigos de respaldo, notificaciones de seguridad,
 pruebas de amenazas de la implementación TOTP en navegador, privacidad y
 cumplimiento legal, continuidad de claves y recuperación ante desastre.
 
