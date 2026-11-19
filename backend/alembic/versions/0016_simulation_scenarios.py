@@ -114,11 +114,63 @@ def upgrade() -> None:
         REVOKE ALL ON simulation_scenarios,simulation_request_keys FROM bodyvision_app;
         GRANT SELECT,INSERT ON simulation_scenarios,simulation_request_keys
           TO bodyvision_app;
+        -- Audit belongs to the same transaction as the synthetic scenario.
+        -- A verified database context and valid profile grant are mandatory.
+        CREATE FUNCTION record_private_simulation_event(
+          event_identifier uuid, correlation uuid, target_profile uuid, event_name text
+        ) RETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+        SET search_path=pg_catalog,public AS $
+        DECLARE tenant uuid; actor uuid; writable boolean;
+        BEGIN
+          tenant := NULLIF(current_setting('app.organization_id',true),'')::uuid;
+          actor := NULLIF(current_setting('app.actor_id',true),'')::uuid;
+          writable := event_name='simulation.create';
+          IF tenant IS NULL OR actor IS NULL OR target_profile IS NULL
+             OR correlation IS NULL OR event_identifier IS NULL
+             OR current_setting('app.identity_verified',true) IS DISTINCT FROM 'yes'
+             OR event_name NOT IN ('simulation.create','simulation.list','simulation.read')
+          THEN
+            RAISE EXCEPTION 'Verified simulation audit required' USING ERRCODE='42501';
+          END IF;
+          IF NOT EXISTS (
+            SELECT 1 FROM users u JOIN organizations o ON o.id=u.organization_id
+            WHERE u.id=actor AND u.organization_id=tenant AND o.synthetic
+              AND u.account_status='active' AND NOT u.is_local_operator
+          ) THEN
+            RAISE EXCEPTION 'Active synthetic account required' USING ERRCODE='42501';
+          END IF;
+          IF NOT has_profile_access(target_profile,writable) THEN
+            RAISE EXCEPTION 'Profile access denied' USING ERRCODE='42501';
+          END IF;
+          IF writable AND NOT EXISTS(
+            SELECT 1 FROM user_role_assignments r
+            WHERE r.organization_id=tenant AND r.user_id=actor
+              AND r.role IN ('administrator','specialist')
+              AND (r.expires_at IS NULL OR r.expires_at>now())
+          ) THEN
+            RAISE EXCEPTION 'Write role denied' USING ERRCODE='42501';
+          END IF;
+          INSERT INTO security_audit_events(
+            id,organization_id,actor_id,correlation_id,action,
+            resource_type,resource_id,outcome
+          ) VALUES(
+            event_identifier,tenant,actor,correlation,event_name,
+            'profile',target_profile,'allowed'
+          );
+          RETURN true;
+        END $;
+        REVOKE ALL ON FUNCTION record_private_simulation_event(
+          uuid,uuid,uuid,text
+        ) FROM PUBLIC,bodyvision_auth_app;
+        GRANT EXECUTE ON FUNCTION record_private_simulation_event(
+          uuid,uuid,uuid,text
+        ) TO bodyvision_app;
         UPDATE system_schema_state SET revision='0016_simulation_scenarios';
     """)
 
 
 def downgrade() -> None:
+    op.execute("DROP FUNCTION record_private_simulation_event(uuid,uuid,uuid,text)")
     op.execute("DROP TABLE simulation_request_keys")
     op.execute("DROP TABLE simulation_scenarios")
     op.execute("DROP FUNCTION guard_simulation_scenario()")
