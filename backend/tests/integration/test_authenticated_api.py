@@ -1534,7 +1534,7 @@ def _synthetic_png():
 
     image = bytes([0] + [100, 120, 140] * 32) * 64
     return (
-        b"\\x89PNG\\r\\n\\x1a\\n"
+        b"\x89PNG\r\n\x1a\n"
         + block(b"IHDR", struct.pack(">IIBBBBB", 32, 64, 8, 2, 0, 0, 0))
         + block(b"IDAT", zlib.compress(image))
         + block(b"IEND", b"")
@@ -1601,7 +1601,7 @@ def test_encrypted_synthetic_capture_requires_both_consents_and_writer(protected
                 WHERE id=:id"""),
             {"id": capture_id},
         ).mappings().one()
-        assert not bytes(record["ciphertext"]).startswith(b"\\x89PNG")
+        assert not bytes(record["ciphertext"]).startswith(b"\x89PNG")
         assert b"patient" not in bytes(record["ciphertext"])
         assert conn.execute(
             text("SELECT count(*) FROM measurements WHERE profile_id=:id"),
