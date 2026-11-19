@@ -34,7 +34,7 @@ def seed_private_browser_accounts() -> None:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-            if revision != "0013_mfa_foundation":
+            if revision != "0014_mfa_step_up":
                 raise RuntimeError("Browser fixtures require the reviewed phase 3 test schema")
             for identifier, organization, role, email in [
                 (
