@@ -24,7 +24,7 @@ def upgrade() -> None:
           event_identifier uuid, correlation uuid
         ) RETURNS jsonb
         LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-        SET search_path=pg_catalog,public AS $$
+        SET search_path=pg_catalog,public,pg_temp AS $$
         DECLARE
           tenant uuid;
           actor uuid;

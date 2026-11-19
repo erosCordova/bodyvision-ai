@@ -942,3 +942,30 @@ def test_consent_rolls_back_when_audit_storage_fails(protected):
                 text("DROP TRIGGER IF EXISTS test_consent_audit_failure ON security_audit_events")
             )
             connection.execute(text("DROP FUNCTION IF EXISTS test_reject_consent_audit()"))
+
+
+def test_consent_function_uses_public_tables_when_runtime_has_temporary_namesakes(protected):
+    client, _, profile, users = protected
+    token = authenticate(client, users[0][0], users[0][1]).json()["token"]
+    runtime = create_engine(os.environ["AUTH_DATABASE_URL"], hide_parameters=True)
+    try:
+        with runtime.begin() as connection:
+            # The runtime role may create temporary tables. They must never
+            # shadow the trusted tables inside this SECURITY DEFINER function.
+            connection.execute(text("CREATE TEMP TABLE profiles(shadow integer)"))
+            result = connection.execute(
+                text(
+                    "SELECT private_profile_consents(CAST(:token AS char(64)),:profile,"
+                    "'list',NULL,NULL,:new_id,:event,:correlation)"
+                ),
+                {
+                    "token": hash_session_token(token),
+                    "profile": profile,
+                    "new_id": uuid4(),
+                    "event": uuid4(),
+                    "correlation": uuid4(),
+                },
+            ).scalar_one()
+            assert result["items"] == [] and result["can_record"]
+    finally:
+        runtime.dispose()
