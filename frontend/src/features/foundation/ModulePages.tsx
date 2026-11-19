@@ -5,6 +5,9 @@ import { reviewLocalCapture, type CaptureReview } from "../capture/captureQualit
 import { PoseReview } from "../capture/PoseReview";
 import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { PrivateAccessPage } from "../access/PrivateAccessPage";
+import { PrivateAdministrationPage } from "../access/PrivateAdministrationPage";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
 function PageTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
@@ -343,6 +346,7 @@ export function ReportsPage() {
   </div>;
 }
 export function AdministrationPage() {
+  if (privateAuthEnabled()) return <PrivateAdministrationPage />;
   return <div className="enterprise-module">
     <PageTitle eyebrow="GOBIERNO DE LA PLATAFORMA" title="Administración y seguridad" description="El documento exige roles, consentimiento, auditoría, retención, privacidad y controles de acceso antes de trabajar con datos reales."/>
     <div className="enterprise-admin-grid">
@@ -357,6 +361,7 @@ export function AdministrationPage() {
   </div>;
 }
 export function AccessPage() {
+  if (privateAuthEnabled()) return <PrivateAccessPage />;
   return <div className="enterprise-access">
     <div className="enterprise-access-art"><span>BODYVISION AI</span><h1>Un espacio profesional para explorar el cuerpo.</h1><p>Mediciones, visión anatómica y trazabilidad en una plataforma web.</p><div className="enterprise-access-orbit" aria-hidden="true">✧</div></div>
     <section className="enterprise-access-card"><span className="eyebrow">ACCESO PROFESIONAL</span><h2>Identificación de usuario</h2><p>La autenticación con usuarios y roles es un requisito crítico pendiente de implementar en el backend.</p>
