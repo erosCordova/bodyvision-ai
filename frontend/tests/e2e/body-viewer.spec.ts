@@ -143,6 +143,11 @@ test("regional weight changes are reversible on the same shaded 3D body, includi
   await page.goto("/body-3d?panel=simulacion");
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
   await page.getByRole("button", { name: "Frente", exact: true }).click();
+  // Fix geometry quality for pixel comparisons: Auto/Fluida may replace
+  // meshes asynchronously with LOD geometry between screenshots.
+  const stableQuality = page.getByRole("button", { name: "Alta", exact: true });
+  await stableQuality.click();
+  await expect(stableQuality).toHaveAttribute("aria-pressed", "true");
   const canvas = page.locator(".studio-canvas canvas");
   const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
   await slider.fill("0");
