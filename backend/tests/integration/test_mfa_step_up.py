@@ -186,3 +186,102 @@ def test_two_factor_challenges_are_tenant_and_account_scoped(protected, monkeypa
     )
     assert authenticate(client, *users[0][:2]).status_code == 428
     assert authenticate(client, *users[2][:2]).status_code == 428
+
+
+def test_recovery_replaces_factor_and_revokes_sessions_and_prior_codes(protected, monkeypatch):
+    client, owner, _, users = protected
+    clock = _enable_mfa(client, monkeypatch)
+    user = users[0]
+    credentials = _credentials(user)
+
+    first = client.post("/api/v1/auth/mfa/enrollment", json=credentials)
+    assert first.status_code == 200, first.text
+    first_seed = parse_qs(urlparse(first.json()["otpauth_uri"]).query)["secret"][0]
+    enrolled = client.post(
+        "/api/v1/auth/mfa/confirm",
+        json={**credentials, "code": totp_code(first_seed, clock[0])},
+    )
+    assert enrolled.status_code == 200, enrolled.text
+    old_token = enrolled.json()["token"]
+    old_codes = enrolled.json()["recovery_codes"]
+    assert client.get("/api/v1/auth/me", headers=headers(old_token)).status_code == 200
+
+    incorrect = client.post(
+        "/api/v1/auth/mfa/recover",
+        json={**credentials, "recovery_code": "F" * 32},
+    )
+    assert incorrect.status_code == 401
+    assert client.get("/api/v1/auth/me", headers=headers(old_token)).status_code == 200
+
+    replacement = client.post(
+        "/api/v1/auth/mfa/recover",
+        json={**credentials, "recovery_code": old_codes[0]},
+    )
+    assert replacement.status_code == 200, replacement.text
+    new_seed = parse_qs(urlparse(replacement.json()["otpauth_uri"]).query)["secret"][0]
+    assert new_seed != first_seed
+    assert client.get("/api/v1/auth/me", headers=headers(old_token)).status_code == 401
+
+    with owner.connect() as connection:
+        confirmed_at = connection.execute(
+            text("SELECT confirmed_at FROM private_mfa_credentials WHERE user_id=:actor"),
+            {"actor": user[0]},
+        ).scalar_one()
+        remaining_codes = connection.execute(
+            text("SELECT count(*) FROM private_mfa_recovery_codes WHERE user_id=:actor"),
+            {"actor": user[0]},
+        ).scalar_one()
+        old_active_sessions = connection.execute(
+            text("""
+                SELECT count(*) FROM auth_sessions
+                WHERE user_id=:actor AND revoked_at IS NULL
+            """),
+            {"actor": user[0]},
+        ).scalar_one()
+    assert confirmed_at is None
+    assert remaining_codes == 0
+    assert old_active_sessions == 0
+    assert authenticate(client, *user[:2]).status_code == 428
+
+    stale_recovery = client.post(
+        "/api/v1/auth/mfa/recover",
+        json={**credentials, "recovery_code": old_codes[0]},
+    )
+    assert stale_recovery.status_code == 401
+
+    rotated = client.post(
+        "/api/v1/auth/mfa/confirm",
+        json={**credentials, "code": totp_code(new_seed, clock[0])},
+    )
+    assert rotated.status_code == 200, rotated.text
+    new_codes = rotated.json()["recovery_codes"]
+    assert len(new_codes) == 8
+    assert set(new_codes).isdisjoint(set(old_codes))
+    assert client.get(
+        "/api/v1/auth/me", headers=headers(rotated.json()["token"])
+    ).status_code == 200
+
+    # A previously valid code, not just the consumed code, must be invalidated.
+    rejected = client.post(
+        "/api/v1/auth/login",
+        json={**credentials, "mfa_code": old_codes[1]},
+    )
+    assert rejected.status_code == 401
+    clock[0] += 30
+    accepted = client.post(
+        "/api/v1/auth/login",
+        json={**credentials, "mfa_code": totp_code(new_seed, clock[0])},
+    )
+    assert accepted.status_code == 200
+
+
+def test_recovery_does_not_disclose_a_factor_to_wrong_password(protected, monkeypatch):
+    client, _, _, users = protected
+    _enable_mfa(client, monkeypatch)
+    credentials = _credentials(users[0])
+    result = client.post(
+        "/api/v1/auth/mfa/recover",
+        json={**credentials, "password": "wrong", "recovery_code": "F" * 32},
+    )
+    assert result.status_code == 401
+    assert "otpauth_uri" not in result.text
