@@ -26,13 +26,15 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0012_account_security"
+            == "0013_mfa_foundation"
         )
         for table in (
             "user_role_assignments",
             "auth_sessions",
             "profile_consents",
             "security_audit_events",
+            "private_mfa_credentials",
+            "private_mfa_recovery_codes",
         ):
             assert not conn.execute(
                 text("SELECT has_table_privilege('bodyvision_app', :table, 'SELECT')"),
@@ -58,6 +60,8 @@ def test_runtime_roles_cannot_directly_modify_private_security_data(database):
                 "private_profile_permission_changes",
                 "profile_consents",
                 "auth_sessions",
+                "private_mfa_credentials",
+                "private_mfa_recovery_codes",
             ):
                 for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                     assert not connection.execute(
