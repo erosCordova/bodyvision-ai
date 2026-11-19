@@ -34,6 +34,14 @@ from app.services.auth_sessions import (
     resolve_identity,
 )
 from app.services.consents import ConsentAcceptance, ConsentHistory, consent_operation
+from app.services.mfa_service import (
+    EnrollmentConfirmation,
+    EnrollmentConfirmedRead,
+    EnrollmentCredentials,
+    EnrollmentRead,
+    begin_enrollment,
+    confirm_enrollment,
+)
 from app.services.password_reset import PasswordResetInput, PasswordResetRead, reset_password
 from app.services.user_management import (
     AccountStatusInput,
@@ -51,6 +59,18 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authenticated identity"])
 @router.post("/login", response_model=SessionRead)
 def create_session(request: Request, data: LoginInput) -> SessionRead:
     return login(request, data)
+
+
+@router.post("/mfa/enrollment", response_model=EnrollmentRead)
+def start_mfa_enrollment(request: Request, data: EnrollmentCredentials) -> EnrollmentRead:
+    return begin_enrollment(request, data)
+
+
+@router.post("/mfa/confirm", response_model=EnrollmentConfirmedRead)
+def confirm_mfa_enrollment(
+    request: Request, data: EnrollmentConfirmation
+) -> EnrollmentConfirmedRead:
+    return confirm_enrollment(request, data)
 
 
 @router.get("/me", response_model=IdentityRead)
