@@ -43,7 +43,12 @@ La demostración pública, la instancia local privada con MFA y una operación p
 | `live` y `ready` consultan API y SQL (no valores simulados) | Pendiente |
 | Seed sin duplicados y pruebas de contenedores | Pendiente |
 | UI escritorio/móvil, teclado y error de conexión | Pendiente |
+| Reinicio sin borrar volumen: observaciones y correcciones conservadas | Pendiente |
 | Incidencias / mitigaciones | Pendiente |
 | Conformidad de QA/operaciones | Pendiente |
 
 Solo se marcará **F1 recibida** tras aportar salidas y la conformidad correspondiente. Esta guía es una herramienta, no una prueba de que alguien la haya seguido.
+
+La CI añade una [recepción técnica en la interfaz Docker compilada y un reinicio
+completo conservando datos](../qa/PHASE_1_DOCKER_BROWSER_RESTART.md). Esa evidencia
+sirve al receptor como referencia; no sustituye su ejecución en el equipo objetivo.

@@ -76,6 +76,11 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
         evidence: { label: "Aislamiento y conservación de datos", url: doc("docs/operations/LOCAL_TEST_DATABASE_ISOLATION.md") },
       },
       {
+        id: "F1-DOCKER-RESTART", requirement: "Interfaz compilada navegable y correcciones conservadas tras recrear contenedores.",
+        state: "verified",
+        evidence: { label: "Navegador Docker y reinicio", url: doc("docs/qa/PHASE_1_DOCKER_BROWSER_RESTART.md") },
+      },
+      {
         id: "F1-HANDOFF", requirement: "Alta operativa reproducida por una segunda persona en el entorno objetivo.",
         state: "pending", pendingReason: "CI confirma la receta en runner; no hay constancia de aceptación humana de instalación.",
         evidence: { label: "Guía de alta y entornos", url: doc("docs/operations/PHASE_1_HANDOFF_CHECKLIST.md") },
