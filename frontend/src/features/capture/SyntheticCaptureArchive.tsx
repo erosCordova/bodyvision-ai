@@ -6,7 +6,7 @@ import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { dateTime } from "../../components/ui/States";
 import { consentsApi } from "../../services/api/consents";
 import {
-  prepareSyntheticPng, syntheticCapturesApi,
+  CAPTURE_ARCHIVE_PAGE_SIZE, prepareSyntheticPng, syntheticCapturesApi,
 } from "../../services/api/syntheticCaptures";
 import type { CaptureReview } from "./captureQuality";
 
@@ -18,6 +18,7 @@ export function SyntheticCaptureArchive({
   const { api } = useWorkspace();
   const cache = useQueryClient();
   const [profileId, setProfileId] = useState("");
+  const [pageOffset, setPageOffset] = useState(0);
   const [attested, setAttested] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -39,8 +40,8 @@ export function SyntheticCaptureArchive({
     consent.data?.items.some(item => item.purpose === purpose && item.effective),
   ));
   const archive = useQuery({
-    queryKey: ["synthetic-capture-archive", ...scope, profileId],
-    queryFn: () => syntheticCapturesApi(session!.token, profileId).list(),
+    queryKey: ["synthetic-capture-archive", ...scope, profileId, pageOffset],
+    queryFn: () => syntheticCapturesApi(session!.token, profileId).list(pageOffset),
     enabled: Boolean(session && profileId && consentOk),
   });
   useEffect(() => {
@@ -48,6 +49,12 @@ export function SyntheticCaptureArchive({
     setNotice("");
     setError("");
   }, [file, profileId]);
+  useEffect(() => {
+    if (archive.data && pageOffset >= archive.data.total && pageOffset > 0) {
+      setPageOffset(Math.max(0, Math.ceil(archive.data.total /
+        CAPTURE_ARCHIVE_PAGE_SIZE) - 1) * CAPTURE_ARCHIVE_PAGE_SIZE);
+    }
+  }, [archive.data, pageOffset]);
   const canWrite = Boolean(session && session.role !== "member" && consent.data?.can_record);
   const upload = useMutation({
     mutationFn: async () => {
@@ -58,6 +65,7 @@ export function SyntheticCaptureArchive({
       return syntheticCapturesApi(session.token, profileId).create(png);
     },
     onSuccess: async () => {
+      setPageOffset(0);
       setAttested(false);
       setError("");
       setNotice("Imagen ficticia cifrada. Caduca en siete días y el servidor privado eliminará los registros vencidos durante sus comprobaciones periódicas.");
@@ -111,7 +119,10 @@ export function SyntheticCaptureArchive({
       <label>
         Expediente ficticio autorizado
         <select aria-label="Expediente de captura ficticia" value={profileId}
-          onChange={event => setProfileId(event.target.value)}>
+          onChange={event => {
+            setPageOffset(0);
+            setProfileId(event.target.value);
+          }}>
           <option value="">Seleccionar expediente ficticio</option>
           {profiles.data?.items.map(profile => (
             <option key={profile.id} value={profile.id}>
@@ -149,7 +160,13 @@ export function SyntheticCaptureArchive({
         <h3>Capturas cifradas del expediente</h3>
         {archive.isPending && <p role="status">Consultando capturas…</p>}
         {archive.isError && <p role="alert">{archive.error.message}</p>}
-        {archive.data && (archive.data.items.length ? (
+        {archive.data && <>
+          <p role="status" aria-label="Página del archivo cifrado">
+            {archive.data.total > 0
+              ? `Capturas ${pageOffset + 1}–${pageOffset + archive.data.items.length} de ${archive.data.total}`
+              : "0 capturas ficticias vigentes"}
+          </p>
+          {archive.data.items.length ? (
           <ol className="enterprise-capture-archive-list">
             {archive.data.items.map(item => (
               <li key={item.id}>
@@ -173,7 +190,23 @@ export function SyntheticCaptureArchive({
               </li>
             ))}
           </ol>
-        ) : <p>No hay PNG ficticios guardados en este expediente.</p>)}
+        ) : <p>{archive.data.total === 0
+          ? "No hay PNG ficticios guardados en este expediente."
+          : "No hay capturas en esta página. Vuelve a la anterior."}</p>}
+          <div className="enterprise-camera-buttons" aria-label="Paginación de capturas ficticias">
+            <button type="button" className="secondary-button"
+              disabled={pageOffset === 0 || archive.isFetching}
+              onClick={() => setPageOffset(Math.max(0, pageOffset - CAPTURE_ARCHIVE_PAGE_SIZE))}>
+              Anterior
+            </button>
+            <button type="button" className="secondary-button"
+              disabled={archive.isFetching ||
+                pageOffset + CAPTURE_ARCHIVE_PAGE_SIZE >= archive.data.total}
+              onClick={() => setPageOffset(pageOffset + CAPTURE_ARCHIVE_PAGE_SIZE)}>
+              Siguiente
+            </button>
+          </div>
+        </>}
       </>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
