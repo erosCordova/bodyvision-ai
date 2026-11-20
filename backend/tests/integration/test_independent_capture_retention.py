@@ -21,7 +21,9 @@ def test_offline_worker_purges_expired_captures_and_leaves_valid_ciphertext(prot
         pytest.skip("Requires local data-role PostgreSQL")
     parsed = make_url(url)
     if parsed.username != "bodyvision_app" or parsed.host not in {
-        "localhost", "127.0.0.1", "::1",
+        "localhost",
+        "127.0.0.1",
+        "::1",
     }:
         pytest.skip("Offline positive test runs on the native loopback runner")
 
@@ -67,10 +69,16 @@ def test_offline_worker_purges_expired_captures_and_leaves_valid_ciphertext(prot
     assert run_once(environment) == 1
     assert run_once(environment) == 0
     with owner.connect() as connection:
-        rows = connection.execute(
-            text("SELECT id,ciphertext FROM synthetic_capture_objects WHERE profile_id=:profile"),
-            {"profile": profile_id},
-        ).mappings().all()
+        rows = (
+            connection.execute(
+                text(
+                    "SELECT id,ciphertext FROM synthetic_capture_objects WHERE profile_id=:profile"
+                ),
+                {"profile": profile_id},
+            )
+            .mappings()
+            .all()
+        )
         assert len(rows) == 1
         assert rows[0]["id"] == valid_id
         assert bytes(rows[0]["ciphertext"]) == encrypted
