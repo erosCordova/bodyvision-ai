@@ -13,7 +13,7 @@ export type ProjectPhase = {
   pending: string;
   milestone: string;
 };
-export const reviewedAt = "2026-11-19";
+export const reviewedAt = "2026-11-20";
 export const phaseAssessment: ProjectPhase[] = [
   { id: 0, name: "Descubrimiento y diseño", progress: 85,
     completed: "Documentos maestros v2/v3, arquitectura y pantallas objetivo.",
