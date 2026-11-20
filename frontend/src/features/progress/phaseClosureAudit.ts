@@ -109,6 +109,11 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
         evidence: { label: "Prueba E2E núcleo de datos", url: doc("frontend/tests/e2e/data-core.spec.ts") },
       },
       {
+        id: "F2-TIMESTAMP", requirement: "Corregir un valor no cambia silenciosamente el instante observado.",
+        state: "verified",
+        evidence: { label: "Precisión temporal de las correcciones", url: doc("docs/qa/PHASE_2_CORRECTION_TIMESTAMP.md") },
+      },
+      {
         id: "F2-ACCEPTANCE", requirement: "Aceptación funcional final del flujo ficticio por el responsable del producto.",
         state: "pending", pendingReason: "El cierre técnico consta; falta la revisión y conformidad del responsable.",
       },

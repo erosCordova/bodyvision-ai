@@ -14,7 +14,8 @@ desde esa interfaz. El comprobador HTTP no sustituye esas verificaciones.
 
 1. Arrancar Docker desde configuración limpia y sembrar solo fixtures sintéticos.
 2. Comprobar que la suite aislada no modifica la base de trabajo (PR #31).
-3. Navegar la interfaz compilada en `http://127.0.0.1:8080`, con siete recorridos:
+3. Navegar la interfaz compilada en `http://127.0.0.1:8080`. La batería inicial de
+   siete recorridos se amplía a ocho con la regresión temporal de F2:
    salud/teclado/axe; móvil; recuperación de error de conexión; expediente,
    medición, corrección, versiones, derivadas y aislamiento; gráfico móvil;
    interfaz de solo lectura; tablero de avance.
