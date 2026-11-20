@@ -31,3 +31,20 @@ Las migraciones se ejecutan mediante Alembic en los entornos de desarrollo/prueb
 2. Los valores de escenarios no constituyen composición corporal, predicción clínica ni reconstrucción de un paciente. El modelo conserva su forma anatómica educativa de referencia.
 3. La lista principal muestra las últimas 20 versiones por expediente; las cadenas individuales consultan el historial completo. En proyectos con miles de escenarios, la paginación explícita y retención requieren desarrollo adicional.
 4. Al desplegar en el futuro, migrar Neon de forma controlada y confirmar una copia de seguridad, integridad y recuperación antes de cambiar el backend. No compartir secretos.
+
+## Paginación y exportación CSV de escenarios ficticios (20 noviembre de 2026)
+
+El visor consulta versiones en páginas de 20 mediante el `offset` ya implementado
+por la API y permite desplazarse hacia adelante y atrás sin cargar todo el
+historial. Al cambiar de expediente o registrar una versión nueva vuelve a la
+primera página. La exportación CSV se genera **solo ante una pulsación** y
+contiene exclusivamente los 20 registros visibles, numeración de versión,
+valores simulados, fecha y versión del modelo/algoritmo. Se excluyen nombres,
+notas arbitrarias, IDs personales y datos observados; no hay llamadas de
+escritura a la API. La descarga está claramente rotulada como parcial si hay
+más registros que los visibles.
+
+Las pruebas de navegador emplean una respuesta de paginación sintética de 25
+registros y verifican CSV, desplazamiento y rechazo de texto arbitrario en el
+archivo. Los nombres propios, fechas y resultados no acreditan datos reales.
+La validación del commit debe confirmarse en CI antes de aumentar el porcentaje.

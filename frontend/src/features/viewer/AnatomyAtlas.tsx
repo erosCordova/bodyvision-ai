@@ -16,6 +16,7 @@ import { preferredAtlasQuality } from "./renderBudget";
 import { reviewLocalCapture } from "../capture/captureQuality";
 import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyNameKey } from "./anatomyNames";
+import { buildSyntheticScenarioCsv } from "./scenarioCsv";
 import "./anatomy-studio.css";
 
 type AtlasController = ReturnType<typeof createAnatomyScene>;
@@ -147,6 +148,8 @@ export function AnatomyAtlas() {
   const [scenarioParentId, setScenarioParentId] = useState("");
   const [scenarioRevisionNote, setScenarioRevisionNote] = useState("");
   const [scenarioVersionId, setScenarioVersionId] = useState("");
+  const [scenarioOffset, setScenarioOffset] = useState(0);
+  const [scenarioExportError, setScenarioExportError] = useState("");
   const [scenarioNotice, setScenarioNotice] = useState("");
   const syntheticProfiles = useQuery({
     queryKey: ["simulation-profile-options", workspaceId],
@@ -159,8 +162,8 @@ export function AnatomyAtlas() {
     enabled: panel === "simulacion" && !!scenarioProfileId,
   });
   const scenarioHistory = useQuery({
-    queryKey: ["simulation-history", workspaceId, scenarioProfileId],
-    queryFn: () => api.scenarios(scenarioProfileId),
+    queryKey: ["simulation-history", workspaceId, scenarioProfileId, scenarioOffset],
+    queryFn: () => api.scenarios(scenarioProfileId, scenarioOffset),
     enabled: panel === "simulacion" && !!scenarioProfileId,
   });
   const scenarioVersions = useQuery({
@@ -180,12 +183,32 @@ export function AnatomyAtlas() {
     }, crypto.randomUUID()),
     onSuccess: async scenario => {
       setScenarioParentId(scenario.id);
+      setScenarioOffset(0);
       setScenarioRevisionNote("");
       setScenarioNotice(`Versión ${scenario.version} registrada como SIMULADO. Las mediciones observadas no se modificaron.`);
       await queryClient.invalidateQueries({ queryKey: ["simulation-history", workspaceId, scenarioProfileId] });
       await queryClient.invalidateQueries({ queryKey: ["simulation-versions", workspaceId, scenarioProfileId] });
     },
   });
+  const downloadScenarioPage = () => {
+    const page = scenarioHistory.data;
+    if (!page || page.items.length === 0 || scenarioHistory.isFetching) return;
+    setScenarioExportError("");
+    let url: string | null = null;
+    try {
+      const csv = buildSyntheticScenarioCsv(page.items);
+      url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bodyvision-escenarios-simulados-pagina.csv";
+      link.click();
+      const finishedUrl = url;
+      window.setTimeout(() => URL.revokeObjectURL(finishedUrl), 1500);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      setScenarioExportError("No se pudo generar el CSV de escenarios sintéticos.");
+    }
+  };
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
   const [qualityPreference, setQualityPreference] = useState<SceneQuality | "auto">("auto");
   const [recommendedQuality, setRecommendedQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
@@ -814,6 +837,8 @@ export function AnatomyAtlas() {
                     <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
                       onChange={event => {
                         setScenarioProfileId(event.target.value);
+                        setScenarioOffset(0);
+                        setScenarioExportError("");
                         setScenarioParentId("");
                         setScenarioVersionId("");
                         setScenarioRevisionNote("");
@@ -858,6 +883,19 @@ export function AnatomyAtlas() {
                       {scenarioNotice && <p role="status" className="studio-sim-success">{scenarioNotice}</p>}
                       <div className="studio-scenario-records">
                         <h4>Historial registrado</h4>
+                        {scenarioHistory.data && scenarioHistory.data.total > 0 && (
+                          <div className="studio-scenario-page-toolbar">
+                            <span role="status" aria-label="Página del historial simulado">
+                              Versiones {scenarioHistory.data.offset + 1}–{scenarioHistory.data.offset + scenarioHistory.data.items.length}
+                              {" de "}{scenarioHistory.data.total} · solo SIMULADO
+                            </span>
+                            <button type="button" onClick={downloadScenarioPage}
+                              disabled={scenarioHistory.isFetching || scenarioHistory.data.items.length === 0}>
+                              Exportar página CSV
+                            </button>
+                          </div>
+                        )}
+                        {scenarioExportError && <p role="alert">{scenarioExportError}</p>}
                         {scenarioHistory.isPending && <p>Cargando versiones…</p>}
                         {scenarioHistory.isError && <p role="alert">No se pudo consultar el historial de simulaciones.</p>}
                         {scenarioHistory.data?.items.length === 0 && <p>Aún no hay escenarios registrados.</p>}
@@ -876,8 +914,22 @@ export function AnatomyAtlas() {
                             </li>
                           ))}
                         </ol>}
-                        {!!scenarioHistory.data && scenarioHistory.data.total > scenarioHistory.data.items.length &&
-                          <p>Se muestran las últimas 20 versiones de {scenarioHistory.data.total}. Consulta las cadenas de versiones para revisar el historial asociado.</p>}
+                        {!!scenarioHistory.data && scenarioHistory.data.total > 20 && (
+                          <nav className="studio-scenario-pagination" aria-label="Páginas de escenarios simulados">
+                            <button type="button" disabled={scenarioOffset === 0 || scenarioHistory.isFetching}
+                              onClick={() => setScenarioOffset(offset => Math.max(0, offset - 20))}>
+                              Anteriores 20
+                            </button>
+                            <button type="button"
+                              disabled={scenarioHistory.isFetching ||
+                                scenarioOffset + scenarioHistory.data.limit >= scenarioHistory.data.total}
+                              onClick={() => setScenarioOffset(offset => offset + 20)}>
+                              Siguientes 20
+                            </button>
+                          </nav>
+                        )}
+                        {!!scenarioHistory.data && scenarioHistory.data.total > 0 &&
+                          <small>El CSV contiene únicamente la página visible; no incluye nombres, notas, identificadores de personas ni mediciones observadas.</small>}
                       </div>
                       {!!scenarioVersionId && <div className="studio-sim-saved" aria-label="Cadena de versiones del escenario">
                         <strong>Cadena de versiones</strong>

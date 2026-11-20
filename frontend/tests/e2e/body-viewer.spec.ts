@@ -276,6 +276,60 @@ test("regional weight changes are reversible on the same shaded 3D body, includi
   expect(errors).toEqual([]);
 });
 
+test("synthetic history pages and CSV export never include observed records or arbitrary notes", async ({ page }) => {
+  const saved = await page.request.post("/api/v1/profiles", {
+    data: { birth_year: 1997, display_name: "Caso ficticio de paginación de simulaciones" },
+  });
+  expect(saved.status()).toBe(201);
+  const profileId = (await saved.json() as { id: string }).id;
+  const scenarioUrl = `/api/v1/profiles/${profileId}/scenarios`;
+  let pagesRequested: number[] = [];
+  await page.route(`**${scenarioUrl}?**`, async route => {
+    const requestUrl = new URL(route.request().url());
+    const offset = Number(requestUrl.searchParams.get("offset") ?? 0);
+    pagesRequested.push(offset);
+    const items = Array.from({ length: offset === 20 ? 5 : 20 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      series_id: crypto.randomUUID(), profile_id: profileId,
+      prior_version_id: null, version: 1,
+      reference_kg: 70, variation_percent: 15, stature_cm: 175, simulated_kg: 80.5,
+      model_revision: "28912432581accd7a1c62129d55f0e9758221d48",
+      algorithm_revision: "regional-soft-tissue-v2",
+      revision_note: "=HYPERLINK(\"danger\")", created_by: crypto.randomUUID(),
+      created_at: "2026-11-20T13:00:00Z", data_type: "SIMULADO",
+    }));
+    await route.fulfill({ json: { items, offset, total: 25, limit: 20 } });
+  });
+  await sourceFixtures(page);
+  await page.goto(`/body-3d?panel=simulacion&profile=${profileId}`);
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const history = page.getByRole("region", { name: "Historial de escenarios simulados" });
+  await expect(history.getByRole("status", { name: "Página del historial simulado" }))
+    .toContainText("Versiones 1–20 de 25");
+  const exportButton = history.getByRole("button", { name: "Exportar página CSV" });
+  const firstDownload = page.waitForEvent("download");
+  await exportButton.click();
+  const firstFile = await firstDownload;
+  expect(firstFile.suggestedFilename()).toBe("bodyvision-escenarios-simulados-pagina.csv");
+  const csv = readFileSync((await firstFile.path())!, "utf8");
+  expect(csv).toContain("SIMULADO");
+  expect(csv).toContain("80.5");
+  expect(csv).not.toContain("HYPERLINK");
+  expect(csv).not.toContain(profileId);
+  expect(csv).not.toContain("OBSERVADO");
+  expect(csv.trim().split("\\n")).toHaveLength(21);
+  await history.getByRole("button", { name: "Siguientes 20" }).click();
+  await expect(history.getByRole("status", { name: "Página del historial simulado" }))
+    .toContainText("Versiones 21–25 de 25");
+  await expect(history.getByRole("list", { name: "Versiones de simulación guardadas" }))
+    .toHaveCount(1);
+  await expect(history.getByRole("button", { name: "Siguientes 20" })).toBeDisabled();
+  await history.getByRole("button", { name: "Anteriores 20" }).click();
+  await expect(history.getByRole("status", { name: "Página del historial simulado" }))
+    .toContainText("Versiones 1–20 de 25");
+  expect(pagesRequested).toEqual(expect.arrayContaining([0, 20, 0]));
+});
+
 test("versioned fictitious 3D scenarios persist across visits without creating observations", async ({ page }) => {
   test.setTimeout(120000);
   const response = await page.request.post("/api/v1/profiles", {

@@ -457,3 +457,17 @@
     overscroll-behavior: contain;
   }
 }
+
+/* Explicit, accessible paging of a synthetic and immutable scenario archive. */
+.studio-scenario-page-toolbar,.studio-scenario-pagination{
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:9px;
+}
+.studio-scenario-page-toolbar span{font-size:10px;color:#bcd8e9}
+.studio-scenario-page-toolbar button,.studio-scenario-pagination button{
+  padding:8px 10px;background:#204b65;color:#eaf8ff;border:1px solid #5e94b0;
+  border-radius:8px;font-size:11px
+}
+.studio-scenario-page-toolbar button:disabled,.studio-scenario-pagination button:disabled{
+  cursor:not-allowed;opacity:.45
+}
+.studio-scenario-pagination{border-top:1px solid #45647b;padding-top:11px}
