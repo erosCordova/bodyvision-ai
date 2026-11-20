@@ -73,8 +73,11 @@
   display: grid; flex: 1; min-height: 740px;
   height: calc(100vh - 110px);
   grid-template-columns: 266px minmax(350px, 1fr) 325px;
+  /* Do not let the long simulation form enlarge the WebGL viewport.
+     Its contents belong to the independently scrolling right sidebar. */
+  grid-template-rows: minmax(0, 1fr);
 }
-.studio-left { background: #0d1b2d; border-right: 1px solid #29435c; padding: 27px 19px; overflow-y: auto; }
+.studio-left { min-height: 0; background: #0d1b2d; border-right: 1px solid #29435c; padding: 27px 19px; overflow-y: auto; }
 .studio-left-title { padding: 0 7px 22px; }
 .studio-left-title p, .studio-eyebrow {
   color: #7dcce9; font-size: 9px; letter-spacing: .17em; font-weight: 750; margin: 0 0 12px;
@@ -161,7 +164,7 @@
 .studio-dock button { padding: 9px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #b3ccdf; font-size: 10px; }
 .studio-dock button.active, .studio-dock button[aria-pressed=true] { background: #2b5775; color: #f5fcff; border-color: #5087a5; }
 .studio-dock button:hover:not(:disabled) { background: #284a65; }
-.studio-right { background: #101e31; border-left: 1px solid #29435c; display: flex; flex-direction: column; min-width: 0; }
+.studio-right { min-height: 0; background: #101e31; border-left: 1px solid #29435c; display: flex; flex-direction: column; min-width: 0; }
 .studio-right-head { display: grid; gap: 8px; padding: 27px 23px 22px; }
 .studio-right-head span { font-size: 9px; font-weight: 750; letter-spacing: .15em; color: #79c8e5; }
 .studio-right-head strong { font-size: 19px; letter-spacing: -.03em; }
@@ -248,7 +251,7 @@
   .studio-header { grid-template-columns: auto minmax(130px,1fr) auto; padding: 10px 12px; }
   .studio-brand small { display: none; }
   .studio-header-actions .studio-to-dashboard { display: none; }
-  .studio-main { grid-template-columns: 225px minmax(320px,1fr); }
+  .studio-main { height: auto; min-height: 0; flex: none; grid-template-columns: 225px minmax(320px,1fr); grid-template-rows: 740px auto; }
   .studio-right { grid-column: 1 / -1; border-top: 1px solid #29435c; border-left: 0; }
   .studio-right-content { max-height: 550px; }
 }

@@ -422,6 +422,16 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
   await sourceFixtures(page);
   await page.goto("/simulation");
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  // Regression: expanding the long simulation form must not silently turn
+  // a ~740px 3D scene into a >2500px tall canvas that cannot be captured.
+  const atlasHeight = await page.locator(".studio-canvas canvas").evaluate(
+    element => element.getBoundingClientRect().height,
+  );
+  expect(atlasHeight, "3D viewport should be bounded independently of simulator controls").toBeLessThan(950);
+  const scrollable = await page.locator(".studio-right-content").evaluate(
+    element => element.scrollHeight > element.clientHeight,
+  );
+  expect(scrollable, "simulation controls should scroll inside the right panel").toBe(true);
   await page.getByRole("button", { name: "Frente", exact: true }).click();
   await page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" }).fill("185");
   const analyze = page.getByRole("button", { name: "Analizar esta vista 3D con IA" });
