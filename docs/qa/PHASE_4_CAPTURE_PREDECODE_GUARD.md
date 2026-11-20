@@ -37,3 +37,19 @@ No habilita imágenes de pacientes ni altera el atlas 3D.
 El cierre de F4 y F5 sigue condicionado a privacidad, validación en
 dispositivos físicos, controles jurídicos y revisión de seguridad de producción.
 No hay despliegue ni cambios en `main`.
+
+## Validación e integración verificadas
+
+- [PR #17](https://github.com/erosCordova/bodyvision-ai/pull/17) fusionada
+  en la rama de desarrollo `feature/phase3-auth-security`.
+- [GitHub Actions #44662312003](https://github.com/erosCordova/bodyvision-ai/actions/runs/44662312003):
+  `native-checks` y `docker-smoke` concluyeron con éxito. Las pruebas
+  de navegador incluyen el nuevo rechazo de cabeceras PNG de 64 MP y
+  conservación del visor anatómico 3D.
+- El primer intento falló exclusivamente por el texto esperado en una prueba
+  de formato no coincidente: el validador compartido usa «fotografía» en
+  lugar de «archivo». Se corrigió la expectativa y se repitió CI completa
+  hasta obtener estado verde.
+- Reevaluación manual de Fase 4: **65 % → 70 %**. El porcentaje general
+  redondeado continúa en **74 %**, ya que son diez fases con igual peso.
+  El avance no equivale a autorización clínica ni preparación para producción.
