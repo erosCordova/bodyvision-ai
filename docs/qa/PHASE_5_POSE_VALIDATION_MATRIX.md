@@ -41,6 +41,21 @@ Los límites de dimensiones siguen siendo 16 000 px por lado y 32 MP.
 
 Esta decisión puede rechazar algunos JPEG legítimos con metadatos muy extensos;
 se prefiere el rechazo explícito frente a una decodificación no acotada en la
-demostración sintética. WebP conserva los controles de firma y tamaño del archivo,
-y la validación de dimensiones después de la decodificación. Ningún control
-sustituye la revisión de privacidad y seguridad antes de aceptar fotos reales.
+demostración sintética. Ningún control sustituye la revisión de privacidad y
+seguridad antes de aceptar fotos reales.
+
+## WebP: comprobación de dimensiones antes de decodificar
+
+WebP se verifica también por su primer bloque RIFF, sin descomprimir píxeles:
+`VP8 ` (con pérdida), `VP8L` (sin pérdida) y `VP8X` (extendido, incluso
+contenedores animados) tienen estructuras distintas. Se lee un máximo de
+30 bytes del encabezado; se comprueban la firma RIFF/WEBP, el tipo y longitud
+del bloque, las marcas específicas del formato y ancho/alto. Los mismos límites
+de 16 000 píxeles por lado y 32 MP se aplican antes de `createImageBitmap`.
+Un encabezado desconocido o truncado se rechaza explícitamente.
+
+El control es una inspección de cabecera, **no** una verificación integral del
+archivo, un detector de carga maliciosa ni garantía contra errores del
+decodificador. Tras `createImageBitmap` se comprueban también las dimensiones
+reales, que pueden diferir de los metadatos. Solo se admiten datos ficticios
+en las demostraciones.

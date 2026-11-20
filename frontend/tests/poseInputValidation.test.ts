@@ -29,7 +29,39 @@ function jpegDimensions(width: number, height: number): Uint8Array {
   ]);
 }
 const jpeg = jpegDimensions(1024, 1024);
-const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+function webpExtended(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(30);
+  bytes.set([0x52, 0x49, 0x46, 0x46, 22, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+    0x56, 0x50, 0x38, 0x58, 10, 0, 0, 0]);
+  for (let shift = 0; shift < 3; shift++) {
+    bytes[24 + shift] = ((width - 1) >> (8 * shift)) & 255;
+    bytes[27 + shift] = ((height - 1) >> (8 * shift)) & 255;
+  }
+  return bytes;
+}
+function webpLossless(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(26);
+  bytes.set([0x52, 0x49, 0x46, 0x46, 18, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+    0x56, 0x50, 0x38, 0x4c, 5, 0, 0, 0, 0x2f]);
+  const w = width - 1;
+  const h = height - 1;
+  bytes[21] = w & 255;
+  bytes[22] = ((w >> 8) & 0x3f) | ((h & 3) << 6);
+  bytes[23] = (h >> 2) & 255;
+  bytes[24] = (h >> 10) & 15;
+  return bytes;
+}
+function webpLossy(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(30);
+  bytes.set([0x52, 0x49, 0x46, 0x46, 22, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+    0x56, 0x50, 0x38, 0x20, 10, 0, 0, 0, 0, 0, 0, 0x9d, 1, 0x2a]);
+  bytes[26] = width & 255;
+  bytes[27] = (width >> 8) & 0x3f;
+  bytes[28] = height & 255;
+  bytes[29] = (height >> 8) & 0x3f;
+  return bytes;
+}
+const webp = webpExtended(1024, 1024);
 const file = (bytes: Uint8Array, type: string) => {
   const input = new File([bytes.slice().buffer as ArrayBuffer], "ficticia", { type });
   // jsdom's Blob does not implement arrayBuffer(); real browsers do.
@@ -60,6 +92,41 @@ describe("pose input gates (synthetic local analysis only)", () => {
     await expect(validatePoseImageFile(file(new Uint8Array(), "image/png"))).rejects.toThrow(/validación/);
     await expect(validatePoseImageFile(file(png, "text/plain"))).rejects.toThrow(/validación/);
     await expect(validatePoseImageFile(file(png.slice(0, 3), "image/png"))).rejects.toThrow(/formato/);
+  });
+
+  it.each([
+    { label: "VP8 lossy", frame: webpLossy(1200, 900) },
+    { label: "VP8L lossless", frame: webpLossless(1200, 900) },
+    { label: "VP8X extended", frame: webpExtended(1200, 900) },
+  ])("accepts a bounded $label WebP header before decoding", async ({ frame }) => {
+    await expect(validatePoseImageFile(file(frame, "image/webp"))).resolves.toBeUndefined();
+  });
+
+  it("rejects excessive WebP dimensions across all three codecs", async () => {
+    for (const frame of [
+      webpExtended(8000, 8000), webpLossless(16001, 2000), webpLossy(8000, 8000),
+    ]) {
+      await expect(validatePoseImageFile(file(frame, "image/webp")))
+        .rejects.toThrow(/dimensiones/);
+    }
+    await expect(validatePoseImageFile(file(webpExtended(16000, 2000), "image/webp")))
+      .resolves.toBeUndefined();
+  });
+
+  it("rejects truncated, unknown and malformed WebP chunks before decoding", async () => {
+    const truncated = webp.slice(0, 22);
+    const unknown = webp.slice();
+    unknown[15] = 0x21;
+    const invalidLength = webp.slice();
+    invalidLength[16] = 0xff;
+    const badVP8L = webpLossless(100, 100);
+    badVP8L[20] = 0x00;
+    const badVP8 = webpLossy(100, 100);
+    badVP8[23] = 0x00;
+    for (const frame of [truncated, unknown, invalidLength, badVP8L, badVP8]) {
+      await expect(validatePoseImageFile(file(frame, "image/webp")))
+        .rejects.toThrow(/WebP/);
+    }
   });
 
   it("rejects JPEG SOF dimensions exceeding local processing budgets before decoding", async () => {

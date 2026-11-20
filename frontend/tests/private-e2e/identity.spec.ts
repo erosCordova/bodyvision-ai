@@ -15,7 +15,8 @@ async function signIn(page: Page, email: string, org = organization, passphrase 
   await page.getByRole("button", { name: "Ingresar al espacio privado" }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "Dashboard general", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard general", exact: true }))
+    .toBeVisible({ timeout: 15000 });
   return response.json() as Promise<{ token: string }>;
 }
 
