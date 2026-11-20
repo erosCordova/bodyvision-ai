@@ -749,13 +749,23 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
     await expect(viewport(page)).toHaveAttribute("data-loaded", "true");
     await page.getByRole("button", { name: "Frente", exact: true }).tap();
 
-    // A small display canvas does not magically become a 720px photo.
+    // An explicit snapshot re-renders the SAME 3D mesh at actual higher GPU
+    // resolution. The fluid on-screen canvas never remains in capture mode.
     await page.getByRole("button", { name: "Analizar esta vista 3D con IA" }).tap();
     await expect(page).toHaveURL(/\/analysis$/);
     const capture = page.getByRole("region", { name: "Control de calidad recibido" });
     await expect(capture).toBeVisible();
-    await expect(capture).toContainText("Resolución");
-    await expect(capture).not.toContainText("4 de 4 criterios cumplidos");
+    await expect(capture).toContainText("4 de 4 criterios cumplidos");
+    const image = page.getByRole("img", {
+      name: "Fotografía local utilizada únicamente para la revisión de pose",
+    });
+    await expect(image).toBeVisible();
+    const realDimensions = await image.evaluate((el: HTMLImageElement) => ({
+      width: el.naturalWidth, height: el.naturalHeight,
+    }));
+    expect(Math.min(realDimensions.width, realDimensions.height))
+      .toBeGreaterThanOrEqual(800);
+    expect(realDimensions.width * realDimensions.height).toBeLessThanOrEqual(2_400_000);
 
     // The local model runs nevertheless; record only an honest detect/no-detect
     // outcome, never fabricated landmarks or a clinical quality claim.
@@ -769,6 +779,15 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
     const stages = page.getByLabel("Etapas de inferencia local");
     await expect(stages).toBeVisible({ timeout: 90000 });
     await expect(stages).toContainText("Heap JavaScript");
+    // Verify navigating back does not leave the real-time GPU surface in
+    // high-resolution capture mode; preserve the fluid preview budget.
+    await page.goto("/simulation");
+    await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+    const restoredPixels = await page.locator(".studio-canvas canvas")
+      .evaluate((element: HTMLCanvasElement) => element.width * element.height);
+    expect(restoredPixels).toBeLessThanOrEqual(970000);
+    await expect(page.getByRole("button", { name: "Fluida", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
     expect(scriptErrors).toEqual([]);
     expect(unauthorizedWrites).toEqual([]);
   });

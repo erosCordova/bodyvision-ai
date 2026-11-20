@@ -6,6 +6,7 @@ import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapp
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
 import { captureOpaqueAtlasPng } from "./atlasCapture";
+import { planAtlasCapture } from "./atlasCaptureResolution";
 import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
@@ -850,16 +851,40 @@ export function createAnatomyScene(
     };
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
+  let capturingSnapshot = false;
   const capturePng = async (): Promise<Blob> => {
-    if (disposed || !canvas.isConnected) throw new Error("Visor 3D no disponible");
-    if (comparison) throw new Error("Desactiva la comparación dividida antes de analizar una vista 3D");
-    // Capture immediately after a fresh render. This preserves the existing
-    // single scene, camera, mesh and shader without enabling a costly persistent
-    // WebGL drawing buffer or introducing another character.
-    render();
-    // One offscreen 2D composition is only used for the explicit synthetic
-    // analysis handoff. It does not change the displayed WebGL transparency.
-    return captureOpaqueAtlasPng(canvas);
+    if (disposed || contextUnavailable || !canvas.isConnected) {
+      throw new Error("Visor 3D no disponible");
+    }
+    if (comparison) {
+      throw new Error("Desactiva la comparación dividida antes de analizar una vista 3D");
+    }
+    if (capturingSnapshot) throw new Error("Ya se está preparando una captura 3D.");
+    const bounds = host.getBoundingClientRect();
+    // The preview's <=950k mobile GPU budget is unchanged. On explicit capture,
+    // render the SAME avatar geometry and camera again at actual increased
+    // WebGL resolution; do not interpolate a previously rasterized low-res PNG.
+    const plan = planAtlasCapture(bounds.width, bounds.height, renderer.getPixelRatio());
+    capturingSnapshot = true;
+    try {
+      renderer.setSize(bounds.width, bounds.height, false);
+      renderer.setPixelRatio(plan.pixelRatio);
+      camera.aspect = bounds.width / bounds.height;
+      camera.updateProjectionMatrix();
+      render();
+      if (Math.min(canvas.width, canvas.height) < 800 ||
+          canvas.width * canvas.height > 2_400_000) {
+        throw new Error("La captura sintética no alcanzó la resolución requerida.");
+      }
+      // The 2D matte is applied only to this transient snapshot. The visual
+      // WebGL canvas retains transparent backgrounds before and after capture.
+      return await captureOpaqueAtlasPng(canvas);
+    } finally {
+      capturingSnapshot = false;
+      // Restore user-selected fluid/high ratio even on a failed PNG export.
+      // A new screenshot never changes geometry, materials, zoom or viewpoint.
+      resize();
+    }
   };
   return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, retryLayer, dispose };
 }
