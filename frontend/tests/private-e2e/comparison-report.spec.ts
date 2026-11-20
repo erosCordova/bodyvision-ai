@@ -27,7 +27,8 @@ test("private comparison downloads a server PDF with source IDs and committed au
     expect(result.status()).toBe(201);
     sourceIds.push((await result.json() as { id: string }).id);
   }
-  await page.goto(`/profiles/${id}`);
+  await page.getByRole("link", { name: "Expedientes", exact: true }).click();
+  await page.locator(`a[href="/profiles/${id}"]`).click();
   await page.getByRole("button", { name: "Evolución", exact: true }).click();
   const downloadEvent = page.waitForEvent("download");
   const responseEvent = page.waitForResponse(response => response.url().endsWith("/reports/comparison"));
