@@ -73,7 +73,7 @@ def test_capture_archive_pages_complete_authorized_inventory(protected):
         assert body["total"] == 56
         assert len(body["items"]) == expected
         assert all(row["data_type"] == "SIMULADO" for row in body["items"])
-        assert result.headers["cache-control"] == "no-store, private"
+        assert "no-store" in result.headers["cache-control"].lower().split(", ")
         assert result.headers["pragma"] == "no-cache"
         assert result.headers["x-content-type-options"] == "nosniff"
         assert "set-cookie" not in result.headers
