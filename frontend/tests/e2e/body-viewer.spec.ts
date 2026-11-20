@@ -133,6 +133,43 @@ test("weight morph and polygon overlay change the rendered 3D canvas", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("reference-weight editing deforms one 3D avatar and split view preserves the matching baseline", async ({ page }) => {
+  test.setTimeout(110000);
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Frente", exact: true }).click();
+  await page.getByRole("button", { name: "Alta", exact: true }).click();
+  const canvas = page.locator(".studio-canvas canvas");
+  const weight = page.getByRole("spinbutton", { name: "Peso de referencia (solo demostración)" });
+  const variation = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  const base = await canvas.screenshot();
+  await weight.fill("110");
+  await expect(page.getByText("110", { exact: true }).first()).toBeVisible();
+  await expect.poll(async () => !(await canvas.screenshot()).equals(base), {
+    timeout: 10000,
+    message: "Changing reference weight must change real rendered pixels",
+  }).toBe(true);
+  await variation.fill("20");
+  await page.getByRole("button", { name: "Comparar lado a lado" }).click();
+  const comparison = page.getByLabel("Comparación dividida del mismo modelo 3D");
+  await expect(comparison).toContainText("REFERENCIA · 110 kg");
+  await expect(comparison).toContainText("ESCENARIO · 132 kg");
+  await page.getByRole("slider", { name: "Mover separación entre referencia y escenario" }).fill("70");
+  await expect(comparison).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
+  await page.getByRole("button", { name: "Restaurar valores" }).click();
+  await expect(weight).toHaveValue("70");
+  await expect(variation).toHaveValue("0");
+  await expect.poll(async () => (await canvas.screenshot()).equals(base), {
+    timeout: 10000,
+    message: "Restoring defaults must restore the original atlas silhouette",
+  }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test("regional weight changes are reversible on the same shaded 3D body, including polygon mesh", async ({ page }) => {
   test.setTimeout(110000);
   const errors: string[] = [];
