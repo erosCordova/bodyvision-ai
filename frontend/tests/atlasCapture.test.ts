@@ -41,9 +41,9 @@ describe("synthetic opaque atlas snapshot", () => {
     const input = document.createElement("canvas");
     input.width = 800; input.height = 1100;
     const clearRect = vi.fn();
+    const context = { fillStyle: "", fillRect: vi.fn(), drawImage: vi.fn(), clearRect };
     vi.spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue({ fillStyle: "", fillRect: vi.fn(), drawImage: vi.fn(), clearRect }
-        as unknown as CanvasRenderingContext2D);
+      .mockReturnValue(context as unknown as CanvasRenderingContext2D);
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob")
       .mockImplementation(callback => callback(null));
     await expect(captureOpaqueAtlasPng(input)).rejects.toThrow(/generar/);
