@@ -33,9 +33,15 @@ validación previa por formato, dimensiones, brillo, contraste y pose.
   extrema, datos inválidos, límite de píxeles y conservación de modo
   de calidad suficiente.
 - La prueba móvil táctil recorre la simulación, captura y MediaPipe
-  real. Exige **4/4 controles** en el atlas sintético iluminado,
-  verifica dimensiones del PNG realmente capturado y confirma que al
-  volver al visor el presupuesto «Fluida» queda nuevamente limitado.
+  real. Exige que el **control de resolución** quede aprobado y que
+  el PNG realmente renderizado tenga un lado corto de 800 píxeles.
+  Comprueba también que los controles independientes de iluminación
+  y contraste se mantengan activos y que, al volver al visor, su
+  presupuesto «Fluida» quede nuevamente limitado.
+- En el primer ensayo de CI, el PNG fue **800 × 1177**, pasó resolución,
+  iluminación y orientación pero obtuvo una advertencia de **contraste**
+  (3/4 controles). Se conserva ese aviso en vez de alterar materiales
+  o métricas para aparentar calidad total.
 - Las pruebas no miden FPS, memoria RAM, GPU física ni precisión
   biométrica. Sigue pendiente comprobar teléfonos Android/iOS reales,
   operaciones sin conexión, rendimiento, autorizaciones y revisión

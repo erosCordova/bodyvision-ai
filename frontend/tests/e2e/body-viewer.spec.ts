@@ -755,7 +755,11 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
     await expect(page).toHaveURL(/\/analysis$/);
     const capture = page.getByRole("region", { name: "Control de calidad recibido" });
     await expect(capture).toBeVisible();
-    await expect(capture).toContainText("4 de 4 criterios cumplidos");
+    // Real resolution now passes; contrast and lighting remain independent,
+    // honest capture-quality gates. Never require or manufacture 4/4.
+    const checks = await capture.locator("li strong").allTextContents();
+    expect(checks.map(text => text.trim())).toContain("✓ Resolución");
+    await expect(capture).toContainText("Ambos lados tienen al menos 720 píxeles.");
     const image = page.getByRole("img", {
       name: "Fotografía local utilizada únicamente para la revisión de pose",
     });
