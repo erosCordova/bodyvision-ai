@@ -116,8 +116,12 @@ jobs:
           curl --fail http://127.0.0.1:8080/api/v1/health/ready
           python3 scripts/check_local_installation.py --json
           docker compose run --rm seed
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-tests.sql
           docker compose run --rm api-test
           docker compose run --rm frontend-test
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-tests.sql
+          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-after-tests.sql
+          python3 scripts/check_local_installation.py --json
       - name: Stop disposable environment
         if: always()
         run: docker compose down -v

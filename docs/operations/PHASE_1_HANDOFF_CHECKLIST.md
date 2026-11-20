@@ -25,6 +25,7 @@ python scripts/check_local_installation.py
 docker compose run --rm seed
 docker compose run --rm api-test
 docker compose run --rm frontend-test
+docker compose --profile test stop db-test
 ```
 
 El repositorio puede ser privado: este paso exige acceso legítimo. El uso de `curl` en Git Bash depende de disponibilidad local. Verificar además la interfaz `http://localhost:8080`, expediente ficticio y ausencia de desbordamiento móvil. Finalmente, `docker compose down` (sin `-v`).
