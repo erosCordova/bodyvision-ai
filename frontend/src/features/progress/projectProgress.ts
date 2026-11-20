@@ -53,7 +53,7 @@ export const phaseAssessment: ProjectPhase[] = [
     milestone: "Escenarios trazables sin sobrescribir observaciones." },
   { id: 9, name: "Producción", progress: 30,
     completed: "Despliegue de demostración, pipelines de compilación y pruebas con Docker.",
-    pending: "Secretos, observabilidad, alertas, respaldo/restauración, revisión legal y pruebas de seguridad.",
+    pending: "Secretos, observabilidad, alertas, respaldos productivos/PITR, política de retención, revisión legal y pruebas de seguridad. Simulacro lógico de restauración aislado añadido a CI, pendiente de resultado satisfactorio.",
     milestone: "Checklist de producción completado." },
 ];
 export const overallProgress = Math.round(phaseAssessment.reduce((sum, item) => sum + item.progress, 0) / phaseAssessment.length);
