@@ -99,3 +99,10 @@ rechazo de otros espacios y borrado transaccional al revocar
 consentimiento. Playwright comprueba la navegación deshabilitada cuando
 hay un solo elemento. Esta validación no demuestra borrado irreversible
 de backups, WAL o archivos ya descargados.
+
+
+**Validación cerrada:** [GitHub Actions 44830333880](https://github.com/erosCordova/bodyvision-ai/actions/runs/44830333880)
+aprobó Windows, Docker, backend/PostgreSQL, frontend y navegador para
+el historial cifrado paginado. El criterio de QA de visibilidad total
+queda completado técnicamente en un entorno sintético; no cubre
+retención fuera de línea ni destrucción de copias externas.

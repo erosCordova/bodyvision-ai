@@ -60,3 +60,20 @@ certificado de seguridad, custodia de claves, aprobación clínica ni
 autorización de usuarios reales. Se mantienen como gates pendientes la
 identidad legal, recuperación asistida, respaldo/custodia externos y
 pruebas de recuperación ante desastre.
+
+
+## Fase 4: historial cifrado paginado, total correcto y revocación
+
+La Fase 4 pasa de **70 % a 75 %** según la estimación manual de
+alcance técnico (diez fases con igual ponderación). El archivo privado
+cifrado ahora ofrece navegación paginada, total íntegro de capturas
+ficticias no caducadas, respuesta HTTP no almacenable y regresiones de
+autorización/consentimiento. La prueba con 57 filas sintéticas
+(56 vigentes y 1 vencida) y la prueba de interfaz fueron aprobadas
+en [GitHub Actions 44830333880](https://github.com/erosCordova/bodyvision-ai/actions/runs/44830333880).
+
+Con +5 puntos para una sola de diez fases, el promedio global exacto
+pasa de **78,0 % a 78,5 %**, mostrado como **79 %** por redondeo.
+Este incremento *no* representa una prueba clínica ni la eliminación
+irreversible de copias de seguridad, descargas, WAL o snapshots.
+Permanece prohibida la subida de fotografías de personas reales.
