@@ -101,3 +101,32 @@ pendiente establecer un protocolo reproducible con varias ejecuciones en
 móviles y equipos físicos, medición de memoria y temperatura, rangos por
 hardware y aceptación de rendimiento documentada. Por ello se mantiene la
 valoración de Fase 5 en 60 % y la estimación global en 72 %.
+
+## Protocolo interactivo de repetibilidad local (5 ejecuciones)
+
+Después de detectar la pose por primera vez, el módulo permite ejecutar una
+prueba **voluntaria** de cinco detecciones adicionales de la misma fotografía
+ficticia, con confirmación explícita. Las nuevas ejecuciones reutilizan el
+modelo ya cargado. Se miden desde el inicio de la lectura/validación local del
+archivo hasta el resultado de inferencia. Se ejecutan una detrás de otra, nunca
+en paralelo.
+
+La interfaz enseña la mediana de las duraciones exitosas, un P95 por rango más
+cercano, las ejecuciones exitosas y fallidas, y cuántas detectaron una pose.
+Con cinco muestras, el P95 corresponde a la **más lenta**; su utilidad es
+orientativa y no basta para fijar objetivos de servicio o calidad diagnóstica.
+Los fallos se cuentan, pero no contaminan los percentiles. Si no hay ninguna
+medición válida, el tiempo se muestra como no disponible.
+
+Cambiar de imagen o salir de la vista invalida inmediatamente la serie y
+descarta cualquier resultado tardío. Ninguna muestra, punto anatómico, imagen
+ni metadato del dispositivo sale a la API o se guarda en el historial. La
+prueba sigue limitada a imágenes sintéticas; la aceptación declarada en la
+interfaz no constituye verificación de su origen.
+
+**Para validar dispositivos:** ejecutar con autorización una batería
+independiente por tipo de hardware, navegador y condición de captura; repetir
+varias sesiones, registrar bajo un protocolo externo latencias, fallos, consumo
+de memoria y calentamiento y evaluar los criterios establecidos. La API
+`performance.memory` no es portable y la prueba actual **no mide consumo
+ni temperatura**. La fase 5 continúa al 60 % hasta completar estos gates.
