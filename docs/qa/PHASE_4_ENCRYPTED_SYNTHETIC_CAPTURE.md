@@ -80,9 +80,11 @@ defecto) y `offset=0..10000`, devuelve el conteo completo y pagina las
 capturas no caducadas en orden estable por fecha e identificador.
 Todas las consultas siguen sujetas a la misma sesión, expediente,
 RLS y doble consentimiento vigente. El conteo no incluye registros
-caducados ni de otros expedientes. Las respuestas de metadatos establecen
-`Cache-Control: no-store, private`, `Pragma: no-cache` y
-`X-Content-Type-Options: nosniff`.
+caducados ni de otros expedientes. Las respuestas de metadatos son no almacenables mediante
+`Cache-Control: no-store` (aplicado también por el middleware global),
+`Pragma: no-cache` y `X-Content-Type-Options: nosniff`.
+El middleware puede normalizar la cabecera y omitir `private`, pero
+`no-store` sigue vigente.
 
 El frontend muestra las páginas de 20 registros mediante controles
 «Anterior» y «Siguiente». Al cambiar de expediente o guardar un archivo
