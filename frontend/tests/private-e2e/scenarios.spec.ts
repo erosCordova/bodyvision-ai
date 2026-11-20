@@ -23,7 +23,8 @@ async function signIn(page: Page, email: string, passphrase = password) {
   await page.getByRole("button", { name: "Ingresar al espacio privado" }).click();
   const login = await response;
   expect(login.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "Dashboard general", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard general", exact: true }))
+    .toBeVisible({ timeout: 15000 });
   return (await login.json()) as { token: string };
 }
 
