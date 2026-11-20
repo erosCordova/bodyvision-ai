@@ -426,3 +426,34 @@
 .studio-scenario-history :is(button,select,input):focus-visible {
   outline: 2px solid #8ce4ff; outline-offset: 2px;
 }
+
+/* Desktop viewer must be a viewport-height application, not an auto-height
+   flex column. Without a definite parent height, the very long simulation
+   sidebar gives the CSS grid an auto block size (~2455px in Playwright).
+   A scrollable right panel and bounded WebGL canvas are essential for the
+   800px-min / 2.4-Mpixel-max synthetic capture contract. */
+@media (min-width: 1051px) {
+  .studio-root {
+    height: 100dvh;
+    min-height: 720px;
+  }
+  .studio-main {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .studio-viewport {
+    min-height: 0;
+  }
+  .studio-right {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .studio-right-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
