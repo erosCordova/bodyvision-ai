@@ -22,6 +22,32 @@ Se crean 5 expedientes por cada organización ficticia con mediciones de seis me
 
 Docker Engine con Docker Compose v2 (`--wait` requiere v2.20+), Python 3.11+ para generar configuración y comprobar el arranque, Git opcional, 4 GB de RAM libres y acceso a los registros de imágenes/paquetes. En Windows: Docker Desktop iniciado con contenedores Linux y Git Bash. No necesita Node ni PostgreSQL instalados para la ruta Docker. Puerto local 8080 libre.
 
+## Reinicio en Windows con doble clic (instalacion ya realizada)
+
+En la carpeta de este checkout abre `INICIAR_BODYVISION.cmd` con doble clic.
+Requiere que Docker Desktop este abierto en modo contenedores Linux, que exista
+el archivo `.env` creado en la primera instalacion y que Python este disponible.
+El iniciador **no crea una base nueva, no carga ejemplos, no cambia claves y no
+ejecuta `docker compose down -v`**. Inicia los servicios existentes, valida
+API/PostgreSQL/interfaz y, solo si todo pasa, abre
+`http://localhost:8080`. Si falla, deja el error visible. No se considera
+prueba de navegacion, identidad privada o recepcion operativa.
+
+Si clonaste esta rama antes de que se agregara el archivo, actualiza **esa
+misma carpeta** desde Git Bash (sin borrar `.env` ni crear un segundo clon):
+
+```bash
+cd "$HOME/RUTA_REAL_DE_TU_CARPETA_BODYVISION"
+git status --short
+git pull --ff-only
+```
+
+Sustituye la ruta por la de tu carpeta real. Si `git pull --ff-only` falla
+o ves cambios propios en `git status`, conserva todo y revisa antes de
+modificarlo; nunca uses `git reset --hard` para forzar la actualizacion.
+La rama de este iniciador es `feature/phase3-auth-security`, no `main`.
+Este proceso no se conecta a Neon ni habilita usuarios reales.
+
 ## Inicio desde cero (Git Bash, macOS o Linux)
 
 Desde esta carpeta:
