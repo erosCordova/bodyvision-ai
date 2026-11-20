@@ -2,8 +2,8 @@ import type { Measurement } from "../../services/api/records";
 
 export type LongitudinalRow = Pick<Measurement,
   "id" | "profile_id" | "metric_code" | "value" | "measured_at" |
-  "is_current" | "data_type" | "outlier_confirmed" | "method"
->;
+  "is_current" | "outlier_confirmed" | "method"
+> & { data_type: string };
 
 export type LongitudinalSummaryResult = {
   count: number;
