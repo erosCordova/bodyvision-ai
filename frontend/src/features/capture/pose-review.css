@@ -50,3 +50,4 @@
 .enterprise-pose-benchmark-result{border-radius:8px;border:1px solid #497993;background:#163c53;padding:12px;display:grid;gap:8px}
 .enterprise-pose-benchmark-result small{font-size:11px;color:#c2d8e8;line-height:1.6}
 @media(max-width:700px){.enterprise-pose-benchmark button{width:100%}}
+.enterprise-pose-benchmark button.enterprise-pose-benchmark-cancel{background:#382e47;border-color:#a88a9c;color:#ffe2e8}
