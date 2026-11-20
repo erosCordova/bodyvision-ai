@@ -40,9 +40,12 @@ Abre http://localhost:8080. El resumen debe cargar desde la base. Las comprobaci
 docker compose ps
 docker compose run --rm api-test
 docker compose run --rm frontend-test
+docker compose --profile test stop db-test
 docker compose logs --tail=100
 docker compose down
 ```
+
+Las pruebas Docker usan `db-test` y una red interna separada; no ejecutan migraciones ni limpiezas sobre la base de la aplicación. Su almacenamiento temporal se descarta al detener `db-test`. Consulta [aislamiento y verificación de conservación](docs/operations/LOCAL_TEST_DATABASE_ISOLATION.md).
 
 `down` conserva los datos. **No uses `down -v` salvo que quieras destruir la base local.** No hay registro público. Las cuentas ficticias de las pruebas privadas se preparan solo en CI descartable; esta receta no abre el login privado.
 
@@ -78,13 +81,14 @@ cd backend
 source .venv/bin/activate
 ruff check app tests alembic
 ruff format --check app tests alembic
-export TEST_DATABASE_URL="$MIGRATION_DATABASE_URL"
+export TEST_DATABASE_URL='postgresql+psycopg://PROPIETARIO:CLAVE_LOCAL@127.0.0.1:5432/bodyvision_test'
+MIGRATION_DATABASE_URL="$TEST_DATABASE_URL" alembic upgrade head
 pytest -q
-alembic downgrade base
-alembic upgrade head
+MIGRATION_DATABASE_URL="$TEST_DATABASE_URL" alembic downgrade base
+MIGRATION_DATABASE_URL="$TEST_DATABASE_URL" alembic upgrade head
 ```
 
-El downgrade es exclusivamente para la base descartable de F2 sobre una base descartable. En fases siguientes se revisará su impacto sobre datos.
+Crea previamente `bodyvision_test` como base descartable, con los roles y permisos de inicialización indicados arriba. Nunca apuntes `TEST_DATABASE_URL` a la base de la aplicación ni a Neon: los tests y el downgrade eliminan datos. La ruta Docker prepara y aísla automáticamente su propia base de pruebas.
 
 ```bash
 cd frontend
