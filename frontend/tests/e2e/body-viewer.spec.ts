@@ -163,7 +163,7 @@ test("reference-weight editing deforms one 3D avatar and split view preserves th
   const variation = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
   const base = await canvas.screenshot();
   await weight.fill("110");
-  await expect(page.getByText("110", { exact: true }).first()).toBeVisible();
+  await expect(weight).toHaveValue("110");
   await expect.poll(async () => !(await canvas.screenshot()).equals(base), {
     timeout: 10000,
     message: "Changing reference weight must change real rendered pixels",
