@@ -149,6 +149,28 @@ test("quick volume scenarios update the same avatar and remain reversible", asyn
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
 });
 
+test("height presets update the avatar and the hypothetical differences", async ({ page }) => {
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const height = page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" });
+  const details = page.getByRole("status", { name: "Diferencia hipotética frente a la referencia" });
+  await page.getByRole("button", { name: "Alta 195 cm" }).click();
+  await expect(height).toHaveValue("195");
+  await expect(details).toContainText("Estatura: +20 cm");
+  await page.getByRole("button", { name: "Baja 155 cm" }).click();
+  await expect(height).toHaveValue("155");
+  await expect(details).toContainText("Estatura: -20 cm");
+  await page.getByRole("button", { name: "Referencia 175 cm" }).click();
+  await expect(height).toHaveValue("175");
+  await expect(details).toContainText("Estatura: +0 cm");
+  await page.getByRole("button", { name: "Mayor volumen +15%" }).click();
+  await expect(details).toContainText("Peso: +10.5 kg");
+  await page.getByRole("button", { name: "Restaurar valores" }).click();
+  await expect(details).toContainText("Peso: +0 kg");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});
+
 test("reference-weight editing deforms one 3D avatar and split view preserves the matching baseline", async ({ page }) => {
   test.setTimeout(110000);
   const errors: string[] = [];
