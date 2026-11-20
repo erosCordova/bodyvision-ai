@@ -4,9 +4,11 @@ La rama de identidad añade administración de cuentas, consentimientos, permiso
 cambio de contraseña propia, cierre de sesiones y auditoría encadenada verificable.
 Es una modalidad optativa de desarrollo/CI, distinta de la demostración pública.
 Su configuración y límites están en [fundación de identidad F3](docs/phase3_identity_foundation.md).
-No hay cuentas públicas, MFA terminado ni habilitación de datos reales.
+No hay cuentas públicas ni habilitación de datos reales. MFA TOTP y recuperación
+existen bajo activación privada local/test; no están habilitados por la receta
+Docker de abajo.
 
-Núcleo local para registrar expedientes y mediciones **ficticias**, conservar correcciones y consultar evolución. **No es un dispositivo médico.** Identidad, consentimiento y uso con datos reales siguen bloqueados. El backend es Python/FastAPI según la especificación adjunta.
+Núcleo local para registrar expedientes y mediciones **ficticias**, conservar correcciones y consultar evolución. **No es un dispositivo médico.** La modalidad privada de identidad y consentimiento es optativa; el uso con datos reales sigue bloqueado. El backend es Python/FastAPI según la especificación adjunta.
 
 La interfaz abre el resumen; puedes crear un expediente desde **Expedientes**. Para cargar ejemplos explícitos, después del arranque ejecuta:
 
@@ -18,7 +20,7 @@ Se crean 5 expedientes por cada organización ficticia con mediciones de seis me
 
 ## Requisitos
 
-Docker Engine con Docker Compose v2 (`--wait` requiere v2.20+), Python 3.11+ solo para generar configuración, Git opcional, 4 GB de RAM libres y acceso a los registros de imágenes/paquetes. En Windows: Docker Desktop iniciado con contenedores Linux y Git Bash. No necesita Node ni PostgreSQL instalados para la ruta Docker. Puerto local 8080 libre.
+Docker Engine con Docker Compose v2 (`--wait` requiere v2.20+), Python 3.11+ para generar configuración y comprobar el arranque, Git opcional, 4 GB de RAM libres y acceso a los registros de imágenes/paquetes. En Windows: Docker Desktop iniciado con contenedores Linux y Git Bash. No necesita Node ni PostgreSQL instalados para la ruta Docker. Puerto local 8080 libre.
 
 ## Inicio desde cero (Git Bash, macOS o Linux)
 
@@ -27,11 +29,12 @@ Desde esta carpeta:
 ```bash
 python scripts/setup_local.py
 docker compose up --build --wait
+python scripts/check_local_installation.py
 ```
 
-En sistemas donde el comando sea `python3`, úsalo en lugar de `python`. La primera orden genera `.env` con dos contraseñas aleatorias sin mostrarlas. La segunda inicia PostgreSQL, ejecuta Alembic como servicio de una sola ejecución, espera readiness de la API y publica la interfaz únicamente en loopback.
+En sistemas donde el comando sea `python3`, úsalo en lugar de `python`. La primera orden genera `.env` con dos contraseñas aleatorias sin mostrarlas. La segunda inicia PostgreSQL, ejecuta Alembic como servicio de una sola ejecución, espera readiness de la API y publica la interfaz únicamente en loopback. La tercera verifica por HTTP la API, conexión/esquema SQL e interfaz; devuelve un código distinto de cero si falta un servicio. No modifica datos ni muestra respuestas o credenciales. Puede usarse `--json` para automatización. Consulta el [alcance del comprobador](docs/operations/LOCAL_STARTUP_VERIFICATION.md).
 
-Abre http://localhost:8080. El resumen debe cargar desde la base. Las comprobaciones de salud están en /system. `http://localhost:8080/api/v1/health/live` comprueba el proceso; `/api/v1/health/ready` consulta PostgreSQL y exige la revisión `0002_data_core`. Swagger local: http://localhost:8080/api/v1/docs. La CSP local de nginx impide recursos externos de Swagger; para documentación interactiva usa el acceso nativo de desarrollo indicado abajo o el OpenAPI JSON `/api/v1/openapi.json`.
+Abre http://localhost:8080. El resumen debe cargar desde la base. Las comprobaciones de salud están en /system. `http://localhost:8080/api/v1/health/live` comprueba el proceso; `/api/v1/health/ready` consulta PostgreSQL y exige la revisión declarada en `backend/app/db/session.py` para este checkout (actualmente `0018_capture_maintenance` en local/test; `0002_data_core` solo en demo). Swagger local: http://localhost:8080/api/v1/docs. La CSP local de nginx impide recursos externos de Swagger; para documentación interactiva usa el acceso nativo de desarrollo indicado abajo o el OpenAPI JSON `/api/v1/openapi.json`.
 
 ```bash
 docker compose ps
@@ -41,7 +44,7 @@ docker compose logs --tail=100
 docker compose down
 ```
 
-`down` conserva los datos. **No uses `down -v` salvo que quieras destruir la base local.** No hay registro público ni usuario de prueba porque identidad corresponde a F3.
+`down` conserva los datos. **No uses `down -v` salvo que quieras destruir la base local.** No hay registro público. Las cuentas ficticias de las pruebas privadas se preparan solo en CI descartable; esta receta no abre el login privado.
 
 ## Desarrollo nativo (alternativa)
 
@@ -99,10 +102,10 @@ E2E requiere API y Vite activos y base migrada. Para probar Docker usa `E2E_BASE
 
 - `backend/`: FastAPI factory, configuración validada, logs JSON sin URLs/cuerpos, health checks y Alembic.
 - `frontend/`: React 18, TypeScript estricto, cliente único validado con Zod, React Query, Router, tokens CSS, pruebas unitarias/E2E/axe.
-- `infra/`: inicialización de rol SQL. Proveedor y Terraform pendientes de F9; no hay despliegue productivo.
+- `infra/`: inicialización de rol SQL y configuración de despliegue. La base alojada utiliza **Neon**; PostgreSQL en Docker es exclusivamente local/CI. No provisionar bases en Render. La separación productiva de entornos e IaC sigue pendiente de F9.
 - `docs/`: decisiones, contratos, privacidad, operaciones y evidencia.
 - `.github/workflows/ci.yml`: instalación bloqueada, lint, tests, migraciones, build, E2E y smoke Docker en un runner compatible.
 
-`APP_ENV=production` y `staging` están bloqueados por completo. Este bloqueo preventivo no sustituye el gate granular R11 de F3. No se implementan botones de módulos futuros ni se presentan las observaciones ficticias como datos de personas reales.
+`APP_ENV=production` y `staging` están bloqueados por completo. Este bloqueo preventivo no sustituye el gate granular R11 de F3. La rama de desarrollo incluye visor 3D, simulación y análisis local de pose; sus pruebas y pendientes se consultan en `/progress`. Las observaciones ficticias no se presentan como datos de personas reales.
 
 Estado de la entrega actual: [reporte F2](docs/qa/PHASE_2_REPORT.md). Evidencia previa: [reporte F1](docs/qa/PHASE_1_REPORT.md). **La Fase 1 fue comprobada con Docker y navegador en [GitHub Actions](https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237). El reporte conserva el alcance y las limitaciones de esa evidencia.**

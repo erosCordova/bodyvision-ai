@@ -21,6 +21,7 @@ docker compose up --build --wait
 docker compose ps
 curl --fail http://127.0.0.1:8080/api/v1/health/live
 curl --fail http://127.0.0.1:8080/api/v1/health/ready
+python scripts/check_local_installation.py
 docker compose run --rm seed
 docker compose run --rm api-test
 docker compose run --rm frontend-test

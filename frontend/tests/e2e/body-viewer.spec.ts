@@ -152,7 +152,15 @@ test("regional weight changes are reversible on the same shaded 3D body, includi
   const canvas = page.locator(".studio-canvas canvas");
   const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
   await slider.fill("0");
-  const reference = await canvas.screenshot();
+  // Establish the reference only after the high-quality resize and its WebGL
+  // paint settle. aria-pressed confirms React state, not the rendered pixels.
+  let reference = await canvas.screenshot();
+  await expect.poll(async () => {
+    const next = await canvas.screenshot();
+    const settled = next.equals(reference);
+    reference = next;
+    return settled;
+  }, { timeout: 10000, message: "The 0% reference must settle before changing weight" }).toBe(true);
   await slider.fill("30");
   const heavier = await canvas.screenshot();
   expect(heavier.equals(reference), "Increasing weight must alter the same avatar's contours").toBe(false);

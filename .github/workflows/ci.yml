@@ -31,6 +31,8 @@ jobs:
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - name: Install Python dependencies
         run: python -m pip install --require-hashes -r backend/requirements-dev.lock
+      - name: Startup checker regression tests (standard library only)
+        run: python -m unittest discover -s scripts/tests -v
       - name: Initialize least privilege role (ephemeral CI database only)
         run: |
           psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
@@ -73,6 +75,7 @@ jobs:
             sleep 1
           done
           npm run test:e2e
+          python ../scripts/check_local_installation.py --base-url http://127.0.0.1:5173 --json
       - name: Test private identity and permissions in browser
         timeout-minutes: 3
         env:
@@ -111,6 +114,7 @@ jobs:
           docker compose up --build --wait --wait-timeout 240
           curl --fail http://127.0.0.1:8080/api/v1/health/live
           curl --fail http://127.0.0.1:8080/api/v1/health/ready
+          python3 scripts/check_local_installation.py --json
           docker compose run --rm seed
           docker compose run --rm api-test
           docker compose run --rm frontend-test
