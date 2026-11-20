@@ -179,11 +179,21 @@ test("reference-weight editing deforms one 3D avatar and split view preserves th
   await page.goto("/body-3d?panel=simulacion");
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
   await page.getByRole("button", { name: "Frente", exact: true }).click();
-  await page.getByRole("button", { name: "Alta", exact: true }).click();
+  const highQuality = page.getByRole("button", { name: "Alta", exact: true });
+  await highQuality.click();
+  await expect(highQuality).toHaveAttribute("aria-pressed", "true");
   const canvas = page.locator(".studio-canvas canvas");
   const weight = page.getByRole("spinbutton", { name: "Peso de referencia (solo demostración)" });
   const variation = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
-  const base = await canvas.screenshot();
+  // High-quality meshes and GPU uploads can settle after the button responds.
+  // Establish a stable original frame before comparing restoration pixels.
+  let base = await canvas.screenshot();
+  await expect.poll(async () => {
+    const next = await canvas.screenshot();
+    const stable = next.equals(base);
+    base = next;
+    return stable;
+  }, { timeout: 10000, message: "Original shaded atlas must settle" }).toBe(true);
   await weight.fill("110");
   await expect(weight).toHaveValue("110");
   await expect.poll(async () => !(await canvas.screenshot()).equals(base), {
