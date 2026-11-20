@@ -102,6 +102,13 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       if (current()) setBenchmarkRunning(false);
     }
   };
+  const cancelBenchmark = () => {
+    requestSequence.current += 1;
+    setBenchmarkRunning(false);
+    setBenchmarkProgress(0);
+    setBenchmarkResult(null);
+    setBenchmarkError("Prueba cancelada. Se descartarán los resultados pendientes.");
+  };
   const quality = state === "ready" && estimate
     ? assessPoseQuality(estimate, review, visibilityThreshold) : null;
   const showSkeleton = state === "ready" && estimate?.found === true;
@@ -150,8 +157,12 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
           onClick={() => void runBenchmark()}>
           {benchmarkRunning ? "Midiendo rendimiento…" : "Medir rendimiento (5 repeticiones)"}
         </button>
-        {benchmarkRunning && <p role="status">Pruebas completadas:
-          {" "}{benchmarkProgress}/{POSE_BENCHMARK_RUNS}.</p>}
+        {benchmarkRunning && <>
+          <button type="button" className="enterprise-pose-benchmark-cancel"
+            onClick={cancelBenchmark}>Cancelar prueba</button>
+          <p role="status">Pruebas completadas:
+            {" "}{benchmarkProgress}/{POSE_BENCHMARK_RUNS}.</p>
+        </>}
         {benchmarkError && <p role="alert">{benchmarkError}</p>}
         {benchmarkResult && <div className="enterprise-pose-benchmark-result"
           aria-label="Resumen de rendimiento local">
