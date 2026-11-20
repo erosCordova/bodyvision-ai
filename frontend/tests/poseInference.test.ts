@@ -36,17 +36,33 @@ describe("MediaPipe pose result parsing", () => {
     expect(clipped.fullBodyReview).toBe(false);
   });
 
+  it("does not mistake 33 empty coordinate objects for a detected human", () => {
+    const incomplete = summarizePoseResult({
+      landmarks: [Array.from({ length: 33 }, () => ({}))],
+    });
+    expect(incomplete.found).toBe(false);
+    expect(incomplete.landmarks).toEqual([]);
+  });
+
+  it("retains partial-but-valid output for an explicit insufficient review", () => {
+    const landmarks = Array.from({ length: 33 }, () => ({ x: NaN, y: Infinity, visibility: 1 }));
+    landmarks[0] = { x: 0.5, y: 0.5, visibility: 0.85 };
+    const partial = summarizePoseResult({ landmarks: [landmarks] });
+    expect(partial.found).toBe(true);
+    expect(partial.visiblePoints).toBe(1);
+    expect(partial.fullBodyReview).toBe(false);
+    expect(partial.landmarks.every(point => Object.values(point).every(Number.isFinite))).toBe(true);
+  });
+
   it("never propagates non-finite positions or confidence scores into an overlay", () => {
     const result = summarizePoseResult({
       landmarks: [Array.from({ length: 33 }, () => ({
         x: NaN, y: Infinity, z: -Infinity, visibility: 12,
       }))],
     });
-    expect(result.found).toBe(true);
-    expect(result.landmarks[0]).toEqual({ x: 0, y: 0, z: 0, visibility: 0 });
+    expect(result.found).toBe(false);
+    expect(result.landmarks).toEqual([]);
     expect(result.visiblePoints).toBe(0);
     expect(result.fullBodyReview).toBe(false);
-    expect(result.landmarks.every(point =>
-      Object.values(point).every(Number.isFinite))).toBe(true);
   });
 });

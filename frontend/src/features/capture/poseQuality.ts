@@ -72,6 +72,18 @@ export function assessPoseQuality(
   const core = groups.filter(group => CORE_GROUPS.includes(group.id));
   const coreVisible = core.reduce((total, group) => total + group.visible, 0);
   const coreTotal = core.reduce((total, group) => total + group.total, 0);
+  // Degenerate coordinates can pass a visibility threshold even though the
+  // entire core skeleton lies on one tiny patch of the image. This is a
+  // synthetic review guard only, not an anatomical correctness measurement.
+  const coreIndices = [11, 12, 23, 24, 25, 26, 27, 28];
+  const corePoints = coreIndices.filter(visible).map(index => pose.landmarks[index]);
+  const collapsedCore = corePoints.length === coreIndices.length &&
+    Math.hypot(
+      Math.max(...corePoints.map(point => point.x)) -
+        Math.min(...corePoints.map(point => point.x)),
+      Math.max(...corePoints.map(point => point.y)) -
+        Math.min(...corePoints.map(point => point.y)),
+    ) < 0.06;
   const warnings: string[] = [];
   if (!pose.found) {
     warnings.push("No se ha detectado una pose humana en esta imagen.");
@@ -82,13 +94,16 @@ export function assessPoseQuality(
     if (visiblePoints < 20) {
       warnings.push("Pocos puntos superan el umbral de visibilidad seleccionado.");
     }
+    if (collapsedCore) {
+      warnings.push("Los puntos clave aparecen casi superpuestos; la pose no permite una revisión visual fiable.");
+    }
   }
   for (const check of capture.checks.filter(check => !check.passed)) {
     warnings.push(check.detail);
   }
   let state: PoseQuality["state"];
   if (!pose.found) state = "not-detected";
-  else if (coreVisible < 4 || visiblePoints < 12) state = "insufficient";
+  else if (coreVisible < 4 || visiblePoints < 12 || collapsedCore) state = "insufficient";
   else if (coreVisible < coreTotal || visiblePoints < 20 || !capture.passed) state = "caution";
   else state = "reviewable";
   const labels: Record<PoseQuality["state"], string> = {
