@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHistoricalComparisonShape } from "../src/features/viewer/historicalComparison";
+import { buildHistoricalComparisonShape, remapHeightBounds } from "../src/features/viewer/historicalComparison";
 import { bodyVisualScenario } from "../src/features/viewer/bodyVolume";
 
 describe("historical baseline rendered on same anatomical mesh", () => {
@@ -31,5 +31,24 @@ describe("historical baseline rendered on same anatomical mesh", () => {
     expect(bad.simulatedKg).toBe(70);
     expect(bad.statureCm).toBe(145);
     expect(Number.isFinite(bad.statureScale)).toBe(true);
+  });
+});
+
+describe("historical and current 3D shader bounds stay independent", () => {
+  it("maps both ends of a centered atlas when the left version has a different height", () => {
+    const current = { minY: -1.35, maxY: 1.35 };
+    const left = remapHeightBounds(current.minY, current.maxY, 205 / 175, 155 / 175);
+    expect(left.minY).toBeCloseTo(current.minY * 155 / 205);
+    expect(left.maxY).toBeCloseTo(current.maxY * 155 / 205);
+    expect((left.maxY - left.minY) / (155 / 175))
+      .toBeCloseTo((current.maxY - current.minY) / (205 / 175));
+    expect(current).toEqual({ minY: -1.35, maxY: 1.35 });
+  });
+  it("preserves defaults and rejects invalid GPU height scales", () => {
+    expect(remapHeightBounds(-1.25, 1.25, 0.8, 0.8))
+      .toEqual({ minY: -1.25, maxY: 1.25 });
+    expect(() => remapHeightBounds(-1, 1, 0, 1)).toThrow(/Invalid/);
+    expect(() => remapHeightBounds(Number.NaN, 1, 1, 1)).toThrow(/Invalid/);
+    expect(() => remapHeightBounds(1, -1, 1, 1)).toThrow(/Invalid/);
   });
 });

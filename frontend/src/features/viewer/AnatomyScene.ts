@@ -8,7 +8,7 @@ import { anatomySource } from "./atlasSource";
 import { captureOpaqueAtlasPng, type AtlasComparisonDetails } from "./atlasCapture";
 import { planAtlasCapture } from "./atlasCaptureResolution";
 import { bodyVisualScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
-import { buildHistoricalComparisonShape, type HistoricalComparisonControls } from "./historicalComparison";
+import { buildHistoricalComparisonShape, remapHeightBounds, type HistoricalComparisonControls } from "./historicalComparison";
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
@@ -246,24 +246,36 @@ export function createAnatomyScene(
       const dividerPx = Math.round(width * comparisonDivider / 100);
       const actualVolume = volume.value;
       const actualY = root.scale.y;
+      const boundsMinY = massBounds.value.x;
+      const boundsMaxY = massBounds.value.y;
       try {
         renderer.setScissorTest(true);
         renderer.setViewport(0, 0, width, height);
         renderer.setScissor(0, 0, dividerPx, height);
         volume.value = historicalComparison?.radialVariation ?? referenceVolume;
-        root.scale.y = root.scale.x * (historicalComparison?.statureScale ?? 1);
+        const baselineY = root.scale.x * (historicalComparison?.statureScale ?? 1);
+        const baselineBounds = remapHeightBounds(boundsMinY, boundsMaxY, actualY, baselineY);
+        root.scale.y = baselineY;
+        massBounds.value.x = baselineBounds.minY;
+        massBounds.value.y = baselineBounds.maxY;
         root.updateMatrixWorld(true);
         renderer.render(scene, camera);
         renderPasses++;
         renderer.setScissor(dividerPx, 0, width - dividerPx, height);
         volume.value = actualVolume;
         root.scale.y = actualY;
+        massBounds.value.x = boundsMinY;
+        massBounds.value.y = boundsMaxY;
         root.updateMatrixWorld(true);
         renderer.render(scene, camera);
         renderPasses++;
       } finally {
+        // The left render pass is transient. Leave the interactive scene,
+        // shader uniforms and current stature exactly as they were.
         volume.value = actualVolume;
         root.scale.y = actualY;
+        massBounds.value.x = boundsMinY;
+        massBounds.value.y = boundsMaxY;
         root.updateMatrixWorld(true);
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, width, height);

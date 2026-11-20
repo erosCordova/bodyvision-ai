@@ -75,3 +75,16 @@ se dibuja en dos pasadas; la operación no crea ni edita mediciones observadas
 ni altera la cadena append-only. La cifra calculada es una diferencia aritmética
 de parámetros ficticios, nunca un indicador de salud ni de composición real.
 Incluye prueba de navegador con dos revisiones reales en PostgreSQL de test.
+
+
+## Coherencia de las regiones con estaturas históricas diferentes
+
+El renderizado WebGL del lado izquierdo ahora ajusta temporalmente también
+los límites verticales uniformes del shader, con el mismo factor de estatura
+que la geometría, antes de la primera pasada. El estado de los límites,
+la escala, el volumen, el scissor y el viewport se restaura antes de dibujar
+el lado derecho, incluso ante una excepción. Esto evita que una versión
+histórica de 155 cm herede inadvertidamente los límites de deformación
+regional del escenario actual de 205 cm. Se incorporaron pruebas de escalado
+y reversibilidad de rangos sintéticos; no hay ninguna evaluación anatómica
+individual ni validación clínica.

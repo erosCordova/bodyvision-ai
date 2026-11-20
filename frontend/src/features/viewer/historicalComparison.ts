@@ -21,3 +21,21 @@ export function buildHistoricalComparisonShape(controls: HistoricalComparisonCon
     statureCm: clampStature(controls.statureCm),
   };
 }
+
+/**
+ * Mapping of the shader's y-bound uniforms from the current body pose to
+ * another stature on the SAME mesh. The atlas is centered at the world origin
+ * and scales solely along Y, so both endpoints transform by the identical
+ * root.scale.y ratio. This also ensures normalized region heights stay
+ * coherent when left and right passes use different stature values.
+ */
+export function remapHeightBounds(
+  minY: number, maxY: number, currentScaleY: number, referenceScaleY: number,
+): { minY: number; maxY: number } {
+  if (![minY, maxY, currentScaleY, referenceScaleY].every(Number.isFinite) ||
+      currentScaleY <= 0 || referenceScaleY <= 0 || minY > maxY) {
+    throw new Error("Invalid comparison 3D bounds");
+  }
+  const ratio = referenceScaleY / currentScaleY;
+  return { minY: minY * ratio, maxY: maxY * ratio };
+}
