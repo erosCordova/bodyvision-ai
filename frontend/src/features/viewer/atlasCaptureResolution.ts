@@ -23,7 +23,9 @@ export function planAtlasCapture(
       cssWidth < 1 || cssHeight < 1 || currentPixelRatio <= 0) {
     throw new Error("El visor no tiene dimensiones válidas para una captura 3D.");
   }
-  const required = ATLAS_CAPTURE_SHORT_SIDE / Math.min(cssWidth, cssHeight);
+  // WebGLRenderer floors drawing-buffer dimensions; a small subpixel margin
+  // prevents a 390px viewport from becoming 799px due to floating point.
+  const required = (ATLAS_CAPTURE_SHORT_SIDE + 0.5) / Math.min(cssWidth, cssHeight);
   const maximum = Math.min(
     ATLAS_CAPTURE_MAX_PIXEL_RATIO,
     ATLAS_CAPTURE_MAX_EDGE / Math.max(cssWidth, cssHeight),
