@@ -52,6 +52,26 @@ services:
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+  capture-retention:
+    # Explicit opt-in sidecar: runs while backend is stopped, if db is still up.
+    profiles: [maintenance]
+    build: {context: ./backend, target: runtime}
+    command: [python, -m, app.workers.independent_capture_retention]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      IDENTITY_ENABLED: ${IDENTITY_ENABLED:-false}
+      BODYVISION_ENABLE_CAPTURE_RETENTION: ${BODYVISION_ENABLE_CAPTURE_RETENTION:-disabled}
+      DATABASE_URL: ${DATABASE_URL:?Run setup first}
+      CAPTURE_RETENTION_INTERVAL_SECONDS: ${CAPTURE_RETENTION_INTERVAL_SECONDS:-900}
+      TZ: America/Lima
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+    networks: [private]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
   frontend:
     build: {context: ./frontend, target: runtime}
     depends_on:
