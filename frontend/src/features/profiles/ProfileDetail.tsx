@@ -14,6 +14,7 @@ import {
 import { Modal } from "../../components/ui/Modal";
 import { MeasurementForm } from "../measurements/MeasurementForm";
 import { MeasurementComparison } from "../analytics/MeasurementComparison";
+import { LongitudinalSummary } from "../analytics/LongitudinalSummary";
 import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
 import { ConsentPanel } from "./ConsentPanel";
 const HistoryChart = lazy(() =>
@@ -297,6 +298,12 @@ export function ProfileDetail() {
               <Suspense fallback={<LoadingState />}>
                 <HistoryChart
                   rows={series.data}
+                  unit={selectedMetric?.unit ?? ""}
+                />
+                <LongitudinalSummary
+                  rows={series.data}
+                  profileId={profileId}
+                  metricCode={metric}
                   unit={selectedMetric?.unit ?? ""}
                 />
                 <MeasurementComparison

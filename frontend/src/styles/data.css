@@ -695,3 +695,13 @@ td button {
 .record-report-actions button{border-color:#5385a0;background:#173c57;color:#d8f4ff;white-space:nowrap}
 .record-report-actions small{flex:1;min-width:180px}
 @media(max-width:750px){.record-report-actions button{width:100%}}
+
+/* Descriptive longitudinal statistics; no simulated measurement styling. */
+.longitudinal-summary-grid { margin: 16px 0; }
+.longitudinal-summary-grid article {
+  display: grid; gap: 8px; padding: 16px;
+  background: #122b42; border: 1px solid #294f6e; border-radius: 8px;
+}
+.longitudinal-summary-grid strong { font-size: 19px; font-weight: 600; }
+.longitudinal-summary-grid small { font-size: 10px; line-height: 1.5; }
+.longitudinal-summary-detail { line-height: 1.8; }
