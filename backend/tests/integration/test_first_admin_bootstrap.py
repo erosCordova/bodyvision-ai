@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 from app.core.identity import verify_password
 from app.maintenance.bootstrap_synthetic_admin import (
@@ -55,6 +56,8 @@ def test_bootstrap_creates_one_local_synthetic_admin_and_chained_audit():
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         pytest.skip("Requires isolated PostgreSQL test service")
+    if make_url(url).host not in ("localhost", "127.0.0.1", "::1"):
+        pytest.skip("Bootstrap needs loopback PostgreSQL; native CI tests it")
     engine = create_engine(url, hide_parameters=True)
     try:
         with engine.connect() as conn:
@@ -133,6 +136,8 @@ def test_bootstrap_rejects_nonsynthetic_org_and_bad_identity_before_writes():
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         pytest.skip("Requires isolated PostgreSQL test service")
+    if make_url(url).host not in ("localhost", "127.0.0.1", "::1"):
+        pytest.skip("Bootstrap needs loopback PostgreSQL; native CI tests it")
     engine = create_engine(url, hide_parameters=True)
     try:
         with engine.connect() as conn:
