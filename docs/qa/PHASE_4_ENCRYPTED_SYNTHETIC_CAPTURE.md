@@ -70,3 +70,30 @@ El cifrado de objetos en PostgreSQL **no sustituye una plataforma de almacenamie
 La eliminación de registros de la base no garantiza la eliminación inmediata de copias de seguridad, WAL o bloques remanentes; el proyecto necesita una política institucional de retención, recuperación y eliminación verificable, rotación de claves Fernet y custodia de secretos. La purga limitada depende del backend privado encendido; no existe trabajo externo programado, ni S3/MinIO. No introducir datos médicos reales.
 
 Sin migrar Neon de producción, fusionar en `main` ni desplegar Render/Vercel hasta aprobar los controles pendientes. El avatar anatómico definitivo permanece sin cambios.
+
+
+## Historial completo, paginación y protección de metadatos (20-11-2026)
+
+El archivo privado ya no confunde las primeras 50 filas con el total de
+capturas vigentes. El endpoint de consulta admite `limit=1..50` (20 por
+defecto) y `offset=0..10000`, devuelve el conteo completo y pagina las
+capturas no caducadas en orden estable por fecha e identificador.
+Todas las consultas siguen sujetas a la misma sesión, expediente,
+RLS y doble consentimiento vigente. El conteo no incluye registros
+caducados ni de otros expedientes. Las respuestas de metadatos establecen
+`Cache-Control: no-store, private`, `Pragma: no-cache` y
+`X-Content-Type-Options: nosniff`.
+
+El frontend muestra las páginas de 20 registros mediante controles
+«Anterior» y «Siguiente». Al cambiar de expediente o guardar un archivo
+vuelve a la primera página, y al borrar el último registro de una página
+retrocede a una página válida. Las consultas se invalidan tras cada
+escritura y no persisten el PNG en el navegador.
+
+La prueba de integración utiliza **57 capturas ficticias**, de las
+cuales una está vencida. Verifica 56 elementos únicos en tres páginas,
+orden estable, paginación limitada, total íntegro, caché desactivada,
+rechazo de otros espacios y borrado transaccional al revocar
+consentimiento. Playwright comprueba la navegación deshabilitada cuando
+hay un solo elemento. Esta validación no demuestra borrado irreversible
+de backups, WAL o archivos ya descargados.
