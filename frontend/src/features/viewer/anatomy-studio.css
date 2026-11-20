@@ -308,6 +308,14 @@
 .studio-sim-slider input{width:100%;accent-color:#4bcfe8;cursor:pointer}
 .studio-sim-limits{display:flex;justify-content:space-between;gap:6px}
 .studio-sim-limits small{font-size:9px;color:#91b8ce;line-height:1.5}
+.studio-sim-presets{display:grid;gap:9px;padding:12px;border:1px solid #3b617b;border-radius:10px;background:#17344d}
+.studio-sim-presets>span{color:#c9dced;font-size:11px;font-weight:700}
+.studio-sim-presets small{color:#abc4d8;font-size:10px;line-height:1.5}
+.studio-sim-preset-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.studio-sim-preset-buttons button{min-width:0;padding:10px 5px;border:1px solid #46768d;border-radius:7px;background:#214a63;color:#e0f5fd;font-size:10px;line-height:1.4;cursor:pointer}
+.studio-sim-preset-buttons button[aria-pressed="true"]{background:#28678b;border-color:#8ad9f4;outline:1px solid #8ad9f4}
+.studio-sim-preset-buttons button:focus-visible{outline:2px solid #bdeeff;outline-offset:2px}
+@media(max-width:420px){.studio-sim-preset-buttons{grid-template-columns:1fr}}
 .studio-sim-state{display:flex;align-items:start;gap:12px;background:#18334c;border:1px solid #375775;border-radius:11px;padding:14px}
 .studio-sim-state-icon{font-size:26px;color:#84e0f0;line-height:1}
 .studio-sim-state strong{color:#d8effd;font-size:11px}
