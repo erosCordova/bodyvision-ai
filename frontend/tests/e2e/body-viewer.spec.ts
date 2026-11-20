@@ -315,7 +315,9 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
   await expect(analyze).toBeEnabled();
   await analyze.click();
   await expect(page).toHaveURL(/\/analysis$/);
-  await expect(page.getByRole("region", { name: "Control de calidad recibido" })).toBeVisible();
+  const captureReview = page.getByRole("region", { name: "Control de calidad recibido" });
+  await expect(captureReview).toBeVisible();
+  await expect(captureReview).toContainText("4 de 4 criterios cumplidos");
   await expect(page.getByRole("img", {
     name: "Fotografía local utilizada únicamente para la revisión de pose",
   })).toBeVisible();

@@ -5,6 +5,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url";
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
+import { captureOpaqueAtlasPng } from "./atlasCapture";
 import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
@@ -856,16 +857,9 @@ export function createAnatomyScene(
     // single scene, camera, mesh and shader without enabling a costly persistent
     // WebGL drawing buffer or introducing another character.
     render();
-    return new Promise<Blob>((resolve, reject) => {
-      try {
-        canvas.toBlob(blob => {
-          if (blob && blob.size > 0) resolve(blob);
-          else reject(new Error("No se pudo generar la captura 3D"));
-        }, "image/png");
-      } catch {
-        reject(new Error("El navegador bloqueó la captura de esta vista"));
-      }
-    });
+    // One offscreen 2D composition is only used for the explicit synthetic
+    // analysis handoff. It does not change the displayed WebGL transparency.
+    return captureOpaqueAtlasPng(canvas);
   };
   return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, retryLayer, dispose };
 }

@@ -694,7 +694,7 @@ export function AnatomyAtlas() {
                 </label>}
                 {comparison && <p className="studio-sim-disclaimer">Para analizar esta vista con IA, cierra la comparación dividida: el detector local debe recibir una sola figura.</p>}
                 {captureError && <p role="alert" className="studio-sim-disclaimer">{captureError}</p>}
-                <p className="studio-sim-lead">Esta prueba utiliza exclusivamente una imagen del cuerpo anatómico ficticio del atlas. No identifica personas ni reconstruye cuerpos reales.</p>
+                <p className="studio-sim-lead">Esta prueba utiliza exclusivamente una imagen del cuerpo anatómico ficticio del atlas. La copia local para IA lleva un fondo neutro opaco para evitar que la transparencia se interprete como oscuridad; el visor original no cambia. No identifica personas ni reconstruye cuerpos reales.</p>
                 {savedScenario && <div className="studio-sim-saved" role="status">
                   <strong>Referencia visual guardada</strong>
                   <p>Base {savedScenario.baseKg} kg / {BASELINE_HEIGHT_CM} cm → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg / {savedScenario.statureCm} cm.</p>
