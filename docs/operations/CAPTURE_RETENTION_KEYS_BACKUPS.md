@@ -87,3 +87,10 @@ y reiniciar la API.
 Docker o PostgreSQL; no equivale a eliminar bytes de WAL, respaldos,
 descargas o snapshots. Los controles legales y de retención clínica
 siguen pendientes.
+
+
+**Evidencia CI de mantenimiento independiente:** la ejecución
+[44833432116](https://github.com/erosCordova/bodyvision-ai/actions/runs/44833432116)
+aprobó el test sintético en Docker con la API detenida y su reinicio
+saludable posterior. No prueba que un programador externo esté activo
+cuando Docker o PostgreSQL estén apagados.

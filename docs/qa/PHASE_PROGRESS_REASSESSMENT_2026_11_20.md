@@ -77,3 +77,20 @@ pasa de **78,0 % a 78,5 %**, mostrado como **79 %** por redondeo.
 Este incremento *no* representa una prueba clínica ni la eliminación
 irreversible de copias de seguridad, descargas, WAL o snapshots.
 Permanece prohibida la subida de fotografías de personas reales.
+
+
+## Fase 4: mantenimiento autónomo local de capturas vencidas
+
+Con la ejecución integral [44833432116](https://github.com/erosCordova/bodyvision-ai/actions/runs/44833432116)
+aprobada, la Fase 4 pasa de **75 % a 80 %**. Se comprobó que un
+proceso separado y optativo limpia ciphertext vencido con PostgreSQL
+activo, **aunque el backend esté detenido**; usa el rol de datos
+`bodyvision_app`, bloques limitados y un contexto `synthetic-only`,
+sin acceso a píxeles ni rutas HTTP. La ejecución también verifica que
+no elimina la captura vigente y que la API vuelve a un estado saludable.
+
+La media de las diez fases pasa de **78,5 % a 79,0 %**: el porcentaje
+global visible **permanece en 79 %**. No corresponde ajustar otras fases.
+Siguen pendientes las operaciones cuando Docker/la base estén apagados,
+la custodia de copias y claves, el borrado de backups/WAL y todas las
+aprobaciones para uso real o clínico.

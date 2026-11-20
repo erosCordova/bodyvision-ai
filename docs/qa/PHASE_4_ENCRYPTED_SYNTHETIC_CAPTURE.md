@@ -108,7 +108,7 @@ queda completado técnicamente en un entorno sintético; no cubre
 retención fuera de línea ni destrucción de copias externas.
 
 
-## Retención desacoplada de FastAPI (pruebas pendientes de CI)
+## Retención desacoplada de FastAPI (CI integral aprobada)
 
 Se agregó un proceso optativo, aislado, que invoca la función PostgreSQL
 de purga de filas vencidas con el mismo rol de datos menos privilegiado.
@@ -122,3 +122,11 @@ figuran en `test_independent_capture_retention.py`.
 Esto **no** constituye un programador externo activo cuando toda la
 infraestructura está apagada ni una eliminación criptográfica de copias.
 Una implementación clínica requeriría otro diseño y aprobación.
+
+
+**Cierre de QA técnico:** [ejecución 44833432116](https://github.com/erosCordova/bodyvision-ai/actions/runs/44833432116).
+El test Docker detiene `backend`, inserta una captura ficticia vencida
+y otra vigente, ejecuta el sidecar de mantenimiento con el rol de datos,
+confirma la eliminación de solo la vencida y vuelve a levantar la API
+hasta que sus comprobaciones de salud aprueban. PostgreSQL, Windows y
+navegador aprobaron en esa misma ejecución. Solo aplica a local/test.
