@@ -326,6 +326,13 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
     .toContainText("Pose detectada.", { timeout: 90000 });
   await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
     .toBeVisible();
+  // Extra diagnostic is explicit and runs on this same approved fictitious atlas.
+  await page.getByRole("checkbox", { name: /Confirmo que esta imagen es ficticia/ }).check();
+  await page.getByRole("button", { name: "Diagnosticar etapas (1 ejecución)" }).click();
+  const stages = page.getByLabel("Etapas de inferencia local");
+  await expect(stages).toBeVisible({ timeout: 90000 });
+  await expect(stages).toContainText("Preparación de imagen:");
+  await expect(stages).toContainText("Heap JavaScript antes:");
 });
 
 test("real local pose matrix tests atlas variants and a well-lit no-person control", async ({ page }) => {
