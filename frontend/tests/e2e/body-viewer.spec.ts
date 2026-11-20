@@ -160,8 +160,13 @@ test("regional weight changes are reversible on the same shaded 3D body, includi
   expect(lighter.equals(reference), "Decreasing weight must alter the same avatar's contours").toBe(false);
   expect(lighter.equals(heavier), "Positive and negative weight scenarios should be visually distinct").toBe(false);
   await slider.fill("0");
+  // WebGL paints asynchronously after React handles slider changes.
+  // Poll the actual pixels instead of taking a potentially stale first frame.
+  await expect.poll(async () => (await canvas.screenshot()).equals(reference), {
+    timeout: 10000, intervals: [100, 250, 500],
+    message: "Returning to 0% must restore the original shaded atlas",
+  }).toBe(true);
   const restored = await canvas.screenshot();
-  expect(restored.equals(reference), "Returning to 0% must restore the original shaded atlas").toBe(true);
   await slider.fill("25");
   await page.getByRole("button", { name: "Malla 3D", exact: true }).click();
   const mesh = await canvas.screenshot();
