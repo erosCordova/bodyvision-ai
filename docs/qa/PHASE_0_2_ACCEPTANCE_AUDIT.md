@@ -4,6 +4,15 @@
 **Rama auditada:** `feature/phase3-auth-security`, base `cf5dc60043eaab5b36a682535107e9fc17265fd4`.  
 **Estado:** auditoría técnica y trazabilidad elaboradas; **no equivale a aceptación final ni firma**.
 
+**Actualización posterior del mismo día, 13:37 (Lima):** se completó la
+[recepción asistida de Windows](PHASE_1_WINDOWS_ASSISTED_RECEPTION.md): tras
+el reinicio confirmado por el usuario, Chrome conservó las versiones 72/72/71 kg
+y mostró API/SQL conectados. F1 alcanza **100 % de cierre técnico local**;
+F0/F2 mantienen sus propios criterios y no se registra firma independiente.
+El tablero actual queda en **76 % global estimado**. Las tablas y porcentajes
+de las secciones siguientes describen la auditoría inicial, anterior a esta
+evidencia, y se conservan como historial.
+
 ## 1. Dos numeraciones, un único seguimiento
 
 El tablero toma **diez fases numeradas 0–9** del documento Arquitectura v3: la fase 0 es descubrimiento y diseño. El archivo de contrato implementable `docs/requirements/IMPLEMENTATION_SPEC.md` enumera **F1–F10**, en cuyo F1 comienza la fundación técnica y cuyo F10 es un piloto real. Se trata de **planes distintos y no de un simple desplazamiento**: su correspondencia se verifica por *entregable y criterio*, no por número. No cambiar los porcentajes del tablero ni declarar «piloto» como fase 9 por el solo parecido del índice.

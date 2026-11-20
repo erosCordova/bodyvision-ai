@@ -1,6 +1,8 @@
 # BODYVISION AI — recepción operativa de F1 (desarrollo sintético)
 
-Este documento guía una **prueba manual pendiente** de instalación por una segunda persona. La receta de checkout limpio, compilación y arranque de Docker ya pasó en [GitHub Actions 44110966237](https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237); la recepción individual **no se ha ejecutado ni firmado**.
+**Estado actualizado al 20 de noviembre de 2026:** la [recepción local asistida en Windows](../qa/PHASE_1_WINDOWS_ASSISTED_RECEPTION.md) completó el cierre técnico local de F1. El usuario instaló y reinició; la revisión desde Chrome confirmó las versiones conservadas y la conexión de API/SQL. No se registró firma independiente de QA.
+
+Este documento conserva la receta y una plantilla para una recepción independiente adicional. La receta de checkout limpio, compilación y arranque de Docker ya pasó en [GitHub Actions 44110966237](https://github.com/erosCordova/bodyvision-ai/actions/runs/44110966237). Los campos de la plantilla no sustituyen ni amplían la evidencia del informe asistido.
 
 ## 1. Condiciones de seguridad
 
@@ -10,7 +12,7 @@ Este documento guía una **prueba manual pendiente** de instalación por una seg
 - Comprobar que el puerto `8080` de desarrollo no esté abierto a Internet y que Docker Desktop esté iniciado con contenedores Linux (Windows).
 - Git Bash, Python 3.11+ y Docker Compose v2.20+ según [README](../../README.md). Instalar en equipo autorizado.
 
-## 2. Alta desde checkout limpio (ejecución manual por validar)
+## 2. Receta de alta desde checkout limpio
 
 ```bash
 git clone https://github.com/erosCordova/bodyvision-ai.git
@@ -32,7 +34,7 @@ El repositorio puede ser privado: este paso exige acceso legítimo. El uso de `c
 
 La demostración pública, la instancia local privada con MFA y una operación productiva **no comparten el mismo nivel de garantías**. Los tests de identidad privada requieren configuración temporal y datos ficticios; no se habilitan con este checklist. El aislamiento completo de entornos, secretos y backups sigue siendo pendiente de F1/F9.
 
-## 3. Planilla de evidencia humana (sin aprobación anticipada)
+## 3. Plantilla de recepción independiente adicional (no ejecutada)
 
 | Control | Resultado registrado |
 |---|---|
@@ -47,7 +49,7 @@ La demostración pública, la instancia local privada con MFA y una operación p
 | Incidencias / mitigaciones | Pendiente |
 | Conformidad de QA/operaciones | Pendiente |
 
-Solo se marcará **F1 recibida** tras aportar salidas y la conformidad correspondiente. Esta guía es una herramienta, no una prueba de que alguien la haya seguido.
+Esta planilla permanece sin completar: no se atribuye una ejecución independiente ni firma de QA. El cierre técnico local se apoya en el informe asistido enlazado al inicio; la conformidad formal de producto sigue separada.
 
 La CI añade una [recepción técnica en la interfaz Docker compilada y un reinicio
 completo conservando datos](../qa/PHASE_1_DOCKER_BROWSER_RESTART.md). Esa evidencia

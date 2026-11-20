@@ -17,6 +17,7 @@ export type PhaseClosureAudit = {
   title: string;
   technical: "verified" | "pending";
   formalAcceptance: "pending";
+  operationalReception?: "assisted";
   mappedExecutionPhase: string;
   owner: string;
   checks: readonly PhaseGateCheck[];
@@ -57,8 +58,9 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
   {
     phaseId: 1, title: "Fundación técnica",
     technical: "verified", formalAcceptance: "pending",
+    operationalReception: "assisted",
     mappedExecutionPhase: "F1 de IMPLEMENTATION_SPEC: monorepo, Docker, PostgreSQL/Alembic, API, React y CI.",
-    owner: "Responsables de ingeniería, operaciones y QA por confirmar",
+    owner: "Usuario local: instalación y reinicio; revisión asistida desde Chrome",
     checks: [
       {
         id: "F1-CI", requirement: "Instalación, build, migraciones y pruebas en checkout limpio.",
@@ -81,9 +83,9 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
         evidence: { label: "Navegador Docker y reinicio", url: doc("docs/qa/PHASE_1_DOCKER_BROWSER_RESTART.md") },
       },
       {
-        id: "F1-HANDOFF", requirement: "Alta operativa reproducida por una segunda persona en el entorno objetivo.",
-        state: "pending", pendingReason: "CI confirma la receta en runner; no hay constancia de aceptación humana de instalación.",
-        evidence: { label: "Guía de alta y entornos", url: doc("docs/operations/PHASE_1_HANDOFF_CHECKLIST.md") },
+        id: "F1-HANDOFF", requirement: "Recepción local en Windows con instalación del usuario y verificación asistida tras reiniciar.",
+        state: "verified",
+        evidence: { label: "Recepción asistida de Windows", url: doc("docs/qa/PHASE_1_WINDOWS_ASSISTED_RECEPTION.md") },
       },
     ],
   },

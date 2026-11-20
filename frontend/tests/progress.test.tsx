@@ -27,7 +27,10 @@ describe("phase 0–2 acceptance gates", () => {
     ]);
     expect(closedWithFormalAcceptance).toBe(0);
     expect(phaseClosureAudit.every(entry => entry.formalAcceptance === "pending")).toBe(true);
-    expect(phaseClosureAudit.every(entry => entry.owner.includes("por confirmar"))).toBe(true);
+    expect(phaseClosureAudit.filter(entry => entry.phaseId !== 1)
+      .every(entry => entry.owner.includes("por confirmar"))).toBe(true);
+    expect(phaseClosureAudit[1].operationalReception).toBe("assisted");
+    expect(phaseAssessment.find(phase => phase.id === 1)?.progress).toBe(100);
     expect(phaseClosureAudit[0].mappedExecutionPhase).toContain("F1–F10");
     expect(phaseClosureAudit[1].mappedExecutionPhase).toContain("F1");
     expect(phaseClosureAudit[2].mappedExecutionPhase).toContain("F2");
@@ -37,7 +40,11 @@ describe("phase 0–2 acceptance gates", () => {
     const checks = phaseClosureAudit.flatMap(entry => entry.checks);
     expect(new Set(checks.map(entry => entry.id)).size).toBe(checks.length);
     for (const gate of phaseClosureAudit) {
-      expect(gate.checks.some(entry => entry.state === "pending")).toBe(true);
+      if (gate.operationalReception === "assisted") {
+        expect(gate.checks.every(entry => entry.state === "verified")).toBe(true);
+      } else {
+        expect(gate.checks.some(entry => entry.state === "pending")).toBe(true);
+      }
     }
     for (const check of checks) {
       expect(check.requirement.length).toBeGreaterThan(10);

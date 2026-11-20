@@ -55,6 +55,7 @@ export function ProjectProgressPage() {
             <article className="project-acceptance-card" key={gate.phaseId}>
               <h3>Fase {gate.phaseId} · {gate.title}</h3>
               <p><strong>Gate técnico:</strong> {gate.technical === "verified" ? "Verificado" : "Pendiente"}</p>
+              {gate.operationalReception === "assisted" && <p><strong>Recepción local:</strong> Comprobada en Windows con asistencia; cierre técnico completado.</p>}
               <p><strong>Aceptación formal:</strong> Pendiente, sin firma</p>
               <p><strong>Responsable:</strong> {gate.owner}</p>
               <p className="project-acceptance-mapping">{gate.mappedExecutionPhase}</p>
