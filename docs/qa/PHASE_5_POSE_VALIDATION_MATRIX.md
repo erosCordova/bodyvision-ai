@@ -59,3 +59,28 @@ archivo, un detector de carga maliciosa ni garantía contra errores del
 decodificador. Tras `createImageBitmap` se comprueban también las dimensiones
 reales, que pueden diferir de los metadatos. Solo se admiten datos ficticios
 en las demostraciones.
+
+## Revisión de avance y métrica automática de regresión · 19-11-2026
+
+El evaluador `frontend/src/features/capture/poseGateBenchmark.ts` recibe
+escenarios **sintéticos** con la decisión de revisión visual esperada y calcula:
+la proporción de decisiones coincidentes y el recuento de casos que el sistema
+clasificó como `reviewable` pese a que el escenario esperaba una advertencia.
+La batería `frontend/tests/poseGateBenchmark.test.ts` comprueba seis
+condiciones representativas y detecta un ejemplo de promoción indebida.
+**Estas cifras evalúan reglas de interfaz sobre datos inventados, no la precisión
+real de MediaPipe ni sensibilidad/especificidad clínica.**
+
+La revisión de la arquitectura v3 incrementa la **Fase 5 de 50 % a 60 %** por:
+(1) inferencia local real y 33 landmarks ya existentes;
+(2) control de resultados asíncronos y limpieza temporal;
+(3) verificación previa de cabeceras de PNG, JPEG y WebP;
+(4) matriz de visibilidad/oclusión con resultados esperados y métricas de regresión.
+El promedio aritmético de las diez fases de igual ponderación pasa de
+**71 % a 72 %**. El incremento es una estimación técnica manual y **no** acredita
+validación en dispositivos reales, seguridad clínica o preparación para producción.
+
+**Para aumentar de nuevo la Fase 5:** se requiere una evaluación reproducible
+con un corpus autorizado y etiquetas independientes, condiciones de iluminación,
+posturas y dispositivos definidos; establecer umbrales de rendimiento/errores,
+revisión humana, persistencia/auditoría autorizada y aprobación de privacidad.
