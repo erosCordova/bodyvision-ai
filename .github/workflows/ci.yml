@@ -122,7 +122,37 @@ jobs:
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-tests.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-after-tests.sql
           python3 scripts/check_local_installation.py --json
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - name: Install browser driver for compiled Docker UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
+      - name: Browser acceptance against compiled Docker UI
+        working-directory: frontend
+        run: npx playwright test --config playwright.docker.config.ts
+      - name: Recreate local containers while preserving the application volume
+        run: |
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-restart.sql
+          docker compose --profile test down
+          docker compose up --wait --wait-timeout 120
+          python3 scripts/check_local_installation.py --json
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-restart.sql
+          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-restart.sql /tmp/bodyvision-after-restart.sql
+      - name: Browser confirms retained correction history after restart
+        working-directory: frontend
+        env:
+          DOCKER_HANDOFF_STAGE: after-restart
+        run: npx playwright test --config playwright.docker.config.ts
+      - name: Upload Docker handoff evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bodyvision-docker-handoff
+          path: frontend/test-results
+          if-no-files-found: ignore
       - name: Stop disposable environment
         if: always()
-        run: docker compose down -v
+        run: docker compose --profile test down -v
 
