@@ -179,7 +179,9 @@ def main() -> int:
         old_key = environment.get("MFA_ROTATION_OLD_KEY", "")
         new_key = environment.get("MFA_ROTATION_NEW_KEY", "")
         validate_distinct_keys(old_key, new_key)
-        consent = input("Servicios detenidos y copia cifrada verificada: escribe ROTAR MFA FICTICIO: ")
+        consent = input(
+            "Servicios detenidos y respaldo verificado. Escribe ROTAR MFA FICTICIO: "
+        )
         if consent.strip() != "ROTAR MFA FICTICIO":
             raise RotationDenied("No se confirmó la operación.")
         # Intentional separate explicit confirmation, but no secret disclosure.

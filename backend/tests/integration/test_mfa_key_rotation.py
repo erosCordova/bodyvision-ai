@@ -141,9 +141,8 @@ def test_rotation_reencrypts_all_synthetic_factors_and_appends_audit(local_owner
 
 def test_rotation_fails_before_writing_anything_when_one_cipher_is_invalid(local_owner):
     old_key, new_key = generate_mfa_encryption_key(), generate_mfa_encryption_key()
-    first_org, first_user = add_test_factor(
-        local_owner, encrypt_totp_seed(new_totp_seed(), old_key)
-    )
+    original = encrypt_totp_seed(new_totp_seed(), old_key)
+    first_org, first_user = add_test_factor(local_owner, original)
     second_org, second_user = add_test_factor(local_owner, "Z" * 100)
     with pytest.raises(RotationDenied, match="Sin cambios"):
         rotate_synthetic_mfa_key(local_owner, old_key, new_key, environment=ALLOWED)
@@ -155,15 +154,7 @@ def test_rotation_fails_before_writing_anything_when_one_cipher_is_invalid(local
             ),
             {"org": org, "user": user},
         ).scalar_one()
-        assert ciphertext == ("Z" * 100 if user == second_user else
-                              local_owner.execute(
-                                  text(
-                                      "SELECT encrypted_totp_seed FROM "
-                                      "public.private_mfa_credentials "
-                                      "WHERE organization_id=:org AND user_id=:user"
-                                  ),
-                                  {"org": first_org, "user": first_user},
-                              ).scalar_one())
+        assert ciphertext == (original if user == first_user else "Z" * 100)
     audited = local_owner.execute(
         text(
             "SELECT count(*) FROM public.security_audit_events "
