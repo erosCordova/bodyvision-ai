@@ -447,6 +447,17 @@ test("3D studio exports the existing synthetic avatar as a valid PNG without API
   await page.getByRole("button", { name: "Comparar lado a lado" }).click();
   await expect(exportButton).toBeDisabled();
   await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeDisabled();
+  const compareButton = page.getByRole("button", { name: "Descargar comparación (PNG)" });
+  await expect(compareButton).toBeEnabled();
+  const pendingComparison = page.waitForEvent("download");
+  await compareButton.click();
+  const comparisonFile = await pendingComparison;
+  expect(comparisonFile.suggestedFilename()).toBe("bodyvision-comparacion-3d-sintetica.png");
+  const comparisonPath = await comparisonFile.path();
+  expect(comparisonPath).not.toBeNull();
+  const bytes = readFileSync(comparisonPath!);
+  expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(bytes.readUInt32BE(20)).toBeGreaterThan(bytes.readUInt32BE(16));
   expect(writes).toEqual([]);
 });
 

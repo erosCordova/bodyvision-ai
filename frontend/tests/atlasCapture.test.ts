@@ -47,6 +47,43 @@ describe("synthetic opaque atlas snapshot", () => {
     expect(input.height).toBe(800);
   });
 
+  it("exports both synthetic comparison labels without changing the original canvas", async () => {
+    const input = document.createElement("canvas");
+    input.width = 900; input.height = 1100;
+    const ctx = {
+      fillStyle: "", font: "", fillRect: vi.fn(), drawImage: vi.fn(),
+      clearRect: vi.fn(), fillText: vi.fn(),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation(callback => callback(new Blob(["comparison"], { type: "image/png" })));
+    const result = await captureOpaqueAtlasPng(input, false, {
+      referenceKg: 70, referenceCm: 175, scenarioKg: 80.5, scenarioCm: 195,
+    });
+    expect(result.type).toBe("image/png");
+    expect(ctx.drawImage).toHaveBeenCalledWith(input, 0, 0);
+    expect(ctx.fillRect).toHaveBeenCalledWith(0, 1100, 900, 96);
+    expect(ctx.fillText).toHaveBeenCalledTimes(3);
+    expect(ctx.fillText.mock.calls[0][0]).toContain("REFERENCIA: 70 kg / 175 cm");
+    expect(ctx.fillText.mock.calls[1][0]).toContain("ESCENARIO: 80.5 kg / 195 cm");
+    expect(ctx.fillText.mock.calls[2][0]).toContain("SIN VALOR CLÍNICO");
+    expect(input.height).toBe(1100);
+  });
+
+  it("rejects private free-form or non-finite comparison fields", async () => {
+    const input = document.createElement("canvas");
+    input.width = 900; input.height = 1100;
+    const createElement = vi.spyOn(document, "createElement");
+    await expect(captureOpaqueAtlasPng(input, false, {
+      referenceKg: Number.NaN, referenceCm: 175, scenarioKg: 80, scenarioCm: 180,
+    })).rejects.toThrow(/inválido/);
+    await expect(captureOpaqueAtlasPng(input, true, {
+      referenceKg: 70, referenceCm: 175, scenarioKg: 80, scenarioCm: 180,
+    })).rejects.toThrow(/pose/);
+    expect(createElement).not.toHaveBeenCalled();
+  });
+
   it("creates a flat contrasting studio matte for a small synthetic silhouette without changing quality gates", () => {
     // A small, explicit 10%-occupancy fictitious skin rectangle, not a clinical
     // sample or mocked pose. The untouched preflight evaluates real RGB pixels.

@@ -5,7 +5,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import dracoWrapperUrl from "three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url";
 import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url";
 import { anatomySource } from "./atlasSource";
-import { captureOpaqueAtlasPng } from "./atlasCapture";
+import { captureOpaqueAtlasPng, type AtlasComparisonDetails } from "./atlasCapture";
 import { planAtlasCapture } from "./atlasCaptureResolution";
 import { bodyVisualScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
@@ -855,12 +855,18 @@ export function createAnatomyScene(
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
   let capturingSnapshot = false;
-  const capturePng = async (portraitForPose = false): Promise<Blob> => {
+  const capturePng = async (
+    portraitForPose = false,
+    comparisonDetails?: AtlasComparisonDetails,
+  ): Promise<Blob> => {
     if (disposed || contextUnavailable || !canvas.isConnected) {
       throw new Error("Visor 3D no disponible");
     }
-    if (comparison) {
+    if (comparison && !comparisonDetails) {
       throw new Error("Desactiva la comparación dividida antes de analizar una vista 3D");
+    }
+    if (!comparison && comparisonDetails) {
+      throw new Error("Activa la comparación dividida antes de exportarla.");
     }
     if (capturingSnapshot) throw new Error("Ya se está preparando una captura 3D.");
     const bounds = host.getBoundingClientRect();
@@ -881,7 +887,7 @@ export function createAnatomyScene(
       }
       // The 2D matte is applied only to this transient snapshot. The visual
       // WebGL canvas retains transparent backgrounds before and after capture.
-      return await captureOpaqueAtlasPng(canvas, portraitForPose);
+      return await captureOpaqueAtlasPng(canvas, portraitForPose, comparisonDetails);
     } finally {
       capturingSnapshot = false;
       // Restore user-selected fluid/high ratio even on a failed PNG export.
