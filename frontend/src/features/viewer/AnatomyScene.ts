@@ -7,7 +7,7 @@ import dracoWasmUrl from "three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?
 import { anatomySource } from "./atlasSource";
 import { captureOpaqueAtlasPng } from "./atlasCapture";
 import { planAtlasCapture } from "./atlasCaptureResolution";
-import { bodyVolumeScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
+import { bodyVisualScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
@@ -201,6 +201,7 @@ export function createAnatomyScene(
   let lodTimer: number | null = null;
   let lodBusy = false;
   const volume = { value: 0 };
+  let referenceVolume = 0;
   const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
   let showWireMesh = false;
   let comparison = false;
@@ -247,7 +248,7 @@ export function createAnatomyScene(
         renderer.setScissorTest(true);
         renderer.setViewport(0, 0, width, height);
         renderer.setScissor(0, 0, dividerPx, height);
-        volume.value = 0;
+        volume.value = referenceVolume;
         root.scale.y = root.scale.x;
         root.updateMatrixWorld(true);
         renderer.render(scene, camera);
@@ -625,8 +626,10 @@ export function createAnatomyScene(
     queueGeometryLod();
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
-  const setWeightVariation = (percent: number) => {
-    volume.value = bodyVolumeScenario(DEFAULT_REFERENCE_KG, percent).radialVariation;
+  const setWeightVariation = (percent: number, referenceKg = DEFAULT_REFERENCE_KG) => {
+    const visual = bodyVisualScenario(referenceKg, percent);
+    referenceVolume = visual.referenceRadialVariation;
+    volume.value = visual.scenarioRadialVariation;
     render();
   };
   const setStature = (centimeters: number) => {
