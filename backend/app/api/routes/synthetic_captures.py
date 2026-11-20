@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from cryptography.fernet import InvalidToken
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -152,22 +152,38 @@ async def upload_synthetic_capture(profile_id: UUID, scope: Scope, request: Requ
 
 
 @router.get("/profiles/{profile_id}/captures", response_model=SyntheticCaptureList)
-def list_synthetic_captures(profile_id: UUID, scope: Scope, request: Request):
+def list_synthetic_captures(
+    profile_id: UUID,
+    scope: Scope,
+    request: Request,
+    response: Response,
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0, le=10000),
+):
     _cipher(request)
     records.profile(scope, profile_id)
     _consented(scope, profile_id)
+    params = {"org": scope.organization_id, "profile": profile_id}
+    total = scope.connection.execute(
+        text("""SELECT count(*) FROM synthetic_capture_objects
+          WHERE organization_id=:org AND profile_id=:profile AND expires_at>now()"""),
+        params,
+    ).scalar_one()
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM synthetic_capture_objects
           WHERE organization_id=:org AND profile_id=:profile AND expires_at>now()
-          ORDER BY created_at DESC,id DESC LIMIT 50"""),
-            {"org": scope.organization_id, "profile": profile_id},
+          ORDER BY created_at DESC,id DESC LIMIT :limit OFFSET :offset"""),
+            {**params, "limit": limit, "offset": offset},
         )
         .mappings()
         .all()
     )
     _audit(scope, "capture.list", profile_id)
-    return {"items": [{**row, "data_type": "SIMULADO"} for row in rows], "total": len(rows)}
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return {"items": [{**row, "data_type": "SIMULADO"} for row in rows], "total": total}
 
 
 @router.get("/profiles/{profile_id}/captures/{capture_id}")
