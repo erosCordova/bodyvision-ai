@@ -145,8 +145,10 @@ def save_scenario(
         # anatomical model revisions. A legacy version remains readable, but
         # requires a NEW root scenario under the currently pinned engine.
         # A frontend-only guard is not sufficient for direct API clients.
-        if (parent["model_revision"] != ATLAS_REVISION or
-                parent["algorithm_revision"] != ALGORITHM_REVISION):
+        if (
+            parent["model_revision"] != ATLAS_REVISION
+            or parent["algorithm_revision"] != ALGORITHM_REVISION
+        ):
             raise DomainError(
                 409,
                 "SCENARIO_ENGINE_MISMATCH",

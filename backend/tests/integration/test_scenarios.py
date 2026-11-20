@@ -117,7 +117,10 @@ def test_append_only_version_chain_and_separation_from_observed(client, database
     ],
 )
 def test_append_only_chain_rejects_legacy_engine_without_modifying_history(
-    client, monkeypatch, revision_name, old_revision,
+    client,
+    monkeypatch,
+    revision_name,
+    old_revision,
 ):
     from app.api.routes import simulation_scenarios as scenario_routes
 
