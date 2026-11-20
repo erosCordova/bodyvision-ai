@@ -7,7 +7,11 @@
  * before the capture preflight avoids misclassifying the empty alpha channel
  * as underexposed subject pixels.
  */
-export const ATLAS_CAPTURE_MATTE = "#c3d1d8";
+// Muted dark blue-gray studio backdrop provides silhouette separation from the
+// pale skin material on a small synthetic screenshot. This is a *flat matte*:
+// no contrast filter, no per-pixel subject processing and no alteration to the
+// interactive WebGL material, lighting, background or camera.
+export const ATLAS_CAPTURE_MATTE = "#344e68";
 
 export async function captureOpaqueAtlasPng(source: HTMLCanvasElement): Promise<Blob> {
   if (!Number.isSafeInteger(source.width) || !Number.isSafeInteger(source.height) ||

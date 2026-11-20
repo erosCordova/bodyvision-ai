@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ATLAS_CAPTURE_MATTE, captureOpaqueAtlasPng,
 } from "../src/features/viewer/atlasCapture";
+import { assessCapturePixels } from "../src/features/capture/captureQuality";
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -27,6 +28,33 @@ describe("synthetic opaque atlas snapshot", () => {
     expect(clearRect).toHaveBeenCalledOnce();
     expect(input.width).toBe(900);
     expect(input.height).toBe(1100);
+  });
+
+  it("creates a flat contrasting studio matte for a small synthetic silhouette without changing quality gates", () => {
+    // A small, explicit 10%-occupancy fictitious skin rectangle, not a clinical
+    // sample or mocked pose. The untouched preflight evaluates real RGB pixels.
+    const width = 80, height = 120;
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    const matte = ATLAS_CAPTURE_MATTE.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    expect(matte).not.toBeNull();
+    const background = matte!.slice(1).map(hex => Number.parseInt(hex, 16));
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const syntheticSkin = x >= 32 && x < 48 && y >= 30 && y < 90;
+        const rgb = syntheticSkin ? [200, 149, 120] : background;
+        pixels[i] = rgb[0];
+        pixels[i + 1] = rgb[1];
+        pixels[i + 2] = rgb[2];
+        pixels[i + 3] = 255;
+      }
+    }
+    const result = assessCapturePixels(width, height, pixels);
+    expect(result.checks.find(check => check.id === "contrast")?.passed).toBe(true);
+    expect(result.checks.find(check => check.id === "illumination")?.passed).toBe(true);
+    // No "quality pass" claim for a tiny synthetic fixture below 720px.
+    expect(result.passed).toBe(false);
+    expect(result.checks.find(check => check.id === "resolution")?.passed).toBe(false);
   });
 
   it("rejects oversized source surfaces before allocating a capture canvas", async () => {
