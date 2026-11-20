@@ -278,7 +278,7 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
   useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
-  useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation), [weightVariation, baselinePreview, restart]);
+  useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation, referenceKg), [weightVariation, referenceKg, baselinePreview, restart]);
   useEffect(() => controller.current?.setStature(baselinePreview ? BASELINE_HEIGHT_CM : statureCm), [statureCm, baselinePreview, restart]);
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
   useEffect(() => controller.current?.setComparison(comparison, comparisonDivider), [comparison, comparisonDivider, restart]);
