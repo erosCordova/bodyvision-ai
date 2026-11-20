@@ -84,3 +84,20 @@ validación en dispositivos reales, seguridad clínica o preparación para produ
 con un corpus autorizado y etiquetas independientes, condiciones de iluminación,
 posturas y dispositivos definidos; establecer umbrales de rendimiento/errores,
 revisión humana, persistencia/auditoría autorizada y aprobación de privacidad.
+
+## Indicador de duración local de IA de pose
+
+El visor de análisis ficticio ahora muestra la duración de cada intento exitoso
+medida con `performance.now()`, desde antes de validar y decodificar el archivo
+hasta que termina el detector. Una primera ejecución puede incluir la carga de
+MediaPipe/WASM, mientras que las siguientes reutilizan el runtime. La cifra no
+se presenta como promedio ni como benchmark de un dispositivo. Se borra al
+cambiar de fotografía o iniciar otro análisis; no se persiste ni se envía a API.
+
+Las advertencias de más de dos y cinco segundos son **orientativas** para
+verificar UX; no son objetivos de latencia clínicamente certificados. Los
+indicadores se prueban con duraciones sintéticas y valores inválidos. Queda
+pendiente establecer un protocolo reproducible con varias ejecuciones en
+móviles y equipos físicos, medición de memoria y temperatura, rangos por
+hardware y aceptación de rendimiento documentada. Por ello se mantiene la
+valoración de Fase 5 en 60 % y la estimación global en 72 %.
