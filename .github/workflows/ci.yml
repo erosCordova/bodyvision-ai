@@ -162,14 +162,14 @@ jobs:
         run: |
           # Disposable synthetic fixtures only; no production database or HTTP API.
           docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' <<'SQL'
-          DO $
+          DO $probe$
           BEGIN
             IF NOT EXISTS (
               SELECT 1 FROM profiles
               WHERE organization_id='10000000-0000-4000-8000-000000000001'
                 AND display_code='FICT-01'
             ) THEN RAISE EXCEPTION 'Missing fictional fixture'; END IF;
-          END $;
+          END $probe$;
           INSERT INTO synthetic_capture_objects(
             id,organization_id,profile_id,created_by,original_bytes,
             width,height,sha256_digest,ciphertext,created_at,expires_at
@@ -193,7 +193,7 @@ jobs:
             -e BODYVISION_ENABLE_CAPTURE_RETENTION=synthetic-only \
             capture-retention python -m app.workers.independent_capture_retention --once
           docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' <<'SQL'
-          DO $
+          DO $probe$
           BEGIN
             IF EXISTS (
               SELECT 1 FROM synthetic_capture_objects
@@ -203,7 +203,7 @@ jobs:
               SELECT 1 FROM synthetic_capture_objects
               WHERE id='90000000-0000-4000-8000-0000000000bb'
             ) THEN RAISE EXCEPTION 'Valid fictional capture was modified'; END IF;
-          END $;
+          END $probe$;
           DELETE FROM synthetic_capture_objects
           WHERE id='90000000-0000-4000-8000-0000000000bb';
           SQL
