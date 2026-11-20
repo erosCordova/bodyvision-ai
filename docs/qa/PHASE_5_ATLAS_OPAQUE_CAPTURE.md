@@ -40,3 +40,23 @@ el usuario. No se modifican ni reducen umbrales de calidad.
 
 No se admite uso clínico, fotos de personas reales ni validación de precisión.
 No modifica despliegues ni la rama `main`.
+
+
+## Validación final e integración · 19-11-2026 (Lima)
+
+- PR [#20](https://github.com/erosCordova/bodyvision-ai/pull/20)
+  revisada e integrada en la rama de desarrollo
+  `feature/phase3-auth-security`, commit
+  `3f8b09a87c966dc4132c96c7f4c742128a7a4cc0`.
+- [CI #44667621228](https://github.com/erosCordova/bodyvision-ai/actions/runs/44667621228):
+  `native-checks` y `docker-smoke` completadas correctamente;
+  28 pruebas públicas de navegador y 5 privadas aprobadas.
+- Tres pruebas unitarias nuevas de composición opaca completadas.
+  La prueba E2E del simulador comprobó **4/4 controles de captura**
+  y una pose realmente detectada por MediaPipe sobre el atlas.
+- Evaluación técnica manual: **Fase 5 de 60 % a 65 %**;
+  promedio de diez fases de igual ponderación **de 74 % a 75 %**.
+  El avance representa funcionalidad técnica verificable, no calidad
+  biométrica, autorización para imágenes reales ni preparación clínica.
+- Se mantuvo sin cambios `main`, el personaje anatómico y la
+  configuración de despliegues existentes.
