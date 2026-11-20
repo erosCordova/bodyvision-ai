@@ -288,12 +288,12 @@ test("synthetic history pages and CSV export never include observed records or a
     const requestUrl = new URL(route.request().url());
     const offset = Number(requestUrl.searchParams.get("offset") ?? 0);
     pagesRequested.push(offset);
-    const items = Array.from({ length: offset === 20 ? 5 : 20 }, () => ({
+    const items = Array.from({ length: offset === 20 ? 5 : 20 }, (_, index) => ({
       id: crypto.randomUUID(),
       series_id: crypto.randomUUID(), profile_id: profileId,
       prior_version_id: null, version: 1,
       reference_kg: 70, variation_percent: 15, stature_cm: 175, simulated_kg: 80.5,
-      model_revision: "28912432581accd7a1c62129d55f0e9758221d48",
+      model_revision: offset === 20 && index === 0 ? "0".repeat(40) : "28912432581accd7a1c62129d55f0e9758221d48",
       algorithm_revision: "regional-soft-tissue-v2",
       revision_note: "=HYPERLINK(\"danger\")", created_by: crypto.randomUUID(),
       created_at: "2026-11-20T13:00:00Z", data_type: "SIMULADO",
@@ -336,8 +336,14 @@ test("synthetic history pages and CSV export never include observed records or a
   await history.getByRole("button", { name: "Siguientes 20" }).click();
   await expect(history.getByRole("status", { name: "Página del historial simulado" }))
     .toContainText("Versiones 21–25 de 25");
-  await expect(history.getByRole("list", { name: "Versiones de simulación guardadas" }))
-    .toHaveCount(1);
+  const items = history.getByRole("list", { name: "Versiones de simulación guardadas" });
+  await expect(items).toHaveCount(1);
+  const incompatible = items.locator("li").first();
+  await expect(incompatible).toContainText("El modelo anatómico usado para guardar esta versión es diferente");
+  await expect(incompatible.getByRole("button", { name: "Cargar en 3D" })).toBeDisabled();
+  await expect(incompatible.getByRole("button", { name: "Fijar como referencia" })).toBeDisabled();
+  await expect(items.locator("li").nth(1).getByRole("button", { name: "Cargar en 3D" }))
+    .toBeEnabled();
   await expect(history.getByRole("button", { name: "Siguientes 20" })).toBeDisabled();
   await history.getByRole("button", { name: "Anteriores 20" }).click();
   await expect(history.getByRole("status", { name: "Página del historial simulado" }))

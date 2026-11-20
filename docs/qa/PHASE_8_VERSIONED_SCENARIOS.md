@@ -88,3 +88,22 @@ histórica de 155 cm herede inadvertidamente los límites de deformación
 regional del escenario actual de 205 cm. Se incorporaron pruebas de escalado
 y reversibilidad de rangos sintéticos; no hay ninguna evaluación anatómica
 individual ni validación clínica.
+
+
+## Compatibilidad y procedencia del motor de simulación
+
+Los escenarios incluyen `model_revision`, `algorithm_revision` y
+`data_type` provenientes de PostgreSQL. Al cargar o fijar una versión
+histórica para compararla, el frontend comprueba que el origen sea
+`SIMULADO` y que ambas versiones técnicas coincidan exactamente con el
+atlas y el motor regional que están ejecutándose. Si no, la fila sigue
+consultable en el historial (y puede exportarse como CSV), pero se
+deshabilitan «Cargar en 3D» y «Fijar como referencia» para evitar presentar
+una reproducción visual engañosa. También existe una segunda comprobación
+en el controlador del botón, no solo en su estado visual.
+
+La verificación no convierte el motor en una medición médica; garantiza
+solamente que no se comparen representaciones sintéticas generadas con
+algoritmos y modelos incompatibles. La validación requiere pruebas unitarias
+de coincidencia y discrepancia y una prueba de navegador de una página
+con versiones antiguas incompatibles. No altera filas guardadas.

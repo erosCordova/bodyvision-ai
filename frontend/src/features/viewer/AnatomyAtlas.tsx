@@ -17,6 +17,7 @@ import { reviewLocalCapture } from "../capture/captureQuality";
 import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyNameKey } from "./anatomyNames";
 import { buildSyntheticScenarioCsv } from "./scenarioCsv";
+import { scenarioCompatibilityReason } from "./scenarioCompatibility";
 import "./anatomy-studio.css";
 
 type AtlasController = ReturnType<typeof createAnatomyScene>;
@@ -154,6 +155,7 @@ export function AnatomyAtlas() {
   const [scenarioVersionId, setScenarioVersionId] = useState("");
   const [scenarioOffset, setScenarioOffset] = useState(0);
   const [scenarioExportError, setScenarioExportError] = useState("");
+  const [scenarioCompatibilityError, setScenarioCompatibilityError] = useState("");
   const [scenarioNotice, setScenarioNotice] = useState("");
   const syntheticProfiles = useQuery({
     queryKey: ["simulation-profile-options", workspaceId],
@@ -436,8 +438,12 @@ export function AnatomyAtlas() {
   };
   const fixHistoricalReference = (row: {
     id: string; version: number; reference_kg: number; variation_percent: number;
-    stature_cm: number; simulated_kg: number;
+    stature_cm: number; simulated_kg: number; model_revision: string;
+    algorithm_revision: string; data_type: "SIMULADO";
   }) => {
+    const reason = scenarioCompatibilityReason(row);
+    if (reason) { setScenarioCompatibilityError(reason); return; }
+    setScenarioCompatibilityError("");
     setHistoricalBaseline({
       id: row.id, version: row.version,
       reference_kg: row.reference_kg,
@@ -453,7 +459,11 @@ export function AnatomyAtlas() {
   };
   const restoreHistoryScenario = (row: {
     id: string; reference_kg: number; variation_percent: number; stature_cm: number;
+    model_revision: string; algorithm_revision: string; data_type: "SIMULADO";
   }) => {
+    const reason = scenarioCompatibilityReason(row);
+    if (reason) { setScenarioCompatibilityError(reason); return; }
+    setScenarioCompatibilityError("");
     setReferenceKg(row.reference_kg);
     setWeightVariation(row.variation_percent);
     setStatureCm(row.stature_cm);
@@ -881,6 +891,7 @@ export function AnatomyAtlas() {
                     <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
                       onChange={event => {
                         setScenarioProfileId(event.target.value);
+                        setScenarioCompatibilityError("");
                         setHistoricalBaseline(null);
                         setComparison(false);
                         setScenarioOffset(0);
@@ -942,6 +953,7 @@ export function AnatomyAtlas() {
                           </div>
                         )}
                         {scenarioExportError && <p role="alert">{scenarioExportError}</p>}
+                        {scenarioCompatibilityError && <p role="alert">{scenarioCompatibilityError}</p>}
                         {scenarioHistory.isPending && <p>Cargando versiones…</p>}
                         {scenarioHistory.isError && <p role="alert">No se pudo consultar el historial de simulaciones.</p>}
                         {scenarioHistory.data?.items.length === 0 && <p>Aún no hay escenarios registrados.</p>}
@@ -952,10 +964,15 @@ export function AnatomyAtlas() {
                                 <strong>Escenario {row.series_id.slice(0, 8)} · v{row.version}</strong>
                                 <span>{row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}</span>
                                 {row.revision_note && <small>{row.revision_note}</small>}
+                                {scenarioCompatibilityReason(row) && <small className="studio-scenario-compatibility-warning">
+                                  {scenarioCompatibilityReason(row)}
+                                </small>}
                               </div>
                               <div className="studio-scenario-row-actions">
-                                <button type="button" onClick={() => restoreHistoryScenario(row)}>Cargar en 3D</button>
-                                <button type="button" aria-pressed={historicalBaseline?.id === row.id}
+                                <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                  onClick={() => restoreHistoryScenario(row)}>Cargar en 3D</button>
+                                <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                  aria-pressed={historicalBaseline?.id === row.id}
                                   onClick={() => fixHistoricalReference(row)}>
                                   Fijar como referencia
                                 </button>
@@ -991,12 +1008,17 @@ export function AnatomyAtlas() {
                             <div>
                               <strong>Versión {row.version} · SIMULADO</strong>
                               <span>{row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}</span>
+                              {scenarioCompatibilityReason(row) && <small className="studio-scenario-compatibility-warning">
+                                {scenarioCompatibilityReason(row)}
+                              </small>}
                             </div>
                             <div className="studio-scenario-row-actions">
-                              <button type="button" onClick={() => restoreHistoryScenario(row)}>
+                              <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                onClick={() => restoreHistoryScenario(row)}>
                                 Cargar v{row.version} en 3D
                               </button>
-                              <button type="button" aria-pressed={historicalBaseline?.id === row.id}
+                              <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                aria-pressed={historicalBaseline?.id === row.id}
                                 onClick={() => fixHistoricalReference(row)}>
                                 Fijar v{row.version} como referencia
                               </button>
