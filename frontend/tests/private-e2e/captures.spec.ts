@@ -85,6 +85,10 @@ test("private capture archives only synthetic PNG after both consents, then dele
   expect(uploaded.status()).toBe(201);
   expect((await uploaded.json() as { data_type: string }).data_type).toBe("SIMULADO");
   await expect(privateArchive).toContainText("SIMULADO");
+  await expect(privateArchive.getByRole("status", { name: "Página del archivo cifrado" }))
+    .toContainText("Capturas 1–1 de 1");
+  await expect(privateArchive.getByRole("button", { name: "Anterior" })).toBeDisabled();
+  await expect(privateArchive.getByRole("button", { name: "Siguiente" })).toBeDisabled();
 
   const downloadEvent = page.waitForEvent("download");
   await privateArchive.getByRole("button", { name: "Descargar PNG" }).click();
