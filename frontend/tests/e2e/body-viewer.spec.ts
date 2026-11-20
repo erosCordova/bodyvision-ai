@@ -283,12 +283,12 @@ test("synthetic history pages and CSV export never include observed records or a
   expect(saved.status()).toBe(201);
   const profileId = (await saved.json() as { id: string }).id;
   const scenarioUrl = `/api/v1/profiles/${profileId}/scenarios`;
-  let pagesRequested: number[] = [];
+  const pagesRequested: number[] = [];
   await page.route(`**${scenarioUrl}?**`, async route => {
     const requestUrl = new URL(route.request().url());
     const offset = Number(requestUrl.searchParams.get("offset") ?? 0);
     pagesRequested.push(offset);
-    const items = Array.from({ length: offset === 20 ? 5 : 20 }, (_, index) => ({
+    const items = Array.from({ length: offset === 20 ? 5 : 20 }, () => ({
       id: crypto.randomUUID(),
       series_id: crypto.randomUUID(), profile_id: profileId,
       prior_version_id: null, version: 1,
@@ -317,7 +317,7 @@ test("synthetic history pages and CSV export never include observed records or a
   expect(csv).not.toContain("HYPERLINK");
   expect(csv).not.toContain(profileId);
   expect(csv).not.toContain("OBSERVADO");
-  expect(csv.trim().split("\\n")).toHaveLength(21);
+  expect(csv.trim().split("\n")).toHaveLength(21);
   await history.getByRole("button", { name: "Siguientes 20" }).click();
   await expect(history.getByRole("status", { name: "Página del historial simulado" }))
     .toContainText("Versiones 21–25 de 25");
