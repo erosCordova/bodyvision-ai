@@ -642,6 +642,26 @@ export function AnatomyAtlas() {
                     }} />
                   <span className="studio-sim-limits"><small>−30% · menor volumen</small><small>+30% · mayor volumen</small></span>
                 </label>
+                <div className="studio-sim-presets" role="group" aria-label="Escenarios rápidos de volumen">
+                  <span>Escenarios visuales rápidos</span>
+                  <div className="studio-sim-preset-buttons">
+                    {([
+                      { label: "Menor volumen −15%", delta: -15 },
+                      { label: "Referencia 0%", delta: 0 },
+                      { label: "Mayor volumen +15%", delta: 15 },
+                    ] as const).map(preset => (
+                      <button key={preset.delta} type="button" aria-pressed={weightVariation === preset.delta}
+                        onClick={() => {
+                          setWeightVariation(preset.delta);
+                          setBaselinePreview(false);
+                          setVisible(previous => previous.includes("skin") ? previous : ["skin", ...previous]);
+                          setOpacity(previous => ({ ...previous, skin: 1 }));
+                          setMode("realista");
+                        }}>{preset.label}</button>
+                    ))}
+                  </div>
+                  <small>Escenarios ilustrativos, no recomendaciones de peso.</small>
+                </div>
                 <label className="studio-sim-slider">
                    <span>Estatura del mismo modelo 3D <strong>{statureCm} cm</strong></span>
                    <input type="range" aria-label="Ajustar estatura del modelo anatómico"
