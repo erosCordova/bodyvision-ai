@@ -39,6 +39,28 @@ describe("pose visibility review is not a clinical accuracy score", () => {
     expect(review.warnings).toEqual([]);
     expect(review.groups.find(g => g.id === "ankles")?.visible).toBe(2);
   });
+  it("prevents a collapsed 33-point output from being marked reviewable", () => {
+    const degenerate = summarizePoseResult({
+      landmarks: [Array.from({ length: 33 }, () => ({
+        x: 0.5, y: 0.5, z: 0, visibility: 0.99,
+      }))],
+    });
+    expect(degenerate.found).toBe(true);
+    const result = assessPoseQuality(degenerate, goodReview);
+    expect(result.coreVisible).toBe(8);
+    expect(result.visiblePoints).toBe(33);
+    expect(result.state).toBe("insufficient");
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("casi superpuestos"),
+    ]));
+  });
+
+  it("does not reject a clearly distributed synthetic core skeleton", () => {
+    const result = assessPoseQuality(syntheticEstimate(), goodReview);
+    expect(result.state).toBe("reviewable");
+    expect(result.warnings.some(message => message.includes("superpuestos"))).toBe(false);
+  });
+
   it("exposes low-light warnings without confusing them with landmark quality", () => {
     const lowLight: CaptureReview = {
       ...goodReview, passed: false,

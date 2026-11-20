@@ -53,15 +53,25 @@ export function summarizePoseResult(result: RawPoseResult): PoseEstimate {
     return { found: false, landmarks: [], visiblePoints: 0, fullBodyReview: false,
       model: POSE_MODEL_VERSION };
   }
+  // MediaPipe may return a 33-element result whose coordinates are all absent
+  // or non-finite. Those are not evidence that a body was detected.
+  const hasAnyFinitePosition = first.some(point =>
+    typeof point?.x === "number" && Number.isFinite(point.x) &&
+    typeof point?.y === "number" && Number.isFinite(point.y),
+  );
+  if (!hasAnyFinitePosition) {
+    return { found: false, landmarks: [], visiblePoints: 0, fullBodyReview: false,
+      model: POSE_MODEL_VERSION };
+  }
   const landmarks = first.map(point => {
-    const hasPosition = typeof point.x === "number" && Number.isFinite(point.x) &&
-      typeof point.y === "number" && Number.isFinite(point.y);
+    const hasPosition = typeof point?.x === "number" && Number.isFinite(point.x) &&
+      typeof point?.y === "number" && Number.isFinite(point.y);
     return {
-      x: finiteCoordinate(point.x),
-      y: finiteCoordinate(point.y),
-      z: finiteCoordinate(point.z),
+      x: finiteCoordinate(point?.x),
+      y: finiteCoordinate(point?.y),
+      z: finiteCoordinate(point?.z),
       visibility: hasPosition
-        ? Math.max(0, Math.min(1, finiteCoordinate(point.visibility)))
+        ? Math.max(0, Math.min(1, finiteCoordinate(point?.visibility)))
         : 0,
     };
   });
