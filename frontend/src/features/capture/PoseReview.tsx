@@ -4,6 +4,7 @@ import {
   POSE_SDK_VERSION, type PoseEstimate,
 } from "./poseInference";
 import { assessPoseQuality, isPosePointVisible } from "./poseQuality";
+import { formatLocalPoseDuration, localPoseLatencyGuidance } from "./poseLatency";
 import type { CaptureReview } from "./captureQuality";
 import "./pose-review.css";
 
@@ -16,6 +17,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
   const [state, setState] = useState<PoseState>("idle");
   const [estimate, setEstimate] = useState<PoseEstimate | null>(null);
   const [failure, setFailure] = useState("");
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [visibilityThreshold, setVisibilityThreshold] = useState(0.5);
   const [showPoints, setShowPoints] = useState(true);
   const [showConnections, setShowConnections] = useState(true);
@@ -27,6 +29,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setState("idle");
     setEstimate(null);
     setFailure("");
+    setElapsedMs(null);
     const url = URL.createObjectURL(file);
     setImageUrl(url);
     return () => {
@@ -42,10 +45,13 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setState("running");
     setFailure("");
     setEstimate(null);
+    setElapsedMs(null);
+    const start = performance.now();
     try {
       const pose = await detectPoseOnDevice(inputFile);
       if (!alive.current || requestId !== requestSequence.current) return;
       setEstimate(pose);
+      setElapsedMs(Math.max(0, performance.now() - start));
       setState("ready");
     } catch {
       if (!alive.current || requestId !== requestSequence.current) return;
@@ -83,6 +89,12 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
         Utiliza únicamente fotografías ficticias para esta demostración.
       </p>
       {state === "running" && <p role="status">Cargando el modelo y procesando la fotografía localmente…</p>}
+      {state === "ready" && elapsedMs !== null && <div className="enterprise-pose-privacy"
+        role="status" aria-label="Duración de inferencia local">
+        <strong>Tiempo total local: {formatLocalPoseDuration(elapsedMs)}.</strong>{" "}
+        {localPoseLatencyGuidance(elapsedMs)} La medición incluye lectura, decodificación,
+        carga del modelo si es la primera ejecución e inferencia; no se guarda ni se envía.
+      </div>}
       {state === "failed" && <p role="alert" className="enterprise-pose-error">{failure}</p>}
       {state === "ready" && estimate && quality && (
         <div className="enterprise-pose-result" aria-live="polite">
