@@ -430,18 +430,32 @@ export function AnatomyAtlas() {
       !visible.includes("skin") || error) return;
     setCaptureBusy(true);
     setCaptureError("");
+    let captureStage: "render" | "validate" | "handoff" = "render";
     try {
       const snapshot = await controller.current.capturePng();
-      const file = new File([snapshot], "modelo-3d-sintetico.png", { type: "image/png" });
-      if (file.size > 10 * 1024 * 1024) {
-        throw new Error("La captura supera el límite de tamaño para el análisis.");
+      if (snapshot.size > 10 * 1024 * 1024) {
+        throw new Error("El archivo de la captura 3D excede 10 MB.");
       }
+      captureStage = "validate";
+      const file = new File([snapshot], "modelo-3d-sintetico.png", { type: "image/png" });
       const review = await reviewLocalCapture(file);
+      captureStage = "handoff";
       stageCaptureForAnalysis(file, review);
       setCaptureBusy(false);
       navigate("/analysis", { state: { localCaptureReview: review, source: "atlas-synthetic" } });
-    } catch {
-      setCaptureError("No se pudo capturar la vista 3D. Comprueba el navegador o utiliza una fotografía de prueba desde Captura.");
+    } catch (cause) {
+      const code = captureStage === "render" ? "BV-3D-CAPTURE" :
+        captureStage === "validate" ? "BV-3D-VALIDATION" : "BV-3D-HANDOFF";
+      // The synthetic scene contains no patient images. Limit console
+      // diagnostics to a stage and JS error message; no bytes/landmarks.
+      const reason = cause instanceof Error ? cause.message : "error desconocido";
+      console.warn("[BodyVision synthetic atlas]", code, reason);
+      const action = captureStage === "render"
+        ? "Prueba a ampliar la vista 3D o cambiar a calidad Alta."
+        : captureStage === "validate"
+          ? "La imagen 3D no superó la validación local; restaura la vista y reintenta."
+          : "No se pudo abrir el análisis local. Vuelve a intentarlo.";
+      setCaptureError(`No se completó la captura sintética (${code}). ${action}`);
       setCaptureBusy(false);
     }
   };
