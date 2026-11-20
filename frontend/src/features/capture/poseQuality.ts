@@ -84,6 +84,20 @@ export function assessPoseQuality(
       Math.max(...corePoints.map(point => point.y)) -
         Math.min(...corePoints.map(point => point.y)),
     ) < 0.06;
+  // Heuristic framing checks are evaluated only with all eight finite,
+  // visible core joints. They do not verify anatomical correctness.
+  const coreRows = [[11, 12], [23, 24], [25, 26], [27, 28]]
+    .map(pair => pair.map(index => pose.landmarks[index]?.y ?? 0)
+      .reduce((sum, value) => sum + value, 0) / 2);
+  const fullCoreVisible = corePoints.length === coreIndices.length;
+  const invertedCore = fullCoreVisible && coreRows.every((y, index) =>
+    index === 0 || y < coreRows[index - 1] - 0.04);
+  const nearFrameEdge = fullCoreVisible && corePoints.some(point =>
+    point.x < 0.015 || point.x > 0.985 || point.y < 0.015 || point.y > 0.985);
+  const compactFullBody = fullCoreVisible &&
+    Math.max(...corePoints.map(point => point.y)) -
+      Math.min(...corePoints.map(point => point.y)) < 0.18;
+  const uncertainFraming = invertedCore || nearFrameEdge || compactFullBody;
   const warnings: string[] = [];
   if (!pose.found) {
     warnings.push("No se ha detectado una pose humana en esta imagen.");
@@ -97,6 +111,15 @@ export function assessPoseQuality(
     if (collapsedCore) {
       warnings.push("Los puntos clave aparecen casi superpuestos; la pose no permite una revisión visual fiable.");
     }
+    if (invertedCore) {
+      warnings.push("La orientación vertical de los puntos principales parece invertida; comprueba la imagen.");
+    }
+    if (nearFrameEdge) {
+      warnings.push("Algunos puntos principales están muy cerca del borde; revisa posibles recortes.");
+    }
+    if (compactFullBody) {
+      warnings.push("Los puntos del cuerpo ocupan poca altura de la imagen; prueba un encuadre más cercano.");
+    }
   }
   for (const check of capture.checks.filter(check => !check.passed)) {
     warnings.push(check.detail);
@@ -104,7 +127,7 @@ export function assessPoseQuality(
   let state: PoseQuality["state"];
   if (!pose.found) state = "not-detected";
   else if (coreVisible < 4 || visiblePoints < 12 || collapsedCore) state = "insufficient";
-  else if (coreVisible < coreTotal || visiblePoints < 20 || !capture.passed) state = "caution";
+  else if (coreVisible < coreTotal || visiblePoints < 20 || !capture.passed || uncertainFraming) state = "caution";
   else state = "reviewable";
   const labels: Record<PoseQuality["state"], string> = {
     "not-detected": "Sin detección",

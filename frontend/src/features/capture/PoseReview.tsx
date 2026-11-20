@@ -11,6 +11,7 @@ import {
 import type { CaptureReview } from "./captureQuality";
 import type { PoseLocalDiagnostic } from "./poseDiagnostics";
 import { downloadSyntheticPosePerformanceReport } from "./posePerformanceReport";
+import { downloadSyntheticPoseReviewReport } from "./poseReviewReport";
 import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
@@ -287,6 +288,13 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
             <strong>Resultado técnico: {quality.label}</strong>
             <small>Indicador heurístico de visibilidad y encuadre; no es precisión ni
               probabilidad diagnóstica de la IA.</small>
+            <button type="button" className="enterprise-pose-review-download"
+              onClick={() => downloadSyntheticPoseReviewReport({
+                capture: review, pose: estimate, quality, threshold: visibilityThreshold,
+              })}>
+              Descargar resumen de revisión de pose (JSON)
+            </button>
+            <small>El resumen no contiene fotografía, coordenadas, nombres ni identificadores.</small>
             {quality.warnings.length > 0 && <ul aria-label="Advertencias de pose">
               {quality.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
             </ul>}

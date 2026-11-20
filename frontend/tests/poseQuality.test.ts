@@ -83,6 +83,28 @@ describe("pose visibility review is not a clinical accuracy score", () => {
     expect(review.groups.find(g => g.id === "ankles")?.state).toBe("missing");
     expect(review.warnings.some(w => w.includes("Faltan"))).toBe(true);
   });
+  it("marks an inverted core as caution even when every landmark passes visibility", () => {
+    const pose = syntheticEstimate();
+    for (const point of pose.landmarks) point.y = 1 - point.y;
+    const quality = assessPoseQuality(pose, goodReview);
+    expect(quality.visiblePoints).toBe(33);
+    expect(quality.state).toBe("caution");
+    expect(quality.warnings.some(message => message.includes("invertida"))).toBe(true);
+  });
+  it("flags key points touching the image boundary without claiming a medical problem", () => {
+    const pose = syntheticEstimate();
+    pose.landmarks[27].y = 0.992;
+    const result = assessPoseQuality(pose, goodReview);
+    expect(result.state).toBe("caution");
+    expect(result.warnings.some(message => message.includes("borde"))).toBe(true);
+  });
+  it("flags a compact but high-visibility pose as difficult to review visually", () => {
+    const pose = syntheticEstimate();
+    for (const point of pose.landmarks) point.y = 0.4 + point.y * 0.15;
+    const result = assessPoseQuality(pose, goodReview);
+    expect(result.state).toBe("caution");
+    expect(result.warnings.some(message => message.includes("poca altura"))).toBe(true);
+  });
   it("provides an insufficient classification if most points fall below the threshold", () => {
     const quality = assessPoseQuality(syntheticEstimate(0.55), goodReview, 0.8);
     expect(quality.visiblePoints).toBe(0);
