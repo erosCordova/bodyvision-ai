@@ -25,8 +25,11 @@ export function summarizeLocalPoseBenchmark(
     .sort((a, b) => a - b);
   const successful = attempts.filter(item => item.successful).length;
   const detected = attempts.filter(item => item.successful && item.detected).length;
-  const nearestRank = (percentile: number): number | null => timingsMs.length
-    ? timingsMs[Math.max(0, Math.ceil(percentile * timingsMs.length) - 1)]
+  const medianMs = timingsMs.length === 0 ? null :
+    timingsMs.length % 2 === 1 ? timingsMs[Math.floor(timingsMs.length / 2)] :
+    (timingsMs[timingsMs.length / 2 - 1] + timingsMs[timingsMs.length / 2]) / 2;
+  const p95Ms = timingsMs.length
+    ? timingsMs[Math.ceil(0.95 * timingsMs.length) - 1]
     : null;
   return {
     attempts: attempts.length,
@@ -34,8 +37,8 @@ export function summarizeLocalPoseBenchmark(
     failed: attempts.length - successful,
     detected,
     timingsMs,
-    medianMs: nearestRank(0.5),
-    p95Ms: nearestRank(0.95),
+    medianMs,
+    p95Ms,
   };
 }
 
