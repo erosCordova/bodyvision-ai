@@ -151,22 +151,39 @@ async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
  * canvas and must release it. Reusing this already-downsampled canvas avoids
  * repeating full-resolution decode for every benchmark measurement.
  */
+/** Cancel only at async boundaries: MediaPipe's synchronous detect cannot be interrupted mid-call. */
+export type PoseRequestIsCurrent = () => boolean;
+
+function requireCurrentPoseRequest(isCurrent: PoseRequestIsCurrent): void {
+  if (!isCurrent()) {
+    throw new Error("La imagen fue sustituida o el análisis local ya no está activo.");
+  }
+}
+
 export type LocalPoseSession = {
   detect: () => PoseEstimate;
   release: () => void;
 };
 
-export async function createPoseInferenceSession(file: File): Promise<LocalPoseSession> {
-  // Keep format/size/header gates before decode and release the large bitmap
-  // before loading MediaPipe. Never cache a user-provided image globally.
+export async function createPoseInferenceSession(
+  file: File,
+  isCurrent: PoseRequestIsCurrent = () => true,
+): Promise<LocalPoseSession> {
+  // A superseded request must not decode another image or spend CPU running
+  // the model. Guard each awaited stage; the current frame always gets freed.
+  requireCurrentPoseRequest(isCurrent);
   await validatePoseImageFile(file);
+  requireCurrentPoseRequest(isCurrent);
   const frame = await preparePoseFrame(file);
   try {
+    requireCurrentPoseRequest(isCurrent);
     const landmarker = await loadPoseLandmarker();
+    requireCurrentPoseRequest(isCurrent);
     let released = false;
     return {
       detect: () => {
         if (released) throw new Error("La sesión local de pose ya fue liberada.");
+        requireCurrentPoseRequest(isCurrent);
         return summarizePoseResult(landmarker.detect(frame.canvas));
       },
       release: () => {
@@ -181,10 +198,13 @@ export async function createPoseInferenceSession(file: File): Promise<LocalPoseS
   }
 }
 
-export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
-  // Ordinary one-shot inference preserves the same preflight, input
-  // resolution, model options and immediate resource release.
-  const session = await createPoseInferenceSession(file);
+export async function detectPoseOnDevice(
+  file: File,
+  isCurrent: PoseRequestIsCurrent = () => true,
+): Promise<PoseEstimate> {
+  // Ordinary one-shot inference keeps the same input/model and cleanup.
+  // When a new image arrives, do not infer on a stale decoded frame.
+  const session = await createPoseInferenceSession(file, isCurrent);
   try {
     return session.detect();
   } finally {
@@ -198,11 +218,16 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
  * format/header validation, bitmap decoding & scaling, model readiness,
  * detection, and temporary-canvas cleanup. The image is never retained.
  */
-export async function diagnosePoseOnDevice(file: File): Promise<PoseLocalDiagnostic> {
+export async function diagnosePoseOnDevice(
+  file: File,
+  isCurrent: PoseRequestIsCurrent = () => true,
+): Promise<PoseLocalDiagnostic> {
+  requireCurrentPoseRequest(isCurrent);
   const started = performance.now();
   const jsHeapBeforeBytes = optionalJsHeapBytes(performance);
   const modelCachedAtStart = reusableLandmarker !== null;
   await validatePoseImageFile(file);
+  requireCurrentPoseRequest(isCurrent);
   const validated = performance.now();
   const frame = await preparePoseFrame(file);
   const prepared = performance.now();
@@ -210,7 +235,9 @@ export async function diagnosePoseOnDevice(file: File): Promise<PoseLocalDiagnos
   let inferred: number;
   let detected = false;
   try {
+    requireCurrentPoseRequest(isCurrent);
     const landmarker = await loadPoseLandmarker();
+    requireCurrentPoseRequest(isCurrent);
     modelReady = performance.now();
     detected = summarizePoseResult(landmarker.detect(frame.canvas)).found;
     inferred = performance.now();

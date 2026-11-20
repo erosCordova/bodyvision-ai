@@ -66,7 +66,7 @@ describe("five-run synthetic benchmark UI", () => {
     await waitFor(() => expect(detect).toHaveBeenCalledTimes(5));
     expect(detectPoseOnDevice).toHaveBeenCalledOnce();
     expect(createPoseInferenceSession).toHaveBeenCalledOnce();
-    expect(createPoseInferenceSession).toHaveBeenCalledWith(image);
+    expect(createPoseInferenceSession).toHaveBeenCalledWith(image, expect.any(Function));
     expect(release).toHaveBeenCalledOnce();
     const report = await screen.findByLabelText("Resumen de rendimiento local");
     expect(report).toHaveTextContent("Ejecuciones completadas: 5/5");
@@ -75,7 +75,7 @@ describe("five-run synthetic benchmark UI", () => {
     expect(report).toHaveTextContent("P95:");
     expect(screen.getByRole("button", { name: "Medir rendimiento (5 repeticiones)" }))
       .toBeEnabled();
-    expect(detectPoseOnDevice).toHaveBeenLastCalledWith(image);
+    expect(detectPoseOnDevice).toHaveBeenLastCalledWith(image, expect.any(Function));
   });
 
   it("offers a voluntary technical JSON report only after a confirmed local measurement", async () => {
@@ -116,7 +116,10 @@ describe("five-run synthetic benchmark UI", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que esta imagen es ficticia/ }));
     fireEvent.click(screen.getByRole("button", { name: "Medir rendimiento (5 repeticiones)" }));
     await waitFor(() => expect(createPoseInferenceSession).toHaveBeenCalledOnce());
+    const current = vi.mocked(createPoseInferenceSession).mock.calls[0][1]!;
+    expect(current()).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Cancelar prueba" }));
+    expect(current()).toBe(false);
     expect(screen.getByRole("alert")).toHaveTextContent("Prueba cancelada");
     await act(async () => {
       stalled.resolve({ detect, release });
@@ -146,7 +149,7 @@ describe("five-run synthetic benchmark UI", () => {
     fireEvent.click(button);
     const report = await screen.findByLabelText("Etapas de inferencia local");
     expect(diagnosePoseOnDevice).toHaveBeenCalledOnce();
-    expect(diagnosePoseOnDevice).toHaveBeenCalledWith(image);
+    expect(diagnosePoseOnDevice).toHaveBeenCalledWith(image, expect.any(Function));
     expect(report).toHaveTextContent("Preparación de imagen:");
     expect(report).toHaveTextContent("Inferencia:");
     expect(report).toHaveTextContent("Heap JavaScript antes: No disponible");
@@ -166,7 +169,10 @@ describe("five-run synthetic benchmark UI", () => {
     await screen.findByText("No se detectó una pose humana.");
     fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que esta imagen es ficticia/ }));
     fireEvent.click(screen.getByRole("button", { name: "Diagnosticar etapas (1 ejecución)" }));
+    const current = vi.mocked(diagnosePoseOnDevice).mock.calls[0][1]!;
+    expect(current()).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Cancelar diagnóstico" }));
+    expect(current()).toBe(false);
     await act(async () => {
       resolve({
         validationMs: 1, preparationMs: 3, modelWaitMs: 2,

@@ -64,6 +64,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     if (benchmarkRunning || diagnosticRunning) return;
     const requestId = ++requestSequence.current;
     const inputFile = file;
+    const current = () => alive.current && requestId === requestSequence.current;
     setState("running");
     setFailure("");
     setEstimate(null);
@@ -75,7 +76,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setDiagnosticError("");
     const start = performance.now();
     try {
-      const pose = await detectPoseOnDevice(inputFile);
+      const pose = await detectPoseOnDevice(inputFile, current);
       if (!alive.current || requestId !== requestSequence.current) return;
       setEstimate(pose);
       setElapsedMs(Math.max(0, performance.now() - start));
@@ -100,7 +101,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setBenchmarkError("");
     try {
       const result = await runPreparedPoseBenchmark(
-        () => createPoseInferenceSession(inputFile),
+        () => createPoseInferenceSession(inputFile, current),
         current,
         completed => setBenchmarkProgress(completed),
         { yieldBeforeRun: () => new Promise<void>(resolve => window.setTimeout(resolve, 0)) },
@@ -123,11 +124,12 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     if (!benchmarkConfirmed || benchmarkRunning || diagnosticRunning || state !== "ready") return;
     const requestId = ++requestSequence.current;
     const inputFile = file;
+    const current = () => alive.current && requestId === requestSequence.current;
     setDiagnosticRunning(true);
     setDiagnosticResult(null);
     setDiagnosticError("");
     try {
-      const data = await diagnosePoseOnDevice(inputFile);
+      const data = await diagnosePoseOnDevice(inputFile, current);
       if (alive.current && requestId === requestSequence.current) setDiagnosticResult(data);
     } catch {
       if (alive.current && requestId === requestSequence.current) {
