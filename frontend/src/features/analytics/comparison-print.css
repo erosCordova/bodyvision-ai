@@ -1,0 +1,71 @@
+/* Only the synthetic comparison snapshot appears in the PDF/print dialog. */
+@media screen {
+  .bodyvision-comparison-print {
+    position: fixed;
+    left: -200vw;
+    top: 0;
+    width: 210mm;
+    pointer-events: none;
+  }
+}
+@media print {
+  @page { size: A4 portrait; margin: 16mm; }
+  body > :not(.bodyvision-comparison-print) { display: none !important; }
+  body > .bodyvision-comparison-print { display: block !important; }
+  .bodyvision-comparison-print {
+    background: #fff !important;
+    color: #1d2a38 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 11pt;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    line-height: 1.5;
+  }
+  .bodyvision-print-sheet {
+    max-width: 100%; break-inside: avoid;
+  }
+  .bodyvision-print-sheet header {
+    border-bottom: 2px solid #265f83; padding-bottom: 15px; margin-bottom: 17px;
+  }
+  .bodyvision-print-brand {
+    font-size: 9pt; font-weight: 700; letter-spacing: 1.2px;
+    color: #265f83; margin: 0;
+  }
+  .bodyvision-print-sheet h1 {
+    font-size: 21pt; font-weight: 700; letter-spacing: 0;
+    color: #1d2a38; margin: 8px 0;
+  }
+  .bodyvision-print-synthetic {
+    display: inline-block; border: 1px solid #ad6b4e; padding: 5px 8px;
+    color: #85452c; font-size: 9pt; font-weight: bold;
+  }
+  .bodyvision-print-sheet h2 {
+    font-size: 12pt; margin: 19px 0 8px; color: #173a52;
+  }
+  .bodyvision-print-meta,.bodyvision-print-sources { margin: 0; }
+  .bodyvision-print-meta > div,.bodyvision-print-sources > div {
+    display: flex; gap: 14px; border-bottom: 1px solid #d5e0e7;
+    padding: 6px 0;
+  }
+  .bodyvision-print-sheet dt { font-weight: 600; min-width: 130px; }
+  .bodyvision-print-sheet dd { margin: 0; overflow-wrap: anywhere; }
+  .bodyvision-print-sheet table { width: 100%; border-collapse: collapse; }
+  .bodyvision-print-sheet th,.bodyvision-print-sheet td {
+    color: #1d2a38 !important; font-size: 10pt; text-align: left;
+    border: 1px solid #cbd9e2; padding: 9px;
+  }
+  .bodyvision-print-sheet thead { background: #edf3f8; }
+  .bodyvision-print-difference {
+    border: 1px solid #b5cfe0; background: #f0f6fa; padding: 8px 14px;
+    margin-top: 15px;
+  }
+  .bodyvision-print-difference p {
+    display: flex; justify-content: space-between; margin: 7px 0;
+  }
+  .bodyvision-print-sheet footer {
+    margin-top: 24px; padding-top: 10px; border-top: 1px solid #d5e0e7;
+    color: #475869; font-size: 9pt;
+  }
+  .bodyvision-print-sheet footer p { margin: 8px 0; }
+}
