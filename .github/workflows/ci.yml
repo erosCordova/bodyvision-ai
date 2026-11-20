@@ -207,7 +207,7 @@ jobs:
           DELETE FROM synthetic_capture_objects
           WHERE id='90000000-0000-4000-8000-0000000000bb';
           SQL
-          docker compose start backend
+          docker compose up -d --wait --wait-timeout 120 backend
           python3 scripts/check_local_installation.py --json
       - name: Recreate local containers while preserving the application volume
         run: |
