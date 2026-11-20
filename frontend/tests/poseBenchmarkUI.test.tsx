@@ -78,6 +78,31 @@ describe("five-run synthetic benchmark UI", () => {
     expect(detectPoseOnDevice).toHaveBeenLastCalledWith(image);
   });
 
+  it("offers a voluntary technical JSON report only after a confirmed local measurement", async () => {
+    vi.mocked(detectPoseOnDevice).mockResolvedValue(notFound);
+    const session = {
+      detect: vi.fn(() => notFound),
+      release: vi.fn(),
+    };
+    vi.mocked(createPoseInferenceSession).mockResolvedValue(session);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<PoseReview file={new File(["fictional"], "atlas-ficticio.png", { type: "image/png" })}
+      review={review} />);
+    fireEvent.click(screen.getByRole("button", { name: "Detectar pose con IA" }));
+    await screen.findByText("No se detectó una pose humana.");
+    expect(screen.queryByRole("button", { name: "Descargar informe técnico (JSON)" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que esta imagen es ficticia/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Medir rendimiento (5 repeticiones)" }));
+    await screen.findByLabelText("Resumen de rendimiento local");
+    fireEvent.click(screen.getByRole("button", { name: "Descargar informe técnico (JSON)" }));
+    expect(click).toHaveBeenCalledOnce();
+    const urls = vi.mocked(URL.createObjectURL).mock.calls;
+    expect(urls).toHaveLength(2);
+    expect(urls[1][0]).toBeInstanceOf(Blob);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  });
+
   it("allows canceling a running evaluation and drops late image inference", async () => {
     const stalled = pendingSession();
     const detect = vi.fn(() => notFound);
