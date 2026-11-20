@@ -3,6 +3,8 @@ import type { Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { dateTime } from "../../components/ui/States";
 import { chronologicalMeasurements, compareMeasurements } from "./measurementComparison";
+import { buildComparisonReport, type ComparisonReport } from "./comparisonReport";
+import { ComparisonPrintView } from "./ComparisonPrintView";
 
 const formatSigned = (value: number) =>
   new Intl.NumberFormat("es-PE", {
@@ -13,9 +15,19 @@ const formatSigned = (value: number) =>
 export function MeasurementComparison({
   rows,
   unit,
+  profileId,
+  profileCode,
+  synthetic,
+  metricCode,
+  metricLabel,
 }: {
   rows: Measurement[];
   unit: string;
+  profileId: string;
+  profileCode: string;
+  synthetic: boolean;
+  metricCode: string;
+  metricLabel: string;
 }) {
   const ordered = useMemo(() => chronologicalMeasurements(rows), [rows]);
   const [fromId, setFromId] = useState(() => ordered[0]?.id ?? "");
@@ -29,6 +41,19 @@ export function MeasurementComparison({
   }, [ordered, fromId, toId]);
 
   const result = compareMeasurements(ordered, fromId, toId);
+  const [printReport, setPrintReport] = useState<ComparisonReport | null>(null);
+  const [printError, setPrintError] = useState("");
+  const preparePrint = () => {
+    const report = buildComparisonReport(ordered, fromId, toId, {
+      profileId, profileCode, synthetic, metricCode, metricLabel, unit,
+    }, new Date());
+    if (!report) {
+      setPrintError("No se pudo preparar el informe. Revisa los registros seleccionados.");
+      return;
+    }
+    setPrintError("");
+    setPrintReport(report);
+  };
 
   return (
     <section className="panel chart-panel" aria-labelledby="measurement-comparison-title">
@@ -91,6 +116,15 @@ export function MeasurementComparison({
               </article>
             </div>
           )}
+          <div className="record-report-actions">
+            <button type="button" disabled={!result || !synthetic}
+              onClick={preparePrint}>Preparar informe PDF</button>
+            <small className="muted">Exportación local para expedientes ficticios; el navegador permite guardar como PDF.
+              No se exportan simulaciones ni registros sustituidos.</small>
+          </div>
+          {printError && <p role="alert">{printError}</p>}
+          {printReport && <ComparisonPrintView report={printReport}
+            onClose={() => setPrintReport(null)}/>}
         </>
       )}
     </section>
