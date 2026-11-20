@@ -16,7 +16,19 @@ function pngDimensions(width: number, height: number): Uint8Array {
   view.setUint32(20, height);
   return header;
 }
-const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+function jpegDimensions(width: number, height: number): Uint8Array {
+  // SOI, APP1 metadata segment, baseline SOF0, EOI.
+  return new Uint8Array([
+    0xff, 0xd8,
+    0xff, 0xe1, 0, 6, 1, 2, 3, 4,
+    0xff, 0xc0, 0, 11, 8,
+    (height >> 8) & 255, height & 255,
+    (width >> 8) & 255, width & 255,
+    1, 1, 0x11, 0,
+    0xff, 0xd9,
+  ]);
+}
+const jpeg = jpegDimensions(1024, 1024);
 const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
 const file = (bytes: Uint8Array, type: string) => {
   const input = new File([bytes.slice().buffer as ArrayBuffer], "ficticia", { type });
@@ -48,6 +60,40 @@ describe("pose input gates (synthetic local analysis only)", () => {
     await expect(validatePoseImageFile(file(new Uint8Array(), "image/png"))).rejects.toThrow(/validación/);
     await expect(validatePoseImageFile(file(png, "text/plain"))).rejects.toThrow(/validación/);
     await expect(validatePoseImageFile(file(png.slice(0, 3), "image/png"))).rejects.toThrow(/formato/);
+  });
+
+  it("rejects JPEG SOF dimensions exceeding local processing budgets before decoding", async () => {
+    await expect(validatePoseImageFile(file(jpegDimensions(8000, 8000), "image/jpeg")))
+      .rejects.toThrow(/dimensiones/);
+    await expect(validatePoseImageFile(file(jpegDimensions(16001, 100), "image/jpeg")))
+      .rejects.toThrow(/dimensiones/);
+    await expect(validatePoseImageFile(file(jpegDimensions(0, 400), "image/jpeg")))
+      .rejects.toThrow(/dimensiones/);
+  });
+
+  it("accepts a JPEG frame at the 32 MP budget and ignores valid APP metadata", async () => {
+    await expect(validatePoseImageFile(file(jpegDimensions(16000, 2000), "image/jpeg")))
+      .resolves.toBeUndefined();
+  });
+
+  it("rejects JPEGs with no SOF, truncated frame fields or invalid segment lengths", async () => {
+    await expect(validatePoseImageFile(file(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), "image/jpeg")))
+      .rejects.toThrow(/formato|JPEG/);
+    await expect(validatePoseImageFile(file(jpeg.slice(0, 17), "image/jpeg")))
+      .rejects.toThrow(/JPEG/);
+    const malformed = jpeg.slice();
+    malformed[4] = 0;
+    malformed[5] = 1;
+    await expect(validatePoseImageFile(file(malformed, "image/jpeg")))
+      .rejects.toThrow(/JPEG/);
+  });
+
+  it("rejects JPEG metadata extending beyond the bounded header scan", async () => {
+    const metadata = new Uint8Array(65533);
+    const oversized = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff,
+      ...metadata, 0xff, 0xe2, 0xff, 0xff, ...metadata, ...jpeg.slice(2)]);
+    await expect(validatePoseImageFile(file(oversized, "image/jpeg")))
+      .rejects.toThrow(/JPEG/);
   });
 
   it("rejects oversized PNG IHDR before any browser image decoding", async () => {

@@ -29,3 +29,18 @@ La detección mantiene la fotografía dentro del navegador. Al finalizar o falla
 5. Mantener habilitación restringida a demo sintética hasta cerrar seguridad/privacidad y los gates de validación.
 
 **No se ha ejecutado una validación clínica ni se ha certificado precisión por estas pruebas.**
+
+## Control de tamaño JPEG antes de decodificar
+
+La validación local examina los marcadores JPEG hasta hallar un segmento SOF que
+contenga ancho y alto. Solo analiza un prefijo acotado de 128 KiB; si no aparece
+SOF dentro de ese límite o la estructura es inválida, el archivo se rechaza,
+antes de llamar a `createImageBitmap` o inicializar MediaPipe. Se incluyen
+segmentos APP/EXIF que preceden al SOF y variantes habituales de JPEG con SOF.
+Los límites de dimensiones siguen siendo 16 000 px por lado y 32 MP.
+
+Esta decisión puede rechazar algunos JPEG legítimos con metadatos muy extensos;
+se prefiere el rechazo explícito frente a una decodificación no acotada en la
+demostración sintética. WebP conserva los controles de firma y tamaño del archivo,
+y la validación de dimensiones después de la decodificación. Ningún control
+sustituye la revisión de privacidad y seguridad antes de aceptar fotos reales.
