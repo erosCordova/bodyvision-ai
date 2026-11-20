@@ -48,7 +48,7 @@ export const phaseAssessment: ProjectPhase[] = [
     pending: "PDF de servidor con firma/autenticidad y auditoría de exportaciones, autorización para datos reales, validación longitudinal con fuentes completas y evaluación clínica de la interpretación. La exportación local solo admite expedientes ficticios.",
     milestone: "Informes reproducibles con fuentes y pruebas." },
   { id: 8, name: "Simulación", progress: 80,
-    completed: "Peso/estatura sobre el mismo 3D, deformación regional, malla y comparación; escenarios sintéticos versionados en PostgreSQL, con RLS, historial inmutable y restauración en el visor.",
+    completed: "Peso/estatura sobre el mismo 3D, deformación regional, malla y comparación; escenarios sintéticos versionados en PostgreSQL, con RLS, historial inmutable y restauración en el visor. Implementación reciente: peso de referencia incorporado a la forma gráfica, comparación con referencia coherente y tres escenarios visuales rápidos reversibles; pruebas de navegador añadidas, pendientes de resultado CI.",
     pending: "Evaluación morfológica comparativa, autorización real de usuarios, consentimiento, pruebas con dispositivos y operaciones seguras de despliegue.",
     milestone: "Escenarios trazables sin sobrescribir observaciones." },
   { id: 9, name: "Producción", progress: 30,
