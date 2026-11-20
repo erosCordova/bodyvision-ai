@@ -28,7 +28,8 @@ test("the compiled Docker UI retains corrected observations and original version
   });
   await page.getByRole("button", { name: "Cerrar diálogo", exact: true }).click();
   await page.getByRole("button", { name: "Resumen", exact: true }).click();
-  await expect(page.getByText("21.914", { exact: true })).toBeVisible();
+  await expect(page.locator(".derived-card strong").filter({ hasText: "21.914" }))
+    .toBeVisible();
   await expect(page.getByText("DERIVADO", { exact: true })).toBeVisible();
   // Re-open the persisted route directly, exercising nginx's SPA fallback.
   await page.goto(profileUrl);
