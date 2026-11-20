@@ -107,27 +107,35 @@ sintética.
 ## Custodia y rotación de la clave cifrante
 
 La semilla TOTP se cifra mediante la clave `MFA_ENCRYPTION_KEY` externa.
-**No** sustituir dicha clave mientras existan semillas cifradas con ella:
-las cuentas perderían su autenticación de dos factores. La rotación real
-requiere un flujo transaccional de recifrado por lotes, auditoría, respaldo
-cifrado y verificación de rollback; aún no existe. Está prohibido introducir
-la clave en el repositorio, en logs, o en capturas de interfaz.
+**Nunca** sustituirla sin recifrar todas las semillas. En local/test
+sintético existe la herramienta de rotación fuera de línea
+`app.maintenance.rotate_synthetic_mfa_key`, con verificación previa de
+todas las semillas, bloqueo de escrituras, actualización y auditoría en
+una sola transacción. Superó las pruebas integrales de CI 44827504437;
+véase `docs/qa/PHASE_3_MFA_KEY_ROTATION.md`.
+No admite datos reales, Neon ni operación sin detener las API.
+En producción siguen pendientes respaldo cifrado comprobado, custodia
+externa, recuperación ante desastre, aprobación humana y pruebas de rollback
+con claves reales. Las claves no deben aparecer en el repositorio, en logs
+ni en capturas de interfaz.
 
 ## Alta administrativa inicial
 
 El alta inicial de un administrador **no** se expone como endpoint de
-autoregistro. Las cuentas de prueba se provisionan solamente en la base
-desechable del CI, y la API de provisión de usuarios no puede otorgar el
-rol `administrator`. La identidad legal y autorización del primer
-administrador de una organización real deberán verificarse por un proceso
-externo aprobado antes de habilitar el sistema en producción.
+autorregistro. Existe un procedimiento manual, restringido a PostgreSQL
+local y organizaciones ficticias, en
+`app.maintenance.bootstrap_synthetic_admin`, con rol migrador, unicidad
+por organización y auditoría encadenada. Las pruebas de CI están aprobadas.
+La API de provisión de usuarios no puede otorgar el rol `administrator`.
+La identidad legal y la autorización del administrador de una organización
+real requieren un proceso externo aprobado antes de habilitar producción.
 
 ## Pendiente antes de producción
 
-**No considerar la seguridad clínica completa.** Falta un mecanismo verificable
-de alta inicial del administrador, recuperación asistida sin códigos de respaldo, notificaciones de seguridad,
-pruebas de amenazas de la implementación TOTP en navegador, privacidad y
-cumplimiento legal, continuidad de claves y recuperación ante desastre.
+**No considerar la seguridad clínica completa.** Faltan alta verificada de
+administradores reales, recuperación asistida sin códigos de respaldo,
+notificaciones de seguridad, pruebas de amenazas independientes, privacidad
+y cumplimiento legal, custodia externa de claves y recuperación ante desastre.
 
 El registro inicial con solo contraseña es adecuado únicamente para cuentas
 ficticias ya provisionadas en un entorno controlado. No sirve como método

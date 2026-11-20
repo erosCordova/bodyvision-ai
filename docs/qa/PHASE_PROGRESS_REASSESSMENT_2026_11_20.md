@@ -42,3 +42,21 @@ contenedor; una ejecución CI integral nueva debe aprobarse para cerrar
 la regresión final. No confundir ese hecho con una aprobación completa previa.
 
 No se ha modificado `main`, la base alojada ni la demo pública.
+
+## Incremento de identidad tras cierre de rotación MFA local
+
+La Fase 3 se actualiza de **80 % a 85 %** tras la aceptación técnica
+del procedimiento fuera de línea que recifra todas las semillas ficticias,
+verifica la clave nueva y registra auditoría en una transacción PostgreSQL.
+El commit de la implementación superó los jobs
+`native-checks`, `windows-scripts` y `docker-smoke` en
+[GitHub Actions 44827504437](https://github.com/erosCordova/bodyvision-ai/actions/runs/44827504437).
+También se corrigió la documentación que antes decía que no había ningún
+procedimiento de rotación.
+
+El resto de fases no varía: el promedio pasa de **77,5 % a 78,0 %**, por lo
+que el porcentaje **global visible continúa en 78 %**. No es un
+certificado de seguridad, custodia de claves, aprobación clínica ni
+autorización de usuarios reales. Se mantienen como gates pendientes la
+identidad legal, recuperación asistida, respaldo/custodia externos y
+pruebas de recuperación ante desastre.

@@ -162,3 +162,32 @@ def test_rotation_fails_before_writing_anything_when_one_cipher_is_invalid(local
         {"a": first_org, "b": second_org},
     ).scalar_one()
     assert audited == 0
+
+
+def test_rotation_denies_active_sessions_without_writing(local_owner):
+    old_key, new_key = generate_mfa_encryption_key(), generate_mfa_encryption_key()
+    original = encrypt_totp_seed(new_totp_seed(), old_key)
+    organization, user = add_test_factor(local_owner, original)
+    local_owner.execute(
+        text(
+            "INSERT INTO public.auth_sessions "
+            "(id,organization_id,user_id,token_sha256,expires_at) "
+            "VALUES (:id,:org,:user,:digest,now()+interval '1 hour')"
+        ),
+        {"id": uuid4(), "org": organization, "user": user, "digest": "c" * 64},
+    )
+    with pytest.raises(RotationDenied, match="sesiones MFA activas"):
+        rotate_synthetic_mfa_key(local_owner, old_key, new_key, environment=ALLOWED)
+    current = local_owner.execute(
+        text(
+            "SELECT encrypted_totp_seed FROM public.private_mfa_credentials "
+            "WHERE organization_id=:org AND user_id=:user"
+        ),
+        {"org": organization, "user": user},
+    ).scalar_one()
+    assert current == original
+    events = local_owner.execute(
+        text("SELECT count(*) FROM public.security_audit_events WHERE organization_id=:org"),
+        {"org": organization},
+    ).scalar_one()
+    assert events == 0

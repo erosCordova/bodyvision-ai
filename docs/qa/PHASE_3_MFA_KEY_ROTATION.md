@@ -1,6 +1,8 @@
 # Fase 3 — Rotación fuera de línea de claves TOTP ficticias
 
-Estado: **implementación aislada, pendiente de validación integral de CI**.
+Estado: **validación automatizada integral aprobada** en la ejecución
+[44827504437](https://github.com/erosCordova/bodyvision-ai/actions/runs/44827504437).
+No se ha ejecutado una rotación sobre datos reales.
 No es un sistema de gestión de claves para pacientes ni autoriza producción.
 
 ## Procedimiento y controles
