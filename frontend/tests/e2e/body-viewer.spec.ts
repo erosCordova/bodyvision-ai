@@ -380,6 +380,26 @@ test("self-hosted pose model analyses a screenshot of the licensed synthetic ana
     .toBeVisible();
   await expect(page.getByRole("list", { name: "Visibilidad por zonas corporales" }))
     .toBeVisible();
+  // The export is generated only by this click and contains no photo or landmarks.
+  const poseReportDownload = page.waitForEvent("download");
+  await result.getByRole("button", { name: "Descargar resumen de revisión de pose (JSON)" }).click();
+  const poseReport = await poseReportDownload;
+  expect(poseReport.suggestedFilename()).toBe("bodyvision-revision-pose-sintetica.json");
+  const poseReportFile = await poseReport.path();
+  expect(poseReportFile).not.toBeNull();
+  const reportJson = readFileSync(poseReportFile!, "utf8");
+  const reviewReport = JSON.parse(reportJson) as Record<string, unknown>;
+  expect(reviewReport).toMatchObject({
+    schemaVersion: 1,
+    reportKind: "bodyvision-synthetic-pose-review",
+    clinicalAccuracyValidated: false,
+    containsPhoto: false,
+    containsLandmarks: false,
+    containsIdentifiers: false,
+    pose: { detected: true },
+  });
+  expect(reportJson).not.toMatch(/atlas-anatomico-sintetico|data:image|fileName|"landmarks":|rawLandmarks|userAgent|deviceId/i);
+
   const threshold = page.getByRole("slider", { name: "Umbral de visibilidad de landmarks" });
   await expect(threshold).toHaveValue("0.5");
   await threshold.fill("0.9");
