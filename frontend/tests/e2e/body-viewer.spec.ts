@@ -133,6 +133,22 @@ test("weight morph and polygon overlay change the rendered 3D canvas", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("quick volume scenarios update the same avatar and remain reversible", async ({ page }) => {
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  await page.getByRole("button", { name: "Mayor volumen +15%" }).click();
+  await expect(slider).toHaveValue("15");
+  await expect(page.getByRole("button", { name: "Mayor volumen +15%" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Menor volumen −15%" }).click();
+  await expect(slider).toHaveValue("-15");
+  await page.getByRole("button", { name: "Referencia 0%" }).click();
+  await expect(slider).toHaveValue("0");
+  await expect(page.getByRole("button", { name: "Referencia 0%" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});
+
 test("reference-weight editing deforms one 3D avatar and split view preserves the matching baseline", async ({ page }) => {
   test.setTimeout(110000);
   const errors: string[] = [];
