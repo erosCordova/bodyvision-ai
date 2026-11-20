@@ -1,3 +1,5 @@
+import { validatePoseImageDimensions, validatePoseImageFile } from "./poseInputValidation";
+
 /**
  * On-device, non-clinical capture preflight. No image bytes leave the browser.
  * These heuristics evaluate file integrity, lighting and resolution only.
@@ -92,17 +94,10 @@ export async function reviewLocalCapture(file: File): Promise<CaptureReview> {
   if (file.size === 0 || file.size > 10 * 1024 * 1024) {
     throw new Error("La imagen debe ocupar más de 0 bytes y menos de 10 MB.");
   }
-  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const signatureValid =
-    (file.type === "image/jpeg" && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) ||
-    (file.type === "image/png" && header[0] === 0x89 && header[1] === 0x50 &&
-      header[2] === 0x4e && header[3] === 0x47 && header[4] === 0x0d) ||
-    (file.type === "image/webp" &&
-      String.fromCharCode(...header.slice(0, 4)) === "RIFF" &&
-      String.fromCharCode(...header.slice(8, 12)) === "WEBP");
-  if (!signatureValid) {
-    throw new Error("El contenido del archivo no corresponde al formato declarado.");
-  }
+  // The capture preflight and pose inference share the same pre-decode budget:
+  // PNG IHDR, JPEG SOF and WebP VP8/VP8L/VP8X dimensions are inspected first.
+  // A small compressed file may otherwise decompress into an unsafe image.
+  await validatePoseImageFile(file);
 
   let bitmap: ImageBitmap;
   try {
@@ -110,22 +105,28 @@ export async function reviewLocalCapture(file: File): Promise<CaptureReview> {
   } catch {
     throw new Error("No se pudo decodificar la imagen seleccionada.");
   }
+  let canvas: HTMLCanvasElement | null = null;
+  let ctx: CanvasRenderingContext2D | null = null;
   try {
-    if (!bitmap.width || !bitmap.height ||
-      bitmap.width > 16000 || bitmap.height > 16000) {
-      throw new Error("Las dimensiones de la imagen no son compatibles.");
-    }
+    // A decoder can disagree with the header: verify actual decoded dimensions.
+    validatePoseImageDimensions(bitmap.width, bitmap.height);
     const factor = Math.min(1, 256 / Math.max(bitmap.width, bitmap.height));
     const sampleWidth = Math.max(1, Math.round(bitmap.width * factor));
     const sampleHeight = Math.max(1, Math.round(bitmap.height * factor));
-    const canvas = document.createElement("canvas");
+    canvas = document.createElement("canvas");
     canvas.width = sampleWidth;
     canvas.height = sampleHeight;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) throw new Error("Este navegador no permite revisar la imagen localmente.");
     ctx.drawImage(bitmap, 0, 0, sampleWidth, sampleHeight);
     const sample = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
-    const result = assessCapturePixels(sampleWidth, sampleHeight, sample.data);
+    let result: CaptureReview;
+    try {
+      result = assessCapturePixels(sampleWidth, sampleHeight, sample.data);
+    } finally {
+      // Best effort: clear the temporary JS pixel copy after statistical review.
+      sample.data.fill(0);
+    }
     const checks = result.checks.map(check =>
         check.id !== "resolution" && check.id !== "orientation"
           ? check
@@ -150,6 +151,13 @@ export async function reviewLocalCapture(file: File): Promise<CaptureReview> {
       passed: checks.every(check => check.passed),
     };
   } finally {
+    // Free temporary surfaces also when sampling or context initialization fails.
+    // Browsers may retain additional internal copies; this is not secure erasure.
+    if (canvas) {
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 0;
+      canvas.height = 0;
+    }
     bitmap.close();
   }
 }

@@ -79,6 +79,34 @@ test("capture rejects a disguised image without uploading it", async ({ page }) 
   })).toHaveCount(0);
 });
 
+test("capture refuses a compressed 64 MP PNG before decoding or transferring", async ({ page }) => {
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto("/capture");
+  await page.getByRole("checkbox", {
+    name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
+  }).check();
+  const header = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+    0, 0, 0x1f, 0x40, 0, 0, 0x1f, 0x40,
+  ]);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "cabecera-grande-ficticia.png",
+    mimeType: "image/png",
+    buffer: header,
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    "Las dimensiones de la fotografía exceden los límites de análisis local",
+  );
+  await expect(page.getByRole("link", {
+    name: "Ver control de calidad en el módulo de análisis",
+  })).toHaveCount(0);
+  expect(writes).toEqual([]);
+});
+
 test("camera requires consent and reports a denied permission without uploading", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "mediaDevices", {
