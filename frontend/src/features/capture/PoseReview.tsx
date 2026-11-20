@@ -178,7 +178,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
             un valor garantizado ni la precisión clínica. No se mide memoria ni temperatura.</small>
         </div>}
       </section>}
-      {state === "failed" && <p role="alert" className="enterprise-pose-error">{failure}</p>
+      {state === "failed" && <p role="alert" className="enterprise-pose-error">{failure}</p>}
       {state === "ready" && estimate && quality && (
         <div className="enterprise-pose-result" aria-live="polite">
           {estimate.found ? (
