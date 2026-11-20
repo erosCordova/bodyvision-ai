@@ -855,7 +855,7 @@ export function createAnatomyScene(
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
   let capturingSnapshot = false;
-  const capturePng = async (): Promise<Blob> => {
+  const capturePng = async (portraitForPose = false): Promise<Blob> => {
     if (disposed || contextUnavailable || !canvas.isConnected) {
       throw new Error("Visor 3D no disponible");
     }
@@ -881,7 +881,7 @@ export function createAnatomyScene(
       }
       // The 2D matte is applied only to this transient snapshot. The visual
       // WebGL canvas retains transparent backgrounds before and after capture.
-      return await captureOpaqueAtlasPng(canvas);
+      return await captureOpaqueAtlasPng(canvas, portraitForPose);
     } finally {
       capturingSnapshot = false;
       // Restore user-selected fluid/high ratio even on a failed PNG export.

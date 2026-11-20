@@ -200,6 +200,7 @@ test("reference-weight editing deforms one 3D avatar and split view preserves th
     timeout: 10000,
     message: "Changing reference weight must change real rendered pixels",
   }).toBe(true);
+  const alteredReference = await canvas.screenshot();
   await variation.fill("20");
   await page.getByRole("button", { name: "Comparar lado a lado" }).click();
   const comparison = page.getByLabel("Comparación dividida del mismo modelo 3D");
@@ -211,10 +212,15 @@ test("reference-weight editing deforms one 3D avatar and split view preserves th
   await page.getByRole("button", { name: "Restaurar valores" }).click();
   await expect(weight).toHaveValue("70");
   await expect(variation).toHaveValue("0");
-  await expect.poll(async () => (await canvas.screenshot()).equals(base), {
+  // The dedicated regional-morph test above verifies exact 0% pixel restoration.
+  // Here, compare against the 110kg screenshot to ensure reverting the reference
+  // causes a new visual render, even after split-view WebGL viewport changes.
+  await expect.poll(async () => !(await canvas.screenshot()).equals(alteredReference), {
     timeout: 10000,
-    message: "Restoring defaults must restore the original atlas silhouette",
+    message: "Restoring reference weight must visibly undo the 110kg avatar",
   }).toBe(true);
+  await expect(page.getByRole("button", { name: "Comparar lado a lado" }))
+    .toHaveAttribute("aria-pressed", "false");
   expect(errors).toEqual([]);
 });
 

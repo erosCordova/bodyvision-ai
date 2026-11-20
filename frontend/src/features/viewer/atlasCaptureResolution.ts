@@ -46,3 +46,23 @@ export function planAtlasCapture(
   }
   return { pixelRatio, width, height };
 }
+
+/**
+ * Preserve every rendered pixel of the existing synthetic atlas during a
+ * portrait handoff. Letterboxing on an opaque matte changes only the empty
+ * image margins, never the person, mesh, camera or shader.
+ *
+ * Strict limits avoid allocating giant images on ultrawide displays. The
+ * ordinary PNG download uses the original (unletterboxed) aspect ratio.
+ */
+export function planPortraitAtlasHandoff(width: number, height: number) {
+  if (![width, height].every(Number.isSafeInteger) || width < 1 || height < 1) {
+    throw new Error("La captura 3D no tiene dimensiones válidas.");
+  }
+  const targetHeight = height >= width ? height : Math.ceil(width * 1.06);
+  if (width > ATLAS_CAPTURE_MAX_EDGE || targetHeight > ATLAS_CAPTURE_MAX_EDGE ||
+      width * targetHeight > ATLAS_CAPTURE_MAX_PIXELS) {
+    throw new Error("El encuadre es demasiado horizontal para una captura vertical segura.");
+  }
+  return { width, height: targetHeight, offsetY: Math.floor((targetHeight - height) / 2) };
+}

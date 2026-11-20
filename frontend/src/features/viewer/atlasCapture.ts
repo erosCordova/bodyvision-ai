@@ -11,24 +11,29 @@
 // pale skin material on a small synthetic screenshot. This is a *flat matte*:
 // no contrast filter, no per-pixel subject processing and no alteration to the
 // interactive WebGL material, lighting, background or camera.
+import { planPortraitAtlasHandoff } from "./atlasCaptureResolution";
+
 export const ATLAS_CAPTURE_MATTE = "#344e68";
 
-export async function captureOpaqueAtlasPng(source: HTMLCanvasElement): Promise<Blob> {
+export async function captureOpaqueAtlasPng(source: HTMLCanvasElement, portraitForPose = false): Promise<Blob> {
   if (!Number.isSafeInteger(source.width) || !Number.isSafeInteger(source.height) ||
       source.width < 1 || source.height < 1 ||
       source.width > 16000 || source.height > 16000 ||
       source.width * source.height > 32_000_000) {
     throw new Error("Dimensiones del atlas sintético no compatibles para capturar.");
   }
+  const layout = portraitForPose
+    ? planPortraitAtlasHandoff(source.width, source.height)
+    : { width: source.width, height: source.height, offsetY: 0 };
   const snapshot = document.createElement("canvas");
-  snapshot.width = source.width;
-  snapshot.height = source.height;
+  snapshot.width = layout.width;
+  snapshot.height = layout.height;
   const ctx = snapshot.getContext("2d", { alpha: false });
   try {
     if (!ctx) throw new Error("No se pudo preparar el lienzo local de captura.");
     ctx.fillStyle = ATLAS_CAPTURE_MATTE;
     ctx.fillRect(0, 0, snapshot.width, snapshot.height);
-    ctx.drawImage(source, 0, 0);
+    ctx.drawImage(source, 0, layout.offsetY);
     return await new Promise<Blob>((resolve, reject) => {
       snapshot.toBlob(blob => {
         if (blob && blob.size > 0) resolve(blob);

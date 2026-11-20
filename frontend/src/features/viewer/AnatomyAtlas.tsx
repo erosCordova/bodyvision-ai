@@ -432,7 +432,7 @@ export function AnatomyAtlas() {
     setCaptureError("");
     let captureStage: "render" | "validate" | "handoff" = "render";
     try {
-      const snapshot = await controller.current.capturePng();
+      const snapshot = await controller.current.capturePng(true);
       if (snapshot.size > 10 * 1024 * 1024) {
         throw new Error("El archivo de la captura 3D excede 10 MB.");
       }

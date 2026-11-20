@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
-  planAtlasCapture, ATLAS_CAPTURE_MAX_EDGE, ATLAS_CAPTURE_MAX_PIXELS,
+  planAtlasCapture, planPortraitAtlasHandoff, ATLAS_CAPTURE_MAX_EDGE, ATLAS_CAPTURE_MAX_PIXELS,
   ATLAS_CAPTURE_SHORT_SIDE,
 } from "../src/features/viewer/atlasCaptureResolution";
 
 describe("full-detail re-render for synthetic anatomical snapshots", () => {
+  it("pads a landscape rendered atlas to portrait without rescaling source pixels", () => {
+    expect(planPortraitAtlasHandoff(979, 800)).toEqual({
+      width: 979, height: 1038, offsetY: 119,
+    });
+    expect(planPortraitAtlasHandoff(800, 1067)).toEqual({
+      width: 800, height: 1067, offsetY: 0,
+    });
+    expect(planPortraitAtlasHandoff(800, 800)).toEqual({
+      width: 800, height: 800, offsetY: 0,
+    });
+  });
+  it("rejects impossible portrait margins instead of allocating oversized canvases", () => {
+    expect(() => planPortraitAtlasHandoff(2400, 800)).toThrow(/demasiado horizontal/);
+    expect(() => planPortraitAtlasHandoff(0, 800)).toThrow(/dimensiones/);
+    expect(() => planPortraitAtlasHandoff(Number.NaN, 800)).toThrow(/dimensiones/);
+  });
+
   it("raises mobile GPU render pixels above the photographic 720px gate, not by resampling", () => {
     const plan = planAtlasCapture(390, 574, 1);
     expect(plan.width).toBeGreaterThanOrEqual(ATLAS_CAPTURE_SHORT_SIDE);

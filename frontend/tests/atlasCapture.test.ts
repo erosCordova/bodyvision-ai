@@ -30,6 +30,23 @@ describe("synthetic opaque atlas snapshot", () => {
     expect(input.height).toBe(1100);
   });
 
+  it("letterboxes the landscape atlas for pose review without stretching the actual scene", async () => {
+    const input = document.createElement("canvas");
+    input.width = 979; input.height = 800;
+    const fillRect = vi.fn(), drawImage = vi.fn(), clearRect = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      fillStyle: "", fillRect, drawImage, clearRect,
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation(callback => callback(new Blob(["synthetic"], { type: "image/png" })));
+    await captureOpaqueAtlasPng(input, true);
+    expect(fillRect).toHaveBeenCalledWith(0, 0, 979, 1038);
+    expect(drawImage).toHaveBeenCalledWith(input, 0, 119);
+    expect(clearRect).toHaveBeenCalledWith(0, 0, 979, 1038);
+    expect(input.width).toBe(979);
+    expect(input.height).toBe(800);
+  });
+
   it("creates a flat contrasting studio matte for a small synthetic silhouette without changing quality gates", () => {
     // A small, explicit 10%-occupancy fictitious skin rectangle, not a clinical
     // sample or mocked pose. The untouched preflight evaluates real RGB pixels.
