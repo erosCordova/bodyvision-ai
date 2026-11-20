@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { randomUUID } from "node:crypto";
 
 test("create, measure, correct, inspect versions, derive and isolate workspaces", async ({
   page,
@@ -91,6 +92,58 @@ test("create, measure, correct, inspect versions, derive and isolate workspaces"
   await expect(
     page.getByRole("heading", { name: "Expediente ficticio E2E", exact: true }),
   ).not.toBeVisible();
+});
+
+test("correcting a value preserves sub-minute time unless the Lima date is explicitly edited", async ({
+  page, request,
+}) => {
+  const headers = { "X-Workspace-ID": "10000000-0000-4000-8000-000000000001" };
+  const created = await request.post("/api/v1/profiles", {
+    headers, data: { display_name: "Corrección precisa ficticia", birth_year: 1995 },
+  });
+  expect(created.status()).toBe(201);
+  const profile = await created.json();
+  const recorded = await request.post(`/api/v1/profiles/${profile.id}/measurements`, {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: { metric_code: "weight", value: 72, unit: "kg", method: "manual",
+      measured_at: "2026-10-01T03:04:56.789123Z" },
+  });
+  expect(recorded.status()).toBe(201);
+  const original = await recorded.json();
+  await page.goto(`/profiles/${profile.id}?tab=measurements`);
+  await expect(page.getByRole("cell", { name: "72 kg", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Corregir", exact: true }).click();
+  await expect(page.getByLabel("Fecha y hora (Lima)")).toHaveValue("2026-09-30T22:04");
+  await page.getByRole("spinbutton", { name: "Valor (kg)", exact: true }).fill("71");
+  await page.getByRole("textbox", { name: "Motivo de la corrección", exact: true })
+    .fill("Ajustar solo el valor ficticio");
+  const saving = page.waitForResponse(response => response.request().method() === "PATCH"
+    && response.url().endsWith(`/measurements/${original.id}`));
+  await page.getByRole("button", { name: "Guardar corrección", exact: true }).click();
+  const saved = await saving;
+  expect(saved.status()).toBe(201);
+  const corrected = await saved.json();
+  expect(corrected.measured_at).toBe(original.measured_at);
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("cell", { name: "71 kg", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Corregir", exact: true }).click();
+  await page.getByLabel("Fecha y hora (Lima)").fill("2026-10-02T10:20");
+  await page.getByRole("textbox", { name: "Motivo de la corrección", exact: true })
+    .fill("Cambiar expresamente la fecha ficticia");
+  const rescheduling = page.waitForResponse(response => response.request().method() === "PATCH"
+    && response.url().endsWith(`/measurements/${corrected.id}`));
+  await page.getByRole("button", { name: "Guardar corrección", exact: true }).click();
+  const rescheduled = await rescheduling;
+  expect(rescheduled.status()).toBe(201);
+  const final = await rescheduled.json();
+  expect(Date.parse(final.measured_at)).toBe(Date.parse("2026-10-02T10:20:00-05:00"));
+  const history = await request.get(`/api/v1/measurements/${original.id}/versions`, { headers });
+  expect(history.status()).toBe(200);
+  const versions = await history.json();
+  expect(versions.map((row: { measured_at: string }) => row.measured_at))
+    .toEqual([original.measured_at, original.measured_at, final.measured_at]);
+  expect(versions.map((row: { value: number }) => row.value)).toEqual([72, 71, 71]);
 });
 
 test("seeded dashboard, mobile layout and historical chart", async ({

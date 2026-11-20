@@ -57,14 +57,13 @@ export function MeasurementForm({
   const cache = useQueryClient();
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [confirmed, setConfirmed] = useState(false);
+  const originalLocalTime = correction ? limaInput(new Date(correction.measured_at)) : undefined;
   const form = useForm<Inputs>({
     resolver: zodResolver(schema),
     defaultValues: {
       metric_code: correction?.metric_code ?? metrics[0]?.code ?? "weight",
       value: correction?.value ?? undefined,
-      measured_at: limaInput(
-        correction ? new Date(correction.measured_at) : undefined,
-      ),
+      measured_at: originalLocalTime ?? limaInput(),
       method: correction?.method ?? "manual",
       instrument: correction?.instrument ?? "",
       notes: correction?.notes ?? "",
@@ -91,7 +90,10 @@ export function MeasurementForm({
         {
           ...values,
           unit: metric?.unit,
-          measured_at: `${data.measured_at}:00-05:00`,
+          // The minute-only field must not truncate an unchanged observation's
+          // seconds/microseconds. Preserve the API string, not a Date roundtrip.
+          measured_at: correction && data.measured_at === originalLocalTime
+            ? correction.measured_at : `${data.measured_at}:00-05:00`,
           instrument: data.instrument || null,
           notes: data.notes || null,
           outlier_confirmed: confirmed,
