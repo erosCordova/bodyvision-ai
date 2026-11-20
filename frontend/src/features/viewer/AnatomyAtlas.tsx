@@ -672,6 +672,32 @@ export function AnatomyAtlas() {
                      }} />
                    <span className="studio-sim-limits"><small>145 cm · más bajo</small><small>205 cm · más alto</small></span>
                  </label>
+                 <div className="studio-sim-presets" role="group" aria-label="Estaturas rápidas del modelo">
+                   <span>Estatura visual rápida</span>
+                   <div className="studio-sim-preset-buttons">
+                     {([
+                       { label: "Baja 155 cm", height: 155 },
+                       { label: "Referencia 175 cm", height: BASELINE_HEIGHT_CM },
+                       { label: "Alta 195 cm", height: 195 },
+                     ] as const).map(preset => (
+                       <button type="button" key={preset.height} aria-pressed={statureCm === preset.height}
+                         onClick={() => {
+                           setStatureCm(preset.height);
+                           setBaselinePreview(false);
+                         }}>{preset.label}</button>
+                     ))}
+                   </div>
+                   <small>El mismo cuerpo se escala verticalmente; no predice proporciones individuales.</small>
+                 </div>
+                 <div className="studio-sim-state" role="status" aria-label="Diferencia hipotética frente a la referencia">
+                   <span className="studio-sim-state-icon" aria-hidden="true">↔</span>
+                   <div>
+                     <strong>Diferencia del escenario frente a la referencia</strong>
+                     <p>Peso: {simulatedWeight >= referenceKg ? "+" : ""}{Math.round((simulatedWeight - referenceKg) * 10) / 10} kg
+                       {" · "}Estatura: {statureCm >= BASELINE_HEIGHT_CM ? "+" : ""}{statureCm - BASELINE_HEIGHT_CM} cm</p>
+                     <small>Solo visualización ficticia; estas cifras no representan una predicción de salud.</small>
+                   </div>
+                 </div>
                  {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
                 <p>La piel está oculta. Activa la superficie corporal para ver el cambio de volumen.</p>
                 <button onClick={() => {
