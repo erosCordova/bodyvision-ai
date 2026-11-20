@@ -146,6 +146,16 @@ test("quick volume scenarios update the same avatar and remain reversible", asyn
   await page.getByRole("button", { name: "Referencia 0%" }).click();
   await expect(slider).toHaveValue("0");
   await expect(page.getByRole("button", { name: "Referencia 0%" })).toHaveAttribute("aria-pressed", "true");
+  const visualLimit = page.getByRole("status", { name: "Límite gráfico de deformación" });
+  await expect(visualLimit).toHaveCount(0);
+  const referenceKg = page.getByRole("spinbutton", { name: "Peso de referencia (solo demostración)" });
+  await referenceKg.fill("200");
+  await slider.fill("30");
+  await expect(visualLimit).toContainText("Límite visual alcanzado");
+  await expect(visualLimit).toContainText("No representa una");
+  await slider.fill("0");
+  await expect(visualLimit).toHaveCount(0);
+  await referenceKg.fill("70");
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
 });
 

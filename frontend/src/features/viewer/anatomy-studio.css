@@ -483,3 +483,9 @@
 .studio-compare-delta{position:absolute;bottom:42px;left:50%;transform:translateX(-50%);
   background:#142d43df;color:#effaff;border:1px solid #5b91b1;border-radius:7px;
   padding:6px 10px;font-size:10px;white-space:nowrap;max-width:96%;overflow:hidden;text-overflow:ellipsis}
+
+/* Warn visibly when the existing synthetic shader reaches its geometric clamp.
+   This does not imply a physiological or clinical limit. */
+.studio-sim-warning{padding:10px 12px;border:1px solid #b98742;
+  background:#241f1c;color:#f7dfaf;border-radius:8px;font-size:11px;
+  line-height:1.55;margin:8px 0}

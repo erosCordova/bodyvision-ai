@@ -40,3 +40,21 @@ Pendiente para aceptación formal de Fase 8: benchmarking visual en un
 conjunto autorizado de modelos de referencia, GPU y teléfonos físicos,
 revisión de accesibilidad y privacidad, y aprobación de QA/producto.
 No debe elevarse el porcentaje de la fase por esta matriz aislada.
+
+
+## Advertencia del límite visual de deformación
+
+El mismo shader sintético limita los factores laterales y de profundidad a
+`0,60–1,40`. Se incorporó un indicador en el simulador cuando el perfil
+gráfico alcanza ese tope al aumentar el peso de referencia y el porcentaje.
+El cálculo utiliza las constantes del shader `regional-soft-tissue-v2`
+y muestra un aviso no clínico, sin modificar el radio real de la malla ni
+recalcular datos de expedientes.
+
+El detector toma muestras representativas de las regiones regionales y
+ambas direcciones (frontal/posterior); **no es una prueba exhaustiva de
+cada vértice**. Sus tests cubren el máximo de referencia y variación,
+el caso sin saturación y valores no finitos; Playwright comprueba que
+la advertencia aparece al pasar a 200 kg y +30 %, y desaparece al
+restablecer la variación a 0 %. Es un límite **del renderizador**,
+nunca del cuerpo humano.

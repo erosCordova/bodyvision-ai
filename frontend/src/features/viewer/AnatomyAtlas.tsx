@@ -17,6 +17,7 @@ import { reviewLocalCapture } from "../capture/captureQuality";
 import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyNameKey } from "./anatomyNames";
 import { buildSyntheticScenarioCsv } from "./scenarioCsv";
+import { sampledMorphClamping } from "./morphLimits";
 import { scenarioCompatibilityReason } from "./scenarioCompatibility";
 import "./anatomy-studio.css";
 
@@ -216,6 +217,10 @@ export function AnatomyAtlas() {
     }
   };
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
+  const morphClamping = useMemo(
+    () => sampledMorphClamping(referenceKg, weightVariation),
+    [referenceKg, weightVariation],
+  );
   const [qualityPreference, setQualityPreference] = useState<SceneQuality | "auto">("auto");
   const [recommendedQuality, setRecommendedQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
     window.innerWidth,
@@ -814,6 +819,14 @@ export function AnatomyAtlas() {
                      <small>Solo visualización ficticia; estas cifras no representan una predicción de salud.</small>
                    </div>
                  </div>
+                 {visible.includes("skin") && morphClamping.regions.length > 0 && (
+                   <p className="studio-sim-warning" role="status"
+                     aria-label="Límite gráfico de deformación">
+                     Límite visual alcanzado: algunas regiones del cuerpo 3D ya no
+                     aumentan de tamaño proporcionalmente. No representa una
+                     predicción de cambios corporales reales.
+                   </p>
+                 )}
                  {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
                 <p>La piel está oculta. Activa la superficie corporal para ver el cambio de volumen.</p>
                 <button onClick={() => {
