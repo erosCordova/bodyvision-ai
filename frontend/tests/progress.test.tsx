@@ -15,6 +15,12 @@ describe("BODYVISION project progress assessment", () => {
     // Follow live, documented phase evidence instead of freezing any milestone.
     // The calculation above is the only source for the displayed total.
     expect(phaseAssessment.find(phase => phase.id === 5)?.completed).toContain("MediaPipe");
+    const production = phaseAssessment.find(phase => phase.id === 9)!;
+    expect(production.completed).toContain("Restauración lógica");
+    expect(production.completed).toContain("datos sintéticos");
+    expect(production.completed).toContain("44806178898");
+    expect(production.pending).toContain("respaldos productivos/PITR");
+    expect(production.pending).toContain("RPO/RTO");
     expect(reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

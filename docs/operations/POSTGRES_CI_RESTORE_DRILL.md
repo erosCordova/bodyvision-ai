@@ -28,6 +28,14 @@ ejecuta pruebas contra `db-test`, un contenedor efímero aislado de
    los archivos temporales en el runner. La limpieza final de CI
    elimina los contenedores descartables.
 
+## Evidencia de ejecución
+
+La acción [BODYVISION CI #44806178898](https://github.com/erosCordova/bodyvision-ai/actions/runs/44806178898) ejecutó satisfactoriamente el job `docker-smoke`, incluido el paso «Verify synthetic PostgreSQL backup restoration in isolated test database».
+
+Esto demuestra restauración lógica en **un entorno descartable**, no recuperación productiva, certificación sanitaria ni aprobación de todos los jobs de la misma ejecución.
+
+La valoración manual de la Fase 9 pasa de **30 % a 35 %** por este control ya comprobado. Con diez fases igualmente ponderadas, el progreso global sube de 76 % a **77 %** por redondeo de 76,5 %. No se atribuyen avances clínicos ni de producción que no consten.
+
 ## Criterios y limitaciones
 
 El paso aprueba únicamente si la restauración termina sin error y el

@@ -51,9 +51,9 @@ export const phaseAssessment: ProjectPhase[] = [
     completed: "Peso/estatura sobre el mismo 3D, deformación regional, malla y comparación; escenarios sintéticos versionados en PostgreSQL, con RLS, historial inmutable y restauración en el visor. Implementación reciente: peso de referencia incorporado a la forma gráfica, comparación con referencia coherente y tres escenarios visuales rápidos reversibles; pruebas de navegador añadidas, pendientes de resultado CI.",
     pending: "Evaluación morfológica comparativa, autorización real de usuarios, consentimiento, pruebas con dispositivos y operaciones seguras de despliegue.",
     milestone: "Escenarios trazables sin sobrescribir observaciones." },
-  { id: 9, name: "Producción", progress: 30,
-    completed: "Despliegue de demostración, pipelines de compilación y pruebas con Docker.",
-    pending: "Secretos, observabilidad, alertas, respaldos productivos/PITR, política de retención, revisión legal y pruebas de seguridad. Simulacro lógico de restauración aislado añadido a CI, pendiente de resultado satisfactorio.",
+  { id: 9, name: "Producción", progress: 35,
+    completed: "Despliegue de demostración, pipelines de compilación y pruebas con Docker. Restauración lógica de PostgreSQL 15 con datos sintéticos comprobada en base aislada: esquema y contenido tras el respaldo comparados en CI (run 44806178898, docker-smoke aprobado). Es una prueba técnica, no un respaldo operativo real.",
+    pending: "Secretos y rotación, observabilidad, alertas, respaldos productivos/PITR, cifrado y custodia de copias, política de retención, ensayos de RPO/RTO, revisión legal, privacidad y pruebas de seguridad.",
     milestone: "Checklist de producción completado." },
 ];
 export const overallProgress = Math.round(phaseAssessment.reduce((sum, item) => sum + item.progress, 0) / phaseAssessment.length);
