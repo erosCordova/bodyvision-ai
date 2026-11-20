@@ -434,6 +434,23 @@ export function AnatomyAtlas() {
     if (mode === "holograma") setMode("realista");
     setMeshOverlay(value => !value);
   };
+  const fixHistoricalReference = (row: {
+    id: string; version: number; reference_kg: number; variation_percent: number;
+    stature_cm: number; simulated_kg: number;
+  }) => {
+    setHistoricalBaseline({
+      id: row.id, version: row.version,
+      reference_kg: row.reference_kg,
+      variation_percent: row.variation_percent,
+      stature_cm: row.stature_cm,
+      simulated_kg: row.simulated_kg,
+    });
+    setBaselinePreview(false);
+    setComparison(true);
+    setVisible(["skin"]);
+    setOpacity({ ...initialOpacity });
+    setMode("realista");
+  };
   const restoreHistoryScenario = (row: {
     id: string; reference_kg: number; variation_percent: number; stature_cm: number;
   }) => {
@@ -610,6 +627,15 @@ export function AnatomyAtlas() {
                 : `REFERENCIA · ${referenceKg} kg / ${BASELINE_HEIGHT_CM} cm`}</span>
               <span className="studio-compare-after">ESCENARIO · {simulatedWeight} kg / {statureCm} cm</span>
               <span className="studio-compare-caption">Dos estados del mismo cuerpo · comparación gráfica, no clínica</span>
+              {historicalBaseline && (
+                <span className="studio-compare-delta" aria-label="Diferencias visuales frente a la versión histórica">
+                  Diferencia frente a v{historicalBaseline.version}:{" "}
+                  {simulatedWeight - historicalBaseline.simulated_kg >= 0 ? "+" : ""}
+                  {(simulatedWeight - historicalBaseline.simulated_kg).toFixed(1)} kg ·{" "}
+                  {statureCm - historicalBaseline.stature_cm >= 0 ? "+" : ""}
+                  {statureCm - historicalBaseline.stature_cm} cm
+                </span>
+              )}
             </div>
           )}
           <div className="studio-view-top">
@@ -930,20 +956,7 @@ export function AnatomyAtlas() {
                               <div className="studio-scenario-row-actions">
                                 <button type="button" onClick={() => restoreHistoryScenario(row)}>Cargar en 3D</button>
                                 <button type="button" aria-pressed={historicalBaseline?.id === row.id}
-                                  onClick={() => {
-                                    setHistoricalBaseline({
-                                      id: row.id, version: row.version,
-                                      reference_kg: row.reference_kg,
-                                      variation_percent: row.variation_percent,
-                                      stature_cm: row.stature_cm,
-                                      simulated_kg: row.simulated_kg,
-                                    });
-                                    setBaselinePreview(false);
-                                    setComparison(true);
-                                    setVisible(["skin"]);
-                                    setOpacity({ ...initialOpacity });
-                                    setMode("realista");
-                                  }}>
+                                  onClick={() => fixHistoricalReference(row)}>
                                   Fijar como referencia
                                 </button>
                                 <button type="button" onClick={() => setScenarioVersionId(row.id)}>Ver versiones</button>
@@ -973,9 +986,23 @@ export function AnatomyAtlas() {
                         <button type="button" onClick={() => setScenarioVersionId("")}>Cerrar historial</button>
                         {scenarioVersions.isPending && <p>Consultando versiones…</p>}
                         {scenarioVersions.isError && <p role="alert">No se pudo recuperar la cadena de versiones.</p>}
-                        {scenarioVersions.data?.map(row => <p key={row.id}>
-                          v{row.version} · {row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}
-                        </p>)}
+                        {scenarioVersions.data?.map(row => (
+                          <div className="studio-scenario-chain-row" key={row.id}>
+                            <div>
+                              <strong>Versión {row.version} · SIMULADO</strong>
+                              <span>{row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}</span>
+                            </div>
+                            <div className="studio-scenario-row-actions">
+                              <button type="button" onClick={() => restoreHistoryScenario(row)}>
+                                Cargar v{row.version} en 3D
+                              </button>
+                              <button type="button" aria-pressed={historicalBaseline?.id === row.id}
+                                onClick={() => fixHistoricalReference(row)}>
+                                Fijar v{row.version} como referencia
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>}
                     </>
                   )}

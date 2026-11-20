@@ -378,8 +378,25 @@ test("versioned fictitious 3D scenarios persist across visits without creating o
     .toHaveValue("20");
   await restored.getByRole("button", { name: "Ver versiones" }).first().click();
   const chain = restored.getByLabel("Cadena de versiones del escenario");
-  await expect(chain).toContainText("v1");
-  await expect(chain).toContainText("v2");
+  await expect(chain).toContainText("Versión 1");
+  await expect(chain).toContainText("Versión 2");
+  await chain.getByRole("button", { name: "Cargar v1 en 3D" }).click();
+  await expect(page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" }))
+    .toHaveValue("0");
+  await chain.getByRole("button", { name: "Cargar v2 en 3D" }).click();
+  await expect(page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" }))
+    .toHaveValue("20");
+  await chain.getByRole("button", { name: "Fijar v1 como referencia" }).click();
+  const historicalSplit = page.getByLabel("Comparación dividida del mismo modelo 3D");
+  await expect(historicalSplit).toContainText("HISTÓRICO v1 · 70 kg / 175 cm");
+  await expect(historicalSplit).toContainText("ESCENARIO · 84 kg / 175 cm");
+  await expect(page.getByLabel("Diferencias visuales frente a la versión histórica"))
+    .toContainText("Diferencia frente a v1: +14.0 kg · +0 cm");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  await expect(chain.getByRole("button", { name: "Fijar v1 como referencia" }))
+    .toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Quitar referencia histórica" }).click();
+  await expect(historicalSplit).toContainText("REFERENCIA · 70 kg / 175 cm");
 
   const observed = await page.request.get(`/api/v1/profiles/${profileId}/measurements`);
   expect(observed.ok()).toBe(true);

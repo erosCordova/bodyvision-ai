@@ -64,3 +64,14 @@ Se añaden pruebas del cálculo histórico y del flujo de selección, cambio de
 estatura y reversión. El alcance es estrictamente **educativo y sintético**;
 la comparación visual no determina composición corporal ni un resultado
 médico. Su aprobación depende de la ejecución correspondiente de CI.
+
+## Recuperación directa y contraste de revisiones de una misma serie
+
+Cada fila de la cadena de versiones ofrece «Cargar vN en 3D» y «Fijar vN
+como referencia» sin volver a una página anterior del listado. El usuario
+puede cargar una versión como escenario activo y fijar otra como línea base
+visual, con una diferencia calculada de kg y cm. El mismo objeto anatómico
+se dibuja en dos pasadas; la operación no crea ni edita mediciones observadas
+ni altera la cadena append-only. La cifra calculada es una diferencia aritmética
+de parámetros ficticios, nunca un indicador de salud ni de composición real.
+Incluye prueba de navegador con dos revisiones reales en PostgreSQL de test.
