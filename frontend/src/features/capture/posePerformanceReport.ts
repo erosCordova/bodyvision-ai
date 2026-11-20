@@ -103,6 +103,7 @@ export function downloadSyntheticPosePerformanceReport(input: SyntheticPosePerfo
     anchor.click();
   } finally {
     // Defer revocation so mobile download managers can resolve the blob URL.
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    const revoke = URL.revokeObjectURL.bind(URL);
+    window.setTimeout(() => revoke(url), 1500);
   }
 }
