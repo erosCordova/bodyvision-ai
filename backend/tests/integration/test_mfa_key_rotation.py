@@ -109,9 +109,7 @@ def test_rotation_reencrypts_all_synthetic_factors_and_appends_audit(local_owner
     first, second = new_totp_seed(), new_totp_seed()
     first_org, first_user = add_test_factor(local_owner, encrypt_totp_seed(first, old_key))
     second_org, second_user = add_test_factor(local_owner, encrypt_totp_seed(second, old_key))
-    count = rotate_synthetic_mfa_key(
-        local_owner, old_key, new_key, environment=ALLOWED
-    )
+    count = rotate_synthetic_mfa_key(local_owner, old_key, new_key, environment=ALLOWED)
     assert count == 2
     for org, user, seed in [
         (first_org, first_user, first),
@@ -127,13 +125,17 @@ def test_rotation_reencrypts_all_synthetic_factors_and_appends_audit(local_owner
         assert decrypt_totp_seed(updated, new_key) == seed
         with pytest.raises(ValueError):
             decrypt_totp_seed(updated, old_key)
-        audit = local_owner.execute(
-            text(
-                "SELECT action,chain_sequence,event_hash FROM public.security_audit_events "
-                "WHERE organization_id=:org"
-            ),
-            {"org": org},
-        ).mappings().one()
+        audit = (
+            local_owner.execute(
+                text(
+                    "SELECT action,chain_sequence,event_hash FROM public.security_audit_events "
+                    "WHERE organization_id=:org"
+                ),
+                {"org": org},
+            )
+            .mappings()
+            .one()
+        )
         assert audit["action"] == "mfa.key_rotated_synthetic"
         assert audit["chain_sequence"] == 1
         assert len(audit["event_hash"]) == 64
@@ -156,10 +158,7 @@ def test_rotation_fails_before_writing_anything_when_one_cipher_is_invalid(local
         ).scalar_one()
         assert ciphertext == (original if user == first_user else "Z" * 100)
     audited = local_owner.execute(
-        text(
-            "SELECT count(*) FROM public.security_audit_events "
-            "WHERE organization_id IN (:a,:b)"
-        ),
+        text("SELECT count(*) FROM public.security_audit_events WHERE organization_id IN (:a,:b)"),
         {"a": first_org, "b": second_org},
     ).scalar_one()
     assert audited == 0

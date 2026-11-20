@@ -79,9 +79,7 @@ def rotate_synthetic_mfa_key(
         raise RotationDenied("Se requiere el rol migrador local autorizado.")
 
     connection.execute(text("SET LOCAL lock_timeout='5000ms'"))
-    connection.execute(
-        text("LOCK TABLE public.private_mfa_credentials IN ACCESS EXCLUSIVE MODE")
-    )
+    connection.execute(text("LOCK TABLE public.private_mfa_credentials IN ACCESS EXCLUSIVE MODE"))
     non_synthetic = connection.execute(
         text(
             "SELECT count(*) FROM public.private_mfa_credentials c "
@@ -179,9 +177,7 @@ def main() -> int:
         old_key = environment.get("MFA_ROTATION_OLD_KEY", "")
         new_key = environment.get("MFA_ROTATION_NEW_KEY", "")
         validate_distinct_keys(old_key, new_key)
-        consent = input(
-            "Servicios detenidos y respaldo verificado. Escribe ROTAR MFA FICTICIO: "
-        )
+        consent = input("Servicios detenidos y respaldo verificado. Escribe ROTAR MFA FICTICIO: ")
         if consent.strip() != "ROTAR MFA FICTICIO":
             raise RotationDenied("No se confirmó la operación.")
         # Intentional separate explicit confirmation, but no secret disclosure.
@@ -199,8 +195,10 @@ def main() -> int:
     except (RotationDenied, ValueError, EOFError, KeyboardInterrupt, SQLAlchemyError):
         print("Rotación denegada o cancelada. No se confirmó el recifrado.", file=sys.stderr)
         return 1
-    print(f"Rotación sintética confirmada para {changed} semillas. "
-          "Configura la clave nueva antes de reabrir el servicio.")
+    print(
+        f"Rotación sintética confirmada para {changed} semillas. "
+        "Configura la clave nueva antes de reabrir el servicio."
+    )
     return 0
 
 
