@@ -106,3 +106,19 @@ aprobó Windows, Docker, backend/PostgreSQL, frontend y navegador para
 el historial cifrado paginado. El criterio de QA de visibilidad total
 queda completado técnicamente en un entorno sintético; no cubre
 retención fuera de línea ni destrucción de copias externas.
+
+
+## Retención desacoplada de FastAPI (pruebas pendientes de CI)
+
+Se agregó un proceso optativo, aislado, que invoca la función PostgreSQL
+de purga de filas vencidas con el mismo rol de datos menos privilegiado.
+Puede actuar cuando la API está detenida y PostgreSQL sigue funcionando.
+La activación requiere `synthetic-only`, identidad local/test y un
+contenedor bajo el perfil `maintenance`. No abre endpoints ni utiliza
+claves de descifrado. La prueba Docker con la API detenida se encuentra
+en `.github/workflows/ci.yml`; la integración positiva y los rechazos
+figuran en `test_independent_capture_retention.py`.
+
+Esto **no** constituye un programador externo activo cuando toda la
+infraestructura está apagada ni una eliminación criptográfica de copias.
+Una implementación clínica requeriría otro diseño y aprobación.

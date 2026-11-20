@@ -47,3 +47,43 @@ Una restauración desde un backup antiguo debe hacerse en un entorno aislado, va
 - CI: comprobar límites del trabajador de retención, fallos de ejecución, cifrado, rotación y descarga sin caché.
 - Operación: revisar fallas de purga, tamaño de cola vencida, restauración con claves autorizadas y expiración real de snapshots.
 - Escalar cualquier fallo de integridad, ausencia de clave, copia no inventariada o vencimiento incumplido; no ocultarlo con un indicador de éxito.
+
+## Proceso de retención independiente de la API (solo sintético, optativo)
+
+Existe un contenedor de mantenimiento separado en Compose bajo el
+perfil `maintenance`, inicialmente **inactivo**. Ejecuta
+`app.workers.independent_capture_retention`, con rol restringido
+`bodyvision_app`, sin clave de captura, sin HTTP, sin exponer puertos,
+sistema de archivos de solo lectura y sin privilegios adicionales.
+No requiere que el servicio `backend` esté encendido, pero sí que
+**Docker y PostgreSQL permanezcan funcionando**. No configura ningún
+trabajo permanente externo ni borra respaldos.
+
+El operador de un entorno sintético puede habilitarlo explícitamente
+con `APP_ENV=local|test`, `IDENTITY_ENABLED=true` y
+`BODYVISION_ENABLE_CAPTURE_RETENTION=synthetic-only`; nunca habilitar
+en demo, staging, producción ni contra un host PostgreSQL remoto.
+`docker compose --profile maintenance up -d capture-retention`
+activa únicamente el sidecar y sus dependencias. Cuando se usa además
+la limpieza en proceso del backend, la función PostgreSQL serializa
+los lotes concurrentes mediante bloqueo de asesoría transaccional.
+El worker admite una pasada controlada con el argumento `--once`
+para diagnóstico sobre datos exclusivamente ficticios.
+
+El sidecar verifica el rol de sesión conectado, rechaza credenciales
+del propietario/migrador, impone un máximo de 100 filas por lote,
+10 lotes por pasada e intervalos de 60 a 86400 segundos. Utiliza
+la función de purga ya existente y conserva el contador de mantenimiento.
+No descifra fotografías, no consulta su contenido ni crea rutas públicas.
+
+Pruebas: unitarias para el rechazo de entornos no autorizados,
+contraseñas/roles privilegiados, hosts remotos e intervalos inválidos;
+integración PostgreSQL para eliminar solo un registro vencido sin usar
+peticiones HTTP; CI Docker para detener `backend`, ejecutar el sidecar
+una vez, confirmar que borra el elemento vencido y mantiene otro vigente,
+y reiniciar la API.
+
+**Límite de esta capacidad:** no hay limpieza si también están apagados
+Docker o PostgreSQL; no equivale a eliminar bytes de WAL, respaldos,
+descargas o snapshots. Los controles legales y de retención clínica
+siguen pendientes.
