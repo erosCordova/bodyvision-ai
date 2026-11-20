@@ -3,7 +3,8 @@
  * to same-origin, SHA-256-verified build assets; images never leave the tab.
  * Third-party provenance and clinical privacy approval remain separate.
  */
-import { validatePoseImageDimensions, validatePoseImageFile } from "./poseInputValidation";
+import { validatePoseImageFile } from "./poseInputValidation";
+import { preparePoseFrame } from "./poseFrame";
 
 export const POSE_SDK_VERSION = "0.10.32";
 export const POSE_MODEL_VERSION = "pose_landmarker_lite/float16/1";
@@ -142,33 +143,20 @@ async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
 }
 
 export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
-  // Reject mislabeled or oversized files before loading the CPU inference model.
+  // Keep pre-decode limits and MIME validation before allocating a bitmap.
   await validatePoseImageFile(file);
-  // Repeated analyses reuse only the detector, never photo pixels or results.
-  // Delay its initialization until the decoded dimensions pass validation.
-  let bitmap: ImageBitmap | null = null;
-  let canvas: HTMLCanvasElement | null = null;
-  let context: CanvasRenderingContext2D | null = null;
+
+  // Prepare the same <=1024px MediaPipe input and release the potentially much
+  // larger decoded ImageBitmap BEFORE loading the CPU/WASM runtime. In
+  // particular the first (cold) inference no longer holds the full image open
+  // throughout model initialization on memory-constrained browsers.
+  const frame = await preparePoseFrame(file);
   try {
-    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-    validatePoseImageDimensions(bitmap.width, bitmap.height);
     const landmarker = await loadPoseLandmarker();
-    const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
-    canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    context = canvas.getContext("2d");
-    if (!context) throw new Error("No se pudo inicializar el lienzo de análisis.");
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return summarizePoseResult(landmarker.detect(canvas));
+    return summarizePoseResult(landmarker.detect(frame.canvas));
   } finally {
-    // Best-effort release of temporary image surfaces even when inference fails.
-    // This is not a guarantee of secure erasure of browser or GPU memory.
-    if (canvas) {
-      context?.clearRect(0, 0, canvas.width, canvas.height);
-      canvas.width = 0;
-      canvas.height = 0;
-    }
-    bitmap?.close();
+    // Best-effort canvas cleanup even if the runtime fails to load or detect.
+    // This is not secure erasure of browser, decoder or GPU memory.
+    frame.release();
   }
 }
