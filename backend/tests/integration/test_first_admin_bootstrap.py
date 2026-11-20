@@ -105,9 +105,7 @@ def test_bootstrap_creates_one_local_synthetic_admin_and_chained_audit():
                 assert audit["previous_hash"] == "0" * 64
                 assert len(audit["event_hash"]) == 64
                 with pytest.raises(BootstrapDenied, match="ya tiene"):
-                    create_first_admin(
-                        conn, organization, email="otra-cuenta@example.invalid"
-                    )
+                    create_first_admin(conn, organization, email="otra-cuenta@example.invalid")
                 user_count = conn.execute(
                     text(
                         "SELECT count(*) FROM public.users "
