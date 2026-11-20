@@ -817,4 +817,47 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
     expect(scriptErrors).toEqual([]);
     expect(unauthorizedWrites).toEqual([]);
   });
+
+  test("repeated mobile synthetic captures after orientation changes never reuse obsolete pose results", async ({ page }) => {
+    test.setTimeout(180000);
+    const scriptErrors: string[] = [];
+    page.on("pageerror", error => scriptErrors.push(error.message));
+    await sourceFixtures(page);
+    await page.goto("/simulation");
+    await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+
+    // First, the unchanged atlas is rendered at the center of a portrait UI.
+    await page.getByRole("button", { name: "Frente", exact: true }).tap();
+    await page.getByRole("button", { name: "Analizar esta vista 3D con IA" }).tap();
+    await expect(page).toHaveURL(/\/analysis$/);
+    const quality = page.getByRole("region", { name: "Control de calidad recibido" });
+    await expect(quality).toContainText("4 de 4 criterios cumplidos");
+    await page.getByRole("button", { name: "Detectar pose con IA" }).tap();
+    const pose = page.getByRole("region", { name: "Estimación local de pose con IA" });
+    await expect(pose).toContainText("Pose detectada.", { timeout: 90000 });
+    await page.getByRole("button", { name: "Repetir detección" }).tap();
+    await expect(pose).toContainText("Pose detectada.", { timeout: 90000 });
+
+    // Return to the same anatomically shaded body. A landscape-to-portrait
+    // change must not preserve a previous capture surface or pose estimate.
+    await page.goto("/simulation");
+    await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.locator(".studio-canvas canvas")).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Frente", exact: true }).tap();
+    await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+    await page.getByRole("button", { name: "Analizar esta vista 3D con IA" }).tap();
+    await expect(page).toHaveURL(/\/analysis$/);
+    await expect(quality).toContainText("4 de 4 criterios cumplidos");
+    expect(await page.getByRole("img", {
+      name: "Fotografía local utilizada únicamente para la revisión de pose",
+    }).evaluate((image: HTMLImageElement) => Math.min(image.naturalWidth, image.naturalHeight)))
+      .toBeGreaterThanOrEqual(800);
+    await expect(page.getByRole("button", { name: "Detectar pose con IA" })).toBeEnabled();
+    await page.getByRole("button", { name: "Detectar pose con IA" }).tap();
+    await expect(pose).toContainText("Pose detectada.", { timeout: 90000 });
+    expect(scriptErrors).toEqual([]);
+  });
+
 });

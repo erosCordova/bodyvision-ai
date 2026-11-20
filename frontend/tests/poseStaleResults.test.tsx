@@ -66,8 +66,11 @@ describe("local pose review isolation", () => {
     const secondFile = new File(["image2"], "second.png", { type: "image/png" });
     const view = render(<PoseReview file={firstFile} review={review} />);
     fireEvent.click(screen.getByRole("button", { name: "Detectar pose con IA" }));
-    expect(detectPoseOnDevice).toHaveBeenCalledWith(firstFile);
+    expect(detectPoseOnDevice).toHaveBeenCalledWith(firstFile, expect.any(Function));
+    const firstCurrent = vi.mocked(detectPoseOnDevice).mock.calls[0][1]!;
+    expect(firstCurrent()).toBe(true);
     view.rerender(<PoseReview file={secondFile} review={review} />);
+    expect(firstCurrent()).toBe(false);
     expect(screen.getByRole("button", { name: "Detectar pose con IA" })).toBeEnabled();
 
     await act(async () => { older.resolve(person); await older.promise; });
@@ -76,7 +79,8 @@ describe("local pose review isolation", () => {
       .not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Detectar pose con IA" }));
-    expect(detectPoseOnDevice).toHaveBeenCalledWith(secondFile);
+    expect(detectPoseOnDevice).toHaveBeenCalledWith(secondFile, expect.any(Function));
+    expect(vi.mocked(detectPoseOnDevice).mock.calls[1][1]!()).toBe(true);
     await act(async () => { newer.resolve(noHuman); await newer.promise; });
     expect(screen.getByText("No se detectó una pose humana.")).toBeInTheDocument();
   });
@@ -88,7 +92,9 @@ describe("local pose review isolation", () => {
       <PoseReview file={new File(["image"], "test.png", { type: "image/png" })} review={review} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Detectar pose con IA" }));
+    const current = vi.mocked(detectPoseOnDevice).mock.calls[0][1]!;
     view.unmount();
+    expect(current()).toBe(false);
     await act(async () => { old.resolve(person); await old.promise; });
     expect(screen.queryByText("Pose detectada.")).not.toBeInTheDocument();
 
