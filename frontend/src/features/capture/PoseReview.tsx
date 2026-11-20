@@ -10,6 +10,7 @@ import {
 } from "./poseDeviceBenchmark";
 import type { CaptureReview } from "./captureQuality";
 import type { PoseLocalDiagnostic } from "./poseDiagnostics";
+import { downloadSyntheticPosePerformanceReport } from "./posePerformanceReport";
 import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
@@ -221,6 +222,28 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
               exclusivamente de este navegador; no se envía ni se guarda.</small>
           </div>}
         </div>
+        {(benchmarkResult || diagnosticResult) && benchmarkConfirmed && (
+          <div className="enterprise-pose-report" aria-label="Informe técnico local">
+            <button type="button"
+              disabled={benchmarkRunning || diagnosticRunning || state !== "ready" || !estimate}
+              onClick={() => {
+                if (!estimate || state !== "ready" || !benchmarkConfirmed) return;
+                downloadSyntheticPosePerformanceReport({
+                  capture: review,
+                  detected: estimate.found,
+                  singleRunMs: elapsedMs,
+                  benchmark: benchmarkResult,
+                  diagnostic: diagnosticResult,
+                });
+              }}>
+              Descargar informe técnico (JSON)
+            </button>
+            <small>Descarga manual en este dispositivo, sin fotografía, coordenadas,
+              nombre del archivo ni identificadores personales. No se envía a la API.
+              Los datos solo se guardan si eliges descargarlos; no certifica
+              rendimiento de un teléfono físico ni calidad clínica.</small>
+          </div>
+        )}
         {benchmarkRunning && <>
           <button type="button" className="enterprise-pose-benchmark-cancel"
             onClick={cancelBenchmark}>Cancelar prueba</button>

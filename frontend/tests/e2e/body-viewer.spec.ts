@@ -333,6 +333,25 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
   await expect(stages).toBeVisible({ timeout: 90000 });
   await expect(stages).toContainText("Preparación de imagen:");
   await expect(stages).toContainText("Heap JavaScript antes:");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Descargar informe técnico (JSON)" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("bodyvision-rendimiento-local-sintetico.json");
+  const saved = await download.path();
+  expect(saved).not.toBeNull();
+  const report = JSON.parse(readFileSync(saved!, "utf8")) as Record<string, unknown>;
+  expect(report).toMatchObject({
+    schemaVersion: 1,
+    reportKind: "bodyvision-local-pose-performance",
+    actualMobileHardwareVerified: false,
+    containsPhoto: false,
+    containsLandmarks: false,
+    capture: { qualityPassed: true },
+    pose: { detected: true },
+  });
+  const exported = JSON.stringify(report);
+  expect(exported).not.toMatch(/atlas-anatomico|modelo-3d-sintetico|blob:|fileName|rawLandmarks|base64|userAgent|deviceId/i);
+  expect(report.stageDiagnostic).not.toBeNull();
 });
 
 test("real local pose matrix tests atlas variants and a well-lit no-person control", async ({ page }) => {
