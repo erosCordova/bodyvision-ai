@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { dateTime } from "../../components/ui/States";
 import { chronologicalMeasurements, compareMeasurements } from "./measurementComparison";
 import { buildComparisonReport, type ComparisonReport } from "./comparisonReport";
+import { saveComparisonPdf, verifiedComparisonPdf } from "./serverComparisonDownload";
+import type { ComparisonDownload } from "./serverComparisonDownload";
 import { ComparisonPrintView } from "./ComparisonPrintView";
 
 const formatSigned = (value: number) =>
@@ -20,6 +22,7 @@ export function MeasurementComparison({
   synthetic,
   metricCode,
   metricLabel,
+  exportReport,
 }: {
   rows: Measurement[];
   unit: string;
@@ -28,6 +31,7 @@ export function MeasurementComparison({
   synthetic: boolean;
   metricCode: string;
   metricLabel: string;
+  exportReport?: (initialId: string, finalId: string) => Promise<ComparisonDownload>;
 }) {
   const ordered = useMemo(() => chronologicalMeasurements(rows), [rows]);
   const [fromId, setFromId] = useState(() => ordered[0]?.id ?? "");
@@ -43,6 +47,30 @@ export function MeasurementComparison({
   const result = compareMeasurements(ordered, fromId, toId);
   const [printReport, setPrintReport] = useState<ComparisonReport | null>(null);
   const [printError, setPrintError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const downloadAttempt = useRef(0);
+  useEffect(() => {
+    downloadAttempt.current += 1;
+    setDownloading(false);
+    setPrintError("");
+    return () => { downloadAttempt.current += 1; };
+  }, [profileId, fromId, toId]);
+  const downloadReport = async () => {
+    if (!exportReport || !result || !synthetic || downloading) return;
+    const attempt = ++downloadAttempt.current;
+    setDownloading(true);
+    setPrintError("");
+    try {
+      const report = await exportReport(fromId, toId);
+      const blob = await verifiedComparisonPdf(report);
+      if (attempt === downloadAttempt.current) saveComparisonPdf(blob, report.filename);
+    } catch (error) {
+      if (attempt === downloadAttempt.current)
+        setPrintError(error instanceof Error ? error.message : "No se pudo descargar el PDF.");
+    } finally {
+      if (attempt === downloadAttempt.current) setDownloading(false);
+    }
+  };
   const preparePrint = () => {
     const report = buildComparisonReport(ordered, fromId, toId, {
       profileId, profileCode, synthetic, metricCode, metricLabel, unit,
@@ -117,10 +145,19 @@ export function MeasurementComparison({
             </div>
           )}
           <div className="record-report-actions">
-            <button type="button" disabled={!result || !synthetic}
-              onClick={preparePrint}>Preparar informe PDF</button>
-            <small className="muted">Exportación local para expedientes ficticios; el navegador permite guardar como PDF.
-              No se exportan simulaciones ni registros sustituidos.</small>
+            {exportReport ? <>
+              <button type="button" disabled={!result || !synthetic || downloading}
+                onClick={() => void downloadReport()}>
+                {downloading ? "Generando PDF…" : "Descargar informe PDF"}
+              </button>
+              <small className="muted">El informe verifica las fuentes vigentes y registra la exportación.
+                Solo datos ficticios; sin firma digital.</small>
+            </> : <>
+              <button type="button" disabled={!result || !synthetic}
+                onClick={preparePrint}>Preparar informe PDF</button>
+              <small className="muted">Exportación local para expedientes ficticios; el navegador permite guardar como PDF.
+                No se exportan simulaciones ni registros sustituidos.</small>
+            </>}
           </div>
           {printError && <p role="alert">{printError}</p>}
           {printReport && <ComparisonPrintView report={printReport}

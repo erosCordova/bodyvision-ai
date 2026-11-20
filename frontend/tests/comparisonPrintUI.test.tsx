@@ -68,3 +68,13 @@ describe("traceable synthetic PDF print flow", () => {
       .not.toBeInTheDocument();
   });
 });
+
+it("downloads a server report once and surfaces authorization failures", async () => {
+  const { waitFor } = await import("@testing-library/react");
+  const exportReport = vi.fn().mockRejectedValue(new Error("Expediente no disponible."));
+  render(<MeasurementComparison {...props} exportReport={exportReport}/>);
+  fireEvent.click(screen.getByRole("button", { name: "Descargar informe PDF" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Expediente no disponible."));
+  expect(exportReport).toHaveBeenCalledExactlyOnceWith(common.id, later.id);
+  expect(window.print).not.toHaveBeenCalled();
+});

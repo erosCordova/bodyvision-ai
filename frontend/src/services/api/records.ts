@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { comparisonDownloadSchema } from "../../features/analytics/serverComparisonDownload";
 import { ApiError } from "./client";
 import { invalidatePrivateSession } from "./sessionInvalidation";
 
@@ -175,6 +176,9 @@ export function recordsApi(workspace: string, token?: string) {
       headers: key ? { "Idempotency-Key": key } : {},
     }, token);
   return {
+    comparisonReport: (id: string, initialId: string, finalId: string) =>
+      write(`/profiles/${id}/reports/comparison`, "POST",
+        { initial_id: initialId, final_id: finalId }, comparisonDownloadSchema),
     workspaces: () => get("/workspaces", workspacesSchema),
     summary: () => get("/dashboard/summary", summarySchema),
     profiles: (search = "", offset = 0) =>

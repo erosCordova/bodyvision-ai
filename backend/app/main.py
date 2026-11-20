@@ -16,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.simulation_scenarios import router as simulation_router
 from app.api.routes.synthetic_captures import router as capture_router
@@ -187,6 +188,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     app.include_router(health_router)
     app.include_router(data_router)
+    app.include_router(report_router)
     app.include_router(simulation_router)
     if settings.identity_enabled:
         app.include_router(auth_router)

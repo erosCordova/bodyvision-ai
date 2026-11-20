@@ -315,6 +315,9 @@ export function ProfileDetail() {
                   synthetic={current.synthetic}
                   metricCode={metric}
                   metricLabel={selectedMetric?.label ?? metric}
+                  exportReport={privateAuthEnabled()
+                    ? (initial, final) => api.comparisonReport(profileId, initial, final)
+                    : undefined}
                 />
               </Suspense>
             ))}
