@@ -81,3 +81,34 @@ export async function runLocalPoseBenchmark(
   }
   return summarizeLocalPoseBenchmark(samples);
 }
+
+
+/**
+ * Benchmark only warm model inference. Prepare a single synthetic frame
+ * outside the timed loop, perform up to five serial detections, and release
+ * the frame even after cancellation, a failed detection or stale image.
+ *
+ * The measured timings therefore EXCLUDE decode, frame preparation and
+ * model setup. They cannot be compared with the end-to-end one-shot time.
+ */
+export async function runPreparedPoseBenchmark(
+  openSession: () => Promise<{
+    detect: () => { found: boolean } | Promise<{ found: boolean }>;
+    release: () => void;
+  }>,
+  current: () => boolean,
+  onProgress: (completed: number) => void,
+  options: Parameters<typeof runLocalPoseBenchmark>[3] = {},
+): Promise<LocalPoseBenchmark | null> {
+  if (!current()) return null;
+  const session = await openSession();
+  try {
+    if (!current()) return null;
+    return await runLocalPoseBenchmark(
+      async () => session.detect(), current, onProgress, options,
+    );
+  } finally {
+    // Never retain the prepared image after an opt-in benchmark.
+    session.release();
+  }
+}

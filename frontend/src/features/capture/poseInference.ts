@@ -142,21 +142,49 @@ async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
   return reusableLandmarker;
 }
 
-export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
-  // Keep pre-decode limits and MIME validation before allocating a bitmap.
-  await validatePoseImageFile(file);
+/**
+ * An opt-in short-lived prepared frame for the repeatability benchmark.
+ * Only the model runtime is shared across photos; each session owns one
+ * canvas and must release it. Reusing this already-downsampled canvas avoids
+ * repeating full-resolution decode for every benchmark measurement.
+ */
+export type LocalPoseSession = {
+  detect: () => PoseEstimate;
+  release: () => void;
+};
 
-  // Prepare the same <=1024px MediaPipe input and release the potentially much
-  // larger decoded ImageBitmap BEFORE loading the CPU/WASM runtime. In
-  // particular the first (cold) inference no longer holds the full image open
-  // throughout model initialization on memory-constrained browsers.
+export async function createPoseInferenceSession(file: File): Promise<LocalPoseSession> {
+  // Keep format/size/header gates before decode and release the large bitmap
+  // before loading MediaPipe. Never cache a user-provided image globally.
+  await validatePoseImageFile(file);
   const frame = await preparePoseFrame(file);
   try {
     const landmarker = await loadPoseLandmarker();
-    return summarizePoseResult(landmarker.detect(frame.canvas));
-  } finally {
-    // Best-effort canvas cleanup even if the runtime fails to load or detect.
-    // This is not secure erasure of browser, decoder or GPU memory.
+    let released = false;
+    return {
+      detect: () => {
+        if (released) throw new Error("La sesión local de pose ya fue liberada.");
+        return summarizePoseResult(landmarker.detect(frame.canvas));
+      },
+      release: () => {
+        if (released) return;
+        released = true;
+        frame.release();
+      },
+    };
+  } catch (error) {
     frame.release();
+    throw error;
+  }
+}
+
+export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
+  // Ordinary one-shot inference preserves the same preflight, input
+  // resolution, model options and immediate resource release.
+  const session = await createPoseInferenceSession(file);
+  try {
+    return session.detect();
+  } finally {
+    session.release();
   }
 }

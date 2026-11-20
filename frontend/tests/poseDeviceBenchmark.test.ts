@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
-  POSE_BENCHMARK_RUNS, runLocalPoseBenchmark, summarizeLocalPoseBenchmark,
+  POSE_BENCHMARK_RUNS, runLocalPoseBenchmark, runPreparedPoseBenchmark, summarizeLocalPoseBenchmark,
 } from "../src/features/capture/poseDeviceBenchmark";
 
 describe("local synthetic pose repeatability benchmark", () => {
@@ -99,6 +99,79 @@ describe("local synthetic pose repeatability benchmark", () => {
     });
     expect(result).toBeNull();
     expect(count).toBe(2);
+  });
+
+  it("opens one frame for five warm detections and always releases it", async () => {
+    const detect = vi.fn(() => ({ found: true }));
+    const release = vi.fn();
+    const openSession = vi.fn(async () => ({ detect, release }));
+    const updates: number[] = [];
+    const result = await runPreparedPoseBenchmark(
+      openSession, () => true, count => updates.push(count),
+    );
+    expect(result).toMatchObject({
+      attempts: 5, successful: 5, detected: 5, failed: 0,
+    });
+    expect(openSession).toHaveBeenCalledOnce();
+    expect(detect).toHaveBeenCalledTimes(5);
+    expect(release).toHaveBeenCalledOnce();
+    expect(updates).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("releases a prepared frame when cancellation happens during setup", async () => {
+    let active = true;
+    const detect = vi.fn(() => ({ found: true }));
+    const release = vi.fn();
+    const result = await runPreparedPoseBenchmark(
+      async () => { active = false; return { detect, release }; },
+      () => active, () => {},
+    );
+    expect(result).toBeNull();
+    expect(detect).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("releases a frame and discards results if canceled between repetitions", async () => {
+    let active = true;
+    const detect = vi.fn(() => ({ found: true }));
+    const release = vi.fn();
+    const progress: number[] = [];
+    const result = await runPreparedPoseBenchmark(
+      async () => ({ detect, release }),
+      () => active,
+      count => { progress.push(count); active = false; },
+    );
+    expect(result).toBeNull();
+    expect(detect).toHaveBeenCalledOnce();
+    expect(progress).toEqual([1]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("continues after an inference error and closes the frame at completion", async () => {
+    let calls = 0;
+    const release = vi.fn();
+    const result = await runPreparedPoseBenchmark(
+      async () => ({
+        detect: () => {
+          calls++;
+          if (calls === 2) throw Error("synthetic failure");
+          return { found: true };
+        },
+        release,
+      }),
+      () => true, () => {}, { repetitions: 3 },
+    );
+    expect(result).toMatchObject({ attempts: 3, successful: 2, failed: 1 });
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("does not allocate a frame if the benchmark was already canceled", async () => {
+    const openSession = vi.fn(async () => ({
+      detect: () => ({ found: true }), release: () => {},
+    }));
+    expect(await runPreparedPoseBenchmark(openSession, () => false, () => {}))
+      .toBeNull();
+    expect(openSession).not.toHaveBeenCalled();
   });
 
   it("rejects invalid repetition limits before calling the model", async () => {
