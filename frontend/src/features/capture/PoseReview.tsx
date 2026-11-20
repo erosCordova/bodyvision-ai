@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  detectPoseOnDevice, POSE_EDGES, POSE_MODEL_VERSION,
+  createPoseInferenceSession, detectPoseOnDevice, POSE_EDGES, POSE_MODEL_VERSION,
   POSE_SDK_VERSION, type PoseEstimate,
 } from "./poseInference";
 import { assessPoseQuality, isPosePointVisible } from "./poseQuality";
 import { formatLocalPoseDuration, localPoseLatencyGuidance } from "./poseLatency";
 import {
-  POSE_BENCHMARK_RUNS, runLocalPoseBenchmark, type LocalPoseBenchmark,
+  POSE_BENCHMARK_RUNS, runPreparedPoseBenchmark, type LocalPoseBenchmark,
 } from "./poseDeviceBenchmark";
 import type { CaptureReview } from "./captureQuality";
 import "./pose-review.css";
@@ -89,8 +89,8 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setBenchmarkProgress(0);
     setBenchmarkError("");
     try {
-      const result = await runLocalPoseBenchmark(
-        () => detectPoseOnDevice(inputFile),
+      const result = await runPreparedPoseBenchmark(
+        () => createPoseInferenceSession(inputFile),
         current,
         completed => setBenchmarkProgress(completed),
         { yieldBeforeRun: () => new Promise<void>(resolve => window.setTimeout(resolve, 0)) },
@@ -145,9 +145,10 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       {state === "ready" && <section className="enterprise-pose-benchmark"
         aria-label="Evaluación repetible de rendimiento de pose">
         <h4>Evaluación de rendimiento en este dispositivo</h4>
-        <p>Repite {POSE_BENCHMARK_RUNS} veces la detección sobre la misma imagen
-          sintética, tras la primera carga del modelo. Solo mide este navegador;
-          no guarda ni envía archivos, resultados o tiempos.</p>
+        <p>Prepara una sola vez la imagen sintética y repite {POSE_BENCHMARK_RUNS}
+          veces la inferencia local con el mismo lienzo. No vuelve a decodificar
+          la fotografía en cada repetición. Solo mide este navegador;
+          no guarda ni envía imágenes, resultados o tiempos.</p>
         <label><input type="checkbox" checked={benchmarkConfirmed}
           disabled={benchmarkRunning}
           onChange={event => setBenchmarkConfirmed(event.target.checked)}/>
@@ -173,9 +174,10 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
           <p><strong>Ejecuciones completadas:</strong> {benchmarkResult.successful}/{benchmarkResult.attempts}.
             {" "}<strong>Errores:</strong> {benchmarkResult.failed}.
             {" "}<strong>Poses detectadas:</strong> {benchmarkResult.detected}.</p>
-          <small>Medidas del proceso local completo, sin carga inicial del modelo.
+          <small>Medidas solo de inferencia con una imagen ya preparada, sin
+            decodificación, preparación de lienzo ni carga del modelo en los tiempos.
             Con cinco muestras, el P95 es el tiempo más alto; no representa
-            un valor garantizado ni la precisión clínica. No se mide memoria ni temperatura.</small>
+            un valor garantizado ni precisión clínica. No se mide memoria ni temperatura.</small>
         </div>}
       </section>}
       {state === "failed" && <p role="alert" className="enterprise-pose-error">{failure}</p>}
