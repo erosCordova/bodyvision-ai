@@ -690,3 +690,8 @@ td button {
     outline-offset: 1px;
   }
 }
+
+.record-report-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px;padding:12px 0;border-top:1px solid var(--border)}
+.record-report-actions button{border-color:#5385a0;background:#173c57;color:#d8f4ff;white-space:nowrap}
+.record-report-actions small{flex:1;min-width:180px}
+@media(max-width:750px){.record-report-actions button{width:100%}}
