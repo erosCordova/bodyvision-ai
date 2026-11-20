@@ -14,8 +14,8 @@ from collections.abc import Mapping
 from uuid import UUID, uuid4
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Connection, URL, make_url
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.engine import URL, Connection, make_url
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
 from app.core.identity import hash_password
@@ -34,7 +34,7 @@ def require_synthetic_bootstrap(environment: Mapping[str, str], database_url: st
         raise BootstrapDenied("Falta la autorización explícita de alta ficticia.")
     try:
         url = make_url(database_url)
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, ArgumentError) as exc:
         raise BootstrapDenied("URL de PostgreSQL inválida.") from exc
     if url.drivername != "postgresql+psycopg" or url.host not in {
         "localhost",
@@ -99,7 +99,8 @@ def bootstrap_synthetic_administrator(
     connection.execute(
         text(
             "INSERT INTO public.users "
-            "(id,organization_id,display_name,is_local_operator,email,password_hash,account_status) "
+            "(id,organization_id,display_name,is_local_operator,"
+            "email,password_hash,account_status) "
             "VALUES (:id,:org,:name,false,:email,:verifier,'active')"
         ),
         {
