@@ -303,6 +303,11 @@ export function ProfileDetail() {
                   key={`${metric}-${period}`}
                   rows={series.data}
                   unit={selectedMetric?.unit ?? ""}
+                  profileId={profileId}
+                  profileCode={current.display_code}
+                  synthetic={current.synthetic}
+                  metricCode={metric}
+                  metricLabel={selectedMetric?.label ?? metric}
                 />
               </Suspense>
             ))}
