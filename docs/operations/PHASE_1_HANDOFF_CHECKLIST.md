@@ -52,3 +52,7 @@ Solo se marcará **F1 recibida** tras aportar salidas y la conformidad correspon
 La CI añade una [recepción técnica en la interfaz Docker compilada y un reinicio
 completo conservando datos](../qa/PHASE_1_DOCKER_BROWSER_RESTART.md). Esa evidencia
 sirve al receptor como referencia; no sustituye su ejecución en el equipo objetivo.
+
+El job [de scripts Windows/Git Bash](../qa/PHASE_1_WINDOWS_SCRIPTS.md) comprueba
+preparación, conservación de configuración y helpers portables. Tampoco ejecuta
+Docker Desktop ni firma la recepción de este checklist.
