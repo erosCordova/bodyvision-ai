@@ -3,9 +3,9 @@
 ## Alcance
 
 La prueba Playwright `pose quality matrix` se amplía desde las tres
-transformaciones previas hasta **ocho escenarios** con inferencia real
+transformaciones previas hasta **nueve escenarios** con inferencia real
 MediaPipe Lite en el navegador. Se utiliza **únicamente el atlas anatómico
-sintético aprobado**, con captura de sus vistas frontal y lateral izquierda.
+sintético aprobado**, con captura de sus vistas frontal y lateral izquierda, más un control negativo sin figura humana.
 La imagen, transformaciones y landmarks permanecen en memoria del navegador;
 solo se escribe al artefacto de CI un JSON con etiquetas y resultados técnicos.
 
@@ -19,6 +19,7 @@ solo se escribe al artefacto de CI un JSON con etiquetas y resultados técnicos.
 | Recorte inferior | Solo 70 % superior de la captura | Registro de detección y advertencias, sin inventar puntos |
 | Reflejo horizontal | Imagen frontal invertida | Registro comparativo del mismo cuerpo |
 | Oclusión central | Rectángulo opaco en zona central | Registro sin afirmar recuperación correcta de articulaciones |
+| Control negativo sin persona | Gradiente sintético de 800 × 1100 con luz y contraste suficientes | Los cuatro controles de captura deben pasar, pero MediaPipe no debe detectar cuerpo |
 
 ## Indicadores
 
@@ -48,3 +49,11 @@ anotación humana de referencia, consentimiento y privacidad aprobados,
 ensayos por postura/oclusiones/grupos de dispositivos físicos, latencia,
 consumo/temperatura y revisión clínica. No habilita datos de pacientes ni
 modifica el personaje anatómico definitivo. Sin despliegues ni cambios en main.
+
+La primera ejecución de los ocho escenarios originales pasó CI, pero
+mostró que **todas** las capturas del atlas y sus alteraciones tenían al menos
+una alerta, incluida la frontal original (iluminación). Para evitar un gate
+trivial se incorpora un noveno caso negativo con calidad de imagen aceptable
+que debe continuar **sin detección humana**. Las advertencias sobre el atlas
+reflejan los resultados de la heurística local en este entorno de CI, no
+una medición de iluminación clínica ni un defecto demostrado del modelo.

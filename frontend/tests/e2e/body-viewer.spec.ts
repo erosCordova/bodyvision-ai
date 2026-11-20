@@ -326,7 +326,7 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
     .toBeVisible();
 });
 
-test("real local pose matrix records front, lateral, lighting, occlusion and crop of synthetic atlas", async ({ page }) => {
+test("real local pose matrix tests atlas variants and a well-lit no-person control", async ({ page }) => {
   test.setTimeout(300000);
   await sourceFixtures(page);
   await page.goto("/body-3d");
@@ -348,6 +348,7 @@ test("real local pose matrix records front, lateral, lighting, occlusion and cro
   const variants = [
     "frontal-control", "lateral-left", "low-light", "overexposed",
     "reduced-resolution", "lower-body-cropped", "horizontal-mirror", "central-occlusion",
+    "negative-no-person",
   ] as const;
   for (const [i, condition] of variants.entries()) {
     if (i > 0) {
@@ -358,6 +359,21 @@ test("real local pose matrix records front, lateral, lighting, occlusion and cro
       name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
     }).check();
     const base64 = await page.evaluate(async ({ front, side, scenario }) => {
+      // Independent negative control: passes basic capture-quality rules, but
+      // contains no human figure. This prevents a matrix made only of
+      // rejected captures from giving vacuous safety evidence.
+      if (scenario === "negative-no-person") {
+        const canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 1100;
+        const context = canvas.getContext("2d")!;
+        const background = context.createLinearGradient(0, 0, 0, canvas.height);
+        background.addColorStop(0, "#405f87");
+        background.addColorStop(1, "#dfba93");
+        context.fillStyle = background;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png").split(",")[1];
+      }
       const source = new Image();
       source.src = "data:image/png;base64," + (scenario === "lateral-left" ? side : front);
       await source.decode();
@@ -409,6 +425,9 @@ test("real local pose matrix records front, lateral, lighting, occlusion and cro
     if (condition === "reduced-resolution") {
       expect(failedChecks).toContain("Resolución");
     }
+    if (condition === "negative-no-person") {
+      expect(failedChecks, "El control negativo debe superar la calidad básica").toEqual([]);
+    }
     await page.getByRole("link", { name: "Ver control de calidad en el módulo de análisis" }).click();
     await page.getByRole("button", { name: "Detectar pose con IA" }).click();
     const result = page.getByRole("region", { name: "Estimación local de pose con IA" });
@@ -421,6 +440,10 @@ test("real local pose matrix records front, lateral, lighting, occlusion and cro
       "Visible para revisión visual",
     ]).toContain(resultLabel);
     const quality = resultLabel as SyntheticPoseObservation["quality"];
+    if (condition === "negative-no-person") {
+      expect(detected, "Una imagen sintética sin cuerpo no debe mostrar pose").toBe(false);
+      expect(quality).toBe("Sin detección");
+    }
     if (!detected) {
       await expect(result.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
         .toHaveCount(0);
@@ -436,7 +459,9 @@ test("real local pose matrix records front, lateral, lighting, occlusion and cro
     console.log("BODYVISION synthetic pose matrix " + JSON.stringify(observed));
   }
   const summary = summarizeSyntheticPoseMatrix(observations);
-  expect(summary.total).toBe(8);
+  expect(summary.total).toBe(9);
+  expect(summary.notDetected).toBeGreaterThanOrEqual(1);
+  expect(summary.failedCapture).toBeLessThan(summary.total);
   expect(summary.failedCaptureReviewable).toBe(0);
   expect(summary.inconsistentDetection).toBe(0);
   expect(summary.failedCapture).toBeGreaterThanOrEqual(3);
