@@ -79,7 +79,7 @@ test("private 3D UI saves immutable versions; member sees only granted scenarios
   const first = await firstSaved.json() as { id: string; data_type: string; version: number };
   expect(first.data_type).toBe("SIMULADO");
   expect(first.version).toBe(1);
-  await expect(history.getByRole("status")).toContainText("Versión 1 registrada");
+  await expect(history.locator(".studio-sim-success")).toContainText("Versión 1 registrada");
   await expect(history.getByRole("list", { name: "Versiones de simulación guardadas" })).toContainText("v1");
 
   await variation.fill("-10");
@@ -93,7 +93,7 @@ test("private 3D UI saves immutable versions; member sees only granted scenarios
   expect(secondSaved.status()).toBe(201);
   const second = await secondSaved.json() as { id: string; version: number; series_id: string };
   expect(second.version).toBe(2);
-  await expect(history.getByRole("status")).toContainText("Versión 2 registrada");
+  await expect(history.locator(".studio-sim-success")).toContainText("Versión 2 registrada");
 
   await page.getByRole("link", { name: "Panel principal", exact: true }).click();
   const reopened = await simulationPanel(page, profileId);
