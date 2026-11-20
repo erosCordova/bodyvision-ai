@@ -51,5 +51,30 @@ No habilita producción ni datos personales reales.
 - Navegador privado: crea dos observaciones ficticias, descarga desde Evolución,
   comprueba fuentes y checksum y localiza el evento de auditoría.
 
-La ejecución CI integral del nuevo commit debe verificarse antes de dar por
-cerrado el incremento o modificar la estimación del avance.
+La ejecución integral [44839078148](https://github.com/erosCordova/bodyvision-ai/actions/runs/44839078148),
+commit `b7f5867c2f5898cf6e1f30b1d0a69f95bc8ad3ee`, aprobó los tres jobs:
+`native-checks`, `docker-smoke` y `windows-scripts`. Se verificaron **195** pruebas
+backend, **234** frontend, **36** navegador público y **6** navegador privado
+(**471** de aplicación), además de los scripts de instalación, compilación,
+migraciones reversibles, auditorías de dependencias, arranque Docker, respaldo,
+restauración aislada y conservación de historial tras recrear contenedores.
+La prueba del navegador descargó el PDF desde Evolución, comprobó el hash y
+los dos IDs de origen y encontró el evento confirmado de auditoría.
+
+La Fase 7 pasa de **75 % a 80 %** como estimación técnica manual. El promedio
+de diez fases pasa de **79,0 % a 79,5 %**, mostrado como **80 %**. Continúan
+pendientes la firma/autenticidad externa y todos los criterios de uso real.
+
+## Aislamiento de los recorridos privados
+
+La prueba nueva del informe pasó en la ejecución `44838233965`. En esa misma
+corrida, la carga de una captura de otra prueba concurrente agotó el
+`statement_timeout` de 3 segundos esperando la cabecera de auditoría de la
+organización compartida. `fullyParallel: false` no serializaba archivos.
+
+Los recorridos privados se configuran ahora con `workers: 1`, sin reintentos
+ni modificación de aserciones o del límite de PostgreSQL. Sus cuentas y la
+cadena por organización son fixtures compartidos. Se conservan las pruebas
+concurrentes explícitas de PostgreSQL del backend. Esta recepción secuencial
+no demuestra rendimiento de producción con usuarios simultáneos: esa
+medición sigue pendiente en los criterios operativos.

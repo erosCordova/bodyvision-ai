@@ -94,3 +94,23 @@ global visible **permanece en 79 %**. No corresponde ajustar otras fases.
 Siguen pendientes las operaciones cuando Docker/la base estén apagados,
 la custodia de copias y claves, el borrado de backups/WAL y todas las
 aprobaciones para uso real o clínico.
+
+
+## Fase 7: PDF de servidor y auditoría de exportaciones
+
+La ejecución integral [44839078148](https://github.com/erosCordova/bodyvision-ai/actions/runs/44839078148)
+aprobó Windows, `native-checks` y Docker sobre `b7f5867c2f5898cf6e1f30b1d0a69f95bc8ad3ee`.
+El informe privado obtiene dos mediciones vigentes desde una única consulta,
+valida organización, expediente, métrica y fechas y genera un PDF A4 con IDs
+de fuentes y fecha de consulta. El identificador del informe corresponde al
+evento `report.export` confirmado en la cadena de auditoría. El navegador
+comprueba SHA-256 antes de iniciar la descarga; un fallo de auditoría impide
+la entrega. Las 471 pruebas de aplicación incluyeron ese recorrido real.
+
+La Fase 7 sube de **75 % a 80 %**. La suma de diez fases aumenta de 790 a 795;
+el promedio exacto es **79,5 %**, redondeado a **80 %**. No se modifican las
+otras fases. No implica firma digital, autenticidad externa, validación
+clínica ni preparación de producción. Los recorridos privados con cuentas
+compartidas se ejecutan secuencialmente tras observar un timeout de auditoría;
+las pruebas concurrentes del backend se mantienen y el rendimiento concurrente
+de producción sigue pendiente. Detalles en `PHASE_7_SERVER_COMPARISON_PDF.md`.
