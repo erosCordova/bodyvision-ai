@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { anatomySource } from "../../src/features/viewer/atlasSource";
+import { summarizeSyntheticPoseMatrix, type SyntheticPoseObservation } from "../../src/features/capture/poseRobustnessReport";
 
 test.use({ launchOptions: {
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -320,22 +321,29 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
   })).toBeVisible();
   await page.getByRole("button", { name: "Detectar pose con IA" }).click();
   await expect(page.getByRole("region", { name: "Estimación local de pose con IA" }))
-    .toContainText("Pose detectada.", { timeout: 90000 });
-  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
-    .toBeVisible();
-});
-
-test("pose quality matrix reviews dim light, lower resolution and cropped synthetic 3D frames", async ({ page }) => {
-  test.setTimeout(240000);
+    .toContainText("Pose detectada.", { timeout: 90test("real local pose matrix records front, lateral, lighting, occlusion and crop of synthetic atlas", async ({ page }) => {
+  test.setTimeout(300000);
   await sourceFixtures(page);
   await page.goto("/body-3d");
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
   await page.getByRole("button", { name: "Frente", exact: true }).click();
-  const image64 = (await page.locator(".studio-canvas canvas").screenshot()).toString("base64");
-  await page.goto("/capture");
-  const observations: Array<{ condition: string; detected: boolean; quality: string }> = [];
-  const variants = ["low-light", "reduced-resolution", "lower-body-cropped"] as const;
+  const front64 = (await page.locator(".studio-canvas canvas").screenshot()).toString("base64");
+  await page.getByRole("button", { name: "Izquierda", exact: true }).click();
+  const side64 = (await page.locator(".studio-canvas canvas").screenshot()).toString("base64");
 
+  const unexpectedWrites: string[] = [];
+  page.on("request", request => {
+    if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) &&
+        new URL(request.url()).pathname.startsWith("/api/")) {
+      unexpectedWrites.push(request.url());
+    }
+  });
+  await page.goto("/capture");
+  const observations: SyntheticPoseObservation[] = [];
+  const variants = [
+    "frontal-control", "lateral-left", "low-light", "overexposed",
+    "reduced-resolution", "lower-body-cropped", "horizontal-mirror", "central-occlusion",
+  ] as const;
   for (const [i, condition] of variants.entries()) {
     if (i > 0) {
       await page.getByRole("navigation", { name: "Navegación principal" })
@@ -344,9 +352,9 @@ test("pose quality matrix reviews dim light, lower resolution and cropped synthe
     await page.getByRole("checkbox", {
       name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
     }).check();
-    const base64 = await page.evaluate(async ({ original, scenario }) => {
+    const base64 = await page.evaluate(async ({ front, side, scenario }) => {
       const source = new Image();
-      source.src = "data:image/png;base64," + original;
+      source.src = "data:image/png;base64," + (scenario === "lateral-left" ? side : front);
       await source.decode();
       const canvas = document.createElement("canvas");
       canvas.width = scenario === "reduced-resolution" ? 360 : source.naturalWidth;
@@ -355,14 +363,29 @@ test("pose quality matrix reviews dim light, lower resolution and cropped synthe
         source.naturalHeight;
       const context = canvas.getContext("2d")!;
       if (scenario === "low-light") context.filter = "brightness(0.18)";
+      if (scenario === "horizontal-mirror") {
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+      }
       if (scenario === "lower-body-cropped") {
         context.drawImage(source, 0, 0, source.naturalWidth, canvas.height,
           0, 0, canvas.width, canvas.height);
       } else {
         context.drawImage(source, 0, 0, canvas.width, canvas.height);
       }
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.filter = "none";
+      if (scenario === "overexposed") {
+        context.fillStyle = "rgba(255,255,255,0.94)";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      if (scenario === "central-occlusion") {
+        context.fillStyle = "#111925";
+        context.fillRect(canvas.width * 0.25, canvas.height * 0.22,
+          canvas.width * 0.50, canvas.height * 0.62);
+      }
       return canvas.toDataURL("image/png").split(",")[1];
-    }, { original: image64, scenario: condition });
+    }, { front: front64, side: side64, scenario: condition });
     await page.locator('input[type="file"]').setInputFiles({
       name: condition + "-atlas-sintetico.png",
       mimeType: "image/png",
@@ -370,35 +393,62 @@ test("pose quality matrix reviews dim light, lower resolution and cropped synthe
     });
     const capture = page.getByRole("region", { name: "Resultados de calidad local" });
     await expect(capture).toBeVisible();
-    if (condition === "low-light") {
-      await expect(capture).toContainText("Hay señales de iluminación extrema");
+    // Read the actual quality controls, not an assumed outcome from the scenario name.
+    const failedChecks = await capture.locator("li").evaluateAll(items => items
+      .map(item => item.querySelector("strong")?.textContent?.trim() ?? "")
+      .filter(label => label.startsWith("!"))
+      .map(label => label.replace(/^!\s*/, "")));
+    if (condition === "low-light" || condition === "overexposed") {
+      expect(failedChecks).toContain("Iluminación");
     }
     if (condition === "reduced-resolution") {
-      await expect(capture).toContainText("Se recomiendan al menos 720 píxeles");
+      expect(failedChecks).toContain("Resolución");
     }
     await page.getByRole("link", { name: "Ver control de calidad en el módulo de análisis" }).click();
     await page.getByRole("button", { name: "Detectar pose con IA" }).click();
     const result = page.getByRole("region", { name: "Estimación local de pose con IA" });
     await expect(result).toContainText(/Pose detectada\.|No se detectó una pose humana/, { timeout: 90000 });
     const detected = (await result.getByText("Pose detectada.").count()) > 0;
-    const quality = await result.locator(".enterprise-pose-quality strong").innerText();
+    const resultLabel = (await result.locator(".enterprise-pose-quality strong").innerText())
+      .replace("Resultado técnico:", "").trim();
+    expect([
+      "Sin detección", "Puntos insuficientes", "Requiere revisión",
+      "Visible para revisión visual",
+    ]).toContain(resultLabel);
+    const quality = resultLabel as SyntheticPoseObservation["quality"];
     if (!detected) {
       await expect(result.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
         .toHaveCount(0);
     }
-    if (condition === "low-light" || condition === "reduced-resolution") {
-      expect(quality).not.toContain("Visible para revisión visual");
+    if (failedChecks.length > 0) {
+      expect(quality, "Una captura con avisos no debe declararse lista para revisión")
+        .not.toBe("Visible para revisión visual");
     }
-    observations.push({ condition, detected, quality });
-    console.log("BODYVISION synthetic condition " + JSON.stringify(observations.at(-1)));
+    const observed: SyntheticPoseObservation = {
+      condition, detected, quality, capturePassed: failedChecks.length === 0, failedChecks,
+    };
+    observations.push(observed);
+    console.log("BODYVISION synthetic pose matrix " + JSON.stringify(observed));
   }
+  const summary = summarizeSyntheticPoseMatrix(observations);
+  expect(summary.total).toBe(8);
+  expect(summary.failedCaptureReviewable).toBe(0);
+  expect(summary.inconsistentDetection).toBe(0);
+  expect(summary.failedCapture).toBeGreaterThanOrEqual(3);
+  expect(unexpectedWrites).toEqual([]);
   mkdirSync("test-results", { recursive: true });
   writeFileSync("test-results/pose-robustness-matrix.json", JSON.stringify({
-    source: "pinned synthetic anatomical 3D atlas",
+    source: "pinned synthetic anatomical 3D atlas, frontal and left-side views",
     imageType: "synthetic only",
-    dataTransfer: "browser memory",
+    dataTransfer: "browser memory; local observations in disposable CI report",
+    modelProvenance: "same-origin verified MediaPipe Lite",
     observations,
-    limitation: "visual checks only; not clinical accuracy or a population-based benchmark",
+    summary,
+    limitation: "descriptive gate checks on synthetic screenshots, not clinical precision or accuracy",
+  }, null, 2));
+});
+
+cks only; not clinical accuracy or a population-based benchmark",
   }, null, 2));
   expect(observations).toHaveLength(3);
 });
