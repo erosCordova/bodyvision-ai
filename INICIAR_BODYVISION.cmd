@@ -9,7 +9,7 @@ if errorlevel 1 (
   goto :failed
 )
 
-docker info --format "{{.OSType}}" 2>nul | findstr /x /c:"linux" >nul
+call docker info --format "{{.OSType}}" 2>nul | findstr /x /c:"linux" >nul
 if errorlevel 1 (
   echo ERROR: Inicia Docker Desktop y usa contenedores Linux.
   goto :failed
@@ -20,7 +20,7 @@ if not exist ".env" (
   goto :failed
 )
 
-docker compose up --wait --wait-timeout 600
+call docker compose up --wait --wait-timeout 600
 if errorlevel 1 (
   echo ERROR: Los servicios no iniciaron correctamente.
   echo Revisa el estado con: docker compose ps
@@ -34,7 +34,7 @@ if errorlevel 1 (
   goto :failed
 )
 
-python scripts\check_local_installation.py
+call python scripts\check_local_installation.py
 if errorlevel 1 (
   echo ERROR: La comprobacion del entorno local no fue satisfactoria.
   goto :failed
