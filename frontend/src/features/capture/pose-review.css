@@ -39,3 +39,14 @@
   .enterprise-pose-groups{grid-template-columns:repeat(2,minmax(0,1fr))}
   .enterprise-pose-controls{align-items:stretch;flex-direction:column}
 }
+
+.enterprise-pose-benchmark{display:grid;gap:10px;padding:14px 16px;border:1px solid #436e8c;border-radius:12px;background:#102f46;color:#e5f5ff}
+.enterprise-pose-benchmark h4{margin:0;font-size:14px}
+.enterprise-pose-benchmark p{margin:0;font-size:12px;line-height:1.6}
+.enterprise-pose-benchmark label{display:flex;align-items:flex-start;gap:9px;font-size:12px;line-height:1.55}
+.enterprise-pose-benchmark input[type=checkbox]{accent-color:#7ac9ed;width:17px;height:17px;flex-shrink:0}
+.enterprise-pose-benchmark button{justify-self:start;border:1px solid #6bb6de;border-radius:8px;background:#235478;color:#f3fbff;padding:10px 14px;cursor:pointer;font:inherit;font-size:12px}
+.enterprise-pose-benchmark button:disabled{opacity:.48;cursor:not-allowed}
+.enterprise-pose-benchmark-result{border-radius:8px;border:1px solid #497993;background:#163c53;padding:12px;display:grid;gap:8px}
+.enterprise-pose-benchmark-result small{font-size:11px;color:#c2d8e8;line-height:1.6}
+@media(max-width:700px){.enterprise-pose-benchmark button{width:100%}}
