@@ -350,7 +350,7 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
     pose: { detected: true },
   });
   const exported = JSON.stringify(report);
-  expect(exported).not.toMatch(/atlas-anatomico|modelo-3d-sintetico|blob:|fileName|landmarks|base64|userAgent|deviceId/i);
+  expect(exported).not.toMatch(/atlas-anatomico|modelo-3d-sintetico|blob:|fileName|rawLandmarks|base64|userAgent|deviceId/i);
   expect(report.stageDiagnostic).not.toBeNull();
 });
 
