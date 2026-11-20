@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { overallProgress, phaseAssessment, phaseProgressMethod, reviewedAt } from "./projectProgress";
+import { phaseClosureAudit } from "./phaseClosureAudit";
 import "./progress.css";
 
 export function ProjectProgressSummary() {
@@ -39,6 +40,42 @@ export function ProjectProgressPage() {
         <strong>Cómo se calcula</strong>
         <p>{phaseProgressMethod} Los controles marcados como pendientes no se consideran operativos por tener únicamente una pantalla diseñada. Última revisión: {reviewedAt}.</p>
       </div>
+      <section className="project-acceptance-audit" aria-label="Auditoría de cierre de fases 0 a 2">
+        <div className="project-acceptance-heading">
+          <div>
+            <h2>Auditoría de cierre · fases 0–2</h2>
+            <p>Separación entre gate técnico comprobado y aceptación formal. Ninguna fase está firmada; la evidencia no aumenta el porcentaje por sí sola.</p>
+          </div>
+          <a href="https://github.com/erosCordova/bodyvision-ai/blob/feature/phase3-auth-security/docs/qa/PHASE_0_2_ACCEPTANCE_AUDIT.md" target="_blank" rel="noopener noreferrer">
+            Abrir matriz completa
+          </a>
+        </div>
+        <div className="project-acceptance-grid">
+          {phaseClosureAudit.map(gate => (
+            <article className="project-acceptance-card" key={gate.phaseId}>
+              <h3>Fase {gate.phaseId} · {gate.title}</h3>
+              <p><strong>Gate técnico:</strong> {gate.technical === "verified" ? "Verificado" : "Pendiente"}</p>
+              <p><strong>Aceptación formal:</strong> Pendiente, sin firma</p>
+              <p><strong>Responsable:</strong> {gate.owner}</p>
+              <p className="project-acceptance-mapping">{gate.mappedExecutionPhase}</p>
+              <ul>
+                {gate.checks.map(check => (
+                  <li key={check.id}>
+                    <span className="project-acceptance-check">
+                      <strong>{check.state === "verified" ? "Comprobado" : "Pendiente"}</strong>
+                      {" "}{check.requirement}
+                    </span>
+                    {check.pendingReason && <small>{check.pendingReason}</small>}
+                    {check.evidence && <a href={check.evidence.url} target="_blank" rel="noopener noreferrer">
+                      {check.evidence.label}
+                    </a>}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
       <section className="project-phase-list" aria-label="Estado de las diez fases">
         {phaseAssessment.map(phase => (
           <article className="project-phase-card" key={phase.id}>
