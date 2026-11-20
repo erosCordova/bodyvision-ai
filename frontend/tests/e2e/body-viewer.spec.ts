@@ -457,7 +457,10 @@ test("3D studio exports the existing synthetic avatar as a valid PNG without API
   expect(comparisonPath).not.toBeNull();
   const bytes = readFileSync(comparisonPath!);
   expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-  expect(bytes.readUInt32BE(20)).toBeGreaterThan(bytes.readUInt32BE(16));
+  // The annotated export retains the source aspect ratio and adds a
+  // 96-pixel legend beneath it; it is not the portrait-only AI handoff.
+  expect(bytes.readUInt32BE(16)).toBe(pngBytes.readUInt32BE(16));
+  expect(bytes.readUInt32BE(20)).toBe(pngBytes.readUInt32BE(20) + 96);
   expect(writes).toEqual([]);
 });
 
