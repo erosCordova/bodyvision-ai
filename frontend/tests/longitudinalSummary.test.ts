@@ -31,7 +31,7 @@ describe("longitudinal descriptive summary", () => {
     const contaminated = [
       { ...middle, id: "x", profile_id: "someone-else" },
       { ...middle, id: "y", metric_code: "height" },
-      { ...middle, id: "z", data_type: "SIMULADO" as "OBSERVADO" },
+      { ...middle, id: "z", data_type: "SIMULADO" },
       { ...middle, id: "s", is_current: false },
     ];
     expect(summarizeLongitudinal([base, recent, ...contaminated], context)?.count)
