@@ -5,6 +5,9 @@
  */
 import { validatePoseImageFile } from "./poseInputValidation";
 import { preparePoseFrame } from "./poseFrame";
+import {
+  optionalJsHeapBytes, summarizePoseStages, type PoseLocalDiagnostic,
+} from "./poseDiagnostics";
 
 export const POSE_SDK_VERSION = "0.10.32";
 export const POSE_MODEL_VERSION = "pose_landmarker_lite/float16/1";
@@ -187,4 +190,39 @@ export async function detectPoseOnDevice(file: File): Promise<PoseEstimate> {
   } finally {
     session.release();
   }
+}
+
+/**
+ * Explicit, optional ONE-RUN timing diagnostic over a synthetic image.
+ * Unlike the five-run benchmark it measures the whole local pipeline:
+ * format/header validation, bitmap decoding & scaling, model readiness,
+ * detection, and temporary-canvas cleanup. The image is never retained.
+ */
+export async function diagnosePoseOnDevice(file: File): Promise<PoseLocalDiagnostic> {
+  const started = performance.now();
+  const jsHeapBeforeBytes = optionalJsHeapBytes(performance);
+  const modelCachedAtStart = reusableLandmarker !== null;
+  await validatePoseImageFile(file);
+  const validated = performance.now();
+  const frame = await preparePoseFrame(file);
+  const prepared = performance.now();
+  let modelReady: number;
+  let inferred: number;
+  let detected = false;
+  try {
+    const landmarker = await loadPoseLandmarker();
+    modelReady = performance.now();
+    detected = summarizePoseResult(landmarker.detect(frame.canvas)).found;
+    inferred = performance.now();
+  } finally {
+    // The original ImageBitmap was already closed in preparePoseFrame.
+    frame.release();
+  }
+  const finished = performance.now();
+  return summarizePoseStages({
+    started, validated, prepared, modelReady: modelReady!, inferred: inferred!, finished,
+  }, {
+    detected, modelCachedAtStart, jsHeapBeforeBytes,
+    jsHeapAfterBytes: optionalJsHeapBytes(performance),
+  });
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createPoseInferenceSession, detectPoseOnDevice, POSE_EDGES, POSE_MODEL_VERSION,
-  POSE_SDK_VERSION, type PoseEstimate,
+  createPoseInferenceSession, detectPoseOnDevice, diagnosePoseOnDevice, POSE_EDGES,
+  POSE_MODEL_VERSION, POSE_SDK_VERSION, type PoseEstimate,
 } from "./poseInference";
 import { assessPoseQuality, isPosePointVisible } from "./poseQuality";
 import { formatLocalPoseDuration, localPoseLatencyGuidance } from "./poseLatency";
@@ -9,6 +9,7 @@ import {
   POSE_BENCHMARK_RUNS, runPreparedPoseBenchmark, type LocalPoseBenchmark,
 } from "./poseDeviceBenchmark";
 import type { CaptureReview } from "./captureQuality";
+import type { PoseLocalDiagnostic } from "./poseDiagnostics";
 import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
@@ -26,6 +27,9 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
   const [benchmarkProgress, setBenchmarkProgress] = useState(0);
   const [benchmarkResult, setBenchmarkResult] = useState<LocalPoseBenchmark | null>(null);
   const [benchmarkError, setBenchmarkError] = useState("");
+  const [diagnosticRunning, setDiagnosticRunning] = useState(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<PoseLocalDiagnostic | null>(null);
+  const [diagnosticError, setDiagnosticError] = useState("");
   const [visibilityThreshold, setVisibilityThreshold] = useState(0.5);
   const [showPoints, setShowPoints] = useState(true);
   const [showConnections, setShowConnections] = useState(true);
@@ -43,6 +47,9 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setBenchmarkProgress(0);
     setBenchmarkResult(null);
     setBenchmarkError("");
+    setDiagnosticRunning(false);
+    setDiagnosticResult(null);
+    setDiagnosticError("");
     const url = URL.createObjectURL(file);
     setImageUrl(url);
     return () => {
@@ -53,7 +60,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
   }, [file]);
 
   const run = async () => {
-    if (benchmarkRunning) return;
+    if (benchmarkRunning || diagnosticRunning) return;
     const requestId = ++requestSequence.current;
     const inputFile = file;
     setState("running");
@@ -63,6 +70,8 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setBenchmarkResult(null);
     setBenchmarkProgress(0);
     setBenchmarkError("");
+    setDiagnosticResult(null);
+    setDiagnosticError("");
     const start = performance.now();
     try {
       const pose = await detectPoseOnDevice(inputFile);
@@ -80,7 +89,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     }
   };
   const runBenchmark = async () => {
-    if (!benchmarkConfirmed || benchmarkRunning || state !== "ready") return;
+    if (!benchmarkConfirmed || benchmarkRunning || diagnosticRunning || state !== "ready") return;
     const requestId = ++requestSequence.current;
     const inputFile = file;
     const current = () => alive.current && requestId === requestSequence.current;
@@ -109,6 +118,34 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     setBenchmarkResult(null);
     setBenchmarkError("Prueba cancelada. Se descartarán los resultados pendientes.");
   };
+  const runDiagnostic = async () => {
+    if (!benchmarkConfirmed || benchmarkRunning || diagnosticRunning || state !== "ready") return;
+    const requestId = ++requestSequence.current;
+    const inputFile = file;
+    setDiagnosticRunning(true);
+    setDiagnosticResult(null);
+    setDiagnosticError("");
+    try {
+      const data = await diagnosePoseOnDevice(inputFile);
+      if (alive.current && requestId === requestSequence.current) setDiagnosticResult(data);
+    } catch {
+      if (alive.current && requestId === requestSequence.current) {
+        setDiagnosticError("No se pudo completar el diagnóstico técnico local.");
+      }
+    } finally {
+      if (alive.current && requestId === requestSequence.current) setDiagnosticRunning(false);
+    }
+  };
+  const cancelDiagnostic = () => {
+    requestSequence.current += 1;
+    setDiagnosticRunning(false);
+    setDiagnosticResult(null);
+    setDiagnosticError("Diagnóstico cancelado; se descartará el resultado pendiente.");
+  };
+  const elapsedLabel = (value: number | null) =>
+    value === null ? "No disponible" : formatLocalPoseDuration(value);
+  const heapLabel = (value: number | null) =>
+    value === null ? "No disponible" : (value / 1024 / 1024).toFixed(1).replace(".", ",") + " MiB";
   const quality = state === "ready" && estimate
     ? assessPoseQuality(estimate, review, visibilityThreshold) : null;
   const showSkeleton = state === "ready" && estimate?.found === true;
@@ -125,7 +162,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
             sus píxeles al servidor. Este resultado no es una medición ni un diagnóstico.</p>
         </div>
         <button type="button" className="primary-button"
-          disabled={state === "running" || benchmarkRunning} onClick={() => void run()}>
+          disabled={state === "running" || benchmarkRunning || diagnosticRunning} onClick={() => void run()}>
           {state === "running" ? "Analizando imagen…" :
             state === "ready" ? "Repetir detección" : "Detectar pose con IA"}
         </button>
@@ -152,12 +189,38 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
         <label><input type="checkbox" checked={benchmarkConfirmed}
           disabled={benchmarkRunning}
           onChange={event => setBenchmarkConfirmed(event.target.checked)}/>
-          Confirmo que esta imagen es ficticia y autorizo las cinco repeticiones locales.
+          Confirmo que esta imagen es ficticia y autorizo las pruebas locales adicionales.
         </label>
-        <button type="button" disabled={!benchmarkConfirmed || benchmarkRunning}
+        <button type="button" disabled={!benchmarkConfirmed || benchmarkRunning || diagnosticRunning}
           onClick={() => void runBenchmark()}>
           {benchmarkRunning ? "Midiendo rendimiento…" : "Medir rendimiento (5 repeticiones)"}
         </button>
+        <div className="enterprise-pose-technical">
+          <button type="button" disabled={!benchmarkConfirmed || benchmarkRunning || diagnosticRunning}
+            onClick={() => void runDiagnostic()}>
+            {diagnosticRunning ? "Diagnosticando etapas…" : "Diagnosticar etapas (1 ejecución)"}
+          </button>
+          {diagnosticRunning && <button type="button" onClick={cancelDiagnostic}>
+            Cancelar diagnóstico
+          </button>}
+          {diagnosticError && <p role="alert">{diagnosticError}</p>}
+          {diagnosticResult && <div aria-label="Etapas de inferencia local">
+            <p><strong>Validación:</strong> {elapsedLabel(diagnosticResult.validationMs)}.
+              {" "}<strong>Preparación de imagen:</strong> {elapsedLabel(diagnosticResult.preparationMs)}.
+              {" "}<strong>Modelo listo:</strong> {elapsedLabel(diagnosticResult.modelWaitMs)}.
+              {" "}<strong>Inferencia:</strong> {elapsedLabel(diagnosticResult.inferenceMs)}.
+              {" "}<strong>Limpieza:</strong> {elapsedLabel(diagnosticResult.cleanupMs)}.
+              {" "}<strong>Total:</strong> {elapsedLabel(diagnosticResult.totalMs)}.</p>
+            <p>Motor ya en caché al inicio: {diagnosticResult.modelCachedAtStart ? "Sí" : "No"}.
+              {" "}Detección de pose en este ensayo: {diagnosticResult.detected ? "Sí" : "No"}.</p>
+            <p>Heap JavaScript antes: {heapLabel(diagnosticResult.jsHeapBeforeBytes)}.
+              {" "}Heap JavaScript después: {heapLabel(diagnosticResult.jsHeapAfterBytes)}.</p>
+            <small>La memoria mostrada, cuando existe, es solo heap JavaScript; no mide
+              memoria física, WASM, GPU ni consumo máximo. No permite calcular
+              ahorro de RAM y puede no estar disponible. Resultado efímero,
+              exclusivamente de este navegador; no se envía ni se guarda.</small>
+          </div>}
+        </div>
         {benchmarkRunning && <>
           <button type="button" className="enterprise-pose-benchmark-cancel"
             onClick={cancelBenchmark}>Cancelar prueba</button>
