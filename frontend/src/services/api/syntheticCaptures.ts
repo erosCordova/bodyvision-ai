@@ -43,10 +43,16 @@ async function scopedFetch(token: string, path: string, init: RequestInit = {}) 
   return response;
 }
 
+export const CAPTURE_ARCHIVE_PAGE_SIZE = 20;
+
 export function syntheticCapturesApi(token: string, profileId: string) {
   const root = `/profiles/${profileId}/captures`;
   return {
-    list: async () => listSchema.parse(await (await scopedFetch(token, root)).json()),
+    list: async (offset = 0) => listSchema.parse(
+      await (await scopedFetch(token,
+        `${root}?limit=${CAPTURE_ARCHIVE_PAGE_SIZE}&offset=${offset}`,
+      )).json(),
+    ),
     create: async (png: Blob) => storedCapture.parse(await (await scopedFetch(token, root, {
       method: "POST",
       headers: { "Content-Type": "image/png", "X-Synthetic-Only": "confirmed" },
