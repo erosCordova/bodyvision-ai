@@ -6,6 +6,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A new commit supersedes old CI runs for this branch/PR. Avoid wasting
+# expensive Docker/WebGL runners on stale commits.
+concurrency:
+  group: bodyvision-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   windows-scripts:
     runs-on: windows-latest
