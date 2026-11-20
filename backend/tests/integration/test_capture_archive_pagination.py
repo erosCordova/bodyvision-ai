@@ -87,9 +87,9 @@ def test_capture_archive_pages_complete_authorized_inventory(protected):
     for params in ({"limit": 0}, {"limit": 51}, {"offset": -1}, {"offset": 10001}):
         assert client.get(root, params=params, headers=writer).status_code == 422
 
-    consents = client.get(
-        f"/api/v1/auth/profiles/{profile_id}/consents", headers=writer
-    ).json()["items"]
+    consents = client.get(f"/api/v1/auth/profiles/{profile_id}/consents", headers=writer).json()[
+        "items"
+    ]
     storage_id = next(row["id"] for row in consents if row["purpose"] == "storage")
     revoked = client.post(
         f"/api/v1/auth/profiles/{profile_id}/consents/{storage_id}/revoke",
