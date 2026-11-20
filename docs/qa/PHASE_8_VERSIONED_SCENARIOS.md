@@ -107,3 +107,23 @@ solamente que no se comparen representaciones sintéticas generadas con
 algoritmos y modelos incompatibles. La validación requiere pruebas unitarias
 de coincidencia y discrepancia y una prueba de navegador de una página
 con versiones antiguas incompatibles. No altera filas guardadas.
+
+
+## Bloqueo transaccional de continuidad entre versiones incompatibles
+
+La API de escenarios ahora aplica el mismo criterio de procedencia del
+visor: si el escenario padre pertenece a otra revisión del atlas anatómico
+o del algoritmo de deformación, `POST /profiles/{id}/scenarios` responde
+**409 SCENARIO_ENGINE_MISMATCH** antes de insertar una nueva versión.
+
+Se pueden seguir consultando todas las versiones antiguas por sus rutas
+autorizadas, pero para continuar con el nuevo motor se debe crear un
+**nuevo escenario raíz**, sin reetiquetar el historial anterior. La
+implementación conserva el control original de idempotencia, el bloqueo
+de sucesora única, el RLS y los registros append-only.
+
+Las pruebas de integración crean realmente un registro raíz con una
+versión ficticia antigua (una prueba para modelo, otra para algoritmo),
+restauran la configuración actual, comprueban 409 y ausencia de
+sucesoras y de mediciones observadas, y verifican que una serie nueva
+sí puede versionarse. No se cambian migraciones ni datos reales.

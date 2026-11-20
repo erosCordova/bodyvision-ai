@@ -109,6 +109,67 @@ def test_append_only_version_chain_and_separation_from_observed(client, database
         )
 
 
+@pytest.mark.parametrize(
+    ("revision_name", "old_revision"),
+    [
+        ("ATLAS_REVISION", "0" * 40),
+        ("ALGORITHM_REVISION", "regional-soft-tissue-v1"),
+    ],
+)
+def test_append_only_chain_rejects_legacy_engine_without_modifying_history(
+    client, monkeypatch, revision_name, old_revision,
+):
+    from app.api.routes import simulation_scenarios as scenario_routes
+
+    profile_id = new_profile(client)
+    expected_revision = getattr(scenario_routes, revision_name)
+    try:
+        # Construct a legitimate historical root while the fictitious CI
+        # application uses a previous model/algorithm. Do not edit the
+        # immutable database record or bypass triggers.
+        monkeypatch.setattr(scenario_routes, revision_name, old_revision)
+        old = scenario(client, profile_id)
+        assert old.status_code == 201, old.text
+        old_root = old.json()
+    finally:
+        monkeypatch.setattr(scenario_routes, revision_name, expected_revision)
+
+    update = {
+        "reference_kg": 75,
+        "variation_percent": 10,
+        "stature_cm": 185,
+        "prior_version_id": old_root["id"],
+        "revision_note": "Actualizar modelo ilustrativo",
+    }
+    rejected = scenario(client, profile_id, update)
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["code"] == "SCENARIO_ENGINE_MISMATCH"
+
+    # The old revision and its provenance remain readable for audit;
+    # neither an observation nor a partial successor can be created.
+    all_versions = client.get(f"/api/v1/profiles/{profile_id}/scenarios")
+    assert all_versions.status_code == 200
+    assert all_versions.json()["total"] == 1
+    old_record = all_versions.json()["items"][0]
+    assert old_record["id"] == old_root["id"]
+    assert old_record["model_revision"] == old_root["model_revision"]
+    assert old_record["algorithm_revision"] == old_root["algorithm_revision"]
+    assert client.get(f"/api/v1/profiles/{profile_id}/measurements").json()["total"] == 0
+
+    # Starting a fresh series is permitted, then its descendants can be
+    # appended under the *same* pinned revision.
+    new_root = scenario(client, profile_id)
+    assert new_root.status_code == 201, new_root.text
+    current = new_root.json()
+    assert current["series_id"] != old_root["series_id"]
+    next_data = {**update, "prior_version_id": current["id"]}
+    successor = scenario(client, profile_id, next_data)
+    assert successor.status_code == 201, successor.text
+    assert successor.json()["series_id"] == current["series_id"]
+    assert successor.json()["version"] == 2
+    assert client.get(f"/api/v1/profiles/{profile_id}/scenarios").json()["total"] == 3
+
+
 def test_exactly_once_save_and_reject_stale_chain(client):
     profile = new_profile(client)
     data = {"reference_kg": 70, "variation_percent": 20, "stature_cm": 180}

@@ -141,6 +141,18 @@ def save_scenario(
     series = new_id
     if data.prior_version_id is not None:
         parent = _scenario(scope, profile_id, data.prior_version_id)
+        # An immutable synthetic series must never mix shape algorithms or
+        # anatomical model revisions. A legacy version remains readable, but
+        # requires a NEW root scenario under the currently pinned engine.
+        # A frontend-only guard is not sufficient for direct API clients.
+        if (parent["model_revision"] != ATLAS_REVISION or
+                parent["algorithm_revision"] != ALGORITHM_REVISION):
+            raise DomainError(
+                409,
+                "SCENARIO_ENGINE_MISMATCH",
+                "Esta versión usa un modelo o algoritmo anterior. "
+                "Consúltala sin cambios y crea un escenario nuevo para continuar.",
+            )
         has_successor = scope.connection.execute(
             text("""SELECT EXISTS(SELECT 1 FROM simulation_scenarios
               WHERE organization_id=:org AND prior_version_id=:parent)"""),
