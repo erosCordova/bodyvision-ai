@@ -43,15 +43,58 @@ export function readJpegFrameDimensions(bytes: Uint8Array): { width: number; hei
   throw new Error("No se encontraron dimensiones JPEG válidas en la cabecera.");
 }
 
+/**
+ * Read still-image dimensions from the first WebP chunk without decoding.
+ * Covers VP8 (lossy), VP8L (lossless) and VP8X (extended/animated).
+ * RIFF chunk lengths are checked against the declared container size.
+ */
+export function readWebpFrameDimensions(bytes: Uint8Array): { width: number; height: number } {
+  const invalid = () => new Error("La cabecera WebP no contiene dimensiones válidas.");
+  if (bytes.length < 20 ||
+      bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46 ||
+      bytes[8] !== 0x57 || bytes[9] !== 0x45 || bytes[10] !== 0x42 || bytes[11] !== 0x50) {
+    throw invalid();
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const riffSize = view.getUint32(4, true);
+  const chunkSize = view.getUint32(16, true);
+  if (riffSize < 4 + 8 + chunkSize + (chunkSize % 2)) throw invalid();
+
+  const chunk = String.fromCharCode(...bytes.subarray(12, 16));
+  if (chunk === "VP8X") {
+    if (chunkSize < 10 || bytes.length < 30) throw invalid();
+    return {
+      width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
+      height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16),
+    };
+  }
+  if (chunk === "VP8L") {
+    if (chunkSize < 5 || bytes.length < 25 || bytes[20] !== 0x2f ||
+        (bytes[24] & 0xe0) !== 0) throw invalid();
+    return {
+      width: 1 + bytes[21] + ((bytes[22] & 0x3f) << 8),
+      height: 1 + (bytes[22] >> 6) + (bytes[23] << 2) + ((bytes[24] & 0x0f) << 10),
+    };
+  }
+  if (chunk === "VP8 ") {
+    if (chunkSize < 10 || bytes.length < 30 || (bytes[20] & 1) !== 0 ||
+        bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) throw invalid();
+    return {
+      width: (bytes[26] | (bytes[27] << 8)) & 0x3fff,
+      height: (bytes[28] | (bytes[29] << 8)) & 0x3fff,
+    };
+  }
+  throw invalid();
+}
+
 export async function validatePoseImageFile(file: File): Promise<void> {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
       file.size === 0 || file.size > MAX_POSE_FILE_BYTES) {
     throw new Error("La fotografía no supera la validación local.");
   }
-  // Inspect PNG IHDR or JPEG SOF before decoding. WebP dimensions remain
-  // bounded after decoding; do not claim a preflight for that format.
+  // All three supported formats expose dimensions before decompression.
   const headerBytes = file.type === "image/png" ? 24 :
-    file.type === "image/jpeg" ? MAX_JPEG_HEADER_SCAN_BYTES : 12;
+    file.type === "image/jpeg" ? MAX_JPEG_HEADER_SCAN_BYTES : 30;
   const bytes = new Uint8Array(await file.slice(0, headerBytes).arrayBuffer());
   const valid =
     (file.type === "image/jpeg" &&
@@ -71,6 +114,10 @@ export async function validatePoseImageFile(file: File): Promise<void> {
   }
   if (file.type === "image/jpeg") {
     const { width, height } = readJpegFrameDimensions(bytes);
+    validatePoseImageDimensions(width, height);
+  }
+  if (file.type === "image/webp") {
+    const { width, height } = readWebpFrameDimensions(bytes);
     validatePoseImageDimensions(width, height);
   }
   if (file.type === "image/png") {
