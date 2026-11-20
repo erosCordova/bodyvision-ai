@@ -448,11 +448,6 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
   }, null, 2));
 });
 
-cks only; not clinical accuracy or a population-based benchmark",
-  }, null, 2));
-  expect(observations).toHaveLength(3);
-});
-
 test("mobile atlas uses a bounded GPU pixel budget and lazy polygon overlays on the same body", async ({ page }) => {
   test.setTimeout(100000);
   await page.setViewportSize({ width: 390, height: 844 });
