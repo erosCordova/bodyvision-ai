@@ -72,7 +72,7 @@ test("capture rejects a disguised image without uploading it", async ({ page }) 
     buffer: Buffer.from("THIS IS NOT A REAL PNG FILE", "utf8"),
   });
   await expect(page.getByRole("alert")).toContainText(
-    "El contenido del archivo no corresponde al formato declarado",
+    "El contenido de la fotografía no corresponde al formato declarado",
   );
   await expect(page.getByRole("link", {
     name: "Ver control de calidad en el módulo de análisis",
