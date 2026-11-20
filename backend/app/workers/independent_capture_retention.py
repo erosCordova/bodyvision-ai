@@ -11,7 +11,7 @@ import time
 from collections.abc import Mapping
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine, URL, make_url
+from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
