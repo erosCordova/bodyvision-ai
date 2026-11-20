@@ -8,6 +8,7 @@ import { anatomySource } from "./atlasSource";
 import { captureOpaqueAtlasPng, type AtlasComparisonDetails } from "./atlasCapture";
 import { planAtlasCapture } from "./atlasCaptureResolution";
 import { bodyVisualScenario, DEFAULT_REFERENCE_KG } from "./bodyVolume";
+import { buildHistoricalComparisonShape, type HistoricalComparisonControls } from "./historicalComparison";
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
@@ -202,6 +203,7 @@ export function createAnatomyScene(
   let lodBusy = false;
   const volume = { value: 0 };
   let referenceVolume = 0;
+  let historicalComparison: ReturnType<typeof buildHistoricalComparisonShape> | null = null;
   const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
   let showWireMesh = false;
   let comparison = false;
@@ -248,8 +250,8 @@ export function createAnatomyScene(
         renderer.setScissorTest(true);
         renderer.setViewport(0, 0, width, height);
         renderer.setScissor(0, 0, dividerPx, height);
-        volume.value = referenceVolume;
-        root.scale.y = root.scale.x;
+        volume.value = historicalComparison?.radialVariation ?? referenceVolume;
+        root.scale.y = root.scale.x * (historicalComparison?.statureScale ?? 1);
         root.updateMatrixWorld(true);
         renderer.render(scene, camera);
         renderPasses++;
@@ -650,6 +652,12 @@ export function createAnatomyScene(
     if (enabled) for (const [layer, group] of objects) ensureWireOverlays(layer, group);
     applyAll();
   };
+  const setComparisonBaseline = (controls: HistoricalComparisonControls | null) => {
+    // This alters only the left pass of the existing WebGL scene; no
+    // duplicate avatar or scene is allocated. Null restores the original.
+    historicalComparison = controls ? buildHistoricalComparisonShape(controls) : null;
+    render();
+  };
   const setComparison = (enabled: boolean, divider = comparisonDivider) => {
     comparison = enabled;
     comparisonDivider = Number.isFinite(divider)
@@ -895,5 +903,5 @@ export function createAnatomyScene(
       resize();
     }
   };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
 }

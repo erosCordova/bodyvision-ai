@@ -48,3 +48,19 @@ Las pruebas de navegador emplean una respuesta de paginación sintética de 25
 registros y verifican CSV, desplazamiento y rechazo de texto arbitrario en el
 archivo. Los nombres propios, fechas y resultados no acreditan datos reales.
 La validación del commit debe confirmarse en CI antes de aumentar el porcentaje.
+
+## Comparación visual con una versión histórica (20 noviembre de 2026)
+
+El historial incorpora «Fijar como referencia». Esta acción utiliza el peso
+simulado y la estatura de una versión autorizada en el panel izquierdo y
+conserva los controles del escenario actual en el derecho. Son **dos pasadas
+de la misma malla WebGL**, sin crear personajes duplicados, alterar mediciones
+observadas o reescribir filas históricas. La opción «Quitar referencia
+histórica» devuelve el comportamiento original; cambiar de expediente o
+restaurar los controles limpia la referencia anterior. El PNG comparativo usa
+las etiquetas y medidas de la versión fijada.
+
+Se añaden pruebas del cálculo histórico y del flujo de selección, cambio de
+estatura y reversión. El alcance es estrictamente **educativo y sintético**;
+la comparación visual no determina composición corporal ni un resultado
+médico. Su aprobación depende de la ejecución correspondiente de CI.

@@ -139,6 +139,10 @@ export function AnatomyAtlas() {
   const [baselinePreview, setBaselinePreview] = useState(false);
   const [comparison, setComparison] = useState(false);
   const [comparisonDivider, setComparisonDivider] = useState(50);
+  const [historicalBaseline, setHistoricalBaseline] = useState<{
+    id: string; version: number; reference_kg: number; variation_percent: number;
+    stature_cm: number; simulated_kg: number;
+  } | null>(null);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [captureError, setCaptureError] = useState("");
   const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
@@ -304,6 +308,11 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation, referenceKg), [weightVariation, referenceKg, baselinePreview, restart]);
   useEffect(() => controller.current?.setStature(baselinePreview ? BASELINE_HEIGHT_CM : statureCm), [statureCm, baselinePreview, restart]);
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
+  useEffect(() => controller.current?.setComparisonBaseline(historicalBaseline ? {
+    referenceKg: historicalBaseline.reference_kg,
+    variationPercent: historicalBaseline.variation_percent,
+    statureCm: historicalBaseline.stature_cm,
+  } : null), [historicalBaseline, restart]);
   useEffect(() => controller.current?.setComparison(comparison, comparisonDivider), [comparison, comparisonDivider, restart]);
   useEffect(() => {
     if (!diagnosticsOpen) return;
@@ -446,6 +455,7 @@ export function AnatomyAtlas() {
     setStatureCm(BASELINE_HEIGHT_CM);
     setBaselinePreview(false);
     setComparison(false);
+    setHistoricalBaseline(null);
     setSavedScenario(null);
   };
   const analyzeCurrentAvatar = async () => {
@@ -490,7 +500,8 @@ export function AnatomyAtlas() {
     let objectUrl: string | null = null;
     try {
       const png = await controller.current.capturePng(false, exportComparison ? {
-        referenceKg, referenceCm: BASELINE_HEIGHT_CM,
+        referenceKg: historicalBaseline?.simulated_kg ?? referenceKg,
+        referenceCm: historicalBaseline?.stature_cm ?? BASELINE_HEIGHT_CM,
         scenarioKg: simulatedWeight, scenarioCm: statureCm,
       } : undefined);
       if (png.type !== "image/png" || png.size === 0 || png.size > 10 * 1024 * 1024) {
@@ -594,7 +605,9 @@ export function AnatomyAtlas() {
           {comparison && !error && (
             <div className="studio-compare" aria-label="Comparación dividida del mismo modelo 3D">
               <div className="studio-compare-divider" style={{ left: `${comparisonDivider}%` }} />
-              <span className="studio-compare-before">REFERENCIA · {referenceKg} kg / {BASELINE_HEIGHT_CM} cm</span>
+              <span className="studio-compare-before">{historicalBaseline
+                ? `HISTÓRICO v${historicalBaseline.version} · ${historicalBaseline.simulated_kg} kg / ${historicalBaseline.stature_cm} cm`
+                : `REFERENCIA · ${referenceKg} kg / ${BASELINE_HEIGHT_CM} cm`}</span>
               <span className="studio-compare-after">ESCENARIO · {simulatedWeight} kg / {statureCm} cm</span>
               <span className="studio-compare-caption">Dos estados del mismo cuerpo · comparación gráfica, no clínica</span>
             </div>
@@ -791,6 +804,11 @@ export function AnatomyAtlas() {
                     onClick={() => { setBaselinePreview(false); setComparison(value => !value); }}>
                     {comparison ? "Cerrar comparación dividida" : "Comparar lado a lado"}
                   </button>
+                  {historicalBaseline && (
+                    <button type="button" onClick={() => setHistoricalBaseline(null)}>
+                      Quitar referencia histórica
+                    </button>
+                  )}
                   <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation, statureCm })}>Guardar comparación en esta vista</button>
                   <button onClick={resetSimulation}>Restaurar valores</button>
                   <button type="button" onClick={() => void downloadCurrentAvatar()}
@@ -837,6 +855,8 @@ export function AnatomyAtlas() {
                     <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
                       onChange={event => {
                         setScenarioProfileId(event.target.value);
+                        setHistoricalBaseline(null);
+                        setComparison(false);
                         setScenarioOffset(0);
                         setScenarioExportError("");
                         setScenarioParentId("");
@@ -909,6 +929,23 @@ export function AnatomyAtlas() {
                               </div>
                               <div className="studio-scenario-row-actions">
                                 <button type="button" onClick={() => restoreHistoryScenario(row)}>Cargar en 3D</button>
+                                <button type="button" aria-pressed={historicalBaseline?.id === row.id}
+                                  onClick={() => {
+                                    setHistoricalBaseline({
+                                      id: row.id, version: row.version,
+                                      reference_kg: row.reference_kg,
+                                      variation_percent: row.variation_percent,
+                                      stature_cm: row.stature_cm,
+                                      simulated_kg: row.simulated_kg,
+                                    });
+                                    setBaselinePreview(false);
+                                    setComparison(true);
+                                    setVisible(["skin"]);
+                                    setOpacity({ ...initialOpacity });
+                                    setMode("realista");
+                                  }}>
+                                  Fijar como referencia
+                                </button>
                                 <button type="button" onClick={() => setScenarioVersionId(row.id)}>Ver versiones</button>
                               </div>
                             </li>

@@ -306,6 +306,21 @@ test("synthetic history pages and CSV export never include observed records or a
   const history = page.getByRole("region", { name: "Historial de escenarios simulados" });
   await expect(history.getByRole("status", { name: "Página del historial simulado" }))
     .toContainText("Versiones 1–20 de 25");
+  // A stored snapshot can be the left baseline of a split rendering of
+  // the current synthetic scenario, with no additional model instance.
+  await history.getByRole("button", { name: "Fijar como referencia" }).first().click();
+  const comparison = page.getByLabel("Comparación dividida del mismo modelo 3D");
+  await expect(comparison).toContainText("HISTÓRICO v1 · 80.5 kg / 175 cm");
+  await expect(history.getByRole("button", { name: "Fijar como referencia" }).first())
+    .toHaveAttribute("aria-pressed", "true");
+  const height = page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" });
+  await height.fill("195");
+  await expect(comparison).toContainText("HISTÓRICO v1 · 80.5 kg / 175 cm");
+  await expect(comparison).toContainText("ESCENARIO · 70 kg / 195 cm");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  await page.getByRole("button", { name: "Quitar referencia histórica" }).click();
+  await expect(comparison).toContainText("REFERENCIA · 70 kg / 175 cm");
+  await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
   const exportButton = history.getByRole("button", { name: "Exportar página CSV" });
   const firstDownload = page.waitForEvent("download");
   await exportButton.click();
