@@ -11,8 +11,9 @@ describe("BODYVISION project progress assessment", () => {
   it("calculates the overall estimate from the phase assessments", () => {
     const average = phaseAssessment.reduce((sum, phase) => sum + phase.progress, 0) / phaseAssessment.length;
     expect(overallProgress).toBe(Math.round(average));
-    // The aggregate must follow reviewed phase evidence, never a frozen percentage.
-    expect(phaseAssessment.find(phase => phase.id === 5)?.progress).toBe(60);
+    // Follow live, documented phase evidence instead of freezing any milestone.
+    // The calculation above is the only source for the displayed total.
+    expect(phaseAssessment.find(phase => phase.id === 5)?.completed).toContain("MediaPipe");
     expect(reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
