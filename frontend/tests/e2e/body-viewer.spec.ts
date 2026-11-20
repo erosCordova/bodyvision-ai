@@ -834,11 +834,11 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
     await expect(quality).toContainText("4 de 4 criterios cumplidos");
     await page.getByRole("button", { name: "Detectar pose con IA" }).tap();
     const pose = page.getByRole("region", { name: "Estimación local de pose con IA" });
-    await expect(pose).toContainText(/Pose detectada\\.|No se detectó una pose humana/, {
+    await expect(pose).toContainText(/Pose detectada\.|No se detectó una pose humana/, {
       timeout: 90000,
     });
     await page.getByRole("button", { name: "Repetir detección" }).tap();
-    await expect(pose).toContainText(/Pose detectada\\.|No se detectó una pose humana/, {
+    await expect(pose).toContainText(/Pose detectada\.|No se detectó una pose humana/, {
       timeout: 90000,
     });
 
@@ -860,7 +860,7 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
       .toBeGreaterThanOrEqual(800);
     await expect(page.getByRole("button", { name: "Detectar pose con IA" })).toBeEnabled();
     await page.getByRole("button", { name: "Detectar pose con IA" }).tap();
-    await expect(pose).toContainText(/Pose detectada\\.|No se detectó una pose humana/, {
+    await expect(pose).toContainText(/Pose detectada\.|No se detectó una pose humana/, {
       timeout: 90000,
     });
     expect(scriptErrors).toEqual([]);
