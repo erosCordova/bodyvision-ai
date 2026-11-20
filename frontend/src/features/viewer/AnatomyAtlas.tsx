@@ -459,6 +459,33 @@ export function AnatomyAtlas() {
       setCaptureBusy(false);
     }
   };
+  const downloadCurrentAvatar = async () => {
+    if (captureBusy || comparison || !controller.current || layerStates.skin !== "ready" ||
+      !visible.includes("skin") || error) return;
+    setCaptureBusy(true);
+    setCaptureError("");
+    let objectUrl: string | null = null;
+    try {
+      const png = await controller.current.capturePng();
+      if (png.type !== "image/png" || png.size === 0 || png.size > 10 * 1024 * 1024) {
+        throw new Error("La captura PNG 3D no tiene un formato o tamaño válido.");
+      }
+      // Export ONLY the existing synthetic atlas. No upload, external request,
+      // personal file name, duplicate mesh, or persistence in browser storage.
+      objectUrl = URL.createObjectURL(png);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = "bodyvision-atlas-3d-sintetico.png";
+      link.click();
+      const finishedUrl = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(finishedUrl), 1500);
+    } catch {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setCaptureError("No se pudo descargar la imagen 3D ficticia. Comprueba la vista y vuelve a intentarlo.");
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else if (root.current?.requestFullscreen) void root.current.requestFullscreen();
@@ -740,6 +767,10 @@ export function AnatomyAtlas() {
                   </button>
                   <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation, statureCm })}>Guardar comparación en esta vista</button>
                   <button onClick={resetSimulation}>Restaurar valores</button>
+                  <button type="button" onClick={() => void downloadCurrentAvatar()}
+                    disabled={captureBusy || comparison || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
+                    {captureBusy ? "Preparando captura…" : "Descargar imagen 3D (PNG)"}
+                  </button>
                   <button type="button" onClick={() => void analyzeCurrentAvatar()}
                     disabled={captureBusy || comparison || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
                     {captureBusy ? "Preparando captura 3D…" : "Analizar esta vista 3D con IA"}

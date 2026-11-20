@@ -417,6 +417,33 @@ test("self-hosted pose model analyses a screenshot of the licensed synthetic ana
   await page.screenshot({ path: "test-results/pose-synthetic-anatomical-body.png", fullPage: true });
 });
 
+test("3D studio exports the existing synthetic avatar as a valid PNG without API writes", async ({ page }) => {
+  test.setTimeout(110000);
+  await sourceFixtures(page);
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto("/simulation");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const exportButton = page.getByRole("button", { name: "Descargar imagen 3D (PNG)" });
+  await expect(exportButton).toBeEnabled();
+  const pendingDownload = page.waitForEvent("download");
+  await exportButton.click();
+  const downloaded = await pendingDownload;
+  expect(downloaded.suggestedFilename()).toBe("bodyvision-atlas-3d-sintetico.png");
+  const filePath = await downloaded.path();
+  expect(filePath).not.toBeNull();
+  const pngBytes = readFileSync(filePath!);
+  expect([...pngBytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(pngBytes.length).toBeGreaterThan(5000);
+  await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeEnabled();
+  await page.getByRole("button", { name: "Comparar lado a lado" }).click();
+  await expect(exportButton).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Analizar esta vista 3D con IA" })).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test("3D simulation opens the same avatar snapshot in local AI pose analysis", async ({ page }) => {
   test.setTimeout(150000);
   await sourceFixtures(page);
