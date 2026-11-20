@@ -23,9 +23,11 @@ const pose = summarizePoseResult({ landmarks: [Array.from({ length: 33 }, (_, in
 describe("explicit synthetic pose quality report", () => {
   it("keeps only predefined counts and flags; no image, landmarks, names or free-form details", () => {
     const quality = assessPoseQuality(pose, capture);
+    const captureWithPrivateField = { ...capture, privateName: "SECRET_PATIENT" };
+    const poseWithPrivateFields = { ...pose, photo: "data:image/png;private", fileName: "NAME.png" };
     const result = buildSyntheticPoseReviewReport({
-      capture: { ...capture, privateName: "SECRET_PATIENT" },
-      pose: { ...pose, photo: "data:image/png;private", fileName: "NAME.png" },
+      capture: captureWithPrivateField,
+      pose: poseWithPrivateFields,
       quality: { ...quality, warnings: ["PRIVATE_WARNING"] },
       threshold: 0.5,
     });
