@@ -29,7 +29,7 @@ describe("local synthetic pose repeatability benchmark", () => {
     ]);
     expect(summary).toMatchObject({
       attempts: 4, successful: 3, failed: 1, detected: 2,
-      medianMs: 100, p95Ms: 200,
+      medianMs: 150, p95Ms: 200,
     });
     expect(summary.timingsMs).toEqual([100, 200]);
   });
