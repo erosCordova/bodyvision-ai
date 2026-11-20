@@ -321,7 +321,12 @@ test("3D simulation opens the same avatar snapshot in local AI pose analysis", a
   })).toBeVisible();
   await page.getByRole("button", { name: "Detectar pose con IA" }).click();
   await expect(page.getByRole("region", { name: "Estimación local de pose con IA" }))
-    .toContainText("Pose detectada.", { timeout: 90test("real local pose matrix records front, lateral, lighting, occlusion and crop of synthetic atlas", async ({ page }) => {
+    .toContainText("Pose detectada.", { timeout: 90000 });
+  await expect(page.getByRole("img", { name: "Puntos corporales detectados por el modelo" }))
+    .toBeVisible();
+});
+
+test("real local pose matrix records front, lateral, lighting, occlusion and crop of synthetic atlas", async ({ page }) => {
   test.setTimeout(300000);
   await sourceFixtures(page);
   await page.goto("/body-3d");
