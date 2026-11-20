@@ -678,3 +678,98 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
   await expect(panel).toHaveCount(0);
 });
+
+
+/**
+ * Real Chromium mobile-viewport/touch emulation, not a physical device test.
+ * In particular, a GPU-budgeted mobile WebGL capture is less than the 720px
+ * photographic preflight threshold: it must visibly retain that warning
+ * instead of claiming a quality-assured image. No invented pose outcomes.
+ */
+test.describe("mobile touch emulation (not real phone hardware)", () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("touch simulation retains GPU limits, quality warnings and local MediaPipe flow", async ({ page }) => {
+    test.setTimeout(180000);
+    const scriptErrors: string[] = [];
+    const unauthorizedWrites: string[] = [];
+    page.on("pageerror", error => scriptErrors.push(error.message));
+    page.on("request", request => {
+      if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) &&
+          new URL(request.url()).pathname.startsWith("/api/")) {
+        unauthorizedWrites.push(request.url());
+      }
+    });
+    await sourceFixtures(page);
+    await page.goto("/simulation");
+    await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+    const mobileCapabilities = await page.evaluate(() => ({
+      width: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      touch: navigator.maxTouchPoints,
+      coarse: matchMedia("(pointer: coarse)").matches,
+      dpr: devicePixelRatio,
+    }));
+    expect(mobileCapabilities.width).toBe(390);
+    expect(mobileCapabilities.scrollWidth).toBeLessThanOrEqual(392);
+    expect(mobileCapabilities.touch).toBeGreaterThan(0);
+    expect(mobileCapabilities.coarse).toBe(true);
+    expect(mobileCapabilities.dpr).toBe(2);
+    await expect(page.getByRole("button", { name: "Fluida", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
+    const canvas = page.locator(".studio-canvas canvas");
+    await expect(canvas).toHaveCount(1);
+    await expect(canvas).toBeVisible();
+    const pixelCount = await canvas.evaluate((element: HTMLCanvasElement) =>
+      element.width * element.height);
+    expect(pixelCount, "GPU surface in mobile fluid mode remains below its pixel budget")
+      .toBeLessThanOrEqual(970000);
+
+    await page.getByRole("button", { name: "Frente", exact: true }).tap();
+    const weight = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+    await weight.fill("15");
+    await expect(page.locator(".studio-weight-indicator")).toContainText("+15%");
+    await page.getByRole("button", { name: "Malla 3D", exact: true }).tap();
+    await expect(page.getByRole("button", { name: "Malla 3D", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Malla 3D", exact: true }).tap();
+    await expect(canvas).toHaveCount(1);
+
+    // Rotating the device does not switch away from low-fill-rate rendering.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.getByRole("button", { name: "Fluida", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
+    await expect(canvas).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(viewport(page)).toHaveAttribute("data-loaded", "true");
+    await page.getByRole("button", { name: "Frente", exact: true }).tap();
+
+    // A small display canvas does not magically become a 720px photo.
+    await page.getByRole("button", { name: "Analizar esta vista 3D con IA" }).tap();
+    await expect(page).toHaveURL(/\/analysis$/);
+    const capture = page.getByRole("region", { name: "Control de calidad recibido" });
+    await expect(capture).toBeVisible();
+    await expect(capture).toContainText("Resolución");
+    await expect(capture).not.toContainText("4 de 4 criterios cumplidos");
+
+    // The local model runs nevertheless; record only an honest detect/no-detect
+    // outcome, never fabricated landmarks or a clinical quality claim.
+    await page.getByRole("button", { name: "Detectar pose con IA" }).tap();
+    const pose = page.getByRole("region", { name: "Estimación local de pose con IA" });
+    await expect(pose).toContainText(/Pose detectada\.|No se detectó una pose humana/, {
+      timeout: 90000,
+    });
+    await page.getByRole("checkbox", { name: /Confirmo que esta imagen es ficticia/ }).check();
+    await page.getByRole("button", { name: "Diagnosticar etapas (1 ejecución)" }).tap();
+    const stages = page.getByLabel("Etapas de inferencia local");
+    await expect(stages).toBeVisible({ timeout: 90000 });
+    await expect(stages).toContainText("Heap JavaScript");
+    expect(scriptErrors).toEqual([]);
+    expect(unauthorizedWrites).toEqual([]);
+  });
+});
