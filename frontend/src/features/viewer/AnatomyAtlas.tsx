@@ -236,6 +236,7 @@ export function AnatomyAtlas() {
   const [selected, setSelected] = useState<SelectedStructure | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<AtlasEntry | null>(null);
   const [search, setSearch] = useState("");
+  const [activeSearchResult, setActiveSearchResult] = useState(0);
   const [entries, setEntries] = useState<AtlasEntry[]>([]);
   const [contentReady, setContentReady] = useState(false);
   const [status, setStatus] = useState("Inicializando el cuerpo humano 3D…");
@@ -357,12 +358,14 @@ export function AnatomyAtlas() {
   };
   const results = useMemo(() => search.trim().length < 2 ? [] : entries
     .filter(entry => matches(entry, search)).slice(0, 9), [search, entries]);
+  const activeResultIndex = Math.min(activeSearchResult, Math.max(results.length - 1, 0));
   const runningTour = tour && tours.find(item => item.id === tour.id);
   const currentStep = runningTour && tour ? runningTour.steps[tour.step] : null;
 
   const openEntry = (entry: AtlasEntry) => {
     setPanel("informacion");
     setSearch("");
+    setActiveSearchResult(0);
     setTour(null);
     setSelectedEntry(entry);
     setIsolated(false);
@@ -571,12 +574,32 @@ export function AnatomyAtlas() {
         <div className="studio-search-wrap">
           <span aria-hidden="true">⌕</span>
           <input aria-label="Buscar estructura anatómica" placeholder="Buscar estructuras, músculos, huesos, nervios…" value={search}
-            onChange={event => setSearch(event.target.value)} />
-          {search && <button aria-label="Limpiar búsqueda" onClick={() => setSearch("")}>×</button>}
+            aria-controls="studio-search-results"
+            aria-expanded={search.trim().length >= 2}
+            aria-activedescendant={search.trim().length >= 2 && results.length ? "studio-search-result-" + activeResultIndex : undefined}
+            onChange={event => { setSearch(event.target.value); setActiveSearchResult(0); }}
+            onKeyDown={event => {
+              if (event.key === "Escape" && search) {
+                event.preventDefault();
+                setSearch("");
+                setActiveSearchResult(0);
+              } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && results.length) {
+                event.preventDefault();
+                const direction = event.key === "ArrowDown" ? 1 : -1;
+                setActiveSearchResult(value => (value + direction + results.length) % results.length);
+              } else if (event.key === "Enter" && results.length) {
+                event.preventDefault();
+                openEntry(results[activeResultIndex]);
+              }
+            }} />
+          {search && <button aria-label="Limpiar búsqueda" onClick={() => { setSearch(""); setActiveSearchResult(0); }}>×</button>}
           {search.trim().length >= 2 && (
-            <div className="studio-search-results" role="listbox" aria-label="Resultados anatómicos">
-              {results.map(entry => (
-                <button key={entry.layer + entry.id} role="option" aria-selected="false" onClick={() => openEntry(entry)}>
+            <div id="studio-search-results" className="studio-search-results" role="listbox" aria-label="Resultados anatómicos">
+              {results.map((entry, index) => (
+                <button key={entry.layer + entry.id} id={"studio-search-result-" + index} role="option"
+                  aria-selected={index === activeResultIndex}
+                  onMouseEnter={() => setActiveSearchResult(index)}
+                  onClick={() => openEntry(entry)}>
                   <span>{anatomyDisplayName(entry.medical)}</span><small>{anatomicalLayers.find(l => l.id === entry.layer)?.label}</small>
                 </button>
               ))}
