@@ -163,3 +163,21 @@ genéricos. Los tests de Windows y Linux prueban explícitamente
 que cambios de valores y duplicados siguen detectándose.
 Este método no reemplaza la prueba de restauración del esquema
 ni implica validación clínica. 
+
+
+## Consistencia de representación temporal durante la comparación
+
+La prueba de restauración independiente identificó diferencias en tres
+tablas que contienen observaciones y fechas (`organizations`,
+`profiles`, `measurements`), mientras las secuencias coincidían.
+El PostgreSQL principal usa `TZ=America/Lima`; una instancia
+`initdb` nueva sin esa variable puede serializar columnas
+`timestamptz` con una zona horaria diferente en `pg_dump`
+aunque representen los mismos instantes.
+
+El ensayo ahora lee `SHOW TimeZone` del origen **antes de
+detenerlo**, inicia el PostgreSQL temporal con `TZ=America/Lima`
+y exige que `SHOW TimeZone` coincida exactamente en ambas bases.
+Luego mantiene la comparación de filas y secuencias sin omitir
+valores de fechas. No constituye una conversión de datos clínicos
+ni un reemplazo de la revisión de integridad.

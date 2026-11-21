@@ -190,6 +190,10 @@ jobs:
           # Use a brand-new tmpfs-backed PostgreSQL process with NO network and
           # NO access to the application's original Docker volumes.
           recovery_started=$SECONDS
+          # Data-only pg_dump serializes timestamptz values using session timezone.
+          # Capture the source server setting before stopping the primary database.
+          original_timezone="$(docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SHOW TimeZone"')"
+          test -n "$original_timezone"
           docker compose stop frontend backend db
           primary_db_container="$(docker compose ps -aq db)"
           test -n "$primary_db_container"
@@ -200,6 +204,7 @@ jobs:
             -e POSTGRES_DB=bodyvision_recovered_ci \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_HOST_AUTH_METHOD=trust \
+            -e TZ=America/Lima \
             postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3 \
             > /dev/null
           trap 'docker rm -f bodyvision-recovery-ci >/dev/null 2>&1 || true' EXIT
@@ -212,6 +217,8 @@ jobs:
             sleep 1
           done
           docker exec bodyvision-recovery-ci pg_isready -U postgres -d bodyvision_recovered_ci
+          test "$(docker exec bodyvision-recovery-ci psql -U postgres \
+            -d bodyvision_recovered_ci -Atc 'SHOW TimeZone')" = "$original_timezone"
           # This target has no pre-existing user tables. The original DB is stopped.
           test "$(docker exec bodyvision-recovery-ci psql -U postgres \
             -d bodyvision_recovered_ci -Atc \
