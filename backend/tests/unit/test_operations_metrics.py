@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.core.operations import MAX_ORGANIZATIONS, MAX_SAMPLES, OperationsMetrics
-from app.workers.capture_retention import retention_loop
+from app.workers.capture_retention import purge_due, purge_due_pose_summaries, retention_loop
 
 
 class Clock:
@@ -82,19 +82,25 @@ def test_retention_observation_tracks_failure_overdue_and_recovery_without_count
 def test_retention_loop_reports_failure_then_recovery(monkeypatch):
     metrics = OperationsMetrics(retention_enabled=True)
     organization = uuid4()
-    runs = 0
+    capture_runs = 0
+    pose_runs = 0
     states = []
 
-    async def run_once(*args):
-        nonlocal runs
-        runs += 1
-        if runs == 1:
-            raise RuntimeError("sensitive SQL must never be exported")
-        return 7
+    async def run_once(function, *args):
+        nonlocal capture_runs, pose_runs
+        if function is purge_due:
+            capture_runs += 1
+            if capture_runs == 1:
+                raise RuntimeError("sensitive SQL must never be exported")
+            return 7
+        if function is purge_due_pose_summaries:
+            pose_runs += 1
+            return 0
+        raise AssertionError("Unexpected retention worker")
 
     async def next_interval(*args):
         states.append(metrics.snapshot(organization)["retention"]["state"])
-        if runs == 2:
+        if capture_runs == 2:
             raise asyncio.CancelledError
 
     monkeypatch.setattr("app.workers.capture_retention.asyncio.to_thread", run_once)
@@ -102,4 +108,6 @@ def test_retention_loop_reports_failure_then_recovery(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(retention_loop(None, 60, metrics))
     assert states == ["failed", "ready"]
+    assert capture_runs == 2
+    assert pose_runs == 1
     assert "sensitive" not in str(metrics.snapshot(organization))
