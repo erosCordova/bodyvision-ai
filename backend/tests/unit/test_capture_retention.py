@@ -52,7 +52,6 @@ def test_retention_failure_does_not_report_uncommitted_deletions():
         purge_due(engine)
 
 
-
 def test_expired_pose_summaries_are_purged_in_bounded_batches():
     engine, connection = fake_engine([100, 3])
     assert purge_due_pose_summaries(engine, batch_size=100, max_batches=10) == 103

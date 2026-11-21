@@ -9,7 +9,8 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
-from test_pose_summary_api import BODY, accept, pose_archive as pose_archive
+from test_pose_summary_api import BODY, accept
+from test_pose_summary_api import pose_archive as pose_archive
 
 from app.workers.capture_retention import purge_due_pose_summaries
 

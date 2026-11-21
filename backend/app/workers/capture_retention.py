@@ -63,7 +63,9 @@ async def retention_loop(
             if removed:
                 logger.info("synthetic_capture_retention_purged", extra={"removed_count": removed})
             if pose_removed:
-                logger.info("synthetic_pose_retention_purged", extra={"removed_count": pose_removed})
+                logger.info(
+                    "synthetic_pose_retention_purged", extra={"removed_count": pose_removed}
+                )
         except Exception as exc:
             if operations is not None:
                 operations.retention_completed(False)

@@ -55,7 +55,9 @@ def purge_independently(engine: Engine) -> int:
         role = connection.execute(text("SELECT current_user")).scalar_one()
         if role != "bodyvision_app":
             raise IndependentRetentionDenied("Rol de retención no autorizado.")
-    return purge_due(engine, batch_size=100, max_batches=10) + purge_due_pose_summaries(\n        engine, batch_size=100, max_batches=10\n    )
+    captures = purge_due(engine, batch_size=100, max_batches=10)
+    poses = purge_due_pose_summaries(engine, batch_size=100, max_batches=10)
+    return captures + poses
 
 
 def run_once(environment: Mapping[str, str]) -> int:
