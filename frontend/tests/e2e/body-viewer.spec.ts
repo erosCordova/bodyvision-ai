@@ -57,10 +57,14 @@ test("real atlas meshes render, layers and tours respond without writing data", 
   await expect(page.getByLabel("Opacidad de Esqueleto", { exact: true })).toBeVisible();
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
   await page.getByLabel("Opacidad de Esqueleto", { exact: true }).fill("60");
-  await page.getByRole("textbox", { name: "Buscar estructura anatómica", exact: true }).fill("femur");
-  await page.getByRole("option", { name: /Femur/i }).first().click();
-  await expect(page.getByRole("heading", { name: /Femur/i })).toBeVisible();
-  await expect(page.locator(".studio-selected-tag")).toContainText("Femur");
+  const search = page.getByRole("textbox", { name: "Buscar estructura anatómica", exact: true });
+  await search.fill("fémur");
+  await expect(page.getByRole("option", { name: /Fémur/i }).first()).toBeVisible();
+  // Keep the English catalogue term searchable without displaying it as the UI label.
+  await search.fill("femur");
+  await page.getByRole("option", { name: /Fémur/i }).first().click();
+  await expect(page.getByRole("heading", { name: /Fémur/i })).toBeVisible();
+  await expect(page.locator(".studio-selected-tag")).toContainText("Fémur");
   await expect(viewport(page)).not.toContainText("no se encontró");
   await page.getByRole("button", { name: "Aislar estructura", exact: true }).click();
   await page.getByRole("tab", { name: "Recorridos", exact: true }).click();
@@ -449,8 +453,8 @@ test("a browser without WebGL gets an actionable error and keeps the catalogue",
   await expect(page.getByRole("alert")).toContainText("Este navegador no pudo iniciar el visor 3D");
   await expect(page.getByRole("button", { name: "Recargar visor", exact: true })).toBeVisible();
   await expect(viewport(page)).toHaveAttribute("data-loaded", "false");
-  await page.getByRole("textbox", { name: "Buscar estructura anatómica", exact: true }).fill("femur");
-  await expect(page.getByRole("option", { name: /Femur/i }).first()).toBeVisible();
+  await page.getByRole("textbox", { name: "Buscar estructura anatómica", exact: true }).fill("fémur");
+  await expect(page.getByRole("option", { name: /Fémur/i }).first()).toBeVisible();
 });
 
 test("self-hosted pose model analyses a screenshot of the licensed synthetic anatomical body", async ({ page }) => {
