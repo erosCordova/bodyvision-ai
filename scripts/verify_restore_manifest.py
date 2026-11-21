@@ -45,10 +45,22 @@ def _read_regular_file(path: Path, limit: int):
 
 
 def fingerprint(backup: Path) -> tuple[int, str]:
-    metadata = _read_regular_file(backup, MAX_DUMP_BYTES)
-    digest = hashlib.sha256()
-    total = 0
-    with backup.open("rb") as content:
+    # Open the exact inode we inspect. O_NOFOLLOW closes the check/open symlink
+    # swap window on POSIX; the preflight check remains for Windows.
+    _read_regular_file(backup, MAX_DUMP_BYTES)
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(backup, flags)
+    with os.fdopen(descriptor, "rb") as content:
+        metadata = os.fstat(content.fileno())
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or not 5 <= metadata.st_size <= MAX_DUMP_BYTES
+        ):
+            raise RestoreManifestRejected("Regular single-link backup required")
+        digest = hashlib.sha256()
+        total = 0
         if content.read(5) != b"PGDMP":
             raise RestoreManifestRejected("Not PostgreSQL custom dump")
         digest.update(b"PGDMP")
@@ -58,8 +70,14 @@ def fingerprint(backup: Path) -> tuple[int, str]:
             if total > MAX_DUMP_BYTES:
                 raise RestoreManifestRejected("Backup exceeds limit")
             digest.update(chunk)
-    if total != metadata.st_size:
-        raise RestoreManifestRejected("Backup changed during read")
+        after = os.fstat(content.fileno())
+        if (
+            total != metadata.st_size
+            or after.st_size != metadata.st_size
+            or after.st_mtime_ns != metadata.st_mtime_ns
+            or after.st_ctime_ns != metadata.st_ctime_ns
+        ):
+            raise RestoreManifestRejected("Backup changed during read")
     return total, digest.hexdigest()
 
 
