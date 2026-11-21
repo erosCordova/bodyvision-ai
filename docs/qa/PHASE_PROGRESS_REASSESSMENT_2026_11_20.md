@@ -509,3 +509,32 @@ permanece en **87 %** por redondeo. No se modifica ninguna otra fase.
 La valoración es técnica y manual. No cierra recuperación productiva
 de frontend/DNS/TLS fuera del host, custodia de secretos, copias externas,
 PITR, RPO/RTO ni revisiones independientes y recepción operativa real.
+
+
+## Fase 6: aceptación técnica de rendimiento del visor (21-11-2026)
+
+El atlas 3D seleccionado mantiene su modelo y arquitectura. El diagnóstico
+incorpora métricas de CPU por capa (tiempo de carga, memoria geométrica,
+mediana y P95 de envío WebGL). Se reducen renderizados redundantes, se
+pospone la simplificación LOD de capas ocultas y se prueban dos perfiles
+de Chromium móvil/escritorio emulados con el atlas original versionado.
+Las pruebas también comprueban un único canvas, límites de píxeles,
+conservación de geometrías y ausencia de escrituras de datos.
+
+La [CI integral 44963510164](https://github.com/erosCordova/bodyvision-ai/actions/runs/44963510164)
+aprobó el commit `20cd0f94687f879e89e2717db5394241aa8f4616` en
+Windows, Docker, backend, frontend y navegadores. Se aprobaron 278
+pruebas backend, 257 frontend, 40 públicas y 8 privadas (583 en total).
+La [aceptación de retención 44963510115](https://github.com/erosCordova/bodyvision-ai/actions/runs/44963510115)
+también aprobó. Véase `docs/qa/PHASE_6_PERFORMANCE_ACCEPTANCE_2026_11_21.md`.
+
+El entregable de aceptación reproducible se valora manualmente en cinco
+puntos de fase: **Fase 6: 85 % a 90 %**. Solo cambia esa fase; la suma
+de diez fases pasa de 870 a 875, y la media exacta pasa de 87,0 % a
+87,5 %, **88 % en el tablero** por redondeo.
+
+No se ha validado rendimiento en teléfonos físicos, finalización GPU,
+VRAM, FPS, consumo energético ni precisión morfológica o clínica.
+Quedan pendientes referencias morfológicas autorizadas, pruebas reales,
+revisión independiente de privacidad y aceptación humana. La base
+alojada, los despliegues públicos y la rama principal no se modifican.
