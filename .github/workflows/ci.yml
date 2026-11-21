@@ -232,6 +232,26 @@ jobs:
           python3 scripts/check_local_installation.py --json
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-restart.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-restart.sql /tmp/bodyvision-after-restart.sql
+      - name: Watchdog detects API outage and recovery without backend process
+        run: |
+          docker compose --profile watchdog build watchdog
+          docker compose stop backend
+          set +e
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --once \
+            > /tmp/bodyvision-watchdog-down.txt
+          watchdog_status=$?
+          set -e
+          test "$watchdog_status" -eq 1
+          grep -q '"state": "unreachable"' /tmp/bodyvision-watchdog-down.txt
+          docker compose up -d --wait --wait-timeout 120 backend
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --once \
+            > /tmp/bodyvision-watchdog-up.txt
+          grep -q '"state": "ready"' /tmp/bodyvision-watchdog-up.txt
+          python3 scripts/check_local_installation.py --json
       - name: Browser confirms retained correction history after restart
         working-directory: frontend
         env:

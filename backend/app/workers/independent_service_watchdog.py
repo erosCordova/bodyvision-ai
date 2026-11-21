@@ -1,0 +1,129 @@
+"""Optional local-only API availability monitor, in a separate process.
+
+No credentials, database access, patient data, request bodies or external URLs.
+"""
+import argparse
+import json
+import os
+import time
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
+from http.client import HTTPException
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+
+from app.db.session import SCHEMA_REVISION
+
+HEALTH_PATH = "/api/v1/health/ready"
+ALLOWED_TARGETS = frozenset({
+    "http://backend:8000" + HEALTH_PATH,
+    "http://127.0.0.1:8000" + HEALTH_PATH,
+})
+MAX_RESPONSE_BYTES = 4096
+
+
+class WatchdogDenied(ValueError):
+    """Fail closed outside explicit synthetic-only local/test environments."""
+
+
+class NoRedirects(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+def require_synthetic_watchdog(environment: Mapping[str, str]) -> tuple[str, int]:
+    if environment.get("APP_ENV") not in {"local", "test"}:
+        raise WatchdogDenied("Only local/test is permitted")
+    if environment.get("BODYVISION_ENABLE_WATCHDOG") != "synthetic-only":
+        raise WatchdogDenied("Explicit synthetic-only opt-in required")
+    target = environment.get("WATCHDOG_TARGET", "http://backend:8000" + HEALTH_PATH)
+    if target not in ALLOWED_TARGETS:
+        raise WatchdogDenied("Only fixed internal readiness targets are permitted")
+    try:
+        interval = int(environment.get("WATCHDOG_INTERVAL_SECONDS", "30"))
+    except (ValueError, TypeError) as exc:
+        raise WatchdogDenied("Invalid monitoring interval") from exc
+    if not 10 <= interval <= 3600:
+        raise WatchdogDenied("Monitoring interval out of range")
+    return target, interval
+
+
+def probe_readiness(target: str, opener=None) -> str:
+    """Use only controlled statuses; never expose raw errors or response bodies."""
+    if target not in ALLOWED_TARGETS:
+        raise WatchdogDenied("Target not allowlisted")
+    client = opener if opener is not None else build_opener(ProxyHandler({}), NoRedirects())
+    request = Request(target, headers={"Accept": "application/json"}, method="GET")
+    try:
+        with client.open(request, timeout=3) as response:
+            if response.status != 200:
+                return "degraded"
+            body = response.read(MAX_RESPONSE_BYTES + 1)
+    except HTTPError:
+        return "degraded"
+    except (URLError, TimeoutError, OSError, HTTPException):
+        return "unreachable"
+    if len(body) > MAX_RESPONSE_BYTES:
+        return "degraded"
+    try:
+        payload = json.loads(body)
+    except (UnicodeError, ValueError, TypeError):
+        return "degraded"
+    if (
+        isinstance(payload, dict)
+        and payload.get("status") == "ready"
+        and payload.get("database") == "connected"
+        and payload.get("schema_revision") == SCHEMA_REVISION
+    ):
+        return "ready"
+    return "degraded"
+
+
+def monitor(
+    target: str,
+    interval: int,
+    *,
+    once: bool = False,
+    probe: Callable[[str], str] = probe_readiness,
+    sleep: Callable[[float], None] = time.sleep,
+    emit: Callable[[str], None] = print,
+) -> int:
+    """Emit a privacy-minimized JSON line only on state transitions."""
+    previous = None
+    while True:
+        state = probe(target)
+        if state not in {"ready", "degraded", "unreachable"}:
+            state = "degraded"
+        if state != previous:
+            emit(json.dumps({
+                "event": "synthetic_watchdog_transition",
+                "state": state,
+                "checked_at": datetime.now(UTC).isoformat(),
+            }, sort_keys=True))
+            previous = state
+        if once:
+            return 0 if state == "ready" else 1
+        try:
+            sleep(interval)
+        except KeyboardInterrupt:
+            return 0
+
+
+def main(argv: list[str] | None = None, environment: Mapping[str, str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Vigilante de disponibilidad ficticia local")
+    parser.add_argument("--once", action="store_true", help="Consultar una vez y finalizar")
+    args = parser.parse_args(argv)
+    try:
+        target, interval = require_synthetic_watchdog(
+            os.environ if environment is None else environment
+        )
+        return monitor(target, interval, once=args.once)
+    except WatchdogDenied:
+        print('{"event":"synthetic_watchdog_disabled"}', flush=True)
+        return 2
+    except KeyboardInterrupt:
+        return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
