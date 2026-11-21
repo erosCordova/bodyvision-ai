@@ -12,6 +12,8 @@ import type { CaptureReview } from "./captureQuality";
 import type { PoseLocalDiagnostic } from "./poseDiagnostics";
 import { downloadSyntheticPosePerformanceReport } from "./posePerformanceReport";
 import { downloadSyntheticPoseReviewReport } from "./poseReviewReport";
+import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { PoseSummaryArchive } from "./PoseSummaryArchive";
 import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
@@ -21,6 +23,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
   const requestSequence = useRef(0);
   const [imageUrl, setImageUrl] = useState("");
   const [state, setState] = useState<PoseState>("idle");
+  const [analysisSerial, setAnalysisSerial] = useState(0);
   const [estimate, setEstimate] = useState<PoseEstimate | null>(null);
   const [failure, setFailure] = useState("");
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
@@ -80,6 +83,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       const pose = await detectPoseOnDevice(inputFile, current);
       if (!alive.current || requestId !== requestSequence.current) return;
       setEstimate(pose);
+      setAnalysisSerial(previous => previous + 1);
       setElapsedMs(Math.max(0, performance.now() - start));
       setState("ready");
     } catch {
@@ -325,6 +329,12 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
         <label><input type="checkbox" checked={showConnections}
           onChange={event => setShowConnections(event.target.checked)}/> Mostrar conexiones</label>
       </div>}
+      {privateAuthEnabled() && <PoseSummaryArchive runSerial={analysisSerial}
+        summary={state === "ready" && estimate && quality ? {
+          model_revision: POSE_MODEL_VERSION, detected: estimate.found,
+          threshold: visibilityThreshold, visible_points: quality.visiblePoints,
+          core_visible: quality.coreVisible, quality_state: quality.state, capture_passed: review.passed,
+        } : null} />}
       <div className="enterprise-pose-photo" style={{ aspectRatio: `${review.width} / ${review.height}` }}>
         {imageUrl && <img src={imageUrl} alt="Fotografía local utilizada únicamente para la revisión de pose"/>}
         {showSkeleton && (showPoints || showConnections) && (

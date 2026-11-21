@@ -26,7 +26,7 @@ def test_phase3_schema_is_present_and_access_is_denied_by_default(database):
     with database.connect() as conn:
         assert (
             conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one()
-            == "0019_comparison_export"
+            == "0020_pose_summaries"
         )
         for table in (
             "user_role_assignments",

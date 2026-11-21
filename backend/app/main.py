@@ -19,6 +19,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.operations import router as operations_router
+from app.api.routes.pose_summaries import router as pose_router
 from app.api.routes.simulation_scenarios import router as simulation_router
 from app.api.routes.synthetic_captures import router as capture_router
 from app.core.config import Settings
@@ -218,5 +219,6 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     if settings.identity_enabled:
         app.include_router(auth_router)
         app.include_router(operations_router)
+        app.include_router(pose_router)
         app.include_router(capture_router)
     return app
