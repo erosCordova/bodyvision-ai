@@ -33,9 +33,9 @@ No se registran expedientes, pesos, estaturas personales, fotografías, coordena
 
 ## Criterio técnico de aceptación
 
-La entrega está **pendiente de aceptación integral** hasta que la CI del commit final muestre `success` en `native-checks`, `docker-smoke` y `windows-scripts`, incluida la prueba de navegador. La aceptación de retención es independiente y también debe aprobarse.
+**Aceptación técnica confirmada el 21-11-2026.** La [CI integral 44963510164](https://github.com/erosCordova/bodyvision-ai/actions/runs/44963510164) aprobó el commit `20cd0f94687f879e89e2717db5394241aa8f4616` en `native-checks`, `docker-smoke` y `windows-scripts`: 278 pruebas backend, 257 frontend, 40 navegador público (incluida fase 6) y 8 privado; 583 pruebas de aplicación en total. La [aceptación de retención 44963510115](https://github.com/erosCordova/bodyvision-ai/actions/runs/44963510115) también aprobó.
 
-Se rechaza elevar el progreso por commits o tests aún no confirmados. Si se obtiene evidencia integral favorable, este conjunto de pruebas y optimizaciones puede someterse a revisión manual de la Fase 6 de **85 a 90 %**: el cierre restante se reserva para el hardware físico y la validación morfológica.
+Este conjunto satisface el criterio técnico de instrumentación y pruebas reproducibles. La Fase 6 pasa de **85 % a 90 %** según revisión manual del alcance; la media de las diez fases cambia de **87,0 % a 87,5 %**, y el tablero redondea a **88 %**. **No se considera cierre de fase al 100 %**: falta la validación en dispositivos físicos y con referencias morfológicas autorizadas.
 
 ## Límites importantes
 
