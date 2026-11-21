@@ -6,9 +6,18 @@ import {
   isUsefulLod,
   lodVerticesToRemove,
   triangleCount,
+  shouldPrepareGeometryLod,
 } from "../src/features/viewer/geometryLod";
 
 describe("conservative anatomical geometry LOD", () => {
+  it("defers costly simplification while the parent anatomical layer is hidden", () => {
+    expect(shouldPrepareGeometryLod(true, false, true, true)).toBe(false);
+    expect(shouldPrepareGeometryLod(true, true, false, true)).toBe(false);
+    expect(shouldPrepareGeometryLod(true, true, true, false)).toBe(false);
+    expect(shouldPrepareGeometryLod(false, true, true, true)).toBe(false);
+    expect(shouldPrepareGeometryLod(true, true, true, true)).toBe(true);
+  });
+
   it("keeps small and multi-material structures in their original detail", () => {
     const small = new SphereGeometry(1, 12, 8);
     expect(eligibleForGeometryLod(small)).toBe(false);
