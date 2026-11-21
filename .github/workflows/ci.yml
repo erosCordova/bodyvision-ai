@@ -237,7 +237,10 @@ jobs:
             pg_dump --data-only --no-owner --no-privileges \
             -U postgres bodyvision_recovered_ci \
             > /tmp/bodyvision-recovered-ci.sql
-          python3 scripts/verify_test_isolation.py \
+          # An independent cluster can reorder COPY rows and metadata.
+          # Compare full row MULTISETS (including duplicates), table headers
+          # and sequence values; never relax the strict in-place preservation test.
+          python3 scripts/verify_restored_data.py \
             /tmp/bodyvision-before-tests.sql /tmp/bodyvision-recovered-ci.sql
           # Restore the original disposable application only after comparing
           # the independent instance; no production database is touched.

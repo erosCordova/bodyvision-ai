@@ -133,3 +133,33 @@ de restaurar. **No importa secretos ni roles productivos.**
 Para un procedimiento real serían necesarios inventario,
 aprovisionamiento seguro y comprobación independiente de roles,
 permisos y secretos de la infraestructura destino.
+
+
+## Comparación semántica de datos en clústeres separados
+
+La segunda ejecución del ensayo restauró completamente el esquema
+del PostgreSQL de reemplazo, incluidos los roles requeridos,
+pero detectó diferencias al comparar **byte por byte** los volcados
+SQL de dos clústeres distintos. Ese método también compara orden
+físico de exportación y metadatos no clínicos del `pg_dump`,
+que pueden variar sin que cambie ningún valor almacenado.
+
+La comprobación estricta existente `verify_test_isolation.py`
+**permanece intacta** para el control de preservación de la misma
+base. Exclusivamente para verificar una restauración independiente,
+se añade `scripts/verify_restored_data.py`, que compara:
+identificadores de las tablas y orden de columnas de cada bloque COPY;
+el multiconjunto exacto de filas (con duplicados y cantidad);
+sentencias de datos INSERT y estados de las secuencias. Se usan
+resúmenes SHA-256 de cada fila y se ordenan para que no importe
+el orden de exportación. Cualquier fila añadida, ausente, duplicada
+o modificada, una columna alterada, un cambio de secuencia o
+un volcado incompleto hace fallar la prueba.
+
+El comparador evita imprimir valores de filas, direcciones o SQL,
+limita el tamaño y la cantidad de filas, rechaza instrucciones
+de modificación inesperadas y devuelve solo eventos técnicos
+genéricos. Los tests de Windows y Linux prueban explícitamente
+que cambios de valores y duplicados siguen detectándose.
+Este método no reemplaza la prueba de restauración del esquema
+ni implica validación clínica. 
