@@ -1003,6 +1003,11 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   expect(single.triangles).toBeGreaterThan(0);
   expect(single.cpuSubmissionMs).toBeGreaterThanOrEqual(0);
   expect(Number.isFinite(single.cpuSubmissionMs)).toBe(true);
+  expect(single.cpuSampleCount).toBeGreaterThan(0);
+  expect(single.cpuSampleCount).toBeLessThanOrEqual(120);
+  expect(single.cpuMedianMs).toBeGreaterThanOrEqual(0);
+  expect(single.cpuP95Ms).toBeGreaterThanOrEqual(single.cpuMedianMs);
+  await expect(panel).toContainText("Envío CPU (mediana / P95)");
   // Wait for two diagnostic refreshes: reading statistics must leave the scene idle.
   await page.waitForTimeout(2200);
   await expect(panel).toHaveAttribute("data-rendered-frames", String(single.renderedFrames));
@@ -1014,10 +1019,13 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   expect(split.triangles).toBe(single.triangles * 2);
   expect(split.meshes).toBe(single.meshes);
   expect(split.geometryBuffers).toBe(single.geometryBuffers);
+  expect(split.cpuSampleCount).toBeGreaterThanOrEqual(single.cpuSampleCount);
+  expect(split.cpuP95Ms).toBeGreaterThanOrEqual(split.cpuMedianMs);
   expect(Object.keys(split).sort()).toEqual([
     "schemaVersion", "anatomyRevision", "capturedAt", "mode", "interacting", "pixelRatio",
     "bufferWidth", "bufferHeight", "drawCalls", "triangles", "renderPasses",
-    "renderedFrames", "cpuSubmissionMs", "contextAvailable", "geometryBuffers",
+    "renderedFrames", "cpuSubmissionMs", "cpuSampleCount", "cpuMedianMs", "cpuP95Ms",
+    "contextAvailable", "geometryBuffers",
     "textures", "meshes", "overlays", "lodMeshes", "lodTrianglesSaved", "timingScope",
   ].sort());
   await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
