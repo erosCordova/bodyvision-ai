@@ -38,7 +38,7 @@ export function poseSummariesApi(token: string, profile: string) {
           FORBIDDEN: "No tienes permiso para modificar estos resúmenes.",
           NOT_FOUND: "El expediente o resumen no está disponible.",
           SESSION_EXPIRED: "La sesión ha caducado.",
-          CONFLICT: "Este envío ya se usó con datos distintos.",
+          CONFLICT: "El registro cambió o no admite esta operación. Comprueba el expediente y el envío.",
         };
         throw new Error(messages[error.code ?? ""] ?? "No se pudo completar la operación de pose.");
       }

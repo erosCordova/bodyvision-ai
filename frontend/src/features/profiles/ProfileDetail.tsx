@@ -16,6 +16,7 @@ import { MeasurementForm } from "../measurements/MeasurementForm";
 import { MeasurementComparison } from "../analytics/MeasurementComparison";
 import { LongitudinalSummary } from "../analytics/LongitudinalSummary";
 import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { PoseSummaryArchive } from "../capture/PoseSummaryArchive";
 import { ConsentPanel } from "./ConsentPanel";
 const HistoryChart = lazy(() =>
   import("../analytics/HistoryChart").then((module) => ({
@@ -123,6 +124,7 @@ export function ProfileDetail() {
           ["summary", "Resumen"],
           ["measurements", "Mediciones"],
           ["analytics", "Evolución"],
+          ...(privateAuthEnabled() ? [["pose", "Resultados de pose"]] : []),
         ].map(([code, label]) => (
           <button
             key={code}
@@ -133,6 +135,8 @@ export function ProfileDetail() {
           </button>
         ))}
       </nav>
+      {tab === "pose" && privateAuthEnabled() && <PoseSummaryArchive key={profileId}
+        fixedProfileId={profileId} summary={null} runSerial={0} />}
       {tab === "summary" && (
         <>
           <div className="section-title">

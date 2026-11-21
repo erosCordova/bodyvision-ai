@@ -10,13 +10,13 @@ import { dateTime } from "../../components/ui/States";
 const stateNames = { "not-detected": "Sin detección", insufficient: "Visibilidad insuficiente",
   caution: "Requiere revisión", reviewable: "Revisable de forma experimental" };
 
-export function PoseSummaryArchive({ summary, runSerial }: {
-  summary: PoseSummaryDraft | null; runSerial: number;
+export function PoseSummaryArchive({ summary, runSerial, fixedProfileId }: {
+  summary: PoseSummaryDraft | null; runSerial: number; fixedProfileId?: string;
 }) {
   const { session } = usePrivateAuth();
   const { api } = useWorkspace();
   const [search, setSearch] = useState("");
-  const [profileId, setProfileId] = useState("");
+  const [profileId, setProfileId] = useState(fixedProfileId ?? "");
   const [offset, setOffset] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -27,7 +27,7 @@ export function PoseSummaryArchive({ summary, runSerial }: {
   const summaryStamp = JSON.stringify(summary);
   const scope = session ? [session.organization_id, session.user_id] : [];
   const profiles = useQuery({ queryKey: ["pose-summary-profiles", ...scope, search],
-    queryFn: () => api.profiles(search), enabled: Boolean(session) });
+    queryFn: () => api.profiles(search), enabled: Boolean(session && !fixedProfileId) });
   const consents = useQuery({ queryKey: ["pose-summary-consents", ...scope, profileId],
     queryFn: () => consentsApi(session!.organization_id, session!.token, profileId).history(),
     enabled: Boolean(session && profileId) });
@@ -42,7 +42,8 @@ export function PoseSummaryArchive({ summary, runSerial }: {
     return () => { sequence.current += 1; };
   }, [profileId, session?.token, summaryStamp, runSerial]);
   useEffect(() => { setOffset(0); }, [profileId]);
-  const canWrite = session?.role === "administrator" || session?.role === "specialist";
+  const canWrite = (session?.role === "administrator" || session?.role === "specialist")
+    && Boolean(consents.data?.can_record);
 
   async function save() {
     if (!session || !profileId || !summary || !confirmed || !consentOk || busy || !canWrite) return;
@@ -78,6 +79,7 @@ export function PoseSummaryArchive({ summary, runSerial }: {
     <p>Resúmenes ficticios asociados al expediente: recuentos, umbral y versión del modelo.
       No contienen fotografías ni coordenadas. El servidor conserva el resultado comunicado
       por este navegador; no verifica por sí mismo la inferencia ni su precisión.</p>
+    {!fixedProfileId && <>
     <label>Buscar expediente para resultados de pose
       <input type="search" value={search} disabled={busy} onChange={event => {
         setSearch(event.target.value); setProfileId("");
@@ -90,6 +92,7 @@ export function PoseSummaryArchive({ summary, runSerial }: {
       </select>
     </label>
     {profiles.isError && <p role="alert">No se pudo consultar los expedientes.</p>}
+    </>}
     {profileId && <>
       <Link to={`/profiles/${profileId}`}>Gestionar aceptaciones del expediente</Link>
       <button type="button" disabled={busy || consents.isFetching} onClick={() => void consents.refetch()}>Actualizar aceptaciones de pose</button>
@@ -104,7 +107,7 @@ export function PoseSummaryArchive({ summary, runSerial }: {
         </label>
         <button type="button" disabled={busy || !summary || !confirmed}
           onClick={() => void save()}>{busy ? "Procesando resumen…" : "Guardar resultado de pose"}</button>
-        {!summary && <p>Ejecuta la detección local para guardar su resumen.</p>}
+        {!summary && <p>Ejecuta la detección local en <Link to="/capture">Captura corporal</Link> para guardar un nuevo resumen.</p>}
       </>}
       <button type="button" disabled={busy || history.isFetching} onClick={() => void history.refetch()}>Actualizar historial de pose</button>
       {history.isFetching && <p role="status">Consultando resultados guardados…</p>}

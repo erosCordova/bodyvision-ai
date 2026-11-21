@@ -51,9 +51,9 @@ test("real local detector saves only a fictional summary and history survives na
   expect(Object.keys(sent).sort()).toEqual(["model_revision", "detected", "threshold", "visible_points",
     "core_visible", "quality_state", "capture_passed", "synthetic_confirmed"].sort());
   await expect(history.getByRole("status", { name: "Página de resultados de pose" })).toContainText("1 resúmenes");
-  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-  await upload();
-  await history.getByLabel("Expediente para resultados de pose", { exact: true }).selectOption(id);
+  await page.getByRole("link", { name: "Expedientes", exact: true }).click();
+  await page.locator(`a[href="/profiles/${id}"]`).click();
+  await page.getByRole("button", { name: "Resultados de pose", exact: true }).click();
   await expect(history.getByRole("status", { name: "Página de resultados de pose" })).toContainText("1 resúmenes");
   await expect(history.getByRole("button", { name: "Guardar resultado de pose", exact: true })).toBeDisabled();
   page.once("dialog", dialog => dialog.accept());

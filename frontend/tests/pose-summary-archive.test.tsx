@@ -21,11 +21,12 @@ vi.mock("../src/app/providers/WorkspaceProvider", () => ({ useWorkspace: () => (
   profiles: async () => ({ items: [{ id: profile, display_code: "POSE-01" }], total: 1 }),
 } }) }));
 vi.mock("../src/services/api/consents", () => ({ consentsApi: () => ({ history: async () => ({
+  can_record: role !== "member",
   items: (accepted ? ["pose", "storage"] : ["pose"]).map(purpose => ({ purpose, effective: true })),
 }) }) }));
-function mount(summary: PoseSummaryDraft | null = draft) {
+function mount(summary: PoseSummaryDraft | null = draft, fixedProfileId?: string) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <MemoryRouter><PoseSummaryArchive summary={summary} runSerial={1}/></MemoryRouter>
+    <MemoryRouter><PoseSummaryArchive summary={summary} runSerial={1} fixedProfileId={fixedProfileId}/></MemoryRouter>
   </QueryClientProvider>);
 }
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200,
@@ -83,4 +84,14 @@ it("blocks history without both purposes and offers no write controls to a membe
   await screen.findByText("Revisable de forma experimental");
   expect(screen.queryByRole("button", { name: "Guardar resultado de pose" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Eliminar resumen de pose" })).not.toBeInTheDocument();
+});
+
+
+it("reads the fixed profile history without selecting an image or another profile", async () => {
+  role = "member";
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ items: [row], total: 1, limit: 20, offset: 0 })));
+  mount(null, profile);
+  await screen.findByText("Revisable de forma experimental");
+  expect(screen.queryByLabelText("Expediente para resultados de pose")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Guardar resultado de pose" })).not.toBeInTheDocument();
 });

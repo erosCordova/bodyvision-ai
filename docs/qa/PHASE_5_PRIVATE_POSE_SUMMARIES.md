@@ -7,7 +7,8 @@ ficticio seleccionado. Se conservan detección/no detección, recuentos de punto
 visibles y principales, umbral, estado heurístico de calidad, comprobación de
 captura, revisión del modelo, revisión del esquema de resumen, responsable y
 fecha de guardado del servidor. El historial se consulta por páginas de veinte,
-con búsqueda de expediente, actualización y borrado confirmado.
+con búsqueda de expediente, actualización y borrado confirmado. También se
+consulta desde la pestaña Resultados de pose del propio expediente.
 
 La inferencia continúa ejecutándose en el navegador. El servidor **no verifica
 ni ejecuta de nuevo** MediaPipe ni comprueba que una imagen corresponda al
@@ -51,7 +52,7 @@ Las tablas de mediciones y escenarios no se modifican. La creación y su evento
 fila y clave de envío. La consulta/repetición y el borrado también se auditan.
 La huella no es una firma ni acredita autenticidad de la inferencia.
 
-Repetir una clave con la misma entrada devuelve el mismo resultado; cambiarla
+Repetir una clave con la misma entrada devuelve el mismo resultado; cambiar la
 entrada produce conflicto. Tras borrar la fila se conserva un registro mínimo
 de envío y huella, sin el contenido del resumen, para devolver 410 y evitar
 que una respuesta perdida seguida de reintento recree el resultado borrado.
@@ -69,8 +70,8 @@ Los callbacks tardíos no cambian el expediente ni la sesión visibles. Una
 solicitud de escritura ya iniciada puede confirmarse aunque se cambie de
 pantalla: no se presenta el cambio de vista como cancelación del servidor.
 Las claves se reutilizan en un reintento de la misma detección y no se guardan
-en almacenamiento del navegador. La consulta funciona después de volver a
-Captura y cargar una imagen ficticia, sin repetir la inferencia.
+en almacenamiento del navegador. La pestaña **Resultados de pose** del expediente consulta el historial
+sin cargar una fotografía ni repetir la inferencia.
 
 ## Verificación prevista
 
