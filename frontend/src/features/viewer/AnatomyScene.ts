@@ -355,21 +355,26 @@ export function createAnatomyScene(
       });
     }, 80);
   };
-  const resize = () => {
+  const resize = (force = false) => {
     if (disposed) return;
     const bounds = host.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     const ratio = atlasPixelRatio(bounds.width, bounds.height, window.devicePixelRatio || 1, quality, interacting);
     const currentSize = renderer.getSize(new THREE.Vector2());
-    if (currentSize.x !== bounds.width || currentSize.y !== bounds.height) {
-      renderer.setSize(bounds.width, bounds.height, false);
+    const sizeChanged = currentSize.x !== bounds.width || currentSize.y !== bounds.height;
+    const ratioChanged = Math.abs(renderer.getPixelRatio() - ratio) > 0.0001;
+    // Avoid submitting duplicate GPU work for ResizeObserver notifications
+    // that do not actually change the CSS size or device pixel budget.
+    if (!sizeChanged && !ratioChanged && !force) return;
+    if (sizeChanged) renderer.setSize(bounds.width, bounds.height, false);
+    if (ratioChanged) renderer.setPixelRatio(ratio);
+    if (sizeChanged || camera.aspect !== bounds.width / bounds.height) {
+      camera.aspect = bounds.width / bounds.height;
+      camera.updateProjectionMatrix();
     }
-    if (Math.abs(renderer.getPixelRatio() - ratio) > 0.0001) renderer.setPixelRatio(ratio);
-    camera.aspect = bounds.width / bounds.height;
-    camera.updateProjectionMatrix();
     render();
   };
-  const resizeObserver = new ResizeObserver(resize);
+  const resizeObserver = new ResizeObserver(() => resize());
   resizeObserver.observe(host);
 
   const tick = () => {
@@ -403,7 +408,7 @@ export function createAnatomyScene(
   const contextRestored = () => {
     if (disposed) return;
     contextUnavailable = false;
-    resize();
+    resize(true); // A restored WebGL context must be explicitly redrawn.
     onError("");
     onStatus("Conexión gráfica restablecida · modelo anatómico disponible");
     updateAnimation();
@@ -507,7 +512,7 @@ export function createAnatomyScene(
     massBounds.value.set(fittedBox.min.y, fittedBox.max.y, fittedCentre.x, fittedCentre.z);
     resetCamera();
     fitted = true;
-    render();
+    // Loading a layer performs the final render after applying material state.
   };
 
   const matchingMesh = (group: THREE.Group, requestedName: string) => {
@@ -543,8 +548,7 @@ export function createAnatomyScene(
     controls.target.copy(center);
     camera.position.copy(center).addScaledVector(direction, distance);
     camera.lookAt(center);
-    controls.update();
-    render();
+    controls.update(); // Selection already rendered, and camera change emits an update.
     return true;
   };
 
