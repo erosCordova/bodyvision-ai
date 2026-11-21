@@ -741,10 +741,13 @@ export function AnatomyAtlas() {
             <span>Operaciones gráficas: {renderStats.drawCalls} · Triángulos: {renderStats.triangles.toLocaleString("es-PE")}</span>
             <span>LOD geométrico: {renderStats.lodMeshes} mallas simplificadas · {renderStats.lodTrianglesSaved.toLocaleString("es-PE")} triángulos reducidos</span>
             <span>Pasadas por fotograma: {renderStats.renderPasses}</span>
-            <span>Preparación CPU: {renderStats.cpuSubmissionMs === null ? "Sin muestra" : renderStats.cpuSubmissionMs.toFixed(2) + " ms"}</span>
+            <span>Envío CPU (último): {renderStats.cpuSubmissionMs === null ? "Sin muestra" : renderStats.cpuSubmissionMs.toFixed(2) + " ms"}</span>
+            <span>Envío CPU (mediana / P95): {renderStats.cpuMedianMs === null || renderStats.cpuP95Ms === null
+              ? "Sin muestra" : renderStats.cpuMedianMs.toFixed(2) + " / " + renderStats.cpuP95Ms.toFixed(2) + " ms"}</span>
+            <span>Muestras de render: {renderStats.cpuSampleCount} (máximo 120, ventana móvil)</span>
             <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
             <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
-            <small>Último fotograma completo. El tiempo CPU no mide la GPU ni los FPS. Se actualiza al interactuar, sin animar el cuerpo.</small>
+            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. El envío de comandos por CPU no mide la duración real de la GPU, FPS ni latencia de pantalla. Se actualiza al interactuar, sin animar el cuerpo.</small>
             <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
             <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
           </aside>}
