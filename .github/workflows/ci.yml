@@ -155,7 +155,23 @@ jobs:
         run: |
           # All data is synthetic. The restore target is an ephemeral database
           # inside db-test, never the application db or a hosted Neon database.
-          docker compose exec -T db sh -c 'pg_dump --format=custom --no-owner --no-acl -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-backup-ci.dump
+          recovery_state="$(mktemp -d /tmp/bodyvision-recovery-state.XXXXXX)"
+          recovery_image=bodyvision-recovery-acceptance-ci
+          docker build --target test -t "$recovery_image" ./backend
+          primary_db_container="$(docker compose ps -aq db)"
+          test -n "$recovery_image"
+          # Keys and passwords stay outside PostgreSQL and outside uploaded artifacts.
+          # Always remove the private state, including on a failed assertion.
+          trap 'docker rm -f bodyvision-recovery-ci >/dev/null 2>&1 || true; rm -rf "$recovery_state"; rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql /tmp/bodyvision-restored-ci.sql /tmp/bodyvision-before-recovery.sql' EXIT
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --network "container:$primary_db_container" --env-file .env \
+            -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
+            --mount "type=bind,src=$recovery_state,dst=/recovery-state" \
+            "$recovery_image" python tests/recovery_acceptance.py prepare
+          # Fixtures are added only AFTER test-isolation was verified above.
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-recovery.sql
+          # Preserve ACLs: SECURITY DEFINER functions must keep their PUBLIC revokes.
+          docker compose exec -T db sh -c 'pg_dump --format=custom --no-owner -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-backup-ci.dump
           test -s /tmp/bodyvision-backup-ci.dump
           # Reject damaged custom-format backups before invoking pg_restore.
           # Metadata stays on this disposable runner: no SQL/dump artifacts uploaded.
@@ -182,9 +198,9 @@ jobs:
           grep -q '"synthetic_restore_integrity_rejected"' /tmp/bodyvision-restore-corruption-check.json
           rm -f /tmp/bodyvision-corrupt-ci.dump /tmp/bodyvision-restore-corruption-check.json
           docker compose exec -T db-test sh -c 'createdb -U "$POSTGRES_USER" bodyvision_restored_ci'
-          docker compose exec -T db-test sh -c 'pg_restore --exit-on-error --no-owner --no-acl -U "$POSTGRES_USER" -d bodyvision_restored_ci' < /tmp/bodyvision-backup-ci.dump
+          docker compose exec -T db-test sh -c 'pg_restore --exit-on-error --no-owner -U "$POSTGRES_USER" -d bodyvision_restored_ci' < /tmp/bodyvision-backup-ci.dump
           docker compose exec -T db-test sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" bodyvision_restored_ci' > /tmp/bodyvision-restored-ci.sql
-          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-restored-ci.sql
+          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-recovery.sql /tmp/bodyvision-restored-ci.sql
           docker compose exec -T db-test sh -c 'dropdb -U "$POSTGRES_USER" bodyvision_restored_ci'
           # Rehearsal: stop the *entire primary application stack*, including DB.
           # Use a brand-new tmpfs-backed PostgreSQL process with NO network and
@@ -201,13 +217,13 @@ jobs:
           docker run -d --rm --name bodyvision-recovery-ci \
             --network none \
             --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=512m \
-            -e POSTGRES_DB=bodyvision_recovered_ci \
+            --env-file .env \
             -e POSTGRES_USER=postgres \
-            -e POSTGRES_HOST_AUTH_METHOD=trust \
+            -e POSTGRES_DB=bodyvision_recovered_ci \
+            -e POSTGRES_HOST_AUTH_METHOD=scram-sha-256 \
             -e TZ=America/Lima \
             postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3 \
             > /dev/null
-          trap 'docker rm -f bodyvision-recovery-ci >/dev/null 2>&1 || true' EXIT
           test "$(docker inspect --format '{{.HostConfig.NetworkMode}}' bodyvision-recovery-ci)" = none
           for attempt in $(seq 1 45); do
             if docker exec bodyvision-recovery-ci \
@@ -237,7 +253,7 @@ jobs:
             --backup /tmp/bodyvision-backup-ci.dump \
             --manifest /tmp/bodyvision-backup-ci.manifest.json
           docker exec -i bodyvision-recovery-ci \
-            pg_restore --exit-on-error --no-owner --no-acl \
+            pg_restore --exit-on-error --no-owner \
             -U postgres -d bodyvision_recovered_ci \
             < /tmp/bodyvision-backup-ci.dump
           docker exec bodyvision-recovery-ci \
@@ -248,17 +264,27 @@ jobs:
           # Compare full row MULTISETS (including duplicates), table headers
           # and sequence values; never relax the strict in-place preservation test.
           python3 scripts/verify_restored_data.py \
-            /tmp/bodyvision-before-tests.sql /tmp/bodyvision-recovered-ci.sql
+            /tmp/bodyvision-before-recovery.sql /tmp/bodyvision-recovered-ci.sql
+          # The original DB remains stopped. This API connects only to the new
+          # database via loopback inside its isolated network namespace.
+          test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --network container:bodyvision-recovery-ci --env-file .env \
+            -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
+            --mount "type=bind,src=$recovery_state,dst=/recovery-state" \
+            "$recovery_image" python tests/recovery_acceptance.py verify
           # Restore the original disposable application only after comparing
           # the independent instance; no production database is touched.
           docker rm -f bodyvision-recovery-ci > /dev/null
-          trap - EXIT
           docker compose up -d --wait --wait-timeout 180
           python3 scripts/check_local_installation.py --json
           recovery_elapsed=$((SECONDS - recovery_started))
           printf 'Synthetic replacement-DB recovery verified in %s seconds; this is not RTO.\n' "$recovery_elapsed"
           rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql \
-            /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql
+            /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql \
+            /tmp/bodyvision-before-recovery.sql
+          rm -rf "$recovery_state"
+          trap - EXIT
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - name: Install browser driver for compiled Docker UI

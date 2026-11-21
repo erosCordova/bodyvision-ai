@@ -137,7 +137,7 @@ Para un procedimiento real serían necesarios inventario,
 aprovisionamiento seguro y comprobación independiente de roles,
 permisos y secretos de la infraestructura destino.
 
-El ensayo usa `--no-owner --no-acl`: no restaura propietarios ni
+El ensayo aceptado en `44931458692` usaba `--no-owner --no-acl`: no restauraba propietarios ni
 permisos GRANT. Los roles del destino permanecen `NOLOGIN` y no
 se conecta la API a la base recuperada. Por tanto, este control
 demuestra recuperación del esquema y contenido ficticios, pero
@@ -217,3 +217,42 @@ es un dato observado del laboratorio, **no RTO ni SLA**.
 real, almacenamiento redundante, políticas de caducidad,
 verificación bajo pérdida física del anfitrión, infraestructura
 reemplazable y continuidad operativa aprobada para datos reales.
+
+## Ampliación: aceptación de la aplicación sobre el reemplazo
+
+La nueva versión conserva las ACL del respaldo y las restaura con
+`--no-owner`, incluyendo GRANT por columna/función y las revocaciones
+a PUBLIC. Reasigna la propiedad al administrador ficticio del destino;
+no recupera roles globales, contraseñas ni secretos desde el dump.
+
+Antes del respaldo, `backend/tests/recovery_acceptance.py prepare`
+crea dos cuentas ficticias de organizaciones distintas y conserva un
+PNG sintético mediante la API privada, con sus dos aceptaciones.
+Un archivo de estado privado del runner guarda la clave Fernet,
+credenciales y sesión de prueba **fuera del respaldo**. No se adjunta
+a artefactos y se elimina mediante un trap, también ante fallos.
+La comparación de filas se hace contra la instantánea posterior a
+estas fixtures, después del control previo de aislamiento de tests.
+
+El PostgreSQL recuperado exige SCRAM para conexiones TCP. El modo
+`verify`, ejecutado en su espacio de red aislado y mientras la base
+principal sigue apagada, habilita los roles de prueba con las
+credenciales efímeras externas. La aplicación usa conexiones LOGIN
+reales de `bodyvision_app` y `bodyvision_auth_app`, sin SET ROLE ni
+motor de propietario inyectado. Comprueba:
+
+- Roles separados, sin superusuario ni BYPASSRLS; contraseña errónea
+  rechazada, RLS sin contexto y aislamiento entre organizaciones.
+- Denegación SQL de hashes de contraseña al rol de datos y de
+  ciphertext al rol de autenticación.
+- Readiness, sesión anterior al respaldo, login nuevo, acceso privado,
+  escritura/lectura de una medición y cadena de auditoría válida.
+- Descarga exacta del PNG recuperado con su clave externa; sin clave
+  o con una clave incorrecta la API rechaza entregar los bytes.
+- Logout de la sesión recuperada y denegación posterior por revocación.
+
+La aceptación usa FastAPI TestClient con PostgreSQL real, sin mocks de
+persistencia; no es una prueba HTTP por socket ni de navegador sobre
+el reemplazo. No incluye recuperación MFA, custodia productiva de
+secretos, reinstalación de frontend, PITR ni pérdida física del host.
+Su resultado debe aprobarse en CI antes de acreditar avance adicional.
