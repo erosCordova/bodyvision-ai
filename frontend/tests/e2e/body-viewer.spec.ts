@@ -1011,6 +1011,12 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   expect(Number.isFinite(single.layerReadyMs.skin)).toBe(true);
   expect(single.cpuGeometryBytes).toBeGreaterThan(0);
   expect(single.retainedGeometryCount).toBeGreaterThan(0);
+  expect(single.layerGeometry).toHaveLength(1);
+  expect(single.layerGeometry[0]).toMatchObject({
+    layer: "skin", visible: true, cpuGeometryBytes: single.cpuGeometryBytes,
+    retainedGeometryCount: single.retainedGeometryCount, meshes: single.meshes,
+  });
+  await expect(panel.getByRole("group", { name: "Memoria geométrica por capa" })).toContainText("Piel");
   await expect(panel).toContainText("Envío CPU (mediana / P95)");
   await expect(panel).toContainText("Preparación de piel:");
   // Wait for two diagnostic refreshes: reading statistics must leave the scene idle.
@@ -1037,6 +1043,7 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   expect(split.layerReadyMs).toEqual(single.layerReadyMs);
   expect(split.cpuGeometryBytes).toBe(single.cpuGeometryBytes);
   expect(split.retainedGeometryCount).toBe(single.retainedGeometryCount);
+  expect(split.layerGeometry).toEqual(single.layerGeometry);
   expect(split.cpuSampleCount).toBeGreaterThanOrEqual(single.cpuSampleCount);
   expect(split.cpuP95Ms).toBeGreaterThanOrEqual(split.cpuMedianMs);
   expect(Object.keys(split).sort()).toEqual([
@@ -1045,7 +1052,7 @@ test("live diagnostics count both comparison passes without drawing idle frames 
     "renderedFrames", "cpuSubmissionMs", "cpuSampleCount", "cpuMedianMs", "cpuP95Ms",
     "contextAvailable", "geometryBuffers",
     "textures", "meshes", "overlays", "lodMeshes", "lodTrianglesSaved", "layerReadyMs",
-    "retainedGeometryCount", "cpuGeometryBytes", "timingScope",
+    "retainedGeometryCount", "cpuGeometryBytes", "layerGeometry", "timingScope",
   ].sort());
   await page.getByRole("button", { name: "Cerrar comparación dividida" }).click();
   await expect(panel).toContainText("Pasadas por fotograma: 1");
