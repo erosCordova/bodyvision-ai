@@ -12,6 +12,7 @@ import { buildHistoricalComparisonShape, remapHeightBounds, type HistoricalCompa
 import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTissueProfile";
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
+import { recordRenderCpuSample, summarizeRenderCpuSamples } from "./renderCpuTiming";
 import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount } from "./geometryLod";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
@@ -225,6 +226,7 @@ export function createAnatomyScene(
   let renderedFrames = 0;
   let renderPasses = 0;
   let cpuSubmissionMs: number | null = null;
+  const cpuSubmissionSamples: number[] = [];
 
   const render = () => {
     if (disposed || contextUnavailable) return;
@@ -283,6 +285,7 @@ export function createAnatomyScene(
     } finally {
       // CPU submission time deliberately does not claim GPU completion or FPS.
       cpuSubmissionMs = performance.now() - started;
+      recordRenderCpuSample(cpuSubmissionSamples, cpuSubmissionMs);
       renderedFrames++;
     }
   };
@@ -866,6 +869,7 @@ export function createAnatomyScene(
       renderPasses,
       renderedFrames,
       cpuSubmissionMs,
+      ...summarizeRenderCpuSamples(cpuSubmissionSamples),
       contextAvailable: !contextUnavailable,
       geometryBuffers: renderer.info.memory.geometries,
       textures: renderer.info.memory.textures,
