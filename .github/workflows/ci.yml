@@ -53,6 +53,12 @@ jobs:
         run: |
           psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
           psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_auth_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;'
+      - name: Pose expiry retention acceptance in isolated PostgreSQL
+        working-directory: backend
+        timeout-minutes: 5
+        run: |
+          alembic upgrade head
+          pytest -q -x tests/integration/test_pose_summary_retention.py
       - name: Backend quality and migrations
         timeout-minutes: 15
         working-directory: backend
@@ -137,7 +143,10 @@ jobs:
           docker compose run --rm seed
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-tests.sql
           # Capture the first failing test instead of risking runner exhaustion.
-          docker compose run --rm api-test pytest -q -x -p no:cacheprovider
+          # The faulthandler prints a blocked test's stack before a resource kill.
+          # Verbose progress identifies the exact test; cap runner exposure.
+          timeout --signal=TERM --kill-after=10s 300s docker compose run --rm api-test \
+            pytest -vv -x -o faulthandler_timeout=90 -p no:cacheprovider
           docker compose run --rm frontend-test
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-tests.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-after-tests.sql
