@@ -66,11 +66,16 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
                     restore.verify_manifest(self.backup, self.manifest)
 
     def test_wrong_format_empty_and_symlink_are_rejected(self):
-        for content in (b"", b"-- SQL plain dump", b"x" * (restore.MAX_DUMP_BYTES + 1)):
+        for content in (b"", b"-- SQL plain dump"):
             with self.subTest(size=len(content)):
                 self.backup.write_bytes(content)
                 with self.assertRaises(restore.RestoreManifestRejected):
                     restore.build_manifest(self.backup)
+        # Sparse file exercises the bound without allocating 128 MiB of RAM.
+        with self.backup.open("wb") as output:
+            output.truncate(restore.MAX_DUMP_BYTES + 1)
+        with self.assertRaises(restore.RestoreManifestRejected):
+            restore.build_manifest(self.backup)
         self.backup.write_bytes(b"PGDMP" + b"valid")
         link = self.folder / "link.dump"
         if hasattr(os, "symlink"):
