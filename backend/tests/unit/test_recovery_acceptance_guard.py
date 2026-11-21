@@ -76,3 +76,15 @@ def test_cli_redacts_driver_exceptions_and_never_prints_credentials(monkeypatch,
     assert "secret-account" not in output
     assert "private-key" not in output
     assert "hosted.invalid" not in output
+
+
+def test_docker_host_allowlist_is_respected_by_recovery_client(monkeypatch):
+    monkeypatch.setenv("ALLOWED_HOSTS", '["127.0.0.1","backend"]')
+    monkeypatch.setenv("POSTGRES_APP_PASSWORD", "unused-for-live-route")
+    config = recovery.settings("bodyvision", {"auth_password": "unused"}, None)
+    with recovery.recovery_client(config) as client:
+        assert client.get("/api/v1/health/live").status_code == 200
+        assert (
+            client.get("/api/v1/health/live", headers={"Host": "external.invalid"}).status_code
+            == 400
+        )

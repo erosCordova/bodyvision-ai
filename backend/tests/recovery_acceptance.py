@@ -92,6 +92,11 @@ def settings(database, state, key):
     )
 
 
+def recovery_client(config):
+    # The inherited Docker ALLOWED_HOSTS deliberately excludes "testserver".
+    return TestClient(create_app(config), base_url="http://127.0.0.1")
+
+
 def png():
     def chunk(kind, data):
         return (
@@ -121,7 +126,7 @@ def login(client, state, outsider=False):
             "password": state["account_password"],
         },
     )
-    require(response.status_code == 200, "private_login_failed")
+    require(response.status_code == 200, f"private_login_failed_{response.status_code}")
     return {"Authorization": "Bearer " + response.json()["token"]}
 
 
@@ -171,7 +176,7 @@ def prepare():
                             "user": identifier,
                         },
                     )
-        with TestClient(create_app(settings("bodyvision", state, state["capture_key"]))) as client:
+        with recovery_client(settings("bodyvision", state, state["capture_key"])) as client:
             headers = login(client, state)
             state["restored_session"] = headers["Authorization"]
             for purpose in ("capture", "storage"):
@@ -278,7 +283,7 @@ def verify():
         incorrect.dispose()
     path = f"/api/v1/profiles/{state['profile']}"
     capture = f"{path}/captures/{state['capture']}"
-    with TestClient(create_app(config)) as client:
+    with recovery_client(config) as client:
         require(client.get("/api/v1/health/ready").status_code == 200, "restored_readiness_failed")
         require(client.get(path).status_code == 401, "anonymous_access_failed")
         old_headers = {"Authorization": state["restored_session"]}
@@ -318,7 +323,7 @@ def verify():
             "restored_audit_chain_failed",
         )
         for key, expected in ((None, 503), (Fernet.generate_key().decode("ascii"), 500)):
-            with TestClient(create_app(settings("bodyvision_recovered_ci", state, key))) as blocked:
+            with recovery_client(settings("bodyvision_recovered_ci", state, key)) as blocked:
                 response = blocked.get(capture, headers=headers)
                 require(
                     response.status_code == expected and response.content != png(),
@@ -349,6 +354,7 @@ def main():
                 {
                     "event": "synthetic_recovered_application_unverifiable",
                     "error_type": type(exc).__name__,
+                    "sqlstate": getattr(getattr(exc, "orig", None), "sqlstate", None),
                 }
             )
         )
