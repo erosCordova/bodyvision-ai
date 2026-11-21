@@ -1040,7 +1040,7 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   });
   await expect(panel.getByRole("group", { name: "Memoria geométrica por capa" })).toContainText("Piel");
   await expect(panel).toContainText("Envío CPU (mediana / P95)");
-  await expect(panel).toContainText("Preparación de piel:");
+  await expect(panel.getByRole("group", { name: "Memoria geométrica por capa" })).toContainText("Preparación:");
   // Wait for two diagnostic refreshes: reading statistics must leave the scene idle.
   await page.waitForTimeout(2200);
   await expect(panel).toHaveAttribute("data-rendered-frames", String(single.renderedFrames));
