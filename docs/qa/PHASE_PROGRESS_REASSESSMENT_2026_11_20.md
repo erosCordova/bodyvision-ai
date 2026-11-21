@@ -163,3 +163,31 @@ la retención de auditoría/claves/copias, los datos reales, dispositivos físic
 corpus independiente y evaluación clínica mantienen sus criterios pendientes.
 Detalles en `docs/qa/PHASE_5_PRIVATE_POSE_SUMMARIES.md`.
 Esta entrega no migra la base alojada en Neon ni publica cambios en la demo.
+
+
+## Fase 5: retención física de resúmenes y aceptación específica de PostgreSQL
+
+Se registran dos entregables técnicos adicionales, cada uno estimado manualmente
+en cinco puntos de fase: (1) purga física limitada de resúmenes sintéticos cuando
+caduca el consentimiento o desaparecen los registros de consentimiento, integrada
+en el mantenimiento privado y el proceso independiente optativo; (2) pruebas de
+aceptación reproducibles sobre PostgreSQL 15 que cubren vigencia, caducidad,
+lápidas de idempotencia, lotes, rol de mantenimiento, rollback y migración adelante/atrás.
+
+La ejecución específica
+[44858285862](https://github.com/erosCordova/bodyvision-ai/actions/runs/44858285862)
+ha terminado con estado **success**: 39 pruebas aprobadas, migración
+`0021_pose_retention` aplicada y revertida/restaurada con éxito. Este resultado
+**no** equivale a una CI integral aprobada: la suite Docker de
+[44857430062](https://github.com/erosCordova/bodyvision-ai/actions/runs/44857430062)
+falló por finalización del proceso con código 137; la validación completa
+continúa pendiente y debe investigarse sin suponer que 137 demuestra OOM.
+
+La Fase 5 pasa de **75 % a 85 %** como evaluación manual del alcance
+sintético respaldado por dos entregables. Las demás fases no varían:
+la suma aumenta de **815 a 825**, promedio exacto de **82,5 %**, redondeado
+por el tablero a **83 %**. No es un certificado de calidad clínica, precisión
+diagnóstica, control de respaldos/WAL ni autorización de personas reales.
+Quedan pendientes corpus independiente, dispositivos físicos, revisión clínica
+y seguridad/privacidad, operación y retención de copias. La base alojada y
+la demo pública no se modifican.

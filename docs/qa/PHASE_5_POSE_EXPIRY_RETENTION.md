@@ -20,18 +20,27 @@ la restricción de entorno local/test y activación `synthetic-only`.
 Las claves de idempotencia de envíos borrados permanecen como lápidas, para que
 un reintento no recree un resumen cuya conservación dejó de estar autorizada.
 
-## Pruebas propuestas y límites de evidencia
+## Pruebas ejecutadas y límites de evidencia
 
 La prueba `backend/tests/integration/test_pose_summary_retention.py` comprueba:
 (1) no borrar un resumen vigente; (2) caducidad del consentimiento de pose;
 (3) eliminación física de exactamente un resumen; (4) segunda pasada vacía;
 (5) conservación de la clave de reintento y respuesta 410 tras renovar;
-(6) rechazo de lotes cero o superiores a cien.
+(6) rechazo de lotes cero o superiores a cien; (7) eliminación de resúmenes
+huérfanos si también desaparecen los registros de consentimiento.
 
-**La introducción de estos tests no prueba por sí sola su aprobación.**
-Antes de cerrar esta entrega debe comprobarse el resultado integral de GitHub
-Actions, migración adelante/atrás, seguridad, tests nativos y Docker.
-No se incrementa el porcentaje del tablero hasta esa comprobación.
+La ejecución específica
+[44858285862](https://github.com/erosCordova/bodyvision-ai/actions/runs/44858285862)
+aprobó **39 pruebas** en PostgreSQL de prueba, con roles separados, validación
+de permisos, migración `0021` aplicada y reversión/restauración aprobada.
+Se incluyen las pruebas del API privado de postura y el mantenimiento optativo.
+Este gate es reproducible en `.github/workflows/pose-retention.yml`.
+
+**Límite:** la CI integral no está aún aprobada con este cambio. Una suite
+Docker anterior terminó con código 137, sin un diagnóstico concluyente del
+motivo. La aceptación específica no cubre todos los módulos, navegadores,
+equipos físicos o la calidad clínica. El tablero refleja una estimación manual
+del alcance técnico, no una certificación del proyecto.
 
 ## Alcance y limitaciones
 
