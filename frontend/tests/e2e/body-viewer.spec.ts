@@ -93,6 +93,23 @@ test("real atlas meshes render, layers and tours respond without writing data", 
   expect(writes).toEqual([]);
 });
 
+test("anatomical search supports keyboard selection in Spanish without a mouse", async ({ page }) => {
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  const input = page.getByRole("textbox", { name: "Buscar estructura anatómica", exact: true });
+  await input.fill("fémur");
+  await expect(page.getByRole("option", { name: /Fémur/i }).first()).toBeVisible();
+  await input.press("ArrowDown");
+  await expect(page.getByRole("option", { selected: true })).toHaveCount(1);
+  await input.press("Enter");
+  await expect(page.getByRole("heading", { name: /Fémur/i })).toBeVisible();
+  await expect(input).toHaveValue("");
+  await input.fill("femur");
+  await input.press("Escape");
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("listbox", { name: "Resultados anatómicos" })).toHaveCount(0);
+});
+
 test("weight morph and polygon overlay change the rendered 3D canvas", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
