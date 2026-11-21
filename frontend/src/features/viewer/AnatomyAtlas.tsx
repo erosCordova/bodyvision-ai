@@ -21,6 +21,7 @@ import {
 } from "./anatomyFavorites";
 import { buildSyntheticScenarioCsv } from "./scenarioCsv";
 import { sampledMorphClamping } from "./morphLimits";
+import { regionalMorphAudit, regionalAuditBarWidth } from "./regionalMorphAudit";
 import { scenarioCompatibilityReason } from "./scenarioCompatibility";
 import "./anatomy-studio.css";
 
@@ -223,6 +224,11 @@ export function AnatomyAtlas() {
   const morphClamping = useMemo(
     () => sampledMorphClamping(referenceKg, weightVariation),
     [referenceKg, weightVariation],
+  );
+  // Purely local illustration of the same skin shader, not a medical estimate.
+  const regionalMorph = useMemo(
+    () => regionalMorphAudit(baselinePreview ? 70 : referenceKg, baselinePreview ? 0 : weightVariation),
+    [referenceKg, weightVariation, baselinePreview],
   );
   const [qualityPreference, setQualityPreference] = useState<SceneQuality | "auto">("auto");
   const [recommendedQuality, setRecommendedQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
@@ -913,7 +919,31 @@ export function AnatomyAtlas() {
                      <small>Solo visualización ficticia; estas cifras no representan una predicción de salud.</small>
                    </div>
                  </div>
-                 {visible.includes("skin") && morphClamping.regions.length > 0 && (
+                 <section className="studio-sim-regional" aria-label="Respuesta visual regional del cuerpo">
+                  <div className="studio-sim-regional-head">
+                    <strong>Respuesta regional del modelo 3D</strong>
+                    <small>{baselinePreview ? "Vista del atlas original" : "Cambio de silueta frente a la referencia ilustrativa"}</small>
+                  </div>
+                  <div className="studio-sim-regional-items">
+                    {regionalMorph.map(region => (
+                      <div className="studio-sim-region" key={region.id}>
+                        <div className="studio-sim-region-values">
+                          <strong>{region.label}{region.limited ? " · límite visual" : ""}</strong>
+                          <span>Lateral: {region.lateralPercent > 0 ? "+" : ""}{region.lateralPercent.toFixed(1)} %
+                            {" · "}Frontal: {region.frontPercent > 0 ? "+" : ""}{region.frontPercent.toFixed(1)} %</span>
+                        </div>
+                        <div className="studio-sim-region-tracks" aria-hidden="true">
+                          <div><span style={{ width: regionalAuditBarWidth(region.lateralPercent) + "%" }}
+                            className={region.lateralPercent < 0 ? "is-reduced" : ""}/></div>
+                          <div><span style={{ width: regionalAuditBarWidth(region.frontPercent) + "%" }}
+                            className={region.frontPercent < 0 ? "is-reduced" : ""}/></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <small>Factores visuales calculados con las mismas zonas y límites del shader de piel, en puntos representativos; no son cambios reales de contorno, grasa ni masa muscular. Los huesos y nervios no se deforman con el peso.</small>
+                </section>
+                {visible.includes("skin") && morphClamping.regions.length > 0 && (
                    <p className="studio-sim-warning" role="status"
                      aria-label="Límite gráfico de deformación">
                      Límite visual alcanzado: algunas regiones del cuerpo 3D ya no
