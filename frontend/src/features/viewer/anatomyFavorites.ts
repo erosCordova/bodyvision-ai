@@ -12,7 +12,10 @@ function validFavorite(value: unknown): value is FavoriteStructure {
   const entry = value as Record<string, unknown>;
   return Object.keys(entry).length === 2
     && typeof entry.id === "string" && entry.id.length > 0 && entry.id.length <= 160
-    && !/[\u0000-\u001f\u007f]/.test(entry.id)
+    && Array.from(entry.id).every(char => {
+      const code = char.charCodeAt(0);
+      return code > 31 && code !== 127;
+    })
     && typeof entry.layer === "string" && layers.has(entry.layer);
 }
 
