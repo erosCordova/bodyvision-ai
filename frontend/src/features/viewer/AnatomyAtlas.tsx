@@ -746,10 +746,11 @@ export function AnatomyAtlas() {
               ? "Sin muestra" : renderStats.cpuMedianMs.toFixed(2) + " / " + renderStats.cpuP95Ms.toFixed(2) + " ms"}</span>
             <span>Muestras de render: {renderStats.cpuSampleCount} (máximo 120, ventana móvil)</span>
             <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
+            <span>Geometría retenida (CPU): {(renderStats.cpuGeometryBytes / 1024 / 1024).toFixed(2)} MiB · {renderStats.retainedGeometryCount} conjuntos únicos</span>
             <span>Preparación de piel: {renderStats.layerReadyMs.skin === undefined
               ? "Pendiente" : renderStats.layerReadyMs.skin.toFixed(2) + " ms"} (descarga y procesamiento CPU)</span>
             <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
-            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Los tiempos de carga incluyen descarga y preparación de la capa; no miden la finalización de GPU. El envío de comandos CPU tampoco equivale a FPS ni latencia de pantalla.</small>
+            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Memoria de geometría = tamaño de buffers de CPU, no VRAM ni consumo total. Los tiempos de carga no miden la finalización de GPU; el envío CPU tampoco equivale a FPS.</small>
             <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
             <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
           </aside>}
