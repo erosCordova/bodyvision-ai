@@ -4,6 +4,9 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
+from httpx import Response
+from pydantic import ValidationError
 from sqlalchemy.engine import make_url
 
 SPEC = importlib.util.spec_from_file_location(
@@ -88,3 +91,37 @@ def test_docker_host_allowlist_is_respected_by_recovery_client(monkeypatch):
             client.get("/api/v1/health/live", headers={"Host": "external.invalid"}).status_code
             == 400
         )
+
+
+def test_mfa_recovery_requires_external_key_without_disabling_mfa(monkeypatch):
+    monkeypatch.setenv("POSTGRES_APP_PASSWORD", "unused")
+    with pytest.raises(ValidationError):
+        recovery.settings("bodyvision_recovered_ci", {"auth_password": "unused"}, None, mfa=True)
+
+
+def test_mfa_recovery_cannot_reuse_the_capture_key(monkeypatch):
+    monkeypatch.setenv("POSTGRES_APP_PASSWORD", "unused")
+    key = Fernet.generate_key().decode("ascii")
+    with pytest.raises(ValidationError):
+        recovery.settings(
+            "bodyvision_recovered_ci", {"auth_password": "unused", "mfa_key": key}, key, mfa=True
+        )
+
+
+def test_restored_mfa_configuration_keeps_both_keys_distinct(monkeypatch):
+    monkeypatch.setenv("POSTGRES_APP_PASSWORD", "unused")
+    key, capture = (Fernet.generate_key().decode("ascii") for _ in range(2))
+    config = recovery.settings(
+        "bodyvision_recovered_ci", {"auth_password": "unused", "mfa_key": key}, capture, mfa=True
+    )
+    assert config.mfa_enabled and config.identity_enabled
+    assert config.mfa_encryption_key.get_secret_value() == key
+    assert config.capture_encryption_key.get_secret_value() == capture
+
+
+@pytest.mark.parametrize("field", ["token", "recovery_codes"])
+def test_negative_mfa_acceptance_rejects_credentials_in_error_payload(field, capsys):
+    response = Response(401, json={"code": "MFA_CODE_INVALID", field: "secret-test-value"})
+    with pytest.raises(recovery.RecoveryRejected):
+        recovery.rejected_mfa(response, 401, "MFA_CODE_INVALID")
+    assert "secret-test-value" not in capsys.readouterr().out

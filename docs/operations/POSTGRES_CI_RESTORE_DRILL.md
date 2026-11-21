@@ -281,3 +281,34 @@ La escritura de prueba se fecha dos horas atrás, antes del dato atípico
 de 84 kg creado por el seed una hora atrás. No se desactiva ni se
 confirma automáticamente la advertencia de valores atípicos para probar
 una escritura normal sobre el reemplazo.
+
+## Ampliación de recuperación MFA
+
+El runner añade una tercera cuenta ficticia con MFA activado antes del
+respaldo mediante los endpoints de enrollment y confirmación. Guarda
+fuera del dump una clave Fernet MFA distinta de la clave de capturas,
+la semilla del autenticador, códigos de prueba y una sesión MFA verificada.
+Consume un código de recuperación antes de respaldar, para comprobar
+que restaurar no lo vuelve a habilitar. Este estado temporal no se
+adjunta a artefactos y mantiene los controles de acceso y limpieza.
+
+Sobre el reemplazo, un cliente con `mfa_enabled=true` comprueba la sesión
+MFA restaurada, rechazo de contraseña sola, TOTP válido y rechazo de
+repetición, código de recuperación intacto y consumo único. Sin clave MFA
+la configuración no puede iniciar con MFA habilitado; con una clave
+equivocada el login falla sin entregar token. Los roles de datos y auth
+no pueden leer directamente semillas cifradas ni verificadores de códigos.
+
+También reemplaza el factor usando contraseña y otro código válido:
+comprueba semilla nueva, revocación de todas las sesiones anteriores,
+confirmación del nuevo factor, ocho códigos nuevos, rechazo de un código
+antiguo todavía no usado y cadena de auditoría válida tras las operaciones.
+El reloj es real; si la restauración termina en el mismo intervalo TOTP,
+se utiliza el siguiente paso permitido por la ventana existente de +1,
+sin esperas ni modificación del reloj de la aplicación.
+
+El evento `synthetic_recovered_mfa_verified` solo se emite al aprobar
+todas estas comprobaciones. Esta ampliación requiere aceptación en CI
+antes de modificar el avance. No demuestra custodia productiva de
+secretos, recuperación sin claves/códigos ni seguridad ante un operador
+que deshabilite deliberadamente MFA en la configuración.

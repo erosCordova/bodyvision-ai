@@ -12,19 +12,23 @@ import os
 import secrets
 import stat
 import struct
+import time
 import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from psycopg import sql
+from pydantic import ValidationError
 from sqlalchemy import URL, create_engine, text
 from sqlalchemy.exc import DBAPIError
 
 from app.core.config import Settings
 from app.core.identity import hash_password
+from app.core.mfa import totp_code
 from app.main import create_app
 from app.models.context import FIRST_WORKSPACE, SECOND_WORKSPACE
 
@@ -81,7 +85,7 @@ def configure_login(connection, role, password):
         )
 
 
-def settings(database, state, key):
+def settings(database, state, key, *, mfa=False):
     return Settings(
         app_env="test",
         identity_enabled=True,
@@ -89,6 +93,8 @@ def settings(database, state, key):
         auth_database_url=database_url(database, "bodyvision_auth_app", state["auth_password"]),
         capture_encryption_key=key,
         capture_retention_enabled=False,
+        mfa_enabled=mfa,
+        mfa_encryption_key=state.get("mfa_key") if mfa else None,
     )
 
 
@@ -130,12 +136,201 @@ def login(client, state, outsider=False):
     return {"Authorization": "Bearer " + response.json()["token"]}
 
 
+def mfa_credentials(state):
+    return {
+        "organization_id": str(FIRST_WORKSPACE),
+        "email": "recovery.mfa@example.invalid",
+        "password": state["account_password"],
+    }
+
+
+def rejected_mfa(response, status, code):
+    payload = response.json()
+    require(
+        response.status_code == status
+        and payload.get("code") == code
+        and "token" not in payload
+        and "recovery_codes" not in payload,
+        "mfa_negative_check_failed",
+    )
+
+
+def prepare_mfa(state):
+    credentials = mfa_credentials(state)
+    with recovery_client(settings("bodyvision", state, state["capture_key"], mfa=True)) as client:
+        rejected_mfa(client.post("/api/v1/auth/login", json=credentials), 428, "MFA_SETUP_REQUIRED")
+        started = client.post("/api/v1/auth/mfa/enrollment", json=credentials)
+        require(started.status_code == 200, "mfa_enrollment_failed")
+        seed = parse_qs(urlparse(started.json()["otpauth_uri"]).query)["secret"][0]
+        accepted_at = int(time.time())
+        confirmed = client.post(
+            "/api/v1/auth/mfa/confirm",
+            json={
+                **credentials,
+                "code": totp_code(seed, accepted_at),
+            },
+        )
+        require(confirmed.status_code == 200, "mfa_confirmation_failed")
+        codes = confirmed.json()["recovery_codes"]
+        require(len(codes) == len(set(codes)) == 8, "mfa_recovery_inventory_failed")
+        used = client.post("/api/v1/auth/login", json={**credentials, "mfa_code": codes[0]})
+        require(used.status_code == 200, "mfa_source_recovery_failed")
+        state.update(
+            {
+                "mfa_seed": seed,
+                "mfa_enrolled_step": accepted_at // 30,
+                "mfa_used_code": codes[0],
+                "mfa_unused_code": codes[1],
+                "mfa_reset_code": codes[2],
+                "mfa_old_unused_code": codes[3],
+                "mfa_session": "Bearer " + used.json()["token"],
+            }
+        )
+
+
+def verify_mfa(state):
+    config = settings("bodyvision_recovered_ci", state, state["capture_key"], mfa=True)
+    credentials = mfa_credentials(state)
+    path = f"/api/v1/profiles/{state['profile']}"
+    for url in (
+        config.database_url.get_secret_value(),
+        config.auth_database_url.get_secret_value(),
+    ):
+        denied_query(url, "SELECT encrypted_totp_seed FROM private_mfa_credentials")
+        denied_query(url, "SELECT code_verifier FROM private_mfa_recovery_codes")
+    missing = {key: value for key, value in state.items() if key != "mfa_key"}
+    try:
+        settings("bodyvision_recovered_ci", missing, state["capture_key"], mfa=True)
+    except ValidationError:
+        pass
+    else:
+        raise RecoveryRejected("mfa_missing_key_allowed_startup")
+    wrong = {**state, "mfa_key": Fernet.generate_key().decode("ascii")}
+    with recovery_client(
+        settings("bodyvision_recovered_ci", wrong, state["capture_key"], mfa=True)
+    ) as blocked:
+        response = blocked.post(
+            "/api/v1/auth/login",
+            json={
+                **credentials,
+                "mfa_code": totp_code(state["mfa_seed"], int(time.time())),
+            },
+        )
+        rejected_mfa(response, 500, "INTERNAL_ERROR")
+    with recovery_client(config) as client:
+        previous = {"Authorization": state["mfa_session"]}
+        require(
+            client.get(path, headers=previous).status_code == 200, "mfa_restored_session_failed"
+        )
+        rejected_mfa(client.post("/api/v1/auth/login", json=credentials), 401, "MFA_CODE_REQUIRED")
+        rejected_mfa(
+            client.post(
+                "/api/v1/auth/login",
+                json={
+                    **credentials,
+                    "mfa_code": state["mfa_used_code"],
+                },
+            ),
+            401,
+            "MFA_CODE_INVALID",
+        )
+        # Use the next unconsumed step if restore completes within 30 seconds.
+        # This is inside the existing +1 drift window; no clock is mocked.
+        next_step = max(int(time.time()) // 30, state["mfa_enrolled_step"] + 1)
+        code = totp_code(state["mfa_seed"], next_step * 30)
+        signed_in = client.post("/api/v1/auth/login", json={**credentials, "mfa_code": code})
+        require(signed_in.status_code == 200, "mfa_restored_totp_failed")
+        signed_headers = {"Authorization": "Bearer " + signed_in.json()["token"]}
+        require(
+            client.get(path, headers=signed_headers).status_code == 200, "mfa_fresh_session_failed"
+        )
+        rejected_mfa(
+            client.post("/api/v1/auth/login", json={**credentials, "mfa_code": code}),
+            401,
+            "MFA_CODE_INVALID",
+        )
+        recovered = client.post(
+            "/api/v1/auth/login",
+            json={
+                **credentials,
+                "mfa_code": state["mfa_unused_code"],
+            },
+        )
+        require(recovered.status_code == 200, "mfa_restored_recovery_failed")
+        recovered_headers = {"Authorization": "Bearer " + recovered.json()["token"]}
+        require(
+            client.get(path, headers=recovered_headers).status_code == 200,
+            "mfa_recovery_session_failed",
+        )
+        rejected_mfa(
+            client.post(
+                "/api/v1/auth/login",
+                json={
+                    **credentials,
+                    "mfa_code": state["mfa_unused_code"],
+                },
+            ),
+            401,
+            "MFA_CODE_INVALID",
+        )
+        replacement = client.post(
+            "/api/v1/auth/mfa/recover",
+            json={
+                **credentials,
+                "recovery_code": state["mfa_reset_code"],
+            },
+        )
+        require(replacement.status_code == 200, "mfa_restored_factor_reset_failed")
+        seed = parse_qs(urlparse(replacement.json()["otpauth_uri"]).query)["secret"][0]
+        require(seed != state["mfa_seed"], "mfa_replacement_seed_unchanged")
+        for headers in (previous, signed_headers, recovered_headers):
+            require(
+                client.get(path, headers=headers).status_code == 401,
+                "mfa_prior_session_not_revoked",
+            )
+        rejected_mfa(client.post("/api/v1/auth/login", json=credentials), 428, "MFA_SETUP_REQUIRED")
+        confirmed = client.post(
+            "/api/v1/auth/mfa/confirm",
+            json={
+                **credentials,
+                "code": totp_code(seed, int(time.time())),
+            },
+        )
+        require(confirmed.status_code == 200, "mfa_replacement_confirmation_failed")
+        new_codes = confirmed.json()["recovery_codes"]
+        require(len(new_codes) == len(set(new_codes)) == 8, "mfa_replacement_codes_failed")
+        rejected_mfa(
+            client.post(
+                "/api/v1/auth/login",
+                json={
+                    **credentials,
+                    "mfa_code": state["mfa_old_unused_code"],
+                },
+            ),
+            401,
+            "MFA_CODE_INVALID",
+        )
+        new_headers = {"Authorization": "Bearer " + confirmed.json()["token"]}
+        require(
+            client.get(path, headers=new_headers).status_code == 200,
+            "mfa_replacement_session_failed",
+        )
+        audit = client.post("/api/v1/auth/audit/verify", headers=new_headers)
+        require(
+            audit.status_code == 200
+            and audit.json()["valid"]
+            and audit.json()["checked_events"] > 0,
+            "mfa_restored_audit_failed",
+        )
+
+
 def prepare():
     require(not STATE.exists(), "state_already_exists")
     state = {
         "auth_password": secrets.token_urlsafe(32),
         "account_password": secrets.token_urlsafe(32),
         "capture_key": Fernet.generate_key().decode("ascii"),
+        "mfa_key": Fernet.generate_key().decode("ascii"),
         "profile": str(uuid5(NAMESPACE_URL, f"bodyvision:fixture:{FIRST_WORKSPACE}:1")),
     }
     owner = engine(database_url("bodyvision", "postgres", os.environ["POSTGRES_PASSWORD"]))
@@ -145,6 +340,7 @@ def prepare():
             for org, role, email in (
                 (FIRST_WORKSPACE, "administrator", "recovery.admin@example.invalid"),
                 (SECOND_WORKSPACE, "member", "recovery.outsider@example.invalid"),
+                (FIRST_WORKSPACE, "administrator", "recovery.mfa@example.invalid"),
             ):
                 identifier = uuid4()
                 conn.execute(
@@ -164,7 +360,8 @@ def prepare():
                     {"id": uuid4(), "org": org, "user": identifier, "role": role},
                 )
                 if role == "administrator":
-                    state["actor"] = str(identifier)
+                    if email == "recovery.admin@example.invalid":
+                        state["actor"] = str(identifier)
                     conn.execute(
                         text("""INSERT INTO profile_access
                         (id,organization_id,profile_id,user_id,access_level)
@@ -193,6 +390,7 @@ def prepare():
             )
             require(response.status_code == 201, "encrypted_fixture_failed")
             state["capture"] = response.json()["id"]
+        prepare_mfa(state)
         descriptor = os.open(STATE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(descriptor, "w") as target:
             json.dump(state, target)
@@ -338,6 +536,8 @@ def verify():
             "restored_logout_failed",
         )
         require(client.get(path, headers=old_headers).status_code == 401, "revocation_failed")
+    verify_mfa(state)
+    print('{"event":"synthetic_recovered_mfa_verified"}')
 
 
 def main():
