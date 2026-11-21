@@ -9,6 +9,7 @@ The stricter same-database preservation check remains unchanged.
 import argparse
 import hashlib
 import json
+import os
 import re
 import stat
 from pathlib import Path
@@ -25,7 +26,7 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
     if path.is_symlink():
         raise RestoredDataRejected("Symlinks not permitted")
     info = path.stat()
-    if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= MAX_SQL_BYTES:
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= MAX_SQL_BYTES:
         raise RestoredDataRejected("Invalid dump size or file type")
 
     copies: dict[bytes, list[bytes]] = {}
@@ -33,7 +34,16 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
     current: list[bytes] | None = None
     rows = 0
 
-    with path.open("rb") as source:
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    with os.fdopen(descriptor, "rb") as source:
+        before = os.fstat(source.fileno())
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or not 0 < before.st_size <= MAX_SQL_BYTES
+        ):
+            raise RestoredDataRejected("Invalid open dump")
         for raw in source:
             line = raw.rstrip(b"\r\n")
             if current is not None:
@@ -56,6 +66,14 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
                 statements.append(line)
             elif line.startswith((b"DELETE ", b"UPDATE ", b"DROP ", b"TRUNCATE ")):
                 raise RestoredDataRejected("Unexpected SQL statement")
+        after = os.fstat(source.fileno())
+        if (
+            after.st_size != before.st_size
+            or after.st_mtime_ns != before.st_mtime_ns
+            or after.st_ctime_ns != before.st_ctime_ns
+            or source.tell() != before.st_size
+        ):
+            raise RestoredDataRejected("Dump changed during reading")
     if current is not None:
         raise RestoredDataRejected("Incomplete COPY block")
     if not copies and not statements:
