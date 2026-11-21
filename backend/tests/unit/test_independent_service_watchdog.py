@@ -1,4 +1,5 @@
 """Isolated tests of optional monitoring; no HTTP network or live accounts."""
+
 import io
 import json
 from urllib.error import HTTPError, URLError
@@ -7,7 +8,11 @@ import pytest
 
 from app.db.session import SCHEMA_REVISION
 from app.workers.independent_service_watchdog import (
-    MAX_RESPONSE_BYTES, WatchdogDenied, main, monitor, probe_readiness,
+    MAX_RESPONSE_BYTES,
+    WatchdogDenied,
+    main,
+    monitor,
+    probe_readiness,
     require_synthetic_watchdog,
 )
 
@@ -117,6 +122,9 @@ def test_outage_recovery_emits_only_transition_states_without_private_details():
 
 def test_single_probe_exit_codes_and_disallowed_environment(capsys):
     assert monitor(TARGET, 30, once=True, probe=lambda _: "ready", emit=lambda _: None) == 0
-    assert monitor(TARGET, 30, once=True, probe=lambda _: "unreachable", emit=lambda _: None) == 1
-    assert main(["--once"], {"APP_ENV": "production", "BODYVISION_ENABLE_WATCHDOG": "synthetic-only"}) == 2
+    assert (
+        monitor(TARGET, 30, once=True, probe=lambda _: "unreachable", emit=lambda _: None) == 1
+    )
+    forbidden = {**ENV, "APP_ENV": "production"}
+    assert main(["--once"], forbidden) == 2
     assert capsys.readouterr().out.strip() == '{"event":"synthetic_watchdog_disabled"}'
