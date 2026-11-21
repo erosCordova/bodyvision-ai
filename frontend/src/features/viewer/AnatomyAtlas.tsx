@@ -746,8 +746,10 @@ export function AnatomyAtlas() {
               ? "Sin muestra" : renderStats.cpuMedianMs.toFixed(2) + " / " + renderStats.cpuP95Ms.toFixed(2) + " ms"}</span>
             <span>Muestras de render: {renderStats.cpuSampleCount} (máximo 120, ventana móvil)</span>
             <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
+            <span>Preparación de piel: {renderStats.layerReadyMs.skin === undefined
+              ? "Pendiente" : renderStats.layerReadyMs.skin.toFixed(2) + " ms"} (descarga y procesamiento CPU)</span>
             <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
-            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. El envío de comandos por CPU no mide la duración real de la GPU, FPS ni latencia de pantalla. Se actualiza al interactuar, sin animar el cuerpo.</small>
+            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Los tiempos de carga incluyen descarga y preparación de la capa; no miden la finalización de GPU. El envío de comandos CPU tampoco equivale a FPS ni latencia de pantalla.</small>
             <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
             <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
           </aside>}
