@@ -982,6 +982,28 @@ test("split reference and scenario share one 3D canvas and block ambiguous pose 
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
 });
 
+test("3D diagnostics identify hidden loaded layers without double-counting geometry", async ({ page }) => {
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  const panel = page.getByLabel("Diagnóstico de renderizado");
+  const layers = panel.getByRole("group", { name: "Memoria geométrica por capa" });
+  await expect(layers).toContainText("Esqueleto · visible", { timeout: 60000 });
+  const skeletonLoaded = await page.waitForFunction(() => {
+    const group = document.querySelector('[aria-label="Memoria geométrica por capa"]');
+    return !!group && /Esqueleto · visible/.test(group.textContent || "") &&
+      /Piel · visible/.test(group.textContent || "");
+  });
+  expect(skeletonLoaded).toBeTruthy();
+  await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+  await expect(layers).toContainText("Esqueleto · oculta", { timeout: 10000 });
+  await expect(layers).toContainText("Piel · visible");
+  await expect(layers).toContainText("no deben sumarse");
+  await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+});
+
 test("live diagnostics count both comparison passes without drawing idle frames or exporting body data", async ({ page }) => {
   test.setTimeout(110000);
   await sourceFixtures(page);
