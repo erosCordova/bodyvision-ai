@@ -57,6 +57,7 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
             json.dumps({**original, "scope": "production"}).encode(),
             json.dumps({**original, "bytes": True}).encode(),
             json.dumps({**original, "sha256": "0" * 64}).encode(),
+            (self.manifest.read_text().strip()[:-1] + ',"sha256":"' + original["sha256"] + '"}').encode(),
             b"x" * (restore.MAX_MANIFEST_BYTES + 1),
         )
         for variant in variants:
@@ -97,6 +98,24 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
         os.link(self.manifest, manifest_link)
         with self.assertRaises(restore.RestoreManifestRejected):
             restore.verify_manifest(self.backup, self.manifest)
+
+    def test_detects_manifest_mutation_during_streaming(self):
+        restore.create_manifest(self.backup, self.manifest)
+        original_fstat = os.fstat
+        calls = 0
+
+        def mutate_before_final_stat(descriptor):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                with self.manifest.open("r+b") as output:
+                    output.seek(10)
+                    output.write(b"CHANGED")
+            return original_fstat(descriptor)
+
+        with patch.object(restore.os, "fstat", side_effect=mutate_before_final_stat):
+            with self.assertRaises(restore.RestoreManifestRejected):
+                restore.verify_manifest(self.backup, self.manifest)
 
     def test_detects_backup_mutation_during_streaming(self):
         original_fstat = os.fstat
