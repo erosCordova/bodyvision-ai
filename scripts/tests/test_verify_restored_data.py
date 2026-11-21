@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -85,6 +86,31 @@ class RestoredDataTests(unittest.TestCase):
             with self.subTest(broken=broken[:40]):
                 with self.assertRaises(restored.RestoredDataRejected):
                     restored.fingerprint(self.original)
+
+    def test_hardlinked_dump_is_rejected(self):
+        self.original.write_bytes(self.sample([b"1\\tA"]))
+        linked = self.original.with_name("linked.sql")
+        os.link(self.original, linked)
+        with self.assertRaises(restored.RestoredDataRejected):
+            restored.fingerprint(self.original)
+
+    def test_mutation_during_read_is_rejected(self):
+        self.original.write_bytes(self.sample([b"1\\tA"]))
+        original_fstat = os.fstat
+        calls = 0
+
+        def mutate_before_final_stat(descriptor):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                with self.original.open("r+b") as stream:
+                    stream.seek(0)
+                    stream.write(b"ALTERED!")
+            return original_fstat(descriptor)
+
+        with patch.object(restored.os, "fstat", side_effect=mutate_before_final_stat):
+            with self.assertRaises(restored.RestoredDataRejected):
+                restored.fingerprint(self.original)
 
     def test_cli_never_prints_records_or_file_paths_on_failure(self):
         self.original.write_bytes(self.sample([b"secret_fake_value"]))
