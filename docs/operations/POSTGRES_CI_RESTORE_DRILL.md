@@ -255,4 +255,29 @@ La aceptación usa FastAPI TestClient con PostgreSQL real, sin mocks de
 persistencia; no es una prueba HTTP por socket ni de navegador sobre
 el reemplazo. No incluye recuperación MFA, custodia productiva de
 secretos, reinstalación de frontend, PITR ni pérdida física del host.
-Su resultado debe aprobarse en CI antes de acreditar avance adicional.
+El paso de restauración del job `docker-smoke` de
+[CI 44935709054](https://github.com/erosCordova/bodyvision-ai/actions/runs/44935709054)
+aprobó sobre `56e45426d4f080e5118764bd0fab91491f4fc49b`.
+Se observaron `synthetic_recovered_application_prepare_verified`,
+`synthetic_recovery_data_verified` y
+`synthetic_recovered_application_verify_verified`, seguidos del
+reinicio saludable de la instalación original. Docker terminó con éxito.
+La ejecución integral terminó con **success** en Windows,
+`native-checks` y `docker-smoke`: **557 pruebas de aplicación**
+aprobadas (270 backend, 243 frontend, 36 navegador público y 8 privado),
+además de las comprobaciones de scripts y del ensayo de recuperación.
+
+La comprobación negativa detectó que declarar únicamente
+`POSTGRES_HOST_AUTH_METHOD=scram-sha-256` conservaba reglas TCP
+locales `trust` en este clúster nuevo. El destino ahora se inicializa
+con `POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=trust`.
+La conexión TCP con una contraseña aleatoria debe fallar por autenticación;
+un error de red no satisface ese control. Los comandos de administración
+por socket permanecen internos al contenedor desconectado.
+
+El cliente de aceptación usa el host permitido `127.0.0.1`; no se amplió
+la lista de hosts de la aplicación para admitir el nombre `testserver`.
+La escritura de prueba se fecha dos horas atrás, antes del dato atípico
+de 84 kg creado por el seed una hora atrás. No se desactiva ni se
+confirma automáticamente la advertencia de valores atípicos para probar
+una escritura normal sobre el reemplazo.

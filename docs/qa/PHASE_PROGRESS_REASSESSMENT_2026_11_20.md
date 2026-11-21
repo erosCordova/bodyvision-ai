@@ -420,3 +420,33 @@ de backups, operación con datos de personas, PITR ni un objetivo
 RPO/RTO garantizado. Faltan seguridad productiva, privacidad,
 aprobaciones y monitoreo externo. No se modificaron `main`,
 Neon, Render, Vercel ni el visor 3D.
+
+## Fase 9: aplicación privada operativa sobre la base recuperada
+
+Se acredita un entregable técnico adicional de **5 puntos de fase**:
+aceptación de la API privada sobre un PostgreSQL 15 nuevo y restaurado,
+mientras la base principal sigue detenida. El backup conserva ACL y
+revocaciones. Los roles de datos y autenticación acceden mediante LOGIN
+reales separados, sin SET ROLE, superusuario ni BYPASSRLS.
+
+Se comprobaron SCRAM y rechazo de contraseña errónea, permisos SQL,
+RLS sin contexto y entre organizaciones, sesión anterior al respaldo y
+login nuevo, escritura y consulta de una medición, cadena de auditoría,
+PNG ficticio recuperado con clave externa, rechazo con clave ausente o
+incorrecta, logout y revocación de la sesión restaurada. La comparación
+exacta de datos sucede antes de estas escrituras en el destino.
+
+La [CI integral 44935709054](https://github.com/erosCordova/bodyvision-ai/actions/runs/44935709054)
+aprobó `56e45426d4f080e5118764bd0fab91491f4fc49b` en Windows,
+`native-checks` y Docker: **557 pruebas de aplicación** (270 backend,
+243 frontend, 36 navegador público y 8 privado), más los controles de
+scripts y del ensayo. Detalles en `PHASE_9_RECOVERED_APPLICATION.md`.
+
+La Fase 9 pasa de **75 % a 80 %**. La suma de diez fases pasa de
+**855 a 860** y el promedio exacto de **85,5 % a 86,0 %**;
+el porcentaje visible **permanece en 86 %** por redondeo.
+La valoración es técnica y manual. La aceptación usa TestClient con
+PostgreSQL real, sin HTTP por socket ni frontend sobre el reemplazo.
+No cierra recuperación MFA, custodia productiva de secretos, copias
+externas, pérdida física del host, PITR ni RPO/RTO. No modifica Neon,
+despliegues, `main`, el modelo 3D o datos reales.

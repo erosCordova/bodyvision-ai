@@ -224,3 +224,18 @@ en otra región, backups cifrados o custodiados, ni datos reales.
 
 El progreso manual de la Fase 9 sube de **70 % a 75 %**;
 el promedio global de 85,0 % a 85,5 %, visible como **86 %**.
+
+## Aplicación privada aceptada sobre el reemplazo (Fase 9: 80 %)
+
+La [CI integral 44935709054](https://github.com/erosCordova/bodyvision-ai/actions/runs/44935709054)
+aprobó Windows, pruebas nativas y Docker con **557 pruebas de aplicación**.
+El respaldo conserva ACL y se verifican conexiones LOGIN separadas,
+SCRAM, RLS, sesiones, lectura/escritura, auditoría y recuperación del PNG
+ficticio con clave externa mientras la base original permanece detenida.
+Las pruebas negativas rechazan contraseña y claves erróneas, acceso
+cruzado y sesión revocada. El entorno original se reinicia después.
+
+La Fase 9 aumenta de 75 % a **80 %** y la media de 85,5 % a **86,0 %**;
+el tablero continúa en **86 %**. No incluye frontend/HTTP por socket
+sobre el destino, recuperación MFA, custodia productiva, pérdida del host
+ni RPO/RTO. Evidencia y límites: `PHASE_9_RECOVERED_APPLICATION.md`.
