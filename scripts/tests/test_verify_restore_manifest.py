@@ -86,6 +86,33 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
             with self.assertRaises(restore.RestoreManifestRejected):
                 restore.build_manifest(link)
 
+    def test_rejects_hardlinked_backup_and_manifest(self):
+        other = self.folder / "linked.dump"
+        os.link(self.backup, other)
+        with self.assertRaises(restore.RestoreManifestRejected):
+            restore.fingerprint(self.backup)
+        other.unlink()
+        restore.create_manifest(self.backup, self.manifest)
+        manifest_link = self.folder / "linked.json"
+        os.link(self.manifest, manifest_link)
+        with self.assertRaises(restore.RestoreManifestRejected):
+            restore.verify_manifest(self.backup, self.manifest)
+
+    def test_detects_backup_mutation_during_streaming(self):
+        original_open = os.open
+
+        def mutate_after_open(path, flags, *args, **kwargs):
+            descriptor = original_open(path, flags, *args, **kwargs)
+            if Path(path) == self.backup:
+                with self.backup.open("r+b") as output:
+                    output.seek(7)
+                    output.write(b"CHANGED")
+            return descriptor
+
+        with patch.object(restore.os, "open", side_effect=mutate_after_open):
+            with self.assertRaises(restore.RestoreManifestRejected):
+                restore.fingerprint(self.backup)
+
     def test_requires_explicit_disposable_ci_opt_in(self):
         restore.require_ci_synthetic(SAFE_ENV)
         for change in (
