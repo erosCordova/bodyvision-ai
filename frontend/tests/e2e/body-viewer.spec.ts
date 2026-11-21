@@ -238,6 +238,72 @@ test("height presets update the avatar and the hypothetical differences", async 
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
 });
 
+test("phase 8 repeated weight and stature changes retain one geometry allocation", async ({ page }, testInfo) => {
+  test.setTimeout(120000);
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Alta", exact: true }).click();
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  const panel = page.getByLabel("Diagnóstico de renderizado");
+  const snapshot = async () => {
+    const pending = page.waitForEvent("download");
+    await panel.getByRole("button", { name: "Descargar diagnóstico" }).click();
+    const download = await pending;
+    return JSON.parse(readFileSync(await download.path(), "utf8")) as {
+      geometryBuffers: number; cpuGeometryBytes: number; retainedGeometryCount: number;
+      textures: number; renderedFrames: number; cpuSampleCount: number; cpuP95Ms: number | null;
+    };
+  };
+  const start = await snapshot();
+  expect(start.cpuGeometryBytes).toBeGreaterThan(0);
+  const weight = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  const height = page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" });
+  const values = [
+    { weight: 30, height: 205 }, { weight: -30, height: 145 },
+    { weight: 20, height: 185 }, { weight: -20, height: 160 },
+    { weight: 0, height: 175 }, { weight: 15, height: 195 },
+    { weight: -15, height: 155 }, { weight: 25, height: 200 },
+    { weight: -25, height: 150 }, { weight: 0, height: 175 },
+  ];
+  for (const scenario of values) {
+    await weight.fill(String(scenario.weight));
+    await height.fill(String(scenario.height));
+    await expect(weight).toHaveValue(String(scenario.weight));
+    await expect(height).toHaveValue(String(scenario.height));
+  }
+  const end = await snapshot();
+  expect(end.geometryBuffers, "GPU geometry allocations must not rise during uniform-based morphing")
+    .toBe(start.geometryBuffers);
+  expect(end.retainedGeometryCount, "All variations use exactly the same anatomical geometry")
+    .toBe(start.retainedGeometryCount);
+  expect(end.cpuGeometryBytes, "No extra CPU geometry may be allocated by repeated simulations")
+    .toBe(start.cpuGeometryBytes);
+  expect(end.textures).toBe(start.textures);
+  expect(end.renderedFrames).toBeGreaterThan(start.renderedFrames);
+  expect(end.cpuSampleCount).toBeGreaterThan(0);
+  expect(await page.locator(".studio-canvas canvas").count()).toBe(1);
+  expect(writes).toEqual([]);
+  await testInfo.attach("fase8-variaciones-sinteticas.json", {
+    body: Buffer.from(JSON.stringify({
+      schemaVersion: 1,
+      scope: "synthetic-browser-only",
+      scenarioCount: values.length,
+      originalGeometryBuffers: start.geometryBuffers,
+      finalGeometryBuffers: end.geometryBuffers,
+      originalCpuGeometryBytes: start.cpuGeometryBytes,
+      finalCpuGeometryBytes: end.cpuGeometryBytes,
+      p95CpuSubmissionMs: end.cpuP95Ms,
+      limitations: "CPU submission only; not GPU FPS, anatomy or body-fat validation",
+    }, null, 2)),
+    contentType: "application/json",
+  });
+});
+
 test("reference-weight editing deforms one 3D avatar and split view preserves the matching baseline", async ({ page }) => {
   test.setTimeout(110000);
   const errors: string[] = [];
