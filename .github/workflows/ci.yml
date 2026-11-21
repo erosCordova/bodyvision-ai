@@ -157,12 +157,36 @@ jobs:
           # inside db-test, never the application db or a hosted Neon database.
           docker compose exec -T db sh -c 'pg_dump --format=custom --no-owner --no-acl -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-backup-ci.dump
           test -s /tmp/bodyvision-backup-ci.dump
+          # Reject damaged custom-format backups before invoking pg_restore.
+          # Metadata stays on this disposable runner: no SQL/dump artifacts uploaded.
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+            python3 scripts/verify_restore_manifest.py create \
+            --backup /tmp/bodyvision-backup-ci.dump \
+            --manifest /tmp/bodyvision-backup-ci.manifest.json
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+            python3 scripts/verify_restore_manifest.py verify \
+            --backup /tmp/bodyvision-backup-ci.dump \
+            --manifest /tmp/bodyvision-backup-ci.manifest.json
+          # A deliberately corrupted copy must fail closed, never reach pg_restore.
+          cp /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-corrupt-ci.dump
+          printf 'X' >> /tmp/bodyvision-corrupt-ci.dump
+          set +e
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+            python3 scripts/verify_restore_manifest.py verify \
+            --backup /tmp/bodyvision-corrupt-ci.dump \
+            --manifest /tmp/bodyvision-backup-ci.manifest.json \
+            > /tmp/bodyvision-restore-corruption-check.json
+          integrity_status=$?
+          set -e
+          test "$integrity_status" -eq 2
+          grep -q '"synthetic_restore_integrity_rejected"' /tmp/bodyvision-restore-corruption-check.json
+          rm -f /tmp/bodyvision-corrupt-ci.dump /tmp/bodyvision-restore-corruption-check.json
           docker compose exec -T db-test sh -c 'createdb -U "$POSTGRES_USER" bodyvision_restored_ci'
           docker compose exec -T db-test sh -c 'pg_restore --exit-on-error --no-owner --no-acl -U "$POSTGRES_USER" -d bodyvision_restored_ci' < /tmp/bodyvision-backup-ci.dump
           docker compose exec -T db-test sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" bodyvision_restored_ci' > /tmp/bodyvision-restored-ci.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-restored-ci.sql
           docker compose exec -T db-test sh -c 'dropdb -U "$POSTGRES_USER" bodyvision_restored_ci'
-          rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql
+          rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql /tmp/bodyvision-backup-ci.manifest.json
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - name: Install browser driver for compiled Docker UI

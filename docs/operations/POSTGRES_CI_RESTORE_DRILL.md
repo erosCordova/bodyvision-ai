@@ -50,3 +50,32 @@ No se deben subir a artefactos los archivos `.dump` o `.sql`.
 La prueba se incorpora antes de los recorridos de navegador Docker y
 el resultado debe confirmarse en GitHub Actions. La Fase 9 conserva
 provisionalmente su porcentaje hasta validar el nuevo control.
+
+
+## Puerta adicional de integridad SHA-256 anterior a la restauración
+
+Se añadió el comprobador `scripts/verify_restore_manifest.py`
+al simulacro **exclusivamente sintético** de GitHub Actions.
+Antes de llamar a `pg_restore`, comprueba la cabecera del formato
+personalizado `PGDMP`, tamaño acotado, archivo regular, y que
+SHA-256 y bytes coincidan con un manifiesto creado inmediatamente
+después del respaldo. El manifiesto registra solo formato, alcance,
+tamaño y resumen; **no incluye contenido, SQL, datos ni contraseñas**.
+Rechaza sobrescribir un manifiesto existente, enlaces simbólicos,
+archivos dañados, truncados, vacíos o de otro formato.
+
+La CI crea deliberadamente una **copia alterada** del respaldo y exige
+que el comprobador la rechace **antes** de restaurar el respaldo
+original en `db-test`. Después conserva la comparación lógica ya
+existente del contenido restaurado. Los tests de scripts también
+cubren opt-in exclusivo `APP_ENV=test`, `CI=true`,
+`BODYVISION_RESTORE_DRILL=synthetic-only`, JSON manipulado y errores
+sin revelar contenido.
+
+Este control detecta corrupción accidental o discordancia con el
+manifiesto; **SHA-256 no es una firma autenticada** y un atacante que
+pueda reemplazar simultáneamente el respaldo y el manifiesto podría
+recrear ambos. No cifra el respaldo, no lo envía a otra ubicación,
+no prueba recuperación productiva ni establece RPO/RTO. Los archivos
+de respaldo y manifiesto se eliminan del runner; no son artefactos
+descargables de CI.
