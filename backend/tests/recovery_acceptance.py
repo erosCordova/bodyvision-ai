@@ -301,18 +301,22 @@ def verify():
             headers={**headers, "Idempotency-Key": str(uuid4())},
             json={
                 "metric_code": "weight",
-                "value": 73.25,
+                "value": 70.25,
                 "unit": "kg",
                 "method": "manual",
-                "measured_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                # Before the deliberately atypical 84 kg seed at one hour ago.
+                "measured_at": (datetime.now(UTC) - timedelta(hours=2)).isoformat(),
             },
         )
-        require(response.status_code == 201, "restored_write_failed")
+        require(response.status_code == 201, f"restored_write_failed_{response.status_code}")
         identifier = response.json()["id"]
         listing = client.get(path + "/measurements", headers=headers)
         require(
             listing.status_code == 200
-            and any(row["id"] == identifier for row in listing.json()["items"]),
+            and any(
+                row["id"] == identifier and row["value"] == 70.25 and row["unit"] == "kg"
+                for row in listing.json()["items"]
+            ),
             "restored_read_after_write_failed",
         )
         audit = client.post("/api/v1/auth/audit/verify", headers=headers)
