@@ -291,6 +291,71 @@ test("reference-weight editing deforms one 3D avatar and split view preserves th
   expect(errors).toEqual([]);
 });
 
+test("phase 8 regional contour audit responds to weight scenarios and clarifies visual limits", async ({ page }) => {
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const audit = page.getByRole("region", { name: "Respuesta visual regional del cuerpo" });
+  const regions = audit.locator(".studio-sim-region");
+  const slider = page.getByRole("slider", { name: "Aumentar o disminuir peso en el modelo anatómico" });
+  expect(await regions.count()).toBe(5);
+  await expect(audit).toContainText("Abdomen");
+  await expect(audit).toContainText("Pantorrillas");
+  await expect(regions.first()).toContainText("Lateral: 0.0 %");
+  await slider.fill("25");
+  await expect(regions.first()).toContainText(/Lateral: \+[1-9]/);
+  await expect(regions.first()).toContainText(/Frontal: \+[1-9]/);
+  await slider.fill("-25");
+  await expect(regions.first()).toContainText(/Lateral: -[1-9]/);
+  await slider.fill("0");
+  await expect(regions.first()).toContainText("Lateral: 0.0 %");
+  await page.getByRole("spinbutton", { name: "Peso de referencia (solo demostración)" }).fill("200");
+  await slider.fill("30");
+  await expect(audit).toContainText("límite visual");
+  await expect(page.getByRole("status", { name: "Límite gráfico de deformación" })).toBeVisible();
+  await page.getByRole("button", { name: "Comparar con el original" }).click();
+  await expect(audit).toContainText("Vista del atlas original");
+  await expect(regions.first()).toContainText("Lateral: 0.0 %");
+  await page.getByRole("button", { name: "Ver escenario modificado" }).click();
+  await expect(audit).toContainText("límite visual");
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+});
+
+test("phase 8 hard skeleton geometry stays visually unchanged as reference weight changes", async ({ page }) => {
+  test.setTimeout(110000);
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=simulacion");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  await page.getByRole("button", { name: "Alta", exact: true }).click();
+  await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: /Esqueleto/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Piel/ })).not.toBeChecked();
+  await page.getByRole("button", { name: "Detalles", exact: true }).click();
+  await expect(page.getByRole("group", { name: "Memoria geométrica por capa" }))
+    .toContainText("Esqueleto · visible", { timeout: 60000 });
+  await page.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+  const canvas = page.locator(".studio-canvas canvas");
+  let baseline = await canvas.screenshot();
+  await expect.poll(async () => {
+    const current = await canvas.screenshot();
+    const stable = baseline.equals(current);
+    baseline = current;
+    return stable;
+  }, { timeout: 10000, message: "The static skeleton viewport must settle" }).toBe(true);
+  const reference = page.getByRole("spinbutton", { name: "Peso de referencia (solo demostración)" });
+  await reference.fill("120");
+  await expect(reference).toHaveValue("120");
+  expect((await canvas.screenshot()).equals(baseline),
+    "Weight changes must not deform the hard skeleton material").toBe(true);
+  await reference.fill("70");
+  expect((await canvas.screenshot()).equals(baseline)).toBe(true);
+  await page.getByRole("slider", { name: "Ajustar estatura del modelo anatómico" }).fill("195");
+  await expect.poll(async () => !(await canvas.screenshot()).equals(baseline), {
+    timeout: 10000, message: "Stature should still change the same skeleton vertically",
+  }).toBe(true);
+  await expect(canvas).toHaveCount(1);
+});
+
 test("regional weight changes are reversible on the same shaded 3D body, including polygon mesh", async ({ page }) => {
   test.setTimeout(110000);
   const errors: string[] = [];
