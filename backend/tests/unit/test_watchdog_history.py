@@ -56,14 +56,17 @@ def test_monitor_resumes_from_saved_state_across_restarts(tmp_path):
     path = tmp_path / "events.sqlite3"
     outputs = []
     for state, expected in (("unreachable", 1), ("unreachable", 1), ("ready", 0)):
-        assert monitor(
-            TARGET,
-            30,
-            once=True,
-            probe=lambda _, observed=state: observed,
-            emit=outputs.append,
-            journal=WatchdogHistory(path),
-        ) == expected
+        assert (
+            monitor(
+                TARGET,
+                30,
+                once=True,
+                probe=lambda _, observed=state: observed,
+                emit=outputs.append,
+                journal=WatchdogHistory(path),
+            )
+            == expected
+        )
     assert [json.loads(event)["state"] for event in outputs] == ["unreachable", "ready"]
 
 
