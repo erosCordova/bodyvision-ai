@@ -33,3 +33,23 @@ sin credenciales, detuvo el backend y confirmó el estado `unreachable`
 también las comprobaciones de esquema, retención, base restaurada y
 recreación de contenedores. La suite nativa aprobó cuatro pruebas
 unitarias de aislamiento y estados del vigilante.
+
+## Historial mínimo de incidentes (local, optativo)
+
+El perfil `watchdog` dispone de un volumen propio `watchdog_history`
+para un diario SQLite aislado de PostgreSQL. Se conserva solo el estado
+permitido y la fecha UTC, un máximo de 256 transiciones durante siete días.
+El contenedor sin privilegios es propietario del directorio privado (0700);
+el proceso usa umask 077 y no tiene credenciales de base de datos.
+
+El modo `--history` permite consultar el diario sin depender del backend,
+y cada nuevo proceso carga el estado persistido para no generar alertas
+duplicadas después de un reinicio. Los registros no incluyen URL,
+identificadores de usuario, pacientes, fotografías, SQL ni mensajes de error.
+Un volumen inaccesible o dañado provoca salida explícita con código 3 y un
+evento genérico, nunca un éxito ficticio.
+
+La prueba Docker abre sucesivos contenedores, comprueba la caída y recuperación,
+lee el historial y verifica que una segunda consulta no duplique la recuperación.
+Esta persistencia local no equivale a copias seguras, supervisión externa
+ni alertas cuando Docker o el host están apagados.

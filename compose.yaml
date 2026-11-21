@@ -82,6 +82,8 @@ services:
       BODYVISION_ENABLE_WATCHDOG: ${BODYVISION_ENABLE_WATCHDOG:-disabled}
       WATCHDOG_TARGET: http://backend:8000/api/v1/health/ready
       WATCHDOG_INTERVAL_SECONDS: ${WATCHDOG_INTERVAL_SECONDS:-30}
+    volumes:
+      - watchdog_history:/var/lib/bodyvision-watchdog
     restart: unless-stopped
     networks: [private]
     read_only: true
@@ -161,3 +163,4 @@ networks:
   tests: {internal: true}
 volumes:
   postgres_data:
+  watchdog_history:

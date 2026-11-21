@@ -6,6 +6,7 @@ No credentials, database access, patient data, request bodies or external URLs.
 import argparse
 import json
 import os
+import sqlite3
 import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from app.db.session import SCHEMA_REVISION
+from app.workers.watchdog_history import WatchdogHistory
 
 HEALTH_PATH = "/api/v1/health/ready"
 ALLOWED_TARGETS = frozenset(
@@ -90,24 +92,28 @@ def monitor(
     probe: Callable[[str], str] = probe_readiness,
     sleep: Callable[[float], None] = time.sleep,
     emit: Callable[[str], None] = print,
+    journal: WatchdogHistory | None = None,
 ) -> int:
     """Emit a privacy-minimized JSON line only on state transitions."""
-    previous = None
+    previous = journal.latest_state() if journal is not None else None
     while True:
         state = probe(target)
         if state not in {"ready", "degraded", "unreachable"}:
             state = "degraded"
         if state != previous:
-            emit(
-                json.dumps(
-                    {
-                        "event": "synthetic_watchdog_transition",
-                        "state": state,
-                        "checked_at": datetime.now(UTC).isoformat(),
-                    },
-                    sort_keys=True,
+            checked_at = datetime.now(UTC)
+            saved = journal is None or journal.append_transition(state, checked_at)
+            if saved:
+                emit(
+                    json.dumps(
+                        {
+                            "event": "synthetic_watchdog_transition",
+                            "state": state,
+                            "checked_at": checked_at.isoformat(),
+                        },
+                        sort_keys=True,
+                    )
                 )
-            )
             previous = state
         if once:
             return 0 if state == "ready" else 1
@@ -119,13 +125,25 @@ def monitor(
 
 def main(argv: list[str] | None = None, environment: Mapping[str, str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Vigilante de disponibilidad ficticia local")
-    parser.add_argument("--once", action="store_true", help="Consultar una vez y finalizar")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true", help="Consultar una vez y finalizar")
+    mode.add_argument("--history", action="store_true", help="Leer historial local acotado")
     args = parser.parse_args(argv)
     try:
         target, interval = require_synthetic_watchdog(
             os.environ if environment is None else environment
         )
-        return monitor(target, interval, once=args.once)
+        # Only the isolated watchdog process can access this private volume.
+        os.umask(0o077)
+        journal = WatchdogHistory()
+        if args.history:
+            for event in journal.recent():
+                print(json.dumps(event, sort_keys=True))
+            return 0
+        return monitor(target, interval, once=args.once, journal=journal)
+    except (sqlite3.Error, OSError):
+        print('{"event":"synthetic_watchdog_journal_unavailable"}', flush=True)
+        return 3
     except WatchdogDenied:
         print('{"event":"synthetic_watchdog_disabled"}', flush=True)
         return 2

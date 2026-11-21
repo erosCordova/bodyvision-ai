@@ -251,6 +251,26 @@ jobs:
             watchdog python -m app.workers.independent_service_watchdog --once \
             > /tmp/bodyvision-watchdog-up.txt
           grep -q '"state": "ready"' /tmp/bodyvision-watchdog-up.txt
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --history \
+            > /tmp/bodyvision-watchdog-history.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          events = [
+              json.loads(line) for line in
+              Path("/tmp/bodyvision-watchdog-history.jsonl").read_text().splitlines()
+              if line.strip()
+          ]
+          assert [event["state"] for event in events] == ["unreachable", "ready"]
+          assert all(set(event) == {"event", "state", "checked_at"} for event in events)
+          PY
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --once \
+            > /tmp/bodyvision-watchdog-repeat.txt
+          test ! -s /tmp/bodyvision-watchdog-repeat.txt
           python3 scripts/check_local_installation.py --json
       - name: Browser confirms retained correction history after restart
         working-directory: frontend
