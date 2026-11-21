@@ -1,7 +1,8 @@
 """Optional synthetic-only retention worker independent of FastAPI.
 
-Only expired encrypted capture rows may be deleted by the existing narrow
-PostgreSQL SECURITY DEFINER function. No keys, images, HTTP, or owner role.
+Only expired encrypted captures and synthetic pose summaries with invalid
+consent are deleted by narrow PostgreSQL SECURITY DEFINER functions.
+No encryption keys, images, HTTP, or owner role.
 The database must stay running; this does NOT purge offline backups or WAL.
 """
 
