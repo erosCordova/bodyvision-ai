@@ -854,18 +854,38 @@ export function createAnatomyScene(
     let meshes = 0;
     let overlays = 0;
     const retainedGeometry = new Set<THREE.BufferGeometry>();
-    for (const group of objects.values()) group.traverse(node => {
-      if (!(node instanceof THREE.Mesh)) return;
-      retainedGeometry.add(node.geometry);
-      if (node.userData.bodyvisionMeshOverlay) overlays++;
-      else meshes++;
+    // Report retained (including hidden) layers independently so the largest
+    // source of CPU geometry can be identified without loading more models.
+    // Buffers shared across layers are counted once globally, but can appear
+    // in multiple per-layer figures: those figures are not additive.
+    const layerGeometry = anatomicalLayers.flatMap(({ id }) => {
+      const group = objects.get(id);
+      if (!group) return [];
+      let layerMeshes = 0;
+      const geometries = new Set<THREE.BufferGeometry>();
+      group.traverse(node => {
+        if (!(node instanceof THREE.Mesh)) return;
+        geometries.add(node.geometry);
+        if (node.userData.bodyvisionMeshOverlay) {
+          overlays++;
+          return;
+        }
+        layerMeshes++;
+        meshes++;
+        const lod = lodEntries.get(node);
+        if (lod) {
+          geometries.add(lod.high);
+          if (lod.low) geometries.add(lod.low);
+        }
+      });
+      for (const geometry of geometries) retainedGeometry.add(geometry);
+      return [{
+        layer: id,
+        visible: settings.get(id)?.visible ?? false,
+        meshes: layerMeshes,
+        ...estimateRetainedGeometryMemory(geometries),
+      }];
     });
-    // Originals remain retained while simplified LODs are displayed, and
-    // overlays share mesh geometry. Deduplicate their CPU-side array buffers.
-    for (const entry of lodEntries.values()) {
-      retainedGeometry.add(entry.high);
-      if (entry.low) retainedGeometry.add(entry.low);
-    }
     const geometryMemory = estimateRetainedGeometryMemory(retainedGeometry);
     const activeLods = [...lodEntries].filter(([mesh, entry]) => entry.low !== null && mesh.geometry === entry.low);
     return {
@@ -890,6 +910,7 @@ export function createAnatomyScene(
       meshes,
       overlays,
       layerReadyMs: { ...layerReadyMs },
+      layerGeometry,
     };
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
