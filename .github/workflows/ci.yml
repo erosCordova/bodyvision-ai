@@ -52,12 +52,14 @@ jobs:
           psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
           psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_auth_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;'
       - name: Backend quality and migrations
+        timeout-minutes: 15
         working-directory: backend
         run: |
           ruff check app tests alembic
           ruff format --check app tests alembic
           alembic upgrade head
-          pytest -q
+          # Fail fast on the first regression; passing runs still execute the full suite.
+          pytest -q -x
           alembic downgrade base
           alembic upgrade head
       - name: Frontend checks
@@ -131,7 +133,8 @@ jobs:
           python3 scripts/check_local_installation.py --json
           docker compose run --rm seed
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-tests.sql
-          docker compose run --rm api-test
+          # Capture the first failing test instead of risking runner exhaustion.
+          docker compose run --rm api-test pytest -q -x -p no:cacheprovider
           docker compose run --rm frontend-test
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-tests.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-after-tests.sql
