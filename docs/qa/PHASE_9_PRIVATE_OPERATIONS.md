@@ -109,3 +109,25 @@ junto con Windows, tests nativos, frontend y navegadores. Véase
 **Límites:** no hay alertas fuera del host, telemetría centralizada ni
 disponibilidad cuando Docker o el anfitrión están apagados. Sigue
 prohibido usar datos reales; esta prueba no es un SLA.
+
+
+## Historial local bounded de incidentes del vigilante (55 % de Fase 9)
+
+Después de la aceptación independiente, `watchdog_history.py` añade
+persistencia en SQLite local, separada de la base y con un máximo de
+256 transiciones y siete días. El proceso no almacena cuerpos HTTP,
+usuarios, tokens, direcciones ni expedientes. Una nueva instancia consulta
+su último estado antes de escribir, evita duplicados y presenta un historial
+local acotado. El volumen privado tiene permisos restrictivos y el proceso
+nunca se activa por defecto en la aplicación pública.
+
+El [run 44863258689](https://github.com/erosCordova/bodyvision-ai/actions/runs/44863258689)
+aprobó las pruebas de nueva instancia, expiración, límite y corrupción.
+La prueba Docker registró una caída y recuperación reales, consultó ambos
+eventos desde otro contenedor y comprobó que una lectura posterior no
+generase una transición falsa. También finalizaron correctamente Windows,
+backend, frontend y los navegadores públicos/privados.
+
+La Fase 9 queda en **55 %**; faltan vigilancia fuera del host, histórico
+centralizado, notificación externa, custodia de incidentes y preparación
+productiva. Ningún incidente representa un paciente real.

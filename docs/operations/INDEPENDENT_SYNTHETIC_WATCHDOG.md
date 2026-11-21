@@ -53,3 +53,14 @@ La prueba Docker abre sucesivos contenedores, comprueba la caída y recuperació
 lee el historial y verifica que una segunda consulta no duplique la recuperación.
 Esta persistencia local no equivale a copias seguras, supervisión externa
 ni alertas cuando Docker o el host están apagados.
+
+
+## Cierre de la prueba de persistencia
+
+La [ejecución integral 44863258689](https://github.com/erosCordova/bodyvision-ai/actions/runs/44863258689)
+aprobó sobre el commit `20263b74dd5ce339078452b06f7d7f04e3599764`
+la caída y recuperación del servicio, la lectura del diario SQLite
+desde un nuevo contenedor y la no duplicación de estados. Los
+controles de caducidad y tope de 256 filas pasaron en la batería
+backend. Esta evidencia es local y sintética; no acredita
+supervisión externa ni recuperación ante pérdida del volumen.

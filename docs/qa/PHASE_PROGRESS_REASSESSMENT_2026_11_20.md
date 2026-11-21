@@ -222,3 +222,34 @@ histórico durable, producción multiinstancia, RPO/RTO, custodia de secretos
 y respaldos productivos, aceptación operativa y evaluación legal/de seguridad.
 El proceso depende de que Docker/el equipo local sigan encendidos. No se han
 modificado `main`, Render, Vercel ni la base alojada.
+
+
+## Fase 9: historial local persistente, acotado y verificado
+
+Entrega operativa adicional valorada en **5 puntos de fase**: el vigilante
+independiente y optativo guarda solamente estado técnico permitido y hora
+UTC en un volumen local SQLite exclusivo, sin credenciales de PostgreSQL
+ni datos clínicos. Se limita a **256 transiciones de los últimos siete días**.
+Un nuevo proceso recupera el estado y no duplica el último incidente.
+`--history` permite consultar el historial aunque la API no responda.
+
+La [CI integral 44863258689](https://github.com/erosCordova/bodyvision-ai/actions/runs/44863258689)
+del commit `20263b74dd5ce339078452b06f7d7f04e3599764`
+terminó con **success** en Windows, native-checks y Docker. Se aprobaron
+242 pruebas backend, 243 frontend, 36 navegador público y 8 privado:
+**529 pruebas de aplicación**, además de la restauración, conservación
+de volúmenes y aceptación real de caída, recuperación, lectura desde
+otro contenedor y ausencia de duplicados de evento. El diario corrupto
+produce fallo explícito y no se simula disponibilidad.
+
+La Fase 9 pasa de **50 % a 55 %**. La suma de las diez fases pasa de
+**830 a 835** y la media de **83,0 % a 83,5 %**, mostrada como **84 %**.
+Este avance es una estimación técnica documentada, no una certificación
+de disponibilidad ni una validación productiva.
+
+**Sigue faltando:** monitor externo al host/Docker, avisos a terceros,
+histórico centralizado y protegido para varios procesos, respuesta a
+incidentes formalizada, respaldos productivos y recuperación RPO/RTO,
+custodia y rotación de secretos, revisión legal/de privacidad y seguridad.
+El diario local no es una copia de seguridad ni un registro clínico.
+No se ha modificado `main`, Vercel, Render o la base alojada.
