@@ -753,14 +753,15 @@ export function AnatomyAtlas() {
                 <div key={layer.layer} className="studio-render-layer">
                   <span>{anatomicalLayers.find(item => item.id === layer.layer)?.label} · {layer.visible ? "visible" : "oculta"}</span>
                   <span>{(layer.cpuGeometryBytes / 1024 / 1024).toFixed(2)} MiB · {layer.meshes} mallas</span>
+                  <span>Preparación: {renderStats.layerReadyMs[layer.layer] === undefined
+                    ? "Pendiente" : renderStats.layerReadyMs[layer.layer].toFixed(2) + " ms"}</span>
                 </div>
               ))}
               <small>Las capas ocultas siguen cargadas para volver a mostrarlas. Sus cifras pueden compartir buffers y no deben sumarse para calcular el total.</small>
             </div>
-            <span>Preparación de piel: {renderStats.layerReadyMs.skin === undefined
-              ? "Pendiente" : renderStats.layerReadyMs.skin.toFixed(2) + " ms"} (descarga y procesamiento CPU)</span>
+
             <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
-            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Memoria de geometría = tamaño de buffers de CPU, no VRAM ni consumo total. Los tiempos de carga no miden la finalización de GPU; el envío CPU tampoco equivale a FPS.</small>
+            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Memoria de geometría = tamaño de buffers de CPU, no VRAM ni consumo total. La preparación incluye descarga y procesamiento CPU; no mide la finalización de GPU; el envío CPU tampoco equivale a FPS.</small>
             <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
             <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
           </aside>}
