@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from test_authenticated_api import protected as protected
 from test_pose_summary_api import BODY, accept
 from test_pose_summary_api import pose_archive as pose_archive
 
