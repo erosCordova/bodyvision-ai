@@ -118,6 +118,4 @@ def test_cli_damaged_journal_fails_closed_without_database_error_details(
     bad.write_bytes(b"no sqlite content with secret")
     monkeypatch.setattr(watchdog, "WatchdogHistory", lambda: WatchdogHistory(bad))
     assert watchdog.main(["--incidents"], ENV) == 3
-    assert capsys.readouterr().out.strip() == (
-        '{"event":"synthetic_watchdog_journal_unavailable"}'
-    )
+    assert capsys.readouterr().out.strip() == ('{"event":"synthetic_watchdog_journal_unavailable"}')

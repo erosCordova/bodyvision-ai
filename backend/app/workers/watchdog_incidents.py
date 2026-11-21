@@ -45,9 +45,7 @@ def summarize_incidents(events: list[dict[str, str]]) -> dict[str, object]:
         elif pending is not None:
             first = datetime.fromisoformat(str(pending["first_observed_at"]))
             pending["recovery_observed_at"] = timestamp.isoformat()
-            pending["seconds_between_observations"] = round(
-                (timestamp - first).total_seconds(), 3
-            )
+            pending["seconds_between_observations"] = round((timestamp - first).total_seconds(), 3)
             pending["outcome"] = "recovery_observed"
             pending = None
 
@@ -56,8 +54,6 @@ def summarize_incidents(events: list[dict[str, str]]) -> dict[str, object]:
         "coverage": "transitions_only_no_uptime_estimate",
         "last_observed_state": last_state,
         "episode_count": len(episodes),
-        "recoveries_observed": sum(
-            item["outcome"] == "recovery_observed" for item in episodes
-        ),
+        "recoveries_observed": sum(item["outcome"] == "recovery_observed" for item in episodes),
         "episodes": episodes,
     }
