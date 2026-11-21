@@ -14,6 +14,7 @@ import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
 import { recordRenderCpuSample, summarizeRenderCpuSamples } from "./renderCpuTiming";
 import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount } from "./geometryLod";
+import { estimateRetainedGeometryMemory } from "./geometryMemory";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
 export const anatomicalLayers = [
@@ -852,11 +853,20 @@ export function createAnatomyScene(
     const buffer = renderer.getDrawingBufferSize(new THREE.Vector2());
     let meshes = 0;
     let overlays = 0;
+    const retainedGeometry = new Set<THREE.BufferGeometry>();
     for (const group of objects.values()) group.traverse(node => {
       if (!(node instanceof THREE.Mesh)) return;
+      retainedGeometry.add(node.geometry);
       if (node.userData.bodyvisionMeshOverlay) overlays++;
       else meshes++;
     });
+    // Originals remain retained while simplified LODs are displayed, and
+    // overlays share mesh geometry. Deduplicate their CPU-side array buffers.
+    for (const entry of lodEntries.values()) {
+      retainedGeometry.add(entry.high);
+      if (entry.low) retainedGeometry.add(entry.low);
+    }
+    const geometryMemory = estimateRetainedGeometryMemory(retainedGeometry);
     const activeLods = [...lodEntries].filter(([mesh, entry]) => entry.low !== null && mesh.geometry === entry.low);
     return {
       mode: quality,
@@ -875,6 +885,7 @@ export function createAnatomyScene(
       ...summarizeRenderCpuSamples(cpuSubmissionSamples),
       contextAvailable: !contextUnavailable,
       geometryBuffers: renderer.info.memory.geometries,
+      ...geometryMemory,
       textures: renderer.info.memory.textures,
       meshes,
       overlays,
