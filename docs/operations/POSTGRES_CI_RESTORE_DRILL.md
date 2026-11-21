@@ -79,3 +79,38 @@ recrear ambos. No cifra el respaldo, no lo envía a otra ubicación,
 no prueba recuperación productiva ni establece RPO/RTO. Los archivos
 de respaldo y manifiesto se eliminan del runner; no son artefactos
 descargables de CI.
+
+
+## Ensayo de pérdida del servicio principal y restauración sobre almacenamiento nuevo
+
+Como ampliación del paso `docker-smoke`, GitHub Actions detiene
+**frontend, backend y PostgreSQL principal** después de crear y
+verificar el respaldo ficticio. En ese estado, comprueba que
+el contenedor original de PostgreSQL está detenido. Levanta
+después **otro PostgreSQL 15** con un nuevo sistema de archivos
+temporal (`tmpfs`), sin conexión de red (`--network none`) y sin
+montar los volúmenes de la aplicación.
+
+La prueba comprueba que el destino tiene inicialmente cero tablas de
+usuario; vuelve a verificar el respaldo contra su manifiesto,
+lo restaura en el PostgreSQL aislado y compara la exportación
+lógica de los datos recuperados con la instantánea anterior
+mediante `verify_test_isolation.py`. No depende de que la base
+principal esté levantada para realizar esa restauración.
+
+Solo después de superar esa comparación destruye el PostgreSQL
+alternativo, vuelve a levantar la aplicación original y
+verifica su instalación saludable. El proceso informa del tiempo
+transcurrido en **ese ensayo de CI**, sin denominarlo RTO ni
+imponer una garantía de plazo. El archivo de respaldo y las
+exportaciones permanecen exclusivamente en el runner descartable
+y se eliminan tras la prueba.
+
+**Límite fundamental:** la recuperación ocurre en un
+contenedor aislado pero **dentro del mismo runner de GitHub**.
+No representa una caída física del servidor anfitrión,
+almacenamiento geográficamente separado, copias productivas
+ni claves cifradas. Tampoco demuestra recuperación real ante
+pérdida del host ni restauración de datos privados fuera de
+PostgreSQL; esas tareas requieren infraestructura y
+procedimientos específicos antes de admitir datos clínicos.

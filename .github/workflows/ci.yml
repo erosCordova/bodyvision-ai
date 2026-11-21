@@ -186,7 +186,60 @@ jobs:
           docker compose exec -T db-test sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" bodyvision_restored_ci' > /tmp/bodyvision-restored-ci.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-restored-ci.sql
           docker compose exec -T db-test sh -c 'dropdb -U "$POSTGRES_USER" bodyvision_restored_ci'
-          rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql /tmp/bodyvision-backup-ci.manifest.json
+          # Rehearsal: stop the *entire primary application stack*, including DB.
+          # Use a brand-new tmpfs-backed PostgreSQL process with NO network and
+          # NO access to the application's original Docker volumes.
+          recovery_started=$SECONDS
+          docker compose stop frontend backend db
+          primary_db_container="$(docker compose ps -aq db)"
+          test -n "$primary_db_container"
+          test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
+          docker run -d --rm --name bodyvision-recovery-ci \
+            --network none \
+            --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=512m \
+            -e POSTGRES_DB=bodyvision_recovered_ci \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
+            postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3 \
+            > /dev/null
+          trap 'docker rm -f bodyvision-recovery-ci >/dev/null 2>&1 || true' EXIT
+          test "$(docker inspect --format '{{.HostConfig.NetworkMode}}' bodyvision-recovery-ci)" = none
+          for attempt in $(seq 1 45); do
+            if docker exec bodyvision-recovery-ci \
+              pg_isready -U postgres -d bodyvision_recovered_ci > /dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec bodyvision-recovery-ci pg_isready -U postgres -d bodyvision_recovered_ci
+          # This target has no pre-existing user tables. The original DB is stopped.
+          test "$(docker exec bodyvision-recovery-ci psql -U postgres \
+            -d bodyvision_recovered_ci -Atc \
+            "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" = 0
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+            python3 scripts/verify_restore_manifest.py verify \
+            --backup /tmp/bodyvision-backup-ci.dump \
+            --manifest /tmp/bodyvision-backup-ci.manifest.json
+          docker exec -i bodyvision-recovery-ci \
+            pg_restore --exit-on-error --no-owner --no-acl \
+            -U postgres -d bodyvision_recovered_ci \
+            < /tmp/bodyvision-backup-ci.dump
+          docker exec bodyvision-recovery-ci \
+            pg_dump --data-only --no-owner --no-privileges \
+            -U postgres bodyvision_recovered_ci \
+            > /tmp/bodyvision-recovered-ci.sql
+          python3 scripts/verify_test_isolation.py \
+            /tmp/bodyvision-before-tests.sql /tmp/bodyvision-recovered-ci.sql
+          # Restore the original disposable application only after comparing
+          # the independent instance; no production database is touched.
+          docker rm -f bodyvision-recovery-ci > /dev/null
+          trap - EXIT
+          docker compose up -d --wait --wait-timeout 180
+          python3 scripts/check_local_installation.py --json
+          recovery_elapsed=$((SECONDS - recovery_started))
+          printf 'Synthetic replacement-DB recovery verified in %s seconds; this is not RTO.\n' "$recovery_elapsed"
+          rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql \
+            /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - name: Install browser driver for compiled Docker UI
