@@ -64,3 +64,28 @@ desde un nuevo contenedor y la no duplicación de estados. Los
 controles de caducidad y tope de 256 filas pasaron en la batería
 backend. Esta evidencia es local y sintética; no acredita
 supervisión externa ni recuperación ante pérdida del volumen.
+
+
+## Informe local de incidentes observados (sin SLA)
+
+El mismo perfil optativo y autorizado expone el modo `--incidents`.
+Agrupa las transiciones de SQLite en episodios por la primera observación
+no preparada (`degraded` o `unreachable`) hasta la primera recuperación
+observada (`ready`). La degradación seguida de pérdida de conexión es
+**un solo incidente**. Incluye el último estado conocido, cuántas
+recuperaciones se observaron y los tiempos entre ambas observaciones.
+
+El campo `seconds_between_observations` es solo la diferencia entre el
+primer estado degradado observado y la recuperación observada: **no
+representa tiempo real de caída**. Los episodios sin recuperación tienen
+`outcome=recovery_not_observed` y tiempo nulo; no se afirma que el sistema
+siga caído hoy. No se calcula disponibilidad, SLA, MTTR ni cobertura de
+muestras, pues el diario almacena solo cambios de estado y puede contener
+huecos, reinicios y truncamiento después de siete días o 256 eventos.
+
+La salida es un objeto JSON acotado, sin pacientes, credenciales, IP o
+cuerpos HTTP. Se deniega fuera de local/test sintético, no requiere que
+FastAPI esté activo y falla de manera controlada si el diario está dañado.
+Los tests cubren agrupación, datos vacíos, cambios de estado, ausencia
+de recuperación, rechazo de entradas manipuladas y CLI. La prueba de
+aceptación Docker verifica un incidente recuperado entre contenedores.

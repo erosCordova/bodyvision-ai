@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from app.db.session import SCHEMA_REVISION
 from app.workers.watchdog_history import WatchdogHistory
+from app.workers.watchdog_incidents import summarize_incidents
 
 HEALTH_PATH = "/api/v1/health/ready"
 ALLOWED_TARGETS = frozenset(
@@ -128,6 +129,7 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] | None = 
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--once", action="store_true", help="Consultar una vez y finalizar")
     mode.add_argument("--history", action="store_true", help="Leer historial local acotado")
+    mode.add_argument("--incidents", action="store_true", help="Resumir incidentes observados")
     args = parser.parse_args(argv)
     try:
         target, interval = require_synthetic_watchdog(
@@ -140,13 +142,16 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] | None = 
             for event in journal.recent():
                 print(json.dumps(event, sort_keys=True))
             return 0
+        if args.incidents:
+            print(json.dumps(summarize_incidents(journal.recent()), sort_keys=True))
+            return 0
         return monitor(target, interval, once=args.once, journal=journal)
-    except (sqlite3.Error, OSError):
-        print('{"event":"synthetic_watchdog_journal_unavailable"}', flush=True)
-        return 3
     except WatchdogDenied:
         print('{"event":"synthetic_watchdog_disabled"}', flush=True)
         return 2
+    except (sqlite3.Error, OSError, ValueError):
+        print('{"event":"synthetic_watchdog_journal_unavailable"}', flush=True)
+        return 3
     except KeyboardInterrupt:
         return 0
 

@@ -271,6 +271,24 @@ jobs:
             watchdog python -m app.workers.independent_service_watchdog --once \
             > /tmp/bodyvision-watchdog-repeat.txt
           test ! -s /tmp/bodyvision-watchdog-repeat.txt
+          # Report one fully recovered episode without claiming uptime or SLA.
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --incidents \
+            > /tmp/bodyvision-watchdog-incidents.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("/tmp/bodyvision-watchdog-incidents.json").read_text())
+          assert report["event"] == "synthetic_watchdog_incident_report"
+          assert report["coverage"] == "transitions_only_no_uptime_estimate"
+          assert report["episode_count"] == 1
+          assert report["recoveries_observed"] == 1
+          assert report["episodes"][0]["first_nonready_state"] == "unreachable"
+          assert report["episodes"][0]["outcome"] == "recovery_observed"
+          assert report["episodes"][0]["seconds_between_observations"] >= 0
+          assert "availability_percent" not in report
+          PY
           python3 scripts/check_local_installation.py --json
       - name: Browser confirms retained correction history after restart
         working-directory: frontend
