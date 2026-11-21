@@ -63,6 +63,8 @@ jobs:
         timeout-minutes: 15
         working-directory: backend
         run: |
+          # Show a narrow formatting diff for the new watchdog, without mutating CI files.
+          ruff format --diff app/workers/independent_service_watchdog.py tests/unit/test_independent_service_watchdog.py || true
           ruff check app tests alembic
           ruff format --check app tests alembic
           alembic upgrade head
