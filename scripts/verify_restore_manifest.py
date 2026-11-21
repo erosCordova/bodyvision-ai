@@ -110,10 +110,37 @@ def create_manifest(backup: Path, manifest: Path) -> None:
         raise
 
 
+def _unique_json_pairs(pairs):
+    record = {}
+    for key, value in pairs:
+        if key in record:
+            raise RestoreManifestRejected("Duplicate manifest fields")
+        record[key] = value
+    return record
+
+
 def verify_manifest(backup: Path, manifest: Path) -> None:
+    # Bind validation and parsing to one descriptor, preventing an intervening
+    # path replacement from causing a different manifest to be parsed.
     _read_regular_file(manifest, MAX_MANIFEST_BYTES)
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(manifest, flags)
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 1 <= info.st_size <= MAX_MANIFEST_BYTES:
+            raise RestoreManifestRejected("Invalid manifest file")
+        payload = stream.read(MAX_MANIFEST_BYTES + 1)
+        after = os.fstat(stream.fileno())
+        if (
+            len(payload) != info.st_size
+            or after.st_size != info.st_size
+            or after.st_mtime_ns != info.st_mtime_ns
+            or after.st_ctime_ns != info.st_ctime_ns
+        ):
+            raise RestoreManifestRejected("Manifest changed during read")
     try:
-        record = json.loads(manifest.read_text(encoding="utf-8"))
+        record = json.loads(payload.decode("utf-8"), object_pairs_hook=_unique_json_pairs)
     except (ValueError, UnicodeError) as exc:
         raise RestoreManifestRejected("Malformed manifest") from exc
     if not isinstance(record, dict) or record.keys() != MANIFEST_KEYS:
