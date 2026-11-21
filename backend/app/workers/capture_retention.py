@@ -32,6 +32,23 @@ def purge_due(engine: Engine, batch_size: int = 100, max_batches: int = 10) -> i
     return removed_total
 
 
+def purge_due_pose_summaries(engine: Engine, batch_size: int = 100, max_batches: int = 10) -> int:
+    """Erase only synthetic pose summaries without both current consents."""
+    if not 1 <= batch_size <= 100 or not 1 <= max_batches <= 100:
+        raise ValueError("Pose retention batches are bounded")
+    removed_total = 0
+    for _ in range(max_batches):
+        with engine.begin() as connection:
+            removed = connection.execute(
+                text("SELECT purge_expired_pose_summary_batch(:batch)"),
+                {"batch": batch_size},
+            ).scalar_one()
+        removed_total += removed
+        if removed < batch_size:
+            break
+    return removed_total
+
+
 async def retention_loop(
     engine: Engine, interval_seconds: int, operations: OperationsMetrics | None = None
 ) -> None:
@@ -40,10 +57,13 @@ async def retention_loop(
     while True:
         try:
             removed = await asyncio.to_thread(purge_due, engine)
+            pose_removed = await asyncio.to_thread(purge_due_pose_summaries, engine)
             if operations is not None:
                 operations.retention_completed(True)
             if removed:
                 logger.info("synthetic_capture_retention_purged", extra={"removed_count": removed})
+            if pose_removed:
+                logger.info("synthetic_pose_retention_purged", extra={"removed_count": pose_removed})
         except Exception as exc:
             if operations is not None:
                 operations.retention_completed(False)
