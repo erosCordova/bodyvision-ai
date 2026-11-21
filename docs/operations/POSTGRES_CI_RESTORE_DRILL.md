@@ -316,3 +316,38 @@ La evidencia completa figura en `docs/qa/PHASE_9_RECOVERED_MFA.md`.
 No demuestra custodia productiva de
 secretos, recuperación sin claves/códigos ni seguridad ante un operador
 que deshabilite deliberadamente MFA en la configuración.
+
+## Ampliación de interfaz y HTTP real sobre el reemplazo
+
+Tras las comparaciones y la aceptación MFA, el runner conserva dos
+códigos nuevos de recuperación en el mismo archivo privado. Inicia
+Uvicorn con roles LOGIN limitados y MFA habilitado, enlazado a
+`127.0.0.1:8000`, y un frontend Vite local/test en `127.0.0.1:5174`.
+Ambos contenedores comparten únicamente el espacio de red de la base
+recuperada; esta sigue con `--network none`, sin volúmenes originales
+ni puertos publicados. La API monta el estado solo para lectura y
+el frontend no recibe claves ni monta ese archivo.
+
+La imagen `recovery-web` deriva del build con activos verificados, pero
+sirve la interfaz en modo DEV para el acceso privado local/test.
+Se conserva la condición `import.meta.env.DEV` del acceso privado;
+no se habilita autenticación privada en el build público de producción.
+
+Chromium se ejecuta con el UID/GID del runner dentro del mismo espacio
+de red mediante `nsenter`, manteniendo su sistema de archivos. La base
+principal debe continuar detenida. Un recorrido por HTTP real comprueba
+ingreso MFA, consulta de mediciones, registro desde el formulario,
+logout y revocación, nuevo ingreso y lectura de la escritura, y acceso
+denegado a otra organización. No hay mocks de API o persistencia.
+
+La configuración del navegador exige el opt-in test/CI/synthetic-only.
+No captura vídeo, screenshots ni trazas. Incluso los contextos de
+error automáticos de Playwright se escriben en el directorio privado
+temporal, fuera de `frontend/test-results` y de los artefactos publicados.
+Un reporter sanitizado emite solo estado y nombres estáticos de etapas;
+no muestra errores, valores de formularios, tokens ni respuestas HTTP.
+El trap destruye los contenedores y archivos privados ante éxito o fallo.
+
+Esta ampliación requiere aceptación en CI antes de acreditar progreso.
+Es una prueba de recuperación local/test y no demuestra recuperación
+del frontend productivo, DNS/TLS, otro host, custodia de secretos ni RPO/RTO.

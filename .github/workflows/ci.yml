@@ -151,6 +151,13 @@ jobs:
           docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-tests.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-after-tests.sql
           python3 scripts/check_local_installation.py --json
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - name: Install browser driver for compiled Docker UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
       - name: Verify synthetic PostgreSQL backup restoration in isolated test database
         run: |
           # All data is synthetic. The restore target is an ephemeral database
@@ -158,11 +165,12 @@ jobs:
           recovery_state="$(mktemp -d /tmp/bodyvision-recovery-state.XXXXXX)"
           recovery_image=bodyvision-recovery-acceptance-ci
           docker build --target test -t "$recovery_image" ./backend
+          docker build --target recovery-web -t bodyvision-recovery-web-ci-image ./frontend
           primary_db_container="$(docker compose ps -aq db)"
           test -n "$recovery_image"
           # Keys and passwords stay outside PostgreSQL and outside uploaded artifacts.
           # Always remove the private state, including on a failed assertion.
-          trap 'docker rm -f bodyvision-recovery-ci >/dev/null 2>&1 || true; rm -rf "$recovery_state"; rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql /tmp/bodyvision-restored-ci.sql /tmp/bodyvision-before-recovery.sql' EXIT
+          trap 'docker rm -f bodyvision-recovery-web-ci bodyvision-recovery-api-ci bodyvision-recovery-ci >/dev/null 2>&1 || true; rm -rf "$recovery_state"; rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql /tmp/bodyvision-restored-ci.sql /tmp/bodyvision-before-recovery.sql' EXIT
           docker run --rm --user "$(id -u):$(id -g)" \
             --network "container:$primary_db_container" --env-file .env \
             -e PYTHONPATH=/app -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
@@ -274,6 +282,47 @@ jobs:
             -e PYTHONPATH=/app -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
             --mount "type=bind,src=$recovery_state,dst=/recovery-state" \
             "$recovery_image" python tests/recovery_acceptance.py verify
+          # Real HTTP + browser within the replacement DB's isolated namespace.
+          # Frontend stays DEV-only, preserving the production private-auth gate.
+          docker run -d --rm --name bodyvision-recovery-api-ci \
+            --network container:bodyvision-recovery-ci --user "$(id -u):$(id -g)" \
+            --env-file .env -e PYTHONPATH=/app -e APP_ENV=test -e CI=true \
+            -e BODYVISION_RESTORE_DRILL=synthetic-only \
+            --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+            --mount "type=bind,src=$recovery_state,dst=/recovery-state,readonly" \
+            "$recovery_image" python tests/recovery_acceptance.py serve > /dev/null
+          docker run -d --rm --name bodyvision-recovery-web-ci \
+            --network container:bodyvision-recovery-ci \
+            -e VITE_ENABLE_PRIVATE_AUTH=true -e NODE_ENV=development \
+            -e API_PROXY_TARGET=http://127.0.0.1:8000 \
+            --read-only --tmpfs /tmp \
+            --tmpfs /app/node_modules/.vite:rw,nosuid,mode=1777 \
+            --tmpfs /app/node_modules/.vite-temp:rw,nosuid,mode=1777 \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            bodyvision-recovery-web-ci-image > /dev/null
+          for attempt in $(seq 1 45); do
+            if docker exec bodyvision-recovery-api-ci python -c \
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5174/api/v1/health/ready', timeout=3)" \
+              > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec bodyvision-recovery-api-ci python -c \
+            "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5174/api/v1/health/ready', timeout=3)" > /dev/null
+          test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
+          recovery_namespace_pid="$(docker inspect --format '{{.State.Pid}}' bodyvision-recovery-ci)"
+          # Enter only the network namespace; retain the runner filesystem/UID.
+          # Explicit Chromium cache avoids reliance on sudo's HOME environment.
+          (
+            cd frontend
+            sudo --preserve-env=HOME nsenter --target "$recovery_namespace_pid" --net \
+              --setgid "$(id -g)" --setuid "$(id -u)" -- \
+              env APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+              BODYVISION_RECOVERY_STATE="$recovery_state/state.json" \
+              PLAYWRIGHT_BROWSERS_PATH="$HOME/.cache/ms-playwright" \
+              "$(command -v node)" node_modules/@playwright/test/cli.js test \
+              --config playwright.recovery.config.ts
+          )
+          docker rm -f bodyvision-recovery-web-ci bodyvision-recovery-api-ci > /dev/null
           # Restore the original disposable application only after comparing
           # the independent instance; no production database is touched.
           docker rm -f bodyvision-recovery-ci > /dev/null
@@ -286,13 +335,6 @@ jobs:
             /tmp/bodyvision-before-recovery.sql
           rm -rf "$recovery_state"
           trap - EXIT
-      - uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
-      - name: Install browser driver for compiled Docker UI
-        working-directory: frontend
-        run: |
-          npm ci
-          npx playwright install chromium
       - name: Browser acceptance against compiled Docker UI
         working-directory: frontend
         run: npx playwright test --config playwright.docker.config.ts

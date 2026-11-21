@@ -125,3 +125,32 @@ def test_negative_mfa_acceptance_rejects_credentials_in_error_payload(field, cap
     with pytest.raises(recovery.RecoveryRejected):
         recovery.rejected_mfa(response, 401, "MFA_CODE_INVALID")
     assert "secret-test-value" not in capsys.readouterr().out
+
+
+def test_http_runner_rejects_state_readable_by_other_users(monkeypatch, tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text('{"private":"fixture-only"}')
+    path.chmod(0o644)
+    monkeypatch.setattr(recovery, "STATE", path)
+    with pytest.raises(recovery.RecoveryRejected):
+        recovery.read_state()
+
+
+def test_http_runner_rejects_symlinked_private_state(monkeypatch, tmp_path):
+    target = tmp_path / "target.json"
+    target.write_text('{"private":"fixture-only"}')
+    target.chmod(0o600)
+    link = tmp_path / "state.json"
+    link.symlink_to(target)
+    monkeypatch.setattr(recovery, "STATE", link)
+    with pytest.raises(recovery.RecoveryRejected):
+        recovery.read_state()
+
+
+def test_http_runner_reads_private_regular_state_without_output(monkeypatch, tmp_path, capsys):
+    path = tmp_path / "state.json"
+    path.write_text('{"private":"fixture-only"}')
+    path.chmod(0o600)
+    monkeypatch.setattr(recovery, "STATE", path)
+    assert recovery.read_state() == {"private": "fixture-only"}
+    assert capsys.readouterr().out == ""

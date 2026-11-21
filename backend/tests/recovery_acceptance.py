@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
+import uvicorn
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from psycopg import sql
@@ -322,6 +323,12 @@ def verify_mfa(state):
             and audit.json()["checked_events"] > 0,
             "mfa_restored_audit_failed",
         )
+        state.update(
+            {
+                "browser_code": new_codes[0],
+                "browser_second_code": new_codes[1],
+            }
+        )
 
 
 def prepare():
@@ -412,13 +419,17 @@ def denied_query(url, statement):
         probe.dispose()
 
 
-def verify():
+def read_state():
     info = STATE.lstat()
     require(
         stat.S_ISREG(info.st_mode) and not info.st_mode & 0o077 and 0 < info.st_size < 16384,
         "unsafe_state_file",
     )
-    state = json.loads(STATE.read_text())
+    return json.loads(STATE.read_text())
+
+
+def verify():
+    state = read_state()
     owner = engine(
         database_url("bodyvision_recovered_ci", "postgres", os.environ["POSTGRES_PASSWORD"])
     )
@@ -537,16 +548,29 @@ def verify():
         )
         require(client.get(path, headers=old_headers).status_code == 401, "revocation_failed")
     verify_mfa(state)
+    # Export only to the same private runner file; never to stdout/artifacts.
+    descriptor = os.open(STATE, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+    with os.fdopen(descriptor, "w") as target:
+        json.dump(state, target)
     print('{"event":"synthetic_recovered_mfa_verified"}')
+
+
+def serve():
+    state = read_state()
+    config = settings("bodyvision_recovered_ci", state, state["capture_key"], mfa=True)
+    uvicorn.run(create_app(config), host="127.0.0.1", port=8000, access_log=False, log_config=None)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Disposable recovered application acceptance")
-    parser.add_argument("operation", choices=["prepare", "verify"])
+    parser.add_argument("operation", choices=["prepare", "verify", "serve"])
     args = parser.parse_args()
     logging.disable(logging.CRITICAL)
     try:
         guard(os.environ)
+        if args.operation == "serve":
+            serve()
+            return 0
         (prepare if args.operation == "prepare" else verify)()
     except RecoveryRejected as exc:
         print(json.dumps({"event": "synthetic_recovered_application_rejected", "check": str(exc)}))
