@@ -753,8 +753,8 @@ export function AnatomyAtlas() {
                 <div key={layer.layer} className="studio-render-layer">
                   <span>{anatomicalLayers.find(item => item.id === layer.layer)?.label} · {layer.visible ? "visible" : "oculta"}</span>
                   <span>{(layer.cpuGeometryBytes / 1024 / 1024).toFixed(2)} MiB · {layer.meshes} mallas</span>
-                  <span>Preparación: {renderStats.layerReadyMs[layer.layer] === undefined
-                    ? "Pendiente" : renderStats.layerReadyMs[layer.layer].toFixed(2) + " ms"}</span>
+                  <span>Preparación: {renderStats.layerReadyMs[layer.layer]?.toFixed(2) ?? "Pendiente"}
+                    {renderStats.layerReadyMs[layer.layer] === undefined ? "" : " ms"}</span>
                 </div>
               ))}
               <small>Las capas ocultas siguen cargadas para volver a mostrarlas. Sus cifras pueden compartir buffers y no deben sumarse para calcular el total.</small>
