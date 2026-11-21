@@ -127,12 +127,30 @@ class RestoredDataTests(unittest.TestCase):
         self.assertNotIn("another_fake_value", result)
 
     def test_sql_injection_like_commands_are_rejected(self):
-        self.original.write_bytes(
-            self.sample([b"1\tA"]) + b"DROP TABLE public.profiles;\n"
-        )
-        with self.assertRaises(restored.RestoredDataRejected):
-            restored.fingerprint(self.original)
+        base = self.sample([b"1\tA"])
+        for unexpected in (
+            b"DROP TABLE public.profiles;",
+            b"ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;",
+            b"GRANT SELECT ON public.profiles TO PUBLIC;",
+            b"CREATE TABLE public.injected (id int);",
+            b"DO $$ BEGIN NULL; END $$;",
+            b"\\connect other_database",
+            b"\\.",
+        ):
+            with self.subTest(command=unexpected):
+                self.original.write_bytes(base + unexpected + b"\n")
+                with self.assertRaises(restored.RestoredDataRejected):
+                    restored.fingerprint(self.original)
 
+    def test_standard_pg_dump_session_setup_remains_supported(self):
+        base = self.sample([b"1\tA"])
+        with_setup = base.replace(
+            b"SET row_security = off;\n",
+            b"SET row_security = off;\n"
+            b"SELECT pg_catalog.set_config('search_path', '', false);\n"
+            b"SET statement_timeout = 0;\n",
+        )
+        self.assertTrue(self.compare(base, with_setup))
 
 if __name__ == "__main__":
     unittest.main()
