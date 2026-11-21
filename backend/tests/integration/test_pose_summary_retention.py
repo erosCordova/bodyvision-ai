@@ -25,9 +25,10 @@ def test_expired_pose_consent_is_purged_but_valid_summary_remains(pose_archive):
     identifier = result.json()["id"]
     with owner.begin() as connection:
         connection.execute(text("SET LOCAL ROLE bodyvision_app"))
-        assert connection.execute(
-            text("SELECT purge_expired_pose_summary_batch(10)")
-        ).scalar_one() == 0
+        assert (
+            connection.execute(text("SELECT purge_expired_pose_summary_batch(10)")).scalar_one()
+            == 0
+        )
     assert client.get(root, headers=reader).json()["total"] == 1
 
     with owner.begin() as connection:
@@ -40,18 +41,24 @@ def test_expired_pose_consent_is_purged_but_valid_summary_remains(pose_archive):
     assert purge_due_pose_summaries(client.app.state.engine) == 1
     assert purge_due_pose_summaries(client.app.state.engine) == 0
     with owner.connect() as connection:
-        assert connection.execute(
-            text("SELECT count(*) FROM synthetic_pose_summaries WHERE id=:id"),
-            {"id": identifier},
-        ).scalar_one() == 0
-        assert connection.execute(
-            text("SELECT count(*) FROM pose_summary_request_keys WHERE result_id=:id"),
-            {"id": identifier},
-        ).scalar_one() == 1
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM synthetic_pose_summaries WHERE id=:id"),
+                {"id": identifier},
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM pose_summary_request_keys WHERE result_id=:id"),
+                {"id": identifier},
+            ).scalar_one()
+            == 1
+        )
     accept(client, writer, profile, "pose")
-    assert client.post(
-        root, headers={**writer, "Idempotency-Key": key}, json=BODY
-    ).status_code == 410
+    assert (
+        client.post(root, headers={**writer, "Idempotency-Key": key}, json=BODY).status_code == 410
+    )
 
 
 def test_pose_retention_rejects_unbounded_batches(pose_archive):
