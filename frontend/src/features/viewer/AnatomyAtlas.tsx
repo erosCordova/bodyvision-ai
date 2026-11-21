@@ -681,7 +681,7 @@ export function AnatomyAtlas() {
           {showMarker && selected && (
             <div className="studio-selected-tag">
               <span>ESTRUCTURA SELECCIONADA</span>
-              <strong>{identified?.medical || cleanMesh(selected.name)}</strong>
+              <strong>{anatomyDisplayName(identified?.medical || cleanMesh(selected.name))}</strong>
               <button onClick={() => { controller.current?.clearSelection(); setSelectedEntry(null); setIsolated(false); }}>×</button>
             </div>
           )}
