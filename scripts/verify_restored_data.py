@@ -68,8 +68,19 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
                 if not line.endswith(b";"):
                     raise RestoredDataRejected("Invalid data statement")
                 statements.append(line)
-            elif line.startswith((b"DELETE ", b"UPDATE ", b"DROP ", b"TRUNCATE ")):
-                raise RestoredDataRejected("Unexpected SQL statement")
+            elif (
+                not line
+                or line.startswith(b"--")
+                or line.startswith(b"SET ")
+                or line.startswith(b"SELECT pg_catalog.set_config(")
+                or line.startswith(b"\\restrict ")
+                or line.startswith(b"\\unrestrict ")
+            ):
+                # Ordinary pg_dump data-only session setup and metadata.
+                continue
+            else:
+                # Never silently exclude unfamiliar SQL or psql commands.
+                raise RestoredDataRejected("Unexpected SQL or metadata")
         after = os.fstat(source.fileno())
         if (
             after.st_size != before.st_size
