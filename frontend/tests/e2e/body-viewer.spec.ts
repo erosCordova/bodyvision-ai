@@ -882,7 +882,7 @@ test("phase 6 acceptance profiles mobile and desktop layer residency without pat
       expect(width * height).toBeGreaterThan(0);
       expect(width * height).toBeLessThanOrEqual(profile.pixelLimit);
       expect(first.layerGeometry).toHaveLength(1);
-      await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+      await page.getByRole("checkbox", { name: /Esqueleto/ }).check();
       const perLayer = diagnostic.getByRole("group", { name: "Memoria geométrica por capa" });
       await expect(perLayer).toContainText("Esqueleto · visible", { timeout: 60000 });
       const both = await collect();
@@ -894,7 +894,7 @@ test("phase 6 acceptance profiles mobile and desktop layer residency without pat
       expect(layers.every(item => item.visible && item.cpuGeometryBytes > 0 && item.meshes > 0)).toBe(true);
       expect(both.cpuGeometryBytes).toBeGreaterThanOrEqual(Math.max(...layers.map(x => x.cpuGeometryBytes)));
       expect(both.cpuGeometryBytes).toBeLessThanOrEqual(layers.reduce((sum, item) => sum + item.cpuGeometryBytes, 0));
-      await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+      await page.getByRole("checkbox", { name: /Esqueleto/ }).uncheck();
       await expect(perLayer).toContainText("Esqueleto · oculta", { timeout: 10000 });
       const hidden = await collect();
       const skeleton = (hidden.layerGeometry as Array<{ layer: string; visible: boolean }>).find(x => x.layer === "skeleton");
@@ -1074,18 +1074,13 @@ test("3D diagnostics identify hidden loaded layers without double-counting geome
   await sourceFixtures(page);
   await page.goto("/body-3d");
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
-  await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+  await page.getByRole("checkbox", { name: /Esqueleto/ }).check();
   await page.getByRole("button", { name: "Detalles", exact: true }).click();
   const panel = page.getByLabel("Diagnóstico de renderizado");
   const layers = panel.getByRole("group", { name: "Memoria geométrica por capa" });
   await expect(layers).toContainText("Esqueleto · visible", { timeout: 60000 });
-  const skeletonLoaded = await page.waitForFunction(() => {
-    const group = document.querySelector('[aria-label="Memoria geométrica por capa"]');
-    return !!group && /Esqueleto · visible/.test(group.textContent || "") &&
-      /Piel · visible/.test(group.textContent || "");
-  });
-  expect(skeletonLoaded).toBeTruthy();
-  await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+  await expect(layers).toContainText("Piel · visible");
+  await page.getByRole("checkbox", { name: /Esqueleto/ }).uncheck();
   await expect(layers).toContainText("Esqueleto · oculta", { timeout: 10000 });
   await expect(layers).toContainText("Piel · visible");
   await expect(layers).toContainText("no deben sumarse");
