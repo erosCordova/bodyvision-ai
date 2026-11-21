@@ -199,3 +199,28 @@ por valoración manual; el promedio global sube de 84,5 % a
 no protege frente a sustitución simultánea de manifiesto
 y respaldo. No equivale a respaldo cifrado/externo,
 PITR, RPO/RTO o recuperación de infraestructura real.
+
+
+## Simulacro con pila principal detenida (Fase 9: 75 %)
+
+El ensayo Docker apaga frontend, backend y PostgreSQL principal;
+con la base fuente detenida, restaura el respaldo sintético
+verificado sobre una instancia PostgreSQL nueva, sin red y con
+almacenamiento `tmpfs` aislado del volumen original.
+Los roles globales necesarios por las políticas RLS se recrean
+como identidades sin contraseña y `NOLOGIN`; se verifica
+el estado vacío, zona horaria y la igualdad de los datos
+y secuencias sin depender del orden físico del volcado.
+Después destruye la instancia de recuperación, reinicia
+la aplicación y comprueba disponibilidad en el laboratorio.
+
+La [CI 44931458692](https://github.com/erosCordova/bodyvision-ai/actions/runs/44931458692)
+terminó con éxito en Windows, pruebas nativas y Docker,
+con **542 pruebas de aplicación aprobadas**.
+El ensayo observó **18 segundos** para la reposición
+dentro de un único runner, sin acreditar RTO productivo.
+Tampoco demuestra pérdida física del host, restauración
+en otra región, backups cifrados o custodiados, ni datos reales.
+
+El progreso manual de la Fase 9 sube de **70 % a 75 %**;
+el promedio global de 85,0 % a 85,5 %, visible como **86 %**.

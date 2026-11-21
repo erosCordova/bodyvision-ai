@@ -181,3 +181,28 @@ y exige que `SHOW TimeZone` coincida exactamente en ambas bases.
 Luego mantiene la comparación de filas y secuencias sin omitir
 valores de fechas. No constituye una conversión de datos clínicos
 ni un reemplazo de la revisión de integridad.
+
+
+## Aceptación final del simulacro con pérdida de la pila principal
+
+Tras corregir las dependencias de roles RLS y la configuración
+horaria, la [ejecución integral 44931458692](https://github.com/erosCordova/bodyvision-ai/actions/runs/44931458692)
+sobre `86cd17d727e291fb1525ed9ca20a22258dbb662c`
+terminó con **success** en los tres trabajos:
+Windows, `native-checks` y `docker-smoke`. También pasó
+la aceptación independiente de retención de postura.
+La suite aprobó 255 pruebas backend, 243 frontend,
+36 de navegador público y 8 privado.
+
+La prueba real de Docker aceptó una restauración en una base
+completamente nueva y temporal, sin red, mientras PostgreSQL
+principal estaba detenido; verificó las tablas y secuencias
+sin imprimir filas, destruyó el destino, recuperó la pila
+original y confirmó que estaba saludable.
+El procedimiento tomó **18 segundos en ese runner**:
+es un dato observado del laboratorio, **no RTO ni SLA**.
+
+**Pendiente:** copias y secretos custodiados fuera del servidor
+real, almacenamiento redundante, políticas de caducidad,
+verificación bajo pérdida física del anfitrión, infraestructura
+reemplazable y continuidad operativa aprobada para datos reales.

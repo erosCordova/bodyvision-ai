@@ -371,3 +371,52 @@ operativa ante caída del host, restauraciones geográficas, notificaciones
 externas, recuperación/rotación de secretos, legalidad y evaluación de
 seguridad. `main`, Render, Vercel, la base alojada y el modelo 3D
 permanecen sin cambios.
+
+
+## Fase 9: recuperación desde una instancia PostgreSQL nueva y aislada
+
+La CI de recuperación se amplió más allá del `pg_restore` sobre
+una base nueva en el servidor de tests ya activo. El ensayo
+**detiene la pila principal** (frontend, backend y PostgreSQL original)
+y confirma que la base fuente no está en ejecución. Inicia un
+segundo PostgreSQL 15 en un contenedor temporal, sin red,
+con `tmpfs` vacío de 512 MiB, **sin montar volúmenes originales**.
+
+Antes de importar el respaldo íntegro y verificado por SHA-256,
+el destino recrea únicamente las identidades globales exigidas
+por las políticas RLS como roles sintéticos sin login, sin
+contraseñas ni privilegios elevados. Verifica ausencia inicial
+de tablas y coincidencia de `SHOW TimeZone` para evitar
+diferencias de serialización de `timestamptz`.
+La comparación independiente comprueba el multiconjunto completo
+de filas de cada tabla, incluidos duplicados, encabezados y
+valores de secuencias, sin depender del orden físico del volcado.
+Cualquier discrepancia rechaza el ensayo sin emitir valores
+de los registros. La verificación estricta original de
+preservación de la misma base continúa intacta.
+
+Concluida la comparación, destruye el contenedor temporal,
+reinicia la instalación sintética original y comprueba que
+la aplicación vuelve a estar saludable. El ensayo de Docker
+registró **18 segundos** en su ejecución sobre el runner
+descartable: ese tiempo **no es un RTO medido ni garantizado**.
+No hubo un segundo host físico ni almacenamiento externo.
+
+La [CI integral 44931458692](https://github.com/erosCordova/bodyvision-ai/actions/runs/44931458692)
+aprobó el commit `86cd17d727e291fb1525ed9ca20a22258dbb662c`.
+Finalizaron con `success` Windows, `native-checks` y `docker-smoke`;
+se aprobaron **255 tests backend, 243 frontend,
+36 públicos y 8 privados, total 542**. La aceptación separada
+de retención de postura también concluyó correctamente.
+Las pruebas de scripts incluyen el comparador semántico
+y validan cambios de filas, duplicados, columnas y secuencias.
+
+La Fase 9 pasa de **70 % a 75 %** como estimación técnica manual.
+La suma de diez fases pasa de **850 a 855**: la media exacta
+sube de **85,0 % a 85,5 %**, mostrada como **86 %** por redondeo
+en el tablero. La ejecución **no demuestra** recuperación por
+pérdida de un host real, copias fuera del equipo, cifrado/custodia
+de backups, operación con datos de personas, PITR ni un objetivo
+RPO/RTO garantizado. Faltan seguridad productiva, privacidad,
+aprobaciones y monitoreo externo. No se modificaron `main`,
+Neon, Render, Vercel ni el visor 3D.
