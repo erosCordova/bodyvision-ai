@@ -835,6 +835,94 @@ test("real local pose matrix tests atlas variants and a well-lit no-person contr
   }, null, 2));
 });
 
+
+/**
+ * Phase 6 synthetic GPU/CPU instrumentation acceptance. Browser contexts
+ * emulate device properties; no claim of testing a physical phone or GPU.
+ * The report is technical-only and retained as a CI artifact.
+ */
+test("phase 6 acceptance profiles mobile and desktop layer residency without patient data", async ({ browser }, testInfo) => {
+  test.setTimeout(180000);
+  const profiles = [
+    { name: "movil-emulado", width: 390, height: 844, dpr: 3, touch: true, expectedMode: "fluida", pixelLimit: 970000 },
+    { name: "escritorio-emulado", width: 1440, height: 900, dpr: 2, touch: false, expectedMode: "alta", pixelLimit: 2550000 },
+  ] as const;
+  const evidence: Array<Record<string, unknown>> = [];
+  for (const profile of profiles) {
+    const context = await browser.newContext({
+      viewport: { width: profile.width, height: profile.height },
+      deviceScaleFactor: profile.dpr,
+      hasTouch: profile.touch,
+      isMobile: profile.touch,
+      acceptDownloads: true,
+    });
+    try {
+      const page = await context.newPage();
+      await sourceFixtures(page);
+      const writes: string[] = [];
+      page.on("request", request => {
+        if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+      });
+      await page.goto("/body-3d");
+      await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+      await page.getByRole("button", { name: "Detalles", exact: true }).click();
+      const diagnostic = page.getByLabel("Diagnóstico de renderizado");
+      const collect = async () => {
+        const pending = page.waitForEvent("download");
+        await diagnostic.getByRole("button", { name: "Descargar diagnóstico", exact: true }).click();
+        const download = await pending;
+        const data = JSON.parse(readFileSync(await download.path(), "utf8")) as Record<string, unknown>;
+        return data;
+      };
+      const first = await collect();
+      expect(first.mode).toBe(profile.expectedMode);
+      const canvas = page.locator(".studio-canvas canvas");
+      const width = await canvas.evaluate((node: HTMLCanvasElement) => node.width);
+      const height = await canvas.evaluate((node: HTMLCanvasElement) => node.height);
+      expect(width * height).toBeGreaterThan(0);
+      expect(width * height).toBeLessThanOrEqual(profile.pixelLimit);
+      expect(first.layerGeometry).toHaveLength(1);
+      await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+      const perLayer = diagnostic.getByRole("group", { name: "Memoria geométrica por capa" });
+      await expect(perLayer).toContainText("Esqueleto · visible", { timeout: 60000 });
+      const both = await collect();
+      const layers = both.layerGeometry as Array<{
+        layer: string; visible: boolean; cpuGeometryBytes: number; retainedGeometryCount: number; meshes: number;
+      }>;
+      expect(layers).toHaveLength(2);
+      expect(layers.map(item => item.layer).sort()).toEqual(["skeleton", "skin"]);
+      expect(layers.every(item => item.visible && item.cpuGeometryBytes > 0 && item.meshes > 0)).toBe(true);
+      expect(both.cpuGeometryBytes).toBeGreaterThanOrEqual(Math.max(...layers.map(x => x.cpuGeometryBytes)));
+      expect(both.cpuGeometryBytes).toBeLessThanOrEqual(layers.reduce((sum, item) => sum + item.cpuGeometryBytes, 0));
+      await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
+      await expect(perLayer).toContainText("Esqueleto · oculta", { timeout: 10000 });
+      const hidden = await collect();
+      const skeleton = (hidden.layerGeometry as Array<{ layer: string; visible: boolean }>).find(x => x.layer === "skeleton");
+      expect(skeleton?.visible).toBe(false);
+      expect(hidden.retainedGeometryCount).toBeGreaterThan(0);
+      expect(await canvas.count()).toBe(1);
+      expect(writes).toEqual([]);
+      evidence.push({
+        profile: profile.name, simulatedDpr: profile.dpr, internalPixels: width * height,
+        mode: first.mode, retainedCpuGeometryBytes: both.cpuGeometryBytes,
+        layers: layers.map(item => ({ layer: item.layer, cpuGeometryBytes: item.cpuGeometryBytes, meshes: item.meshes })),
+        renderCpuMedianMs: both.cpuMedianMs, renderCpuP95Ms: both.cpuP95Ms,
+        // These CPU metrics are observational. Do NOT label them FPS/GPU/VRAM.
+      });
+    } finally {
+      await context.close();
+    }
+  }
+  await testInfo.attach("fase6-rendimiento-sintetico.json", {
+    body: Buffer.from(JSON.stringify({
+      schemaVersion: 1, method: "Chromium emulado + activos anatómicos fijados",
+      gpuTimingMeasured: false, physicalDeviceValidated: false,
+      evidence,
+    }, null, 2)),
+    contentType: "application/json",
+  });
+});
+
 test("mobile atlas uses a bounded GPU pixel budget and lazy polygon overlays on the same body", async ({ page }) => {
   test.setTimeout(100000);
   await page.setViewportSize({ width: 390, height: 844 });
