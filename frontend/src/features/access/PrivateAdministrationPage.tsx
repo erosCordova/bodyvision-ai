@@ -10,6 +10,7 @@ import {
 import "./private-administration.css";
 import { UserDirectoryPanel } from "./UserDirectoryPanel";
 import { PasswordResetPanel } from "./PasswordResetPanel";
+import { OperationsPanel } from "./OperationsPanel";
 import { AuditIntegrityPanel } from "./AuditIntegrityPanel";
 
 const eventNames: Record<string, string> = {
@@ -213,6 +214,7 @@ export function PrivateAdministrationPage() {
         </div>
         <span className="private-admin-phase">SOLO PRUEBAS</span>
       </div>
+      {session && <OperationsPanel token={session.token} />}
       {api && <UserDirectoryPanel api={api} revision={auditRevision} selected={selectedAccount}
         onSelect={selectAccount} onChanged={account => {
           setSelectedAccount(account); setAuditRevision(previous => previous + 1);

@@ -257,3 +257,29 @@ test("own password, active sessions and audit verification work through the real
   await expect(integrity.getByRole("status")).toContainText("Cadena íntegra en el punto verificado");
   await signOut(page);
 });
+
+test("administrator reads tenant operations without exposing private identifiers", async ({ page }) => {
+  const admin = await signIn(page, "browser.admin@example.invalid");
+  await page.getByRole("link", { name: "Administración", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Estado del servicio", exact: true });
+  await expect(panel).toBeVisible();
+  const read = page.waitForResponse(response => response.url().endsWith("/api/v1/auth/operations"));
+  await panel.getByRole("button", { name: "Consultar estado del servicio", exact: true }).click();
+  const response = await read;
+  expect(response.status()).toBe(200);
+  const result = await response.json() as {
+    scope: string; sample_count: number; database: { state: string }; checked_at: string;
+  };
+  expect(result.scope).toBe("current_organization_current_process");
+  expect(result.sample_count).toBeGreaterThan(0);
+  expect(result.database.state).toBe("ready");
+  expect(response.headers()["cache-control"]).toBe("no-store");
+  await expect(panel.getByText("Disponible y con esquema vigente", { exact: true })).toBeVisible();
+  await expect(panel).toContainText("Los datos se reinician con el proceso");
+  const body = JSON.stringify(result);
+  expect(body).not.toContain(admin.token);
+  expect(body).not.toContain(organization);
+  expect(body).not.toContain("example.invalid");
+  await signOut(page);
+  await expect(page.getByRole("region", { name: "Estado del servicio", exact: true })).toHaveCount(0);
+});

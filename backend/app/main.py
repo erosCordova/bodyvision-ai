@@ -18,11 +18,13 @@ from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
+from app.api.routes.operations import router as operations_router
 from app.api.routes.simulation_scenarios import router as simulation_router
 from app.api.routes.synthetic_captures import router as capture_router
 from app.core.config import Settings
 from app.core.errors import DomainError
 from app.core.logging import configure_logging
+from app.core.operations import OperationsMetrics
 from app.db.session import build_engine
 from app.workers.capture_retention import retention_loop
 
@@ -52,7 +54,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             and settings.capture_retention_enabled
         ):
             retention_task = asyncio.create_task(
-                retention_loop(database_engine, settings.capture_retention_interval_seconds),
+                retention_loop(
+                    database_engine,
+                    settings.capture_retention_interval_seconds,
+                    application.state.operations,
+                ),
                 name="private_synthetic_capture_retention",
             )
         try:
@@ -79,6 +85,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.settings = settings
     app.state.engine = database_engine
     app.state.auth_engine = auth_engine
+    app.state.operations = OperationsMetrics(
+        retention_enabled=bool(
+            settings.identity_enabled
+            and settings.capture_encryption_key
+            and settings.capture_retention_enabled
+        ),
+        retention_interval=settings.capture_retention_interval_seconds,
+    )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.add_middleware(
         CORSMiddleware,
@@ -167,6 +181,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                     "sqlstate": getattr(original, "sqlstate", None),
                 },
             )
+            request.state.operations_query_interrupted = (
+                getattr(original, "sqlstate", None) == "57014"
+            )
             response = error(request, 500, "INTERNAL_ERROR", "No se pudo completar la operación.")
         response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -174,6 +191,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         response.headers["Cache-Control"] = "no-store"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         route = request.scope.get("route")
+        organization = getattr(request.state, "operations_organization", None)
+        if organization is not None and route and route.path != "/api/v1/auth/operations":
+            app.state.operations.observe(
+                organization,
+                response.status_code,
+                (time.perf_counter() - started) * 1000,
+                interrupted=getattr(request.state, "operations_query_interrupted", False),
+            )
         logging.getLogger("bodyvision").info(
             "request_completed",
             extra={
@@ -192,5 +217,6 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(simulation_router)
     if settings.identity_enabled:
         app.include_router(auth_router)
+        app.include_router(operations_router)
         app.include_router(capture_router)
     return app

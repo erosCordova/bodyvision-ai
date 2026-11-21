@@ -94,6 +94,9 @@ def resolve_identity(request: Request) -> Identity:
         "member",
     }:
         raise DomainError(401, "SESSION_EXPIRED", "La sesión ya no es válida.")
+    # Scope diagnostics only after successful session and MFA verification.
+    # Never infer this value from the client workspace selector.
+    request.state.operations_organization = row["org_id"]
     return Identity(row["org_id"], row["actor_id"], row["assigned_role"], True)
 
 

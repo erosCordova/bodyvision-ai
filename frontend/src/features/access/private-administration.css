@@ -63,3 +63,12 @@
 .private-admin-integrity>small{display:block;font-size:11px;line-height:1.7;color:var(--text-muted,#9fb3c8);margin-top:12px}
 .private-admin-integrity code{overflow-wrap:anywhere;font-size:11px}
 .private-admin-integrity details{margin-top:10px}
+
+.operations-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}
+.operations-grid>div{padding:14px;border:1px solid var(--border,#33566c);border-radius:8px;min-width:0}
+.operations-grid dt{font-size:11px;color:var(--text-muted,#b6cee0);line-height:1.6}
+.operations-grid dd{margin:8px 0 0;font-size:16px;font-weight:650;overflow-wrap:anywhere}
+.operations-panel>p,.operations-panel details{font-size:12px;line-height:1.7}
+.operations-panel li{font-size:12px;line-height:1.8}
+.operations-panel .private-admin-audit-head{flex-wrap:wrap}
+.operations-panel button:disabled{opacity:.65;cursor:wait}

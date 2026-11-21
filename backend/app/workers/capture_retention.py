@@ -11,6 +11,8 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from app.core.operations import OperationsMetrics
+
 logger = logging.getLogger("bodyvision")
 
 
@@ -30,15 +32,21 @@ def purge_due(engine: Engine, batch_size: int = 100, max_batches: int = 10) -> i
     return removed_total
 
 
-async def retention_loop(engine: Engine, interval_seconds: int) -> None:
+async def retention_loop(
+    engine: Engine, interval_seconds: int, operations: OperationsMetrics | None = None
+) -> None:
     if not 60 <= interval_seconds <= 86400:
         raise ValueError("Capture retention interval is out of range")
     while True:
         try:
             removed = await asyncio.to_thread(purge_due, engine)
+            if operations is not None:
+                operations.retention_completed(True)
             if removed:
                 logger.info("synthetic_capture_retention_purged", extra={"removed_count": removed})
         except Exception as exc:
+            if operations is not None:
+                operations.retention_completed(False)
             # Never log SQL exception strings: they can contain connection data.
             logger.error(
                 "synthetic_capture_retention_failed",
