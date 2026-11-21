@@ -489,3 +489,15 @@
 .studio-sim-warning{padding:10px 12px;border:1px solid #b98742;
   background:#241f1c;color:#f7dfaf;border-radius:8px;font-size:11px;
   line-height:1.55;margin:8px 0}
+
+/* Client-only anatomical favorites: a compact navigation list, never patient data. */
+.studio-favorites { min-width: 0; }
+.studio-favorites-list { list-style: none; margin: 9px 0; padding: 0; display: grid; gap: 7px; }
+.studio-favorites-list li { display: flex; align-items: stretch; border: 1px solid #3f637e; border-radius: 8px; background: #1a334c; min-width: 0; }
+.studio-favorites-list li > button:first-child { min-width: 0; flex: 1; text-align: left; padding: 9px; border: 0; color: #e9f7ff; background: transparent; display: grid; gap: 3px; }
+.studio-favorites-list strong { font-size: 11px; overflow-wrap: anywhere; }
+.studio-favorites-list small { font-size: 10px; color: #a5cadd; }
+.studio-favorites-list .studio-favorite-remove { background: transparent; border: 0; color: #bdd7e8; font-size: 19px; padding: 0 11px; }
+.studio-favorites-list li:hover, .studio-favorites-list li:focus-within { background: #254765; }
+.studio-favorites-empty, .studio-favorites-note { display: block; margin: 9px 0; color: #abc9df; font-size: 11px; line-height: 1.55; }
+.studio-search-results button[aria-selected="true"] { background: #28516f; outline: 1px solid #71b7dc; }
