@@ -574,8 +574,7 @@ export function AnatomyAtlas() {
         <div className="studio-search-wrap">
           <span aria-hidden="true">⌕</span>
           <input aria-label="Buscar estructura anatómica" placeholder="Buscar estructuras, músculos, huesos, nervios…" value={search}
-            aria-controls="studio-search-results"
-            aria-expanded={search.trim().length >= 2}
+            aria-controls={search.trim().length >= 2 ? "studio-search-results" : undefined}
             aria-activedescendant={search.trim().length >= 2 && results.length ? "studio-search-result-" + activeResultIndex : undefined}
             onChange={event => { setSearch(event.target.value); setActiveSearchResult(0); }}
             onKeyDown={event => {
