@@ -34,9 +34,17 @@ async function signIn(page: Page, code?: string) {
 
 async function openProfile(page: Page) {
   await page.getByRole("link", { name: "Expedientes", exact: true }).click();
-  await page.locator(`a[href="/profiles/${state.profile}"]`).click();
-  await expect(page.getByRole("heading", { name: "Expediente ficticio 01", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Mediciones", exact: true }).click();
+  // Dashboard activity can have several links to the same profile. Wait for
+  // the catalogue and choose its card instead of a stale activity link.
+  await expect(page.getByRole("heading", { name: "Expedientes", level: 1, exact: true })).toBeVisible();
+  await page.locator(`a.profile-card[href="/profiles/${state.profile}"]`).click();
+  await expect(page.getByRole("heading", { name: "Expediente ficticio 01", level: 1, exact: true })).toBeVisible();
+  await page.getByRole("navigation", { name: "Secciones del expediente" })
+    .getByRole("button", { name: "Mediciones", exact: true }).click();
+}
+
+function measurementsTable(page: Page) {
+  return page.getByRole("table", { name: "Mediciones observadas vigentes de Peso", exact: true });
 }
 
 async function signOut(page: Page, token: string) {
@@ -56,7 +64,7 @@ test("private interface operates over the restored database through real HTTP", 
   await test.step("MFA sign-in", async () => { token = await signIn(page, state.browser_code); });
   await test.step("Read recovered measurements", async () => {
     await openProfile(page);
-    await expect(page.getByRole("cell", { name: "70.25 kg", exact: true })).toBeVisible();
+    await expect(measurementsTable(page).getByRole("cell", { name: "70.25 kg", exact: true })).toBeVisible();
   });
   await test.step("Write from interface", async () => {
     await page.getByRole("button", { name: "+ Registrar medición", exact: true }).click();
@@ -73,13 +81,13 @@ test("private interface operates over the restored database through real HTTP", 
     await page.getByRole("button", { name: "Guardar medición", exact: true }).click();
     expect((await saved).status()).toBe(201);
     await expect(page.getByRole("dialog")).not.toBeVisible();
-    await expect(page.getByRole("cell", { name: "70.35 kg", exact: true })).toBeVisible();
+    await expect(measurementsTable(page).getByRole("cell", { name: "70.35 kg", exact: true })).toBeVisible();
   });
   await test.step("Logout revokes bearer", async () => { await signOut(page, token); });
   await test.step("Reauthenticate and read persisted write", async () => {
     token = await signIn(page, state.browser_second_code);
     await openProfile(page);
-    await expect(page.getByRole("cell", { name: "70.35 kg", exact: true })).toBeVisible();
+    await expect(measurementsTable(page).getByRole("cell", { name: "70.35 kg", exact: true })).toBeVisible();
     await signOut(page, token);
   });
   await test.step("Foreign organization remains isolated", async () => {

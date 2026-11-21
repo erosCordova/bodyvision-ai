@@ -6,9 +6,11 @@ export default class SafeReporter implements Reporter {
   onTestEnd(_test: TestCase, result: TestResult) {
     if (result.status !== "passed") {
       const kind = result.error?.message?.includes("browserType.launch")
-        ? "browser_start" : result.status === "timedOut" ? "timeout" : "assertion";
+        ? "browser_start" : result.error?.message?.includes("strict mode violation")
+          ? "ambiguous_locator" : result.status === "timedOut" ? "timeout" : "assertion";
+      const location = result.error?.stack?.match(/restored-ui\.spec\.ts:(\d+):\d+/);
       process.stdout.write(JSON.stringify({ event: "synthetic_recovery_browser_test_failed",
-        kind }) + "\n");
+        kind, source_line: location ? Number(location[1]) : null }) + "\n");
     }
   }
   onError() {
