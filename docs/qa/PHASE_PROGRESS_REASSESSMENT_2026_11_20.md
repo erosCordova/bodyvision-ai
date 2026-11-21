@@ -253,3 +253,41 @@ incidentes formalizada, respaldos productivos y recuperación RPO/RTO,
 custodia y rotación de secretos, revisión legal/de privacidad y seguridad.
 El diario local no es una copia de seguridad ni un registro clínico.
 No se ha modificado `main`, Vercel, Render o la base alojada.
+
+
+## Fase 9: reconstrucción acotada de incidentes observados
+
+Se añade un entregable operativo valorado manualmente en **5 puntos de
+fase**: a partir de las transiciones sintéticas del diario local SQLite,
+el vigilante agrupa eventos `degraded` y `unreachable` consecutivos
+como un único episodio. Solo una observación `ready` posterior cierra el
+episodio. Si falta, su resultado es `recovery_not_observed` y el tiempo
+permanece nulo; no se infiere que la caída continúe hoy.
+
+El modo optativo `--incidents` requiere el mismo entorno local/test
+`synthetic-only`. Devuelve JSON acotado, sin fotografías, URLs, usuarios,
+tokens ni registros clínicos. El campo
+`seconds_between_observations` **no es la duración real de caída**,
+solo el tiempo entre la primera observación no preparada y la recuperación
+observada. No se calculan uptime, MTTR ni SLA porque el diario no almacena
+latidos periódicos y puede contener huecos/truncamiento.
+
+La [CI integral 44865810489](https://github.com/erosCordova/bodyvision-ai/actions/runs/44865810489)
+aprobó el commit `379c5cc642000bb15dd93245a263c8c98a940785`
+en Windows, backend, frontend y Docker. La batería nativa aprobó
+**249 backend, 243 frontend, 36 navegador público y 8 privado:
+536 pruebas de aplicación**. Docker simuló caída y recuperación, accedió
+al historial desde otro contenedor y verificó un único episodio cerrado,
+sin suponer cifras de disponibilidad. Las pruebas específicas de retención
+PostgreSQL también aprobaron.
+
+La Fase 9 aumenta de **55 % a 60 %**; la suma de fases pasa de
+**835 a 840**, con promedio exacto de **83,5 % a 84,0 %**. El valor
+global visible **permanece en 84 %**, por redondeo. La puntuación
+es técnica y manual, no una certificación.
+
+Siguen faltando alertas fuera del host, observabilidad externa,
+custodia del registro, monitoreo cuando Docker esté caído, ensayos
+productivos de recuperación, RPO/RTO, seguridad y aprobación legal.
+`main`, servicios alojados, el modelo 3D y los datos reales
+no se han alterado.

@@ -131,3 +131,23 @@ backend, frontend y los navegadores públicos/privados.
 La Fase 9 queda en **55 %**; faltan vigilancia fuera del host, histórico
 centralizado, notificación externa, custodia de incidentes y preparación
 productiva. Ningún incidente representa un paciente real.
+
+
+## Resumen de incidentes con desenlace no observado
+
+El módulo `watchdog_incidents.py` integra las transiciones locales ya
+registradas por el vigilante sin abrir rutas HTTP nuevas ni acceder a
+PostgreSQL. Agrupa degradaciones y caídas consecutivas en un incidente;
+solo una nueva observación positiva permite marcar recuperación. El reporte
+no calcula uptime, SLA ni tiempos reales de indisponibilidad. Excluye
+datos individuales y se limita al entorno ficticio optativo.
+
+La [CI 44865810489](https://github.com/erosCordova/bodyvision-ai/actions/runs/44865810489)
+aprobó todos los jobs, incluidas 536 pruebas de aplicación, y la prueba
+Docker de un episodio recuperado tras parada de la API. Los tests cubren
+incidentes múltiples, datos ausentes, una caída sin recuperación
+observada, cronología inválida, acceso autorizado y diario corrupto.
+
+La Fase 9 queda en **60 %** por estimación técnica manual, con 84 %
+global tras redondeo. El reporte no sustituye supervisión fuera de Docker
+ni pruebas operativas reales.

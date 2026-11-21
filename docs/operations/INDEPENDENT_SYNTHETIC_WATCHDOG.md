@@ -89,3 +89,16 @@ FastAPI esté activo y falla de manera controlada si el diario está dañado.
 Los tests cubren agrupación, datos vacíos, cambios de estado, ausencia
 de recuperación, rechazo de entradas manipuladas y CLI. La prueba de
 aceptación Docker verifica un incidente recuperado entre contenedores.
+
+
+## Informe de incidentes — aceptación
+
+La CI [44865810489](https://github.com/erosCordova/bodyvision-ai/actions/runs/44865810489)
+terminó con éxito para el commit
+`379c5cc642000bb15dd93245a263c8c98a940785`, con 249 tests
+backend, 243 frontend, 36 públicos y 8 privados, además de Docker.
+El flujo de aceptación ejecutó `--incidents` desde un contenedor
+separado y comprobó `episode_count=1`,
+`recoveries_observed=1`, `outcome=recovery_observed` y la ausencia
+de una métrica de disponibilidad ficticia. La prueba no valida un
+SLA ni operación con datos reales.
