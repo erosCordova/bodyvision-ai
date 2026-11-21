@@ -16,6 +16,9 @@ import { preferredAtlasQuality } from "./renderBudget";
 import { reviewLocalCapture } from "../capture/captureQuality";
 import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyDisplayName, anatomyNameKey } from "./anatomyNames";
+import {
+  FAVORITES_LIMIT, loadAtlasFavorites, saveAtlasFavorites, type FavoriteStructure,
+} from "./anatomyFavorites";
 import { buildSyntheticScenarioCsv } from "./scenarioCsv";
 import { sampledMorphClamping } from "./morphLimits";
 import { scenarioCompatibilityReason } from "./scenarioCompatibility";
@@ -37,8 +40,6 @@ type AtlasEntry = {
 };
 type AtlasData = { structures?: Omit<AtlasEntry, "layer">[] };
 type Panel = "informacion" | "recorridos" | "guia" | "simulacion";
-type FavoriteStructure = { id: string; layer: AnatomicalLayer };
-const FAVORITES_LIMIT = 12;
 type TourStep = { layer: AnatomicalLayer; name: string; title: string; intro: string };
 type Tour = { id: string; title: string; description: string; icon: string; steps: TourStep[] };
 
@@ -237,8 +238,9 @@ export function AnatomyAtlas() {
   const [showMarker, setShowMarker] = useState(true);
   const [selected, setSelected] = useState<SelectedStructure | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<AtlasEntry | null>(null);
-  // Session-only catalogue navigation: no account/profile identifiers, storage or API writes.
-  const [favorites, setFavorites] = useState<FavoriteStructure[]>([]);
+  // Tab-scoped catalogue navigation; never sent to the application API.
+  const [favorites, setFavorites] = useState<FavoriteStructure[]>(loadAtlasFavorites);
+  useEffect(() => saveAtlasFavorites(favorites), [favorites]);
   const [search, setSearch] = useState("");
   const [activeSearchResult, setActiveSearchResult] = useState(0);
   const [entries, setEntries] = useState<AtlasEntry[]>([]);
@@ -386,6 +388,14 @@ export function AnatomyAtlas() {
     setIsolated(false);
     setVisible(previous => previous.includes(entry.layer) ? previous : [...previous, entry.layer]);
     if (entry.match[0]) controller.current?.focus(entry.match[0], entry.layer);
+  };
+  const moveFavorite = (direction: -1 | 1) => {
+    if (favoriteEntries.length < 2) return;
+    const index = identified ? favoriteEntries.findIndex(entry =>
+      entry.id === identified.id && entry.layer === identified.layer) : -1;
+    const start = index >= 0 ? index : direction === 1 ? -1 : 0;
+    const next = (start + direction + favoriteEntries.length) % favoriteEntries.length;
+    openEntry(favoriteEntries[next]);
   };
   const toggleLayer = (layer: AnatomicalLayer) => {
     setVisible(previous => previous.includes(layer) ? previous.filter(id => id !== layer) : [...previous, layer]);
@@ -680,7 +690,18 @@ export function AnatomyAtlas() {
                 ))}
               </ol>
             ) : <p className="studio-favorites-empty">Abre una ficha anatómica y guárdala para volver rápidamente.</p>}
-            <small className="studio-favorites-note">Solo en esta sesión. No se guardan en expedientes ni se envían al servidor.</small>
+            {favoriteEntries.length >= 2 && (
+              <div className="studio-favorites-navigation" role="group" aria-label="Recorrido de favoritos">
+                <button type="button" onClick={() => moveFavorite(-1)}>← Anterior</button>
+                <button type="button" onClick={() => moveFavorite(1)}>Siguiente →</button>
+              </div>
+            )}
+            {favoriteEntries.length > 0 && (
+              <button type="button" className="studio-favorites-clear" onClick={() => setFavorites([])}>
+                Vaciar favoritos
+              </button>
+            )}
+            <small className="studio-favorites-note">Se conservan al recargar esta pestaña. No se guardan en expedientes ni se envían al servidor; puedes vaciarlos cuando quieras.</small>
           </section>
           <div className="studio-left-section studio-left-footer">
             <p>Modelo anatómico de referencia. No corresponde a pacientes ni expedientes clínicos.</p>
