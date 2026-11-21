@@ -33,6 +33,7 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
     statements: list[bytes] = []
     current: list[bytes] | None = None
     rows = 0
+    bytes_read = 0
 
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)
@@ -45,6 +46,9 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
         ):
             raise RestoredDataRejected("Invalid open dump")
         for raw in source:
+            bytes_read += len(raw)
+            if bytes_read > MAX_SQL_BYTES:
+                raise RestoredDataRejected("Dump exceeds size limit")
             line = raw.rstrip(b"\r\n")
             if current is not None:
                 if line == b"\\.":
@@ -71,7 +75,7 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
             after.st_size != before.st_size
             or after.st_mtime_ns != before.st_mtime_ns
             or after.st_ctime_ns != before.st_ctime_ns
-            or source.tell() != before.st_size
+            or bytes_read != before.st_size
         ):
             raise RestoredDataRejected("Dump changed during reading")
     if current is not None:
