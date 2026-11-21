@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from app.core.identity import hash_password
+from app.db.session import SCHEMA_REVISION
 from app.models.context import FIRST_WORKSPACE, SECOND_WORKSPACE
 
 PASSWORD = "Browser fixtures only 2026!"
@@ -34,8 +35,8 @@ def seed_private_browser_accounts() -> None:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-            if revision != "0020_pose_summaries":
-                raise RuntimeError("Private browser fixtures require combined revision 0020")
+            if revision != SCHEMA_REVISION:
+                raise RuntimeError("Private browser fixtures require the current schema revision")
             for identifier, organization, role, email in [
                 (
                     UUID("30000000-0000-4000-8000-000000000001"),
