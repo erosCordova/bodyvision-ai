@@ -37,6 +37,8 @@ type AtlasEntry = {
 };
 type AtlasData = { structures?: Omit<AtlasEntry, "layer">[] };
 type Panel = "informacion" | "recorridos" | "guia" | "simulacion";
+type FavoriteStructure = { id: string; layer: AnatomicalLayer };
+const FAVORITES_LIMIT = 12;
 type TourStep = { layer: AnatomicalLayer; name: string; title: string; intro: string };
 type Tour = { id: string; title: string; description: string; icon: string; steps: TourStep[] };
 
@@ -235,6 +237,8 @@ export function AnatomyAtlas() {
   const [showMarker, setShowMarker] = useState(true);
   const [selected, setSelected] = useState<SelectedStructure | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<AtlasEntry | null>(null);
+  // Session-only catalogue navigation: no account/profile identifiers, storage or API writes.
+  const [favorites, setFavorites] = useState<FavoriteStructure[]>([]);
   const [search, setSearch] = useState("");
   const [activeSearchResult, setActiveSearchResult] = useState(0);
   const [entries, setEntries] = useState<AtlasEntry[]>([]);
@@ -337,6 +341,17 @@ export function AnatomyAtlas() {
   }, []);
 
   const identified = useMemo(() => findFromMesh(entries, selected) || selectedEntry, [entries, selected, selectedEntry]);
+  const favoriteEntries = useMemo(() => favorites.flatMap(saved => {
+    const found = entries.find(entry => entry.id === saved.id && entry.layer === saved.layer);
+    return found ? [found] : [];
+  }), [favorites, entries]);
+  const isFavorite = (entry: AtlasEntry) => favorites.some(saved =>
+    saved.id === entry.id && saved.layer === entry.layer);
+  const toggleFavorite = (entry: AtlasEntry) => {
+    setFavorites(previous => previous.some(saved => saved.id === entry.id && saved.layer === entry.layer)
+      ? previous.filter(saved => !(saved.id === entry.id && saved.layer === entry.layer))
+      : previous.length < FAVORITES_LIMIT ? [...previous, { id: entry.id, layer: entry.layer }] : previous);
+  };
   const downloadRenderStats = () => {
     const stats = controller.current?.getPerformanceStats();
     if (!stats) return;
@@ -648,6 +663,25 @@ export function AnatomyAtlas() {
               {quickViews.map(preset => <button key={preset.name} onClick={() => applyPreset(preset)}>{preset.name}</button>)}
             </div>
           </div>
+          <section className="studio-left-section studio-favorites" aria-label="Estructuras favoritas">
+            <div className="studio-section-title"><strong>MIS ESTRUCTURAS</strong><span>{favoriteEntries.length}/{FAVORITES_LIMIT}</span></div>
+            {favoriteEntries.length ? (
+              <ol className="studio-favorites-list">
+                {favoriteEntries.map(entry => (
+                  <li key={entry.layer + ":" + entry.id}>
+                    <button type="button" onClick={() => openEntry(entry)}
+                      aria-label={"Abrir " + anatomyDisplayName(entry.medical)}>
+                      <strong>{anatomyDisplayName(entry.medical)}</strong>
+                      <small>{anatomicalLayers.find(layer => layer.id === entry.layer)?.label}</small>
+                    </button>
+                    <button type="button" className="studio-favorite-remove" onClick={() => toggleFavorite(entry)}
+                      aria-label={"Quitar " + anatomyDisplayName(entry.medical) + " de favoritos"}>×</button>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="studio-favorites-empty">Abre una ficha anatómica y guárdala para volver rápidamente.</p>}
+            <small className="studio-favorites-note">Solo en esta sesión. No se guardan en expedientes ni se envían al servidor.</small>
+          </section>
           <div className="studio-left-section studio-left-footer">
             <p>Modelo anatómico de referencia. No corresponde a pacientes ni expedientes clínicos.</p>
             <button onClick={() => { applyPreset(quickViews[0]); setMode("realista"); setSpin(false); resetSimulation(); setMeshOverlay(false); }}>↺ Restaurar visualización</button>
@@ -1085,6 +1119,11 @@ export function AnatomyAtlas() {
                   </div></section>}
                   <p className="studio-original-note">Algunos nombres frecuentes se muestran en español; las descripciones originales y términos no revisados conservan el idioma del catálogo fuente.</p>
                   <div className="studio-info-actions">
+                    <button type="button" aria-pressed={isFavorite(identified)}
+                      disabled={!isFavorite(identified) && favorites.length >= FAVORITES_LIMIT}
+                      onClick={() => toggleFavorite(identified)}>
+                      {isFavorite(identified) ? "Quitar de favoritos" : "Guardar en favoritos"}
+                    </button>
                     <button onClick={() => setIsolated(value => !value)}>{isolated ? "Mostrar todas las piezas" : "Aislar estructura"}</button>
                     <button onClick={() => { controller.current?.clearSelection(); setSelectedEntry(null); setIsolated(false); }}>Cerrar ficha</button>
                   </div>
