@@ -102,3 +102,29 @@ separado y comprobó `episode_count=1`,
 `recoveries_observed=1`, `outcome=recovery_observed` y la ausencia
 de una métrica de disponibilidad ficticia. La prueba no valida un
 SLA ni operación con datos reales.
+
+
+## Vigencia de la última comprobación (sondeo local)
+
+El modo `--status` **no consulta la API** ni confunde la última
+transición con el estado actual. Registra cada sondeo del proceso activo
+en una única fila SQLite independiente del diario de transiciones,
+con el estado permitido, fecha UTC e intervalo de sondeo vigente;
+las comprobaciones repetidas no crean eventos ni filas adicionales.
+Se usa el mismo volumen privado sin credenciales de PostgreSQL.
+
+La respuesta `synthetic_watchdog_probe_status` distingue:
+`never_observed` (sin sondeos), `recent` (último sondeo dentro de tres
+intervalos más cinco segundos), `stale` (supera ese umbral) y
+`clock_inconsistent` (el reloj local parece anterior al sondeo).
+También devuelve el último estado observado, la fecha y una antigüedad
+aproximada solo si no hay discrepancia de reloj. Un `ready` obsoleto
+**no demuestra que la API esté disponible**, ni un `unreachable`
+reciente garantiza que la caída continúe.
+
+La prueba integral Docker consulta `--status` desde un nuevo contenedor
+tras recuperar el backend. Pruebas unitarias reproducibles avanzan el
+tiempo sin esperas para probar la transición a obsoleto, el límite de
+una fila, la falta de observaciones y los relojes inconsistentes.
+No hay notificaciones externas ni se detecta una caída de Docker,
+su red o el anfitrión. Sigue siendo un recurso local de laboratorio.

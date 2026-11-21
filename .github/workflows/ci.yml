@@ -289,6 +289,22 @@ jobs:
           assert report["episodes"][0]["seconds_between_observations"] >= 0
           assert "availability_percent" not in report
           PY
+          # Read the latest probe from a new container, without contacting the API.
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --status \
+            > /tmp/bodyvision-watchdog-status.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          status = json.loads(Path("/tmp/bodyvision-watchdog-status.json").read_text())
+          assert status["event"] == "synthetic_watchdog_probe_status"
+          assert status["scope"] == "local_last_observation_not_live_availability"
+          assert status["last_observed_state"] == "ready"
+          assert status["freshness"] == "recent"
+          assert status["age_seconds"] >= 0
+          assert "availability_percent" not in status
+          PY
           python3 scripts/check_local_installation.py --json
       - name: Browser confirms retained correction history after restart
         working-directory: frontend

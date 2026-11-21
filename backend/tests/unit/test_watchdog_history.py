@@ -81,3 +81,94 @@ def test_history_refuses_other_states_and_corrupted_database(tmp_path):
     broken.write_bytes(b"not a database")
     with pytest.raises(sqlite3.DatabaseError):
         WatchdogHistory(broken).recent()
+
+
+def test_probe_status_is_empty_until_an_explicit_check(tmp_path):
+    journal = WatchdogHistory(tmp_path / "events.sqlite3")
+    result = journal.probe_status()
+    assert result == {
+        "event": "synthetic_watchdog_probe_status",
+        "scope": "local_last_observation_not_live_availability",
+        "last_observed_state": None,
+        "last_checked_at": None,
+        "age_seconds": None,
+        "freshness": "never_observed",
+    }
+    assert journal.recent() == []
+
+
+def test_probe_freshness_turns_stale_without_a_new_transition(tmp_path):
+    journal = WatchdogHistory(tmp_path / "events.sqlite3")
+    checked = datetime.now(UTC)
+    journal.record_probe("ready", checked, 10)
+    recent = journal.probe_status(checked + timedelta(seconds=34))
+    assert recent["freshness"] == "recent"
+    assert recent["last_observed_state"] == "ready"
+    assert recent["age_seconds"] == 34
+    stale = WatchdogHistory(journal.path).probe_status(checked + timedelta(seconds=36))
+    assert stale["freshness"] == "stale"
+    assert stale["last_observed_state"] == "ready"
+    assert stale["age_seconds"] == 36
+    assert stale["scope"] == "local_last_observation_not_live_availability"
+    assert journal.recent() == []
+
+
+def test_latest_probe_is_one_row_across_restarts_and_changes(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    start = datetime.now(UTC)
+    WatchdogHistory(path).record_probe("unreachable", start, 30)
+    WatchdogHistory(path).record_probe("ready", start + timedelta(seconds=10), 30)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM watchdog_latest_probe").fetchone()[0] == 1
+    result = WatchdogHistory(path).probe_status(start + timedelta(seconds=11))
+    assert result["last_observed_state"] == "ready"
+    assert result["freshness"] == "recent"
+    assert result["age_seconds"] == 1
+
+
+def test_clock_inconsistency_does_not_show_healthy_or_invent_age(tmp_path):
+    journal = WatchdogHistory(tmp_path / "events.sqlite3")
+    sample = datetime.now(UTC)
+    journal.record_probe("ready", sample, 10)
+    result = journal.probe_status(sample - timedelta(seconds=2))
+    assert result["freshness"] == "clock_inconsistent"
+    assert result["age_seconds"] is None
+    assert result["last_observed_state"] == "ready"
+
+
+def test_probe_rejects_other_states_intervals_and_naive_timestamps(tmp_path):
+    journal = WatchdogHistory(tmp_path / "events.sqlite3")
+    now = datetime.now(UTC)
+    for state, when, interval in (
+        ("secret-user", now, 30),
+        ("ready", datetime(2026, 11, 20), 30),
+        ("ready", now, 0),
+        ("ready", now, 3601),
+        ("ready", now, True),
+    ):
+        with pytest.raises(ValueError):
+            journal.record_probe(state, when, interval)
+    with pytest.raises(ValueError):
+        journal.probe_status(datetime(2026, 11, 20))
+    assert journal.probe_status()["freshness"] == "never_observed"
+
+
+def test_monitor_keeps_freshness_current_with_no_new_transition(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    observed = []
+    for _ in range(2):
+        assert (
+            monitor(
+                TARGET,
+                30,
+                once=True,
+                probe=lambda _target: "ready",
+                emit=observed.append,
+                journal=WatchdogHistory(path),
+            )
+            == 0
+        )
+    assert len(observed) == 1
+    assert WatchdogHistory(path).probe_status()["freshness"] == "recent"
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM watchdog_latest_probe").fetchone()[0] == 1

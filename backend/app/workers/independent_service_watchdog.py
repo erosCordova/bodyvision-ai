@@ -101,8 +101,10 @@ def monitor(
         state = probe(target)
         if state not in {"ready", "degraded", "unreachable"}:
             state = "degraded"
+        checked_at = datetime.now(UTC)
+        if journal is not None:
+            journal.record_probe(state, checked_at, interval)
         if state != previous:
-            checked_at = datetime.now(UTC)
             saved = journal is None or journal.append_transition(state, checked_at)
             if saved:
                 emit(
@@ -130,6 +132,7 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] | None = 
     mode.add_argument("--once", action="store_true", help="Consultar una vez y finalizar")
     mode.add_argument("--history", action="store_true", help="Leer historial local acotado")
     mode.add_argument("--incidents", action="store_true", help="Resumir incidentes observados")
+    mode.add_argument("--status", action="store_true", help="Consultar vigencia del ultimo sondeo")
     args = parser.parse_args(argv)
     try:
         target, interval = require_synthetic_watchdog(
@@ -144,6 +147,9 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] | None = 
             return 0
         if args.incidents:
             print(json.dumps(summarize_incidents(journal.recent()), sort_keys=True))
+            return 0
+        if args.status:
+            print(json.dumps(journal.probe_status(), sort_keys=True))
             return 0
         return monitor(target, interval, once=args.once, journal=journal)
     except WatchdogDenied:
