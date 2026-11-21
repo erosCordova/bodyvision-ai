@@ -60,14 +60,11 @@ def test_monitor_resumes_from_saved_state_across_restarts(tmp_path):
             TARGET,
             30,
             once=True,
-            probe=lambda _: state,
+            probe=lambda _, observed=state: observed,
             emit=outputs.append,
             journal=WatchdogHistory(path),
         ) == expected
-    assert [json.loads(event)["state"] for event in outputs] == [
-        "unreachable",
-        "ready",
-    ]
+    assert [json.loads(event)["state"] for event in outputs] == ["unreachable", "ready"]
 
 
 def test_history_refuses_other_states_and_corrupted_database(tmp_path):
