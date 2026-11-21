@@ -15,7 +15,7 @@ import { BASELINE_HEIGHT_CM } from "./bodyStature";
 import { preferredAtlasQuality } from "./renderBudget";
 import { reviewLocalCapture } from "../capture/captureQuality";
 import { stageCaptureForAnalysis } from "../capture/captureHandoff";
-import { anatomyNameKey } from "./anatomyNames";
+import { anatomyDisplayName, anatomyNameKey } from "./anatomyNames";
 import { buildSyntheticScenarioCsv } from "./scenarioCsv";
 import { sampledMorphClamping } from "./morphLimits";
 import { scenarioCompatibilityReason } from "./scenarioCompatibility";
@@ -107,7 +107,7 @@ const cleanMesh = (name: string) => name.replace(/\.(l|r)(\.\d+)?$/i, "").replac
 const sourceRoot = anatomySource + "content/";
 
 function candidateNames(entry: AtlasEntry) {
-  return [entry.medical, entry.common || "", entry.category || "", ...entry.match, ...Object.entries(aliases)
+  return [entry.medical, anatomyDisplayName(entry.medical), entry.common || "", entry.category || "", ...entry.match, ...Object.entries(aliases)
     .filter(([en]) => word(entry.medical + " " + (entry.common || "")).includes(word(en)))
     .map(([, es]) => es)];
 }
@@ -577,7 +577,7 @@ export function AnatomyAtlas() {
             <div className="studio-search-results" role="listbox" aria-label="Resultados anatómicos">
               {results.map(entry => (
                 <button key={entry.layer + entry.id} role="option" aria-selected="false" onClick={() => openEntry(entry)}>
-                  <span>{entry.medical}</span><small>{anatomicalLayers.find(l => l.id === entry.layer)?.label}</small>
+                  <span>{anatomyDisplayName(entry.medical)}</span><small>{anatomicalLayers.find(l => l.id === entry.layer)?.label}</small>
                 </button>
               ))}
               {!results.length && <p>{contentReady ? "Sin resultados en las capas disponibles" : "Cargando catálogo anatómico…"}</p>}
@@ -1049,7 +1049,7 @@ export function AnatomyAtlas() {
               identified ? (
                 <div className="studio-info">
                   <p className="studio-eyebrow">FICHA ANATÓMICA</p>
-                  <h2>{identified.medical}</h2>
+                  <h2>{anatomyDisplayName(identified.medical)}</h2>
                   {identified.common && <p className="studio-subtitle">{identified.common}</p>}
                   <p className="studio-info-layer">{anatomicalLayers.find(l => l.id === identified.layer)?.label} · {identified.category || "Estructura anatómica"}</p>
                   {identified.summary && <section><h3>Descripción original</h3><p>{identified.summary}</p></section>}
@@ -1061,14 +1061,14 @@ export function AnatomyAtlas() {
                       <a href={link} key={link} target="_blank" rel="noreferrer">Ver fuente {index + 1} ↗</a>
                     ))}
                   </div></section>}
-                  <p className="studio-original-note">Las fichas heredadas del atlas original se presentan en inglés mientras se prepara una revisión terminológica en español.</p>
+                  <p className="studio-original-note">Algunos nombres frecuentes se muestran en español; las descripciones originales y términos no revisados conservan el idioma del catálogo fuente.</p>
                   <div className="studio-info-actions">
                     <button onClick={() => setIsolated(value => !value)}>{isolated ? "Mostrar todas las piezas" : "Aislar estructura"}</button>
                     <button onClick={() => { controller.current?.clearSelection(); setSelectedEntry(null); setIsolated(false); }}>Cerrar ficha</button>
                   </div>
                 </div>
               ) : selected ? (
-                <div className="studio-info"><p className="studio-eyebrow">ESTRUCTURA 3D</p><h2>{cleanMesh(selected.name)}</h2>
+                <div className="studio-info"><p className="studio-eyebrow">ESTRUCTURA 3D</p><h2>{anatomyDisplayName(cleanMesh(selected.name))}</h2>
                   <p className="studio-subtitle">La malla se encuentra disponible, pero no tiene una ficha descriptiva asociada en el catálogo.</p>
                   <button onClick={() => setIsolated(value => !value)}>{isolated ? "Mostrar todas" : "Aislar estructura"}</button>
                 </div>
