@@ -114,3 +114,22 @@ ni claves cifradas. Tampoco demuestra recuperación real ante
 pérdida del host ni restauración de datos privados fuera de
 PostgreSQL; esas tareas requieren infraestructura y
 procedimientos específicos antes de admitir datos clínicos.
+
+
+## Ajuste de recuperación: roles globales referenciados por RLS
+
+La primera ejecución del ensayo de reposición detectó correctamente
+que `pg_dump` **no incluye los roles globales del clúster**.
+Las políticas de seguridad por filas (RLS) del esquema hacen referencia
+a `bodyvision_app` y `bodyvision_auth_app`; por ello,
+`pg_restore --exit-on-error` rechazó un PostgreSQL recién creado
+que no poseía dichos roles, antes de declarar la recuperación aprobada.
+
+El ensayo ahora prepara esas dos identidades **solo en la instancia
+de CI desconectada**, como roles `NOLOGIN`, sin contraseñas,
+superusuario, creación de bases, herencia ni capacidad de saltarse
+RLS. Comprueba su presencia y que no admiten login antes
+de restaurar. **No importa secretos ni roles productivos.**
+Para un procedimiento real serían necesarios inventario,
+aprovisionamiento seguro y comprobación independiente de roles,
+permisos y secretos de la infraestructura destino.

@@ -216,6 +216,15 @@ jobs:
           test "$(docker exec bodyvision-recovery-ci psql -U postgres \
             -d bodyvision_recovered_ci -Atc \
             "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" = 0
+          # A full database dump does NOT include cluster-global PostgreSQL roles.
+          # RLS policies refer to these names. Recreate inert NOLOGIN roles
+          # before restoring, without passwords or network access.
+          docker exec bodyvision-recovery-ci psql -U postgres \
+            -d bodyvision_recovered_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE bodyvision_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE bodyvision_auth_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
+          test "$(docker exec bodyvision-recovery-ci psql -U postgres \
+            -d bodyvision_recovered_ci -Atc \
+            "SELECT count(*) FROM pg_roles WHERE rolname IN ('bodyvision_app','bodyvision_auth_app') AND NOT rolcanlogin AND NOT rolsuper")" = 2
           APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
             python3 scripts/verify_restore_manifest.py verify \
             --backup /tmp/bodyvision-backup-ci.dump \
