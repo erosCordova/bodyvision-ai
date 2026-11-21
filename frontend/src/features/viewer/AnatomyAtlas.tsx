@@ -747,6 +747,16 @@ export function AnatomyAtlas() {
             <span>Muestras de render: {renderStats.cpuSampleCount} (máximo 120, ventana móvil)</span>
             <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
             <span>Geometría retenida (CPU): {(renderStats.cpuGeometryBytes / 1024 / 1024).toFixed(2)} MiB · {renderStats.retainedGeometryCount} conjuntos únicos</span>
+            <div className="studio-render-layers" role="group" aria-label="Memoria geométrica por capa">
+              <strong>Capas cargadas por consumo de geometría CPU</strong>
+              {[...renderStats.layerGeometry].sort((a, b) => b.cpuGeometryBytes - a.cpuGeometryBytes).map(layer => (
+                <div key={layer.layer} className="studio-render-layer">
+                  <span>{anatomicalLayers.find(item => item.id === layer.layer)?.label} · {layer.visible ? "visible" : "oculta"}</span>
+                  <span>{(layer.cpuGeometryBytes / 1024 / 1024).toFixed(2)} MiB · {layer.meshes} mallas</span>
+                </div>
+              ))}
+              <small>Las capas ocultas siguen cargadas para volver a mostrarlas. Sus cifras pueden compartir buffers y no deben sumarse para calcular el total.</small>
+            </div>
             <span>Preparación de piel: {renderStats.layerReadyMs.skin === undefined
               ? "Pendiente" : renderStats.layerReadyMs.skin.toFixed(2) + " ms"} (descarga y procesamiento CPU)</span>
             <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
