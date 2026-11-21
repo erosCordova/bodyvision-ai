@@ -165,7 +165,7 @@ jobs:
           trap 'docker rm -f bodyvision-recovery-ci >/dev/null 2>&1 || true; rm -rf "$recovery_state"; rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-backup-ci.manifest.json /tmp/bodyvision-recovered-ci.sql /tmp/bodyvision-restored-ci.sql /tmp/bodyvision-before-recovery.sql' EXIT
           docker run --rm --user "$(id -u):$(id -g)" \
             --network "container:$primary_db_container" --env-file .env \
-            -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
+            -e PYTHONPATH=/app -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
             --mount "type=bind,src=$recovery_state,dst=/recovery-state" \
             "$recovery_image" python tests/recovery_acceptance.py prepare
           # Fixtures are added only AFTER test-isolation was verified above.
@@ -270,7 +270,7 @@ jobs:
           test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
           docker run --rm --user "$(id -u):$(id -g)" \
             --network container:bodyvision-recovery-ci --env-file .env \
-            -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
+            -e PYTHONPATH=/app -e APP_ENV=test -e CI=true -e BODYVISION_RESTORE_DRILL=synthetic-only \
             --mount "type=bind,src=$recovery_state,dst=/recovery-state" \
             "$recovery_image" python tests/recovery_acceptance.py verify
           # Restore the original disposable application only after comparing
