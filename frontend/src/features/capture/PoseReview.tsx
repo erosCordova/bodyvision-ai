@@ -21,6 +21,8 @@ type PoseState = "idle" | "running" | "ready" | "failed";
 export function PoseReview({ file, review }: { file: File; review: CaptureReview }) {
   const alive = useRef(true);
   const requestSequence = useRef(0);
+  // Prevent repeated taps from allocating overlapping MediaPipe input sessions.
+  const poseInFlight = useRef<number | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [state, setState] = useState<PoseState>("idle");
   const [analysisSerial, setAnalysisSerial] = useState(0);
@@ -43,6 +45,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     alive.current = true;
     // Any in-flight pose estimate belongs only to the image that started it.
     requestSequence.current += 1;
+    poseInFlight.current = null;
     setState("idle");
     setEstimate(null);
     setFailure("");
@@ -60,13 +63,15 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
     return () => {
       alive.current = false;
       requestSequence.current += 1;
+      poseInFlight.current = null;
       URL.revokeObjectURL(url);
     };
   }, [file]);
 
   const run = async () => {
-    if (benchmarkRunning || diagnosticRunning) return;
+    if (poseInFlight.current !== null || benchmarkRunning || diagnosticRunning) return;
     const requestId = ++requestSequence.current;
+    poseInFlight.current = requestId;
     const inputFile = file;
     const current = () => alive.current && requestId === requestSequence.current;
     setState("running");
@@ -93,6 +98,9 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
         "No se pudo ejecutar el detector local. Comprueba que esta versión incluya los archivos verificados, " +
         "la compatibilidad de WebAssembly y vuelve a intentarlo. La imagen no se ha enviado a la API.",
       );
+    } finally {
+      // Do not release a newer photograph's lock when an old request settles.
+      if (poseInFlight.current === requestId) poseInFlight.current = null;
     }
   };
   const runBenchmark = async () => {

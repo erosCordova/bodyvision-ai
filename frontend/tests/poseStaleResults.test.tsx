@@ -56,6 +56,29 @@ afterEach(() => {
 });
 
 describe("local pose review isolation", () => {
+  it("ignores rapid duplicate taps while loading and unlocks after completion", async () => {
+    const loading = deferred<PoseEstimate>();
+    vi.mocked(detectPoseOnDevice)
+      .mockReturnValueOnce(loading.promise)
+      .mockResolvedValueOnce(noHuman);
+    render(<PoseReview
+      file={new File(["synthetic"], "same.png", { type: "image/png" })}
+      review={review}
+    />);
+    const detect = screen.getByRole("button", { name: "Detectar pose con IA" });
+    // Both click events occur before React commits its disabled state.
+    act(() => {
+      detect.click();
+      detect.click();
+    });
+    expect(detectPoseOnDevice).toHaveBeenCalledOnce();
+    await act(async () => { loading.resolve(noHuman); await loading.promise; });
+    expect(screen.getByText("No se detectó una pose humana.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Repetir detección" }));
+    await act(async () => {});
+    expect(detectPoseOnDevice).toHaveBeenCalledTimes(2);
+  });
+
   it("never applies an old photograph's late pose result to a replacement image", async () => {
     const older = deferred<PoseEstimate>();
     const newer = deferred<PoseEstimate>();
