@@ -510,3 +510,23 @@
 }
 .studio-favorites-clear { margin-top: 8px; width: 100%; background: #213145; }
 .studio-favorites-navigation button:hover, .studio-favorites-clear:hover { background: #315d78; }
+
+
+/* Diagnostic card stays usable in short viewports, including mobile emulation. */
+.studio-render-info {
+  max-height: min(72dvh, 690px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.studio-render-layers {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid #466782;
+  border-bottom: 1px solid #466782;
+  padding: 9px 0;
+}
+.studio-render-layers strong { font-size: 11px; line-height: 1.4; }
+.studio-render-layer { display: grid; gap: 3px; padding: 5px 0; border-bottom: 1px solid #314d63; }
+.studio-render-layer:last-of-type { border-bottom: 0; }
+.studio-render-layer span:first-child { color: #e9f8ff; font-weight: 600; }
+.studio-render-layer span:last-child { color: #a9d9ef; font-variant-numeric: tabular-nums; }
