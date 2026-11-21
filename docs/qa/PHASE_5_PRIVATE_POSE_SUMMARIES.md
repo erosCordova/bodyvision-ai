@@ -2,7 +2,8 @@
 
 ## Flujo incorporado
 
-En Captura corporal, el detector local permite asociar un resumen al expediente
+Desde Captura corporal se transfiere la imagen local al módulo de análisis,
+donde el detector permite asociar un resumen al expediente
 ficticio seleccionado. Se conservan detección/no detección, recuentos de puntos
 visibles y principales, umbral, estado heurístico de calidad, comprobación de
 captura, revisión del modelo, revisión del esquema de resumen, responsable y

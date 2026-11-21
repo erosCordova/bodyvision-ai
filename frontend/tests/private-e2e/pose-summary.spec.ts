@@ -34,6 +34,8 @@ test("real local detector saves only a fictional summary and history survives na
       mimeType: "image/png", buffer: Buffer.from(encoded, "base64") });
   };
   await upload();
+  await page.getByRole("link", { name: "Ver control de calidad en el módulo de análisis", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Análisis corporal con IA", exact: true })).toBeVisible();
   const detector = page.getByRole("region", { name: "Estimación local de pose con IA", exact: true });
   await detector.getByRole("button", { name: "Detectar pose con IA", exact: true }).click();
   await expect(detector.getByRole("button", { name: "Repetir detección", exact: true })).toBeVisible({ timeout: 45000 });
