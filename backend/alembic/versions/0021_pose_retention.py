@@ -22,11 +22,6 @@ def upgrade():
             SELECT s.id FROM synthetic_pose_summaries s
             JOIN organizations o ON o.id=s.organization_id AND o.synthetic
             WHERE EXISTS (
-              SELECT 1 FROM profile_consents c
-              WHERE c.organization_id=s.organization_id AND c.profile_id=s.profile_id
-                AND c.purpose IN ('pose','storage')
-            )
-            AND EXISTS (
               SELECT 1 FROM (VALUES ('pose'),('storage')) AS needed(purpose)
               WHERE NOT EXISTS (
                 SELECT 1 FROM profile_consents c

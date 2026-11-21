@@ -71,3 +71,29 @@ def test_pose_retention_rejects_unbounded_batches(pose_archive):
                 connection.execute(
                     text("SELECT purge_expired_pose_summary_batch(:limit)"), {"limit": invalid}
                 )
+
+
+
+def test_missing_consent_records_do_not_leave_orphaned_pose_summaries(pose_archive):
+    client, owner, profile, writer, _, _, root = pose_archive
+    for purpose in ("pose", "storage"):
+        accept(client, writer, profile, purpose)
+    created = client.post(
+        root, headers={**writer, "Idempotency-Key": str(uuid4())}, json=BODY
+    )
+    assert created.status_code == 201, created.text
+
+    # A privileged fixture simulates erasure of the consent rows themselves.
+    # The maintenance role must then erase the orphaned fictional summary.
+    with owner.begin() as connection:
+        connection.execute(
+            text("DELETE FROM profile_consents WHERE profile_id=:profile"),
+            {"profile": profile},
+        )
+    assert purge_due_pose_summaries(client.app.state.engine) == 1
+    with owner.connect() as connection:
+        remaining = connection.execute(
+            text("SELECT count(*) FROM synthetic_pose_summaries WHERE profile_id=:profile"),
+            {"profile": profile},
+        ).scalar_one()
+    assert remaining == 0
