@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("real local detector saves only a fictional summary and history survives navigation", async ({ page }) => {
   test.setTimeout(120000);
+  page.setDefaultTimeout(15000);
   await page.goto("/access");
   await page.getByLabel("Identificador de organización").fill("10000000-0000-4000-8000-000000000001");
   await page.getByLabel("Correo electrónico").fill("browser.admin@example.invalid");
@@ -40,7 +41,7 @@ test("real local detector saves only a fictional summary and history survives na
   await detector.getByRole("button", { name: "Detectar pose con IA", exact: true }).click();
   await expect(detector.getByRole("button", { name: "Repetir detección", exact: true })).toBeVisible({ timeout: 45000 });
   const history = page.getByRole("region", { name: "Historial privado de resultados de pose", exact: true });
-  await history.getByLabel("Expediente para resultados de pose", { exact: true }).selectOption(id);
+  await history.getByRole("combobox", { name: "Expediente para resultados de pose", exact: true }).selectOption(id);
   await history.getByRole("checkbox", { name: /Confirmo que el resultado procede/ }).check();
   const post = page.waitForResponse(response => response.url().endsWith(`/profiles/${id}/pose-summaries`)
     && response.request().method() === "POST");

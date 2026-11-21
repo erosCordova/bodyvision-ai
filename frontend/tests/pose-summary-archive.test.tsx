@@ -55,7 +55,7 @@ it("saves, reloads and deletes a summary after explicit fictional confirmation",
   vi.spyOn(window, "confirm").mockReturnValue(true);
   mount();
   await screen.findByRole("option", { name: "POSE-01" });
-  fireEvent.change(screen.getByLabelText("Expediente para resultados de pose"), { target: { value: profile } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Expediente para resultados de pose", exact: true }), { target: { value: profile } });
   await screen.findByRole("checkbox", { name: /Confirmo que el resultado/ });
   const save = screen.getByRole("button", { name: "Guardar resultado de pose" });
   expect(save).toBeDisabled();
@@ -74,13 +74,13 @@ it("blocks history without both purposes and offers no write controls to a membe
   accepted = false;
   const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
   const first = mount(); await screen.findByRole("option", { name: "POSE-01" });
-  fireEvent.change(screen.getByLabelText("Expediente para resultados de pose"), { target: { value: profile } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Expediente para resultados de pose", exact: true }), { target: { value: profile } });
   await screen.findByText(/Registra aceptaciones vigentes/);
   expect(fetcher).not.toHaveBeenCalled(); first.unmount();
   accepted = true; role = "member";
   fetcher.mockResolvedValue(json({ items: [row], total: 1, limit: 20, offset: 0 }));
   mount(null); await screen.findByRole("option", { name: "POSE-01" });
-  fireEvent.change(screen.getByLabelText("Expediente para resultados de pose"), { target: { value: profile } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Expediente para resultados de pose", exact: true }), { target: { value: profile } });
   await screen.findByText("Revisable de forma experimental");
   expect(screen.queryByRole("button", { name: "Guardar resultado de pose" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Eliminar resumen de pose" })).not.toBeInTheDocument();
