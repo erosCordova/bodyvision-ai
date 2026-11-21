@@ -501,3 +501,12 @@
 .studio-favorites-list li:hover, .studio-favorites-list li:focus-within { background: #254765; }
 .studio-favorites-empty, .studio-favorites-note { display: block; margin: 9px 0; color: #abc9df; font-size: 11px; line-height: 1.55; }
 .studio-search-results button[aria-selected="true"] { background: #28516f; outline: 1px solid #71b7dc; }
+
+/* Private-tab favorites are a study shortcut, never a server-side record. */
+.studio-favorites-navigation { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 9px; }
+.studio-favorites-navigation button, .studio-favorites-clear {
+  border: 1px solid #5a89a5; border-radius: 8px; background: #213f59;
+  color: #eaf8ff; padding: 9px 7px; font-size: 11px; font-weight: 600;
+}
+.studio-favorites-clear { margin-top: 8px; width: 100%; background: #213145; }
+.studio-favorites-navigation button:hover, .studio-favorites-clear:hover { background: #315d78; }
