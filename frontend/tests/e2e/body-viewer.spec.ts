@@ -1011,6 +1011,16 @@ test("live diagnostics count both comparison passes without drawing idle frames 
   // Wait for two diagnostic refreshes: reading statistics must leave the scene idle.
   await page.waitForTimeout(2200);
   await expect(panel).toHaveAttribute("data-rendered-frames", String(single.renderedFrames));
+  // Moving a camera must submit one WebGL frame, not both the OrbitControls
+  // "change" frame and a redundant immediate render from the UI handler.
+  await page.getByRole("button", { name: "Frente", exact: true }).click();
+  const moved = await downloadStats("test-results/render-camera.json");
+  expect(moved.renderedFrames - single.renderedFrames).toBe(1);
+  expect(moved.renderPasses).toBe(1);
+  await page.getByRole("img", { name: /Cuerpo humano anatómico 3D/ }).press("ArrowLeft");
+  const keyboard = await downloadStats("test-results/render-keyboard.json");
+  expect(keyboard.renderedFrames - moved.renderedFrames).toBe(1);
+  expect(keyboard.renderPasses).toBe(1);
   await page.getByRole("button", { name: "Comparar lado a lado", exact: true }).click();
   await expect(panel).toContainText("Pasadas por fotograma: 2");
   const split = await downloadStats("test-results/render-split.json");
