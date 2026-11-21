@@ -99,17 +99,20 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
             restore.verify_manifest(self.backup, self.manifest)
 
     def test_detects_backup_mutation_during_streaming(self):
-        original_open = os.open
+        original_fstat = os.fstat
+        calls = 0
 
-        def mutate_after_open(path, flags, *args, **kwargs):
-            descriptor = original_open(path, flags, *args, **kwargs)
-            if Path(path) == self.backup:
+        def mutate_before_final_stat(descriptor):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                # Same-length modification during the open descriptor's read.
                 with self.backup.open("r+b") as output:
                     output.seek(7)
                     output.write(b"CHANGED")
-            return descriptor
+            return original_fstat(descriptor)
 
-        with patch.object(restore.os, "open", side_effect=mutate_after_open):
+        with patch.object(restore.os, "fstat", side_effect=mutate_before_final_stat):
             with self.assertRaises(restore.RestoreManifestRejected):
                 restore.fingerprint(self.backup)
 
