@@ -1,6 +1,7 @@
 """An independent PostgreSQL restore must preserve every row and sequence."""
 
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -92,9 +93,11 @@ class RestoredDataTests(unittest.TestCase):
             self.assertEqual(
                 restored.main([str(self.original), str(self.rebuilt)]), 1
             )
-        self.assertEqual(
-            messages.call_args.args[0], '{"event":"synthetic_recovery_data_mismatch"}'
-        )
+        result = messages.call_args.args[0]
+        self.assertEqual(json.loads(result)["event"], "synthetic_recovery_data_mismatch")
+        self.assertEqual(json.loads(result)["different_tables"], ["public.profiles"])
+        self.assertNotIn("secret_fake_value", result)
+        self.assertNotIn("another_fake_value", result)
 
     def test_sql_injection_like_commands_are_rejected(self):
         self.original.write_bytes(

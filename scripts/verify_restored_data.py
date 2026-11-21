@@ -8,6 +8,8 @@ The stricter same-database preservation check remains unchanged.
 
 import argparse
 import hashlib
+import json
+import re
 import stat
 from pathlib import Path
 
@@ -19,7 +21,7 @@ class RestoredDataRejected(ValueError):
     """The dump is missing, malformed, unsupported or incomplete."""
 
 
-def fingerprint(path: Path) -> bytes:
+def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
     if path.is_symlink():
         raise RestoredDataRejected("Symlinks not permitted")
     info = path.stat()
@@ -58,7 +60,11 @@ def fingerprint(path: Path) -> bytes:
         raise RestoredDataRejected("Incomplete COPY block")
     if not copies and not statements:
         raise RestoredDataRejected("No synthetic data sections")
+    return copies, statements
 
+
+def fingerprint(path: Path) -> bytes:
+    copies, statements = _sections(path)
     digest = hashlib.sha256()
     for header, records in sorted(copies.items()):
         digest.update(b"\x01")
@@ -74,6 +80,24 @@ def fingerprint(path: Path) -> bytes:
     return digest.digest()
 
 
+def discrepancy_summary(left: Path, right: Path) -> dict[str, object]:
+    """Only schema section NAMES/counts; never SQL rows, IDs or values."""
+    left_copies, left_statements = _sections(left)
+    right_copies, right_statements = _sections(right)
+    different = []
+    for header in set(left_copies) | set(right_copies):
+        first = left_copies.get(header)
+        second = right_copies.get(header)
+        if first is None or second is None or sorted(first) != sorted(second):
+            match = re.fullmatch(rb"COPY (public\.[a-z_][a-z0-9_]*) \(.*\) FROM stdin;", header)
+            different.append(match.group(1).decode("ascii") if match else "unrecognized_section")
+    return {
+        "different_tables": sorted(different)[:12],
+        "different_table_count": len(different),
+        "data_statement_mismatch": sorted(left_statements) != sorted(right_statements),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Synthetic isolated restore comparison")
     parser.add_argument("original", type=Path)
@@ -85,7 +109,8 @@ def main(argv: list[str] | None = None) -> int:
         print('{"event":"synthetic_recovery_data_unverifiable"}')
         return 2
     if not same:
-        print('{"event":"synthetic_recovery_data_mismatch"}')
+        summary = discrepancy_summary(args.original, args.restored)
+        print(json.dumps({"event": "synthetic_recovery_data_mismatch", **summary}, sort_keys=True))
         return 1
     print('{"event":"synthetic_recovery_data_verified"}')
     return 0
