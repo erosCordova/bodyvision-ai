@@ -11,6 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from test_pose_summary_api import BODY, accept, pose_archive as pose_archive
 
+from app.workers.capture_retention import purge_due_pose_summaries
+
 
 def test_expired_pose_consent_is_purged_but_valid_summary_remains(pose_archive):
     client, owner, profile, writer, reader, _, root = pose_archive
@@ -34,14 +36,8 @@ def test_expired_pose_consent_is_purged_but_valid_summary_remains(pose_archive):
                 WHERE profile_id=:profile AND purpose='pose'"""),
             {"profile": profile},
         )
-    with owner.begin() as connection:
-        connection.execute(text("SET LOCAL ROLE bodyvision_app"))
-        assert connection.execute(
-            text("SELECT purge_expired_pose_summary_batch(10)")
-        ).scalar_one() == 1
-        assert connection.execute(
-            text("SELECT purge_expired_pose_summary_batch(10)")
-        ).scalar_one() == 0
+    assert purge_due_pose_summaries(client.app.state.engine) == 1
+    assert purge_due_pose_summaries(client.app.state.engine) == 0
     with owner.connect() as connection:
         assert connection.execute(
             text("SELECT count(*) FROM synthetic_pose_summaries WHERE id=:id"),
