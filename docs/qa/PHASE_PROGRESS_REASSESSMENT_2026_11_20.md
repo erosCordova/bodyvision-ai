@@ -134,3 +134,32 @@ API que no pueda responder. La observabilidad centralizada/externa, notificacion
 seguridad, secretos, respaldos productivos y aceptación operativa siguen pendientes.
 Detalles en `docs/qa/PHASE_9_PRIVATE_OPERATIONS.md` y
 `docs/operations/PRIVATE_SERVICE_DIAGNOSTICS.md`. No se certifica producción.
+
+
+## Fase 5: resúmenes mínimos de pose e historial por expediente
+
+Se incorporan dos entregables técnicos, evaluados manualmente en cinco puntos
+cada uno: (1) persistencia de resúmenes mínimos versionados y consulta paginada
+desde el análisis o directamente desde el expediente; (2) doble aceptación,
+permisos y auditoría transaccional, reintentos sin duplicar y borrado sin
+recreación del mismo envío, incluida la purga por revocación o renovación.
+La Fase 5 pasa de **65 % a 75 %** tras aprobar la ejecución integral
+[44847175532](https://github.com/erosCordova/bodyvision-ai/actions/runs/44847175532),
+commit `169f5dcb1d5305b547beea2fda82b42b991df4bf`.
+
+Aprobaron Windows, Docker, migraciones reversibles y **512 pruebas de aplicación**:
+226 backend, 242 frontend, 36 navegador público y 8 privado. El nuevo recorrido
+privado ejecuta MediaPipe sobre un patrón ficticio sin persona, guarda el resumen
+negativo, lo consulta tras navegar al expediente y lo elimina. Las mediciones
+corporales siguen vacías. Los casos de API también cubren paginación, aislamiento,
+caducidad, revocación, renovación y reversión de un fallo de auditoría.
+
+La suma de diez fases pasa de **805 a 815**, con promedio exacto **81,5 %**,
+redondeado a **82 %**. Las otras fases no cambian. El servidor conserva la
+salida declarada por el navegador: no vuelve a inferir ni certifica su precisión.
+No se guardan fotos, coordenadas o huellas de imagen en estos resúmenes.
+La caducidad deniega acceso, pero la eliminación física periódica por caducidad,
+la retención de auditoría/claves/copias, los datos reales, dispositivos físicos,
+corpus independiente y evaluación clínica mantienen sus criterios pendientes.
+Detalles en `docs/qa/PHASE_5_PRIVATE_POSE_SUMMARIES.md`.
+Esta entrega no migra la base alojada en Neon ni publica cambios en la demo.

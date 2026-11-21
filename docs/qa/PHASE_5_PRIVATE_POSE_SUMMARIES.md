@@ -74,7 +74,7 @@ Las claves se reutilizan en un reintento de la misma detección y no se guardan
 en almacenamiento del navegador. La pestaña **Resultados de pose** del expediente consulta el historial
 sin cargar una fotografía ni repetir la inferencia.
 
-## Verificación prevista
+## Verificación aprobada
 
 - Contrato mínimo y consistencia con resultados negativos válidos.
 - PostgreSQL: permisos, aislamiento, dos finalidades, paginación/total, reintentos,
@@ -83,6 +83,15 @@ sin cargar una fotografía ni repetir la inferencia.
 - Navegador: ejecución real de MediaPipe sobre un patrón ficticio, guardado del
   resumen mínimo, consulta después de navegar y borrado sin crear mediciones.
 
-La estimación se revisará tras aprobar CI integral. Continúan pendientes corpus
+La ejecución integral [44847175532](https://github.com/erosCordova/bodyvision-ai/actions/runs/44847175532),
+commit `169f5dcb1d5305b547beea2fda82b42b991df4bf`, aprobó Windows, Docker y pruebas
+nativas: 226 backend, 242 frontend, 36 navegador público y 8 privado
+(**512 pruebas de aplicación**, sin contar duplicados de Docker). El recorrido
+privado ejecutó MediaPipe sobre el patrón sin persona, guardó el resultado
+negativo, lo consultó desde el expediente y lo borró sin generar mediciones.
+No es una prueba de exactitud sobre personas.
+
+La Fase 5 pasa de 65 % a 75 % y el promedio manual exacto de 80,5 % a 81,5 %,
+mostrado como **82 %**. Continúan pendientes corpus
 independiente autorizado, dispositivos físicos, evaluación de precisión y toda
 recepción clínica/operativa. `main` y la base alojada no se migran en esta entrega.
