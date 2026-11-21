@@ -73,14 +73,11 @@ def test_pose_retention_rejects_unbounded_batches(pose_archive):
                 )
 
 
-
 def test_missing_consent_records_do_not_leave_orphaned_pose_summaries(pose_archive):
     client, owner, profile, writer, _, _, root = pose_archive
     for purpose in ("pose", "storage"):
         accept(client, writer, profile, purpose)
-    created = client.post(
-        root, headers={**writer, "Idempotency-Key": str(uuid4())}, json=BODY
-    )
+    created = client.post(root, headers={**writer, "Idempotency-Key": str(uuid4())}, json=BODY)
     assert created.status_code == 201, created.text
 
     # A privileged fixture simulates erasure of the consent rows themselves.
