@@ -191,3 +191,34 @@ diagnóstica, control de respaldos/WAL ni autorización de personas reales.
 Quedan pendientes corpus independiente, dispositivos físicos, revisión clínica
 y seguridad/privacidad, operación y retención de copias. La base alojada y
 la demo pública no se modifican.
+
+
+## Fase 9: vigilancia de caída y recuperación desde un proceso independiente
+
+Se incorpora un entregable funcional independiente, valorado manualmente en
+**5 puntos de fase**: un vigilante de disponibilidad expresamente optativo
+para local/test ficticio. No depende del proceso FastAPI, no recibe credenciales,
+no recoge identificadores ni respuestas de la API y emite únicamente cambios de
+estado de preparación. Si la API deja de responder se observa
+`unreachable`; si se reinicia con PostgreSQL y esquema vigentes pasa a
+`ready`. Se rechazan orígenes externos, redirecciones, intervalos fuera de
+rango y entornos demo/producción.
+
+En [CI 44861754261](https://github.com/erosCordova/bodyvision-ai/actions/runs/44861754261),
+commit `ff21c135c27bb4f87a38abd5b260f86c31ddab83`,
+pasaron **Windows, backend, frontend, navegadores y Docker**. El paso
+`Watchdog detects API outage and recovery without backend process` detuvo
+el backend, verificó la señal de indisponibilidad y validó su recuperación
+tras reiniciarlo. La suite nativa aprobó 238 tests backend, 243 frontend,
+36 de navegador público y 8 privado: **525 de aplicación**.
+
+La Fase 9 pasa de **45 % a 50 %**. La suma de las diez fases sube de
+**825 a 830** y la media exacta de **82,5 % a 83,0 %**; el porcentaje
+global mostrado **permanece en 83 %** por redondeo. Es avance real
+de fase, no certificación de producción ni garantía de disponibilidad.
+
+Quedan pendientes vigilancia fuera del host, notificaciones externas,
+histórico durable, producción multiinstancia, RPO/RTO, custodia de secretos
+y respaldos productivos, aceptación operativa y evaluación legal/de seguridad.
+El proceso depende de que Docker/el equipo local sigan encendidos. No se han
+modificado `main`, Render, Vercel ni la base alojada.

@@ -21,3 +21,15 @@ Las pruebas unitarias backend/tests/unit/test_independent_service_watchdog.py co
 ## Límites
 
 Los eventos quedan en stdout local. No hay alertas fuera del host, SLO medido, histórico centralizado, supervisión cuando Docker o el host completo estén apagados, ni integración con servicios de mensajería. Faltan control de credenciales productivas, infraestructura redundante, RPO/RTO, revisión de privacidad y aprobación operativa; no utilizar personas reales ni afirmar disponibilidad garantizada. No se despliega en Render, Vercel ni Neon.
+
+
+## Evidencia de aceptación
+
+El commit `ff21c135c27bb4f87a38abd5b260f86c31ddab83`
+superó [BODYVISION CI 44861754261](https://github.com/erosCordova/bodyvision-ai/actions/runs/44861754261).
+La prueba de Docker arrancó el vigilante como proceso independiente
+sin credenciales, detuvo el backend y confirmó el estado `unreachable`
+(código 1); lo reinició y confirmó `ready` (código 0). Aprobó
+también las comprobaciones de esquema, retención, base restaurada y
+recreación de contenedores. La suite nativa aprobó cuatro pruebas
+unitarias de aislamiento y estados del vigilante.

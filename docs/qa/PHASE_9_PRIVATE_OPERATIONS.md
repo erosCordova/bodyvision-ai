@@ -89,3 +89,23 @@ entregables: observabilidad privada acotada con avisos (5 puntos), y recepción
 del diagnóstico/recuperación con panel y procedimiento operativo (5 puntos).
 El promedio de diez fases pasa de 79,5 % a **80,5 %**, mostrado como **81 %**.
 No se alteran las otras fases ni se da por cerrado el criterio de producción.
+
+
+## Vigilante independiente de indisponibilidad local (entrega posterior)
+
+La observabilidad del panel ahora se complementa con el proceso separado
+`app.workers.independent_service_watchdog`, bajo el perfil optativo
+`watchdog`, exclusivamente local/test sintético. Puede informar sobre una
+API caída desde fuera del proceso de la API. El proceso no recibe credenciales
+ni escribe en PostgreSQL; limita la URL de destino al endpoint interno fijo,
+prohíbe redirecciones y solo emite cambios de estado sanitizados a stdout.
+
+La aceptación integral
+[44861754261](https://github.com/erosCordova/bodyvision-ai/actions/runs/44861754261)
+aprobó una caída real del backend Docker y la recuperación posterior,
+junto con Windows, tests nativos, frontend y navegadores. Véase
+`docs/operations/INDEPENDENT_SYNTHETIC_WATCHDOG.md`.
+
+**Límites:** no hay alertas fuera del host, telemetría centralizada ni
+disponibilidad cuando Docker o el anfitrión están apagados. Sigue
+prohibido usar datos reales; esta prueba no es un SLA.
