@@ -1,7 +1,7 @@
 """Private local/test cleanup: no HTTP route, no owner credentials.
 
-Only ciphertext whose retention clock has expired may be deleted by the
-SECURITY DEFINER database function. A bounded batch executes periodically
+Only expired ciphertext and fictional pose summaries without valid consent
+may be deleted by narrow SECURITY DEFINER functions. Bounded batches run periodically
 while the private backend is running; no public/demo task starts.
 """
 
@@ -69,7 +69,7 @@ async def retention_loop(
                 operations.retention_completed(False)
             # Never log SQL exception strings: they can contain connection data.
             logger.error(
-                "synthetic_capture_retention_failed",
+                "synthetic_retention_failed",
                 extra={"error_type": type(exc).__name__},
             )
         await asyncio.sleep(interval_seconds)

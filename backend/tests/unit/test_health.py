@@ -19,7 +19,7 @@ from app.main import create_app
 def engine():
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
-    connection.execute.return_value.scalar_one.return_value = "0020_pose_summaries"
+    connection.execute.return_value.scalar_one.return_value = "0021_pose_retention"
     return engine
 
 
@@ -41,7 +41,7 @@ def test_live_does_not_require_database(client, engine):
 def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
-    assert response.json()["schema_revision"] == "0020_pose_summaries"
+    assert response.json()["schema_revision"] == "0021_pose_retention"
 
 
 def test_demo_ready_uses_data_core_revision(client, engine):
@@ -52,7 +52,7 @@ def test_demo_ready_uses_data_core_revision(client, engine):
         response = demo.get("/api/v1/health/ready")
         assert response.status_code == 200
         assert response.json()["schema_revision"] == "0002_data_core"
-        connection.execute.return_value.scalar_one.return_value = "0020_pose_summaries"
+        connection.execute.return_value.scalar_one.return_value = "0021_pose_retention"
         assert demo.get("/api/v1/health/ready").status_code == 503
 
 

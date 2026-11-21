@@ -61,9 +61,14 @@ def test_single_pass_checks_real_data_role_and_disposes_engine():
             "app.workers.independent_capture_retention.purge_due",
             return_value=3,
         ) as cleanup,
+        patch(
+            "app.workers.independent_capture_retention.purge_due_pose_summaries",
+            return_value=2,
+        ) as cleanup_pose,
     ):
-        assert run_once(GOOD) == 3
+        assert run_once(GOOD) == 5
     cleanup.assert_called_once_with(engine, batch_size=100, max_batches=10)
+    cleanup_pose.assert_called_once_with(engine, batch_size=100, max_batches=10)
     assert creator.call_args.kwargs["hide_parameters"] is True
     assert creator.call_args.kwargs["connect_args"]["connect_timeout"] == 3
     engine.dispose.assert_called_once()
@@ -76,8 +81,10 @@ def test_sidecar_rejects_unexpected_database_role_before_deleting():
     with (
         patch("app.workers.independent_capture_retention.create_engine", return_value=engine),
         patch("app.workers.independent_capture_retention.purge_due") as cleanup,
+        patch("app.workers.independent_capture_retention.purge_due_pose_summaries") as cleanup_pose,
     ):
         with pytest.raises(IndependentRetentionDenied, match="Rol"):
             run_once(GOOD)
     cleanup.assert_not_called()
+    cleanup_pose.assert_not_called()
     engine.dispose.assert_called_once()
