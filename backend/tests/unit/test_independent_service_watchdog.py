@@ -52,14 +52,16 @@ def test_requires_explicit_synthetic_opt_in_bounded_interval_and_internal_target
     assert require_synthetic_watchdog(ENV) == (TARGET, 30)
     assert require_synthetic_watchdog({**ENV, "WATCHDOG_INTERVAL_SECONDS": "10"})[1] == 10
     for changes in (
-        {"APP_ENV": "production"}, {"APP_ENV": "demo"},
+        {"APP_ENV": "production"},
+        {"APP_ENV": "demo"},
         {"BODYVISION_ENABLE_WATCHDOG": "true"},
         {"BODYVISION_ENABLE_WATCHDOG": ""},
         {"WATCHDOG_TARGET": "http://outside.invalid/api/v1/health/ready"},
         {"WATCHDOG_TARGET": "http://backend:8000/api/v1/auth/operations"},
         {"WATCHDOG_TARGET": "https://backend:8000/api/v1/health/ready"},
         {"WATCHDOG_TARGET": "http://backend:8000/api/v1/health/ready?token=secret"},
-        {"WATCHDOG_INTERVAL_SECONDS": "0"}, {"WATCHDOG_INTERVAL_SECONDS": "3601"},
+        {"WATCHDOG_INTERVAL_SECONDS": "0"},
+        {"WATCHDOG_INTERVAL_SECONDS": "3601"},
         {"WATCHDOG_INTERVAL_SECONDS": "bad"},
     ):
         with pytest.raises(WatchdogDenied):
@@ -69,9 +71,9 @@ def test_requires_explicit_synthetic_opt_in_bounded_interval_and_internal_target
 
 
 def test_probe_requires_ready_database_and_current_revision_without_redirects():
-    healthy = json.dumps({
-        "status": "ready", "database": "connected", "schema_revision": SCHEMA_REVISION
-    }).encode()
+    healthy = json.dumps(
+        {"status": "ready", "database": "connected", "schema_revision": SCHEMA_REVISION}
+    ).encode()
     opener = Opener(Response(healthy))
     assert probe_readiness(TARGET, opener=opener) == "ready"
     assert opener.requests == [(TARGET, "GET", 3)]
@@ -80,20 +82,24 @@ def test_probe_requires_ready_database_and_current_revision_without_redirects():
         {"status": "alive", "database": "connected", "schema_revision": SCHEMA_REVISION},
         ["ready"],
     ):
-        assert probe_readiness(
-            TARGET, opener=Opener(Response(json.dumps(item).encode()))
-        ) == "degraded"
+        assert (
+            probe_readiness(TARGET, opener=Opener(Response(json.dumps(item).encode())))
+            == "degraded"
+        )
     assert probe_readiness(TARGET, opener=Opener(Response(b"invalid json"))) == "degraded"
-    assert probe_readiness(
-        TARGET, opener=Opener(Response(b"x" * (MAX_RESPONSE_BYTES + 1)))
-    ) == "degraded"
+    assert (
+        probe_readiness(TARGET, opener=Opener(Response(b"x" * (MAX_RESPONSE_BYTES + 1))))
+        == "degraded"
+    )
     for status in (302, 503):
-        assert probe_readiness(
-            TARGET, opener=Opener(HTTPError(TARGET, status, "not ready", {}, None))
-        ) == "degraded"
-    assert probe_readiness(
-        TARGET, opener=Opener(URLError("connection refused private host"))
-    ) == "unreachable"
+        assert (
+            probe_readiness(TARGET, opener=Opener(HTTPError(TARGET, status, "not ready", {}, None)))
+            == "degraded"
+        )
+    assert (
+        probe_readiness(TARGET, opener=Opener(URLError("connection refused private host")))
+        == "unreachable"
+    )
 
 
 def test_outage_recovery_emits_only_transition_states_without_private_details():
@@ -107,14 +113,18 @@ def test_outage_recovery_emits_only_transition_states_without_private_details():
         if iterations == 4:
             raise KeyboardInterrupt
 
-    assert monitor(
-        TARGET, 10, probe=lambda _: next(states), sleep=finish,
-        emit=records.append,
-    ) == 0
+    assert (
+        monitor(
+            TARGET,
+            10,
+            probe=lambda _: next(states),
+            sleep=finish,
+            emit=records.append,
+        )
+        == 0
+    )
     messages = [json.loads(line) for line in records]
-    assert [message["state"] for message in messages] == [
-        "unreachable", "degraded", "ready"
-    ]
+    assert [message["state"] for message in messages] == ["unreachable", "degraded", "ready"]
     assert all(set(message) == {"event", "state", "checked_at"} for message in messages)
     assert TARGET not in "".join(records)
     assert "connection refused" not in "".join(records)
@@ -122,9 +132,7 @@ def test_outage_recovery_emits_only_transition_states_without_private_details():
 
 def test_single_probe_exit_codes_and_disallowed_environment(capsys):
     assert monitor(TARGET, 30, once=True, probe=lambda _: "ready", emit=lambda _: None) == 0
-    assert (
-        monitor(TARGET, 30, once=True, probe=lambda _: "unreachable", emit=lambda _: None) == 1
-    )
+    assert monitor(TARGET, 30, once=True, probe=lambda _: "unreachable", emit=lambda _: None) == 1
     forbidden = {**ENV, "APP_ENV": "production"}
     assert main(["--once"], forbidden) == 2
     assert capsys.readouterr().out.strip() == '{"event":"synthetic_watchdog_disabled"}'

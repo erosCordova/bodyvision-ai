@@ -2,6 +2,7 @@
 
 No credentials, database access, patient data, request bodies or external URLs.
 """
+
 import argparse
 import json
 import os
@@ -15,10 +16,12 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 from app.db.session import SCHEMA_REVISION
 
 HEALTH_PATH = "/api/v1/health/ready"
-ALLOWED_TARGETS = frozenset({
-    "http://backend:8000" + HEALTH_PATH,
-    "http://127.0.0.1:8000" + HEALTH_PATH,
-})
+ALLOWED_TARGETS = frozenset(
+    {
+        "http://backend:8000" + HEALTH_PATH,
+        "http://127.0.0.1:8000" + HEALTH_PATH,
+    }
+)
 MAX_RESPONSE_BYTES = 4096
 
 
@@ -95,11 +98,16 @@ def monitor(
         if state not in {"ready", "degraded", "unreachable"}:
             state = "degraded"
         if state != previous:
-            emit(json.dumps({
-                "event": "synthetic_watchdog_transition",
-                "state": state,
-                "checked_at": datetime.now(UTC).isoformat(),
-            }, sort_keys=True))
+            emit(
+                json.dumps(
+                    {
+                        "event": "synthetic_watchdog_transition",
+                        "state": state,
+                        "checked_at": datetime.now(UTC).isoformat(),
+                    },
+                    sort_keys=True,
+                )
+            )
             previous = state
         if once:
             return 0 if state == "ready" else 1
