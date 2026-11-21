@@ -694,8 +694,9 @@ export function createAnatomyScene(
     ));
     controls.target.set(0, 0, 0);
     camera.position.set(0.35, 0.08, 1).normalize().multiplyScalar(distance);
+    // OrbitControls dispatches one synchronous change event for the new pose;
+    // an extra render() here doubles WebGL work on each camera reset.
     controls.update();
-    render();
   };
   const view = (type: "front" | "back" | "left" | "right") => {
     const dist = camera.position.distanceTo(controls.target);
@@ -705,16 +706,14 @@ export function createAnatomyScene(
       controls.target.y + 0.04 * dist,
       controls.target.z + Math.cos(angle) * dist,
     );
-    controls.update();
-    render();
+    controls.update(); // The change listener renders the updated camera once.
   };
   const zoom = (factor: number) => {
     const displacement = new THREE.Vector3().subVectors(camera.position, controls.target);
     displacement.multiplyScalar(factor);
     displacement.clampLength(controls.minDistance, controls.maxDistance);
     camera.position.copy(controls.target).add(displacement);
-    controls.update();
-    render();
+    controls.update(); // Do not render again after the change event.
   };
   const clearSelection = () => showSelection(null, null);
   const keyboard = (event: KeyboardEvent) => {
@@ -731,8 +730,7 @@ export function createAnatomyScene(
       spherical.phi = THREE.MathUtils.clamp(spherical.phi + pitch, 0.09, Math.PI - 0.09);
       camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
       camera.lookAt(controls.target);
-      controls.update();
-      render();
+      controls.update(); // Keyboard rotation is rendered by OrbitControls.
       return;
     }
     switch (event.key) {
