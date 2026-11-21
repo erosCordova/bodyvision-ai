@@ -13,7 +13,7 @@ import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTis
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
 import { recordRenderCpuSample, summarizeRenderCpuSamples } from "./renderCpuTiming";
-import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount } from "./geometryLod";
+import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount, shouldPrepareGeometryLod } from "./geometryLod";
 import { estimateRetainedGeometryMemory } from "./geometryMemory";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
 
@@ -199,7 +199,7 @@ export function createAnatomyScene(
   const settings = new Map<AnatomicalLayer, { visible: boolean; opacity: number }>();
   const assets = new Map<AnatomicalLayer, Set<THREE.Material>>();
   const meshOverlays = new Map<AnatomicalLayer, THREE.MeshBasicMaterial>();
-  type LodEntry = { high: THREE.BufferGeometry; low: THREE.BufferGeometry | null; state: "pending" | "building" | "ready" | "failed" };
+  type LodEntry = { layer: AnatomicalLayer; high: THREE.BufferGeometry; low: THREE.BufferGeometry | null; state: "pending" | "building" | "ready" | "failed" };
   // The high-fidelity geometry always remains available for detailed study and picking.
   const lodEntries = new Map<THREE.Mesh, LodEntry>();
   let lodTimer: number | null = null;
@@ -311,7 +311,8 @@ export function createAnatomyScene(
   const queueGeometryLod = () => {
     if (disposed || quality !== "fluida" || lodBusy || lodTimer !== null) return;
     const candidate = [...lodEntries].filter(([mesh, entry]) =>
-      entry.state === "pending" && mesh.visible,
+      shouldPrepareGeometryLod(true, settings.get(entry.layer)?.visible === true,
+        mesh.visible, entry.state === "pending"),
     ).sort((a, b) => triangleCount(b[1].high) - triangleCount(a[1].high))[0];
     if (!candidate) return;
     const [, entry] = candidate;
@@ -322,17 +323,22 @@ export function createAnatomyScene(
     lodTimer = window.setTimeout(() => {
       lodTimer = null;
       void (async () => {
-        if (disposed || quality !== "fluida") {
+        if (disposed || quality !== "fluida" || settings.get(entry.layer)?.visible !== true) {
           entry.state = "pending";
           return;
         }
         const { SimplifyModifier } = await import("three/addons/modifiers/SimplifyModifier.js");
         if (disposed) return;
+        if (settings.get(entry.layer)?.visible !== true) {
+          entry.state = "pending";
+          return;
+        }
         const simplified = await new SimplifyModifier().modify(
           entry.high, lodVerticesToRemove(entry.high),
         );
-        if (disposed) {
+        if (disposed || settings.get(entry.layer)?.visible !== true) {
           simplified.dispose();
+          entry.state = "pending";
           return;
         }
         if (isUsefulLod(entry.high, simplified)) {
@@ -608,7 +614,7 @@ export function createAnatomyScene(
         old.forEach(material => material.dispose());
         for (const node of originalMeshes) {
           if (!(node instanceof THREE.SkinnedMesh) && eligibleForGeometryLod(node.geometry)) {
-            lodEntries.set(node, { high: node.geometry, low: null, state: "pending" });
+            lodEntries.set(node, { layer, high: node.geometry, low: null, state: "pending" });
           }
         }
         assets.set(layer, new Set([...cached.values(), wireMaterial]));
