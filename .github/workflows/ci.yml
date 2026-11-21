@@ -221,6 +221,7 @@ jobs:
             -e POSTGRES_USER=postgres \
             -e POSTGRES_DB=bodyvision_recovered_ci \
             -e POSTGRES_HOST_AUTH_METHOD=scram-sha-256 \
+            -e 'POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=trust' \
             -e TZ=America/Lima \
             postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3 \
             > /dev/null
