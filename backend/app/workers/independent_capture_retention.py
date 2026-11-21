@@ -15,7 +15,7 @@ from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
-from app.workers.capture_retention import purge_due
+from app.workers.capture_retention import purge_due, purge_due_pose_summaries
 
 
 class IndependentRetentionDenied(ValueError):
@@ -54,7 +54,7 @@ def purge_independently(engine: Engine) -> int:
         role = connection.execute(text("SELECT current_user")).scalar_one()
         if role != "bodyvision_app":
             raise IndependentRetentionDenied("Rol de retención no autorizado.")
-    return purge_due(engine, batch_size=100, max_batches=10)
+    return purge_due(engine, batch_size=100, max_batches=10) + purge_due_pose_summaries(\n        engine, batch_size=100, max_batches=10\n    )
 
 
 def run_once(environment: Mapping[str, str]) -> int:
