@@ -41,3 +41,14 @@ export function isUsefulLod(original: BufferGeometry, simplified: BufferGeometry
     !!simplified.getAttribute("normal") === !!original.getAttribute("normal") &&
     !!simplified.getAttribute("uv") === !!original.getAttribute("uv");
 }
+
+
+/** Never spend CPU simplifying a hidden anatomical layer. */
+export function shouldPrepareGeometryLod(
+  fluidQuality: boolean,
+  layerVisible: boolean,
+  meshVisible: boolean,
+  pending: boolean,
+): boolean {
+  return fluidQuality && layerVisible && meshVisible && pending;
+}
