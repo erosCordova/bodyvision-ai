@@ -32,8 +32,10 @@ el proceso borra todos estos diagnósticos. No es un recuento exhaustivo de trá
 ni un histórico persistente.
 
 P95 usa rango más próximo. El tiempo termina al recibirse la respuesta interna
-de FastAPI e incluye el trabajo transaccional del endpoint; no mide descarga
-completa, red del usuario, GPU ni FPS. No se muestra cero cuando faltan muestras.
+de FastAPI e incluye el trabajo transaccional del endpoint; incluye esperas de E/S y lectura del cuerpo dentro del endpoint; no mide
+el RTT completo del usuario, la descarga completa, GPU ni FPS. No se muestra cero cuando faltan muestras.
+
+Procedimiento de atención: `docs/operations/PRIVATE_SERVICE_DIAGNOSTICS.md`.
 
 ## Avisos verificables
 
@@ -71,5 +73,19 @@ procesos, histórico, supervisión cuando la API no responda, alertas fuera de l
 aplicación, inventario/custodia, respaldos productivos y aceptación operativa.
 No demuestra carga concurrente de producción ni exactitud clínica.
 
-La estimación de avance se revisará solo después de aprobar la ejecución CI
-integral del nuevo código.
+## Cierre técnico comprobado
+
+[GitHub Actions 44841638430](https://github.com/erosCordova/bodyvision-ai/actions/runs/44841638430)
+aprobó `native-checks`, `windows-scripts` y `docker-smoke` sobre el commit
+`075a525a6e962042f4acc68eaf5ebbb9e944355a`. Hubo **203** pruebas backend,
+**238** frontend, **36** de navegador público y **7** privado: **484** de
+aplicación. La ejecución también verificó calidad, compilación, dependencias,
+migraciones, arranque Docker, restauración aislada y conservación de datos
+tras recrear contenedores. El recorrido administrativo consultó el diagnóstico
+real, comprobó el contrato sin identificadores y cerró la sesión.
+
+La estimación técnica manual de la Fase 9 pasa de **35 % a 45 %** por dos
+entregables: observabilidad privada acotada con avisos (5 puntos), y recepción
+del diagnóstico/recuperación con panel y procedimiento operativo (5 puntos).
+El promedio de diez fases pasa de 79,5 % a **80,5 %**, mostrado como **81 %**.
+No se alteran las otras fases ni se da por cerrado el criterio de producción.

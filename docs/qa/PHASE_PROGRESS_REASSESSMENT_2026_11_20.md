@@ -114,3 +114,23 @@ clínica ni preparación de producción. Los recorridos privados con cuentas
 compartidas se ejecutan secuencialmente tras observar un timeout de auditoría;
 las pruebas concurrentes del backend se mantienen y el rendimiento concurrente
 de producción sigue pendiente. Detalles en `PHASE_7_SERVER_COMPARISON_PDF.md`.
+
+
+## Fase 9: diagnóstico administrativo y atención de avisos locales
+
+Se incorporan dos entregables técnicos locales, cada uno evaluado manualmente
+en cinco puntos de fase: (1) muestras autenticadas por organización, acotadas y
+sin identificadores exportados, P95 y avisos; (2) diagnóstico de conexión/esquema
+y retención con recuperación, panel de administración y procedimiento de atención.
+La Fase 9 pasa de **35 % a 45 %** después de aprobar Windows, pruebas nativas y
+Docker en [CI 44841638430](https://github.com/erosCordova/bodyvision-ai/actions/runs/44841638430),
+commit `075a525a6e962042f4acc68eaf5ebbb9e944355a`. La ejecución aprobó 484 pruebas
+de aplicación, incluida la consulta real desde Administración y cierre de sesión.
+
+La suma de diez fases pasa de **795 a 805**: el promedio exacto es **80,5 %** y el
+valor visible redondeado **81 %**. Las otras fases no cambian. Los avisos son
+locales y manuales, la telemetría desaparece con el proceso y no observa una
+API que no pueda responder. La observabilidad centralizada/externa, notificaciones,
+seguridad, secretos, respaldos productivos y aceptación operativa siguen pendientes.
+Detalles en `docs/qa/PHASE_9_PRIVATE_OPERATIONS.md` y
+`docs/operations/PRIVATE_SERVICE_DIAGNOSTICS.md`. No se certifica producción.

@@ -51,9 +51,9 @@ export const phaseAssessment: ProjectPhase[] = [
     completed: "Peso/estatura sobre el mismo atlas 3D, deformación regional, malla, comparación histórica, PNG y versiones sintéticas inmutables en PostgreSQL. Paginación/CSV restringido, protección de versiones del motor, matriz matemática de 960 combinaciones y aviso de saturación del shader; batería Windows, Docker, backend y navegador aprobada en GitHub Actions 44823204295.",
     pending: "Evaluación morfológica independiente con referencias autorizadas, pruebas de GPU/teléfonos físicos, consentimientos y autorización real, evaluación clínica y operaciones seguras antes de desplegar. La matriz sintética no estima anatomía personal.",
     milestone: "Escenarios trazables sin sobrescribir observaciones." },
-  { id: 9, name: "Producción", progress: 35,
-    completed: "Despliegue de demostración, pipelines de compilación y pruebas con Docker. Restauración lógica de PostgreSQL 15 con datos sintéticos comprobada en base aislada: esquema y contenido tras el respaldo comparados en CI (run 44806178898, docker-smoke aprobado). Es una prueba técnica, no un respaldo operativo real.",
-    pending: "Secretos y rotación, observabilidad, alertas, respaldos productivos/PITR, cifrado y custodia de copias, política de retención, ensayos de RPO/RTO, revisión legal, privacidad y pruebas de seguridad.",
+  { id: 9, name: "Producción", progress: 45,
+    completed: "Despliegue de demostración, pipelines de compilación y pruebas con Docker. Restauración lógica de PostgreSQL 15 con datos sintéticos comprobada en base aislada: esquema y contenido tras el respaldo comparados en CI (run 44806178898, docker-smoke aprobado). Es una prueba técnica, no un respaldo operativo real. Diagnóstico administrativo por organización/proceso con muestra acotada, P95 y avisos; sondeo de esquema/conexión y estado de retención con recuperación; procedimiento de atención y pruebas completas aprobadas en CI 44841638430.",
+    pending: "Secretos y rotación, observabilidad externa centralizada y entre procesos, alertas fuera de la aplicación y supervisión cuando la API no responde, respaldos productivos/PITR, cifrado y custodia de copias, política de retención, ensayos de RPO/RTO, revisión legal, privacidad y pruebas de seguridad.",
     milestone: "Checklist de producción completado." },
 ];
 export const overallProgress = Math.round(phaseAssessment.reduce((sum, item) => sum + item.progress, 0) / phaseAssessment.length);
