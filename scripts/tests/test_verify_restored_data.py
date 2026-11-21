@@ -103,8 +103,9 @@ class RestoredDataTests(unittest.TestCase):
             nonlocal calls
             calls += 1
             if calls == 2:
-                with self.original.open("r+b") as stream:
-                    stream.seek(0)
+                # Size mutation is reliable across Windows and POSIX filesystems,
+                # including volumes with coarse timestamp resolution.
+                with self.original.open("ab") as stream:
                     stream.write(b"ALTERED!")
             return original_fstat(descriptor)
 
