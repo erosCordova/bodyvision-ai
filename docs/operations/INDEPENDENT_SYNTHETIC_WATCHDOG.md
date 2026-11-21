@@ -128,3 +128,17 @@ tiempo sin esperas para probar la transición a obsoleto, el límite de
 una fila, la falta de observaciones y los relojes inconsistentes.
 No hay notificaciones externas ni se detecta una caída de Docker,
 su red o el anfitrión. Sigue siendo un recurso local de laboratorio.
+
+
+## Cierre técnico de vigencia de sondeos
+
+La [CI 44926525791](https://github.com/erosCordova/bodyvision-ai/actions/runs/44926525791)
+concluyó con éxito en el commit
+`737d006b7d8681777d0d7ec49fa8e68380506fde`.
+Aprobó 255 pruebas de backend, 243 frontend, 36 públicas y 8 privadas,
+además de Windows y Docker. El ensayo Docker verificó la lectura de
+un `ready` recién observado desde un contenedor independiente.
+Las pruebas unitarias comprobaron que sin sondeos el estado sea
+`never_observed`, y que un `ready` antiguo se marque `stale`
+en lugar de atribuirle actualidad. El registro no es vigilancia
+externa ni un mecanismo de disponibilidad garantizada.

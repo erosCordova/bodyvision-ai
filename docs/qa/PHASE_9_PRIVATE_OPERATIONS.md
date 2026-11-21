@@ -151,3 +151,26 @@ observada, cronología inválida, acceso autorizado y diario corrupto.
 La Fase 9 queda en **60 %** por estimación técnica manual, con 84 %
 global tras redondeo. El reporte no sustituye supervisión fuera de Docker
 ni pruebas operativas reales.
+
+
+## Vigencia de observaciones del vigilante (Fase 9: 65 %)
+
+La tabla SQLite `watchdog_latest_probe` almacena únicamente un sondeo
+reciente —estado, fecha UTC e intervalo— y sustituye el valor anterior
+en cada comprobación. El modo local optativo `--status` diferencia
+`never_observed`, `recent`, `stale` y `clock_inconsistent`, sin
+consultar la API ni afirmar disponibilidad por un `ready` antiguo.
+No se publican endpoints ni datos de expedientes; el volumen permanece
+dentro del contenedor optativo de laboratorio.
+
+La [CI integral 44926525791](https://github.com/erosCordova/bodyvision-ai/actions/runs/44926525791)
+aprobó Windows, Docker, backend y frontend (542 pruebas de aplicación).
+Las pruebas unitarias comprueban caducidad lógica del estado ante el
+paso del tiempo, reloj invertido, estados/intervalos rechazados, una
+sola fila tras reinicio y sondeos repetidos sin duplicar transiciones.
+Docker comprueba el estado reciente desde otro contenedor al recuperar
+la API. El procedimiento no demuestra SLA ni observa el host apagado.
+
+Por alcance verificado, la Fase 9 pasa de 60 % a **65 %**, y el
+promedio global manual de diez fases pasa de 84,0 % a **84,5 %**,
+mostrado como **85 %** por redondeo.

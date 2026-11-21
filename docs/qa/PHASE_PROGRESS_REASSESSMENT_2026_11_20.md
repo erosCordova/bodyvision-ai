@@ -291,3 +291,43 @@ custodia del registro, monitoreo cuando Docker esté caído, ensayos
 productivos de recuperación, RPO/RTO, seguridad y aprobación legal.
 `main`, servicios alojados, el modelo 3D y los datos reales
 no se han alterado.
+
+
+## Fase 9: vigencia del último sondeo y detección de observaciones obsoletas
+
+Se registra un nuevo entregable operativo local y sintético, valorado
+manualmente en **5 puntos de fase**. El vigilante independiente conserva
+en SQLite el estado y hora UTC de **cada comprobación**, incluso si no cambia
+el estado del backend. Solo ocupa **una fila** en una tabla dedicada,
+separada del historial acotado de transiciones y sin datos de personas,
+secretos, URL ni cuerpos HTTP.
+
+La nueva consulta optativa `--status` distingue
+`never_observed`, `recent`, `stale` y `clock_inconsistent`.
+El umbral de vigencia es tres veces el intervalo configurado más cinco
+segundos. Una observación anterior no demuestra el estado actual de
+la API: la salida indica expresamente que se trata de la última
+observación local, no disponibilidad en vivo. Los relojes inconsistentes
+no producen una edad positiva ficticia.
+
+La [CI integral 44926525791](https://github.com/erosCordova/bodyvision-ai/actions/runs/44926525791)
+terminó con **success** sobre el commit
+`737d006b7d8681777d0d7ec49fa8e68380506fde`. Aprobaron Windows,
+native-checks y docker-smoke, con 255 pruebas backend, 243 frontend,
+36 de navegador público y 8 privado: **542 pruebas de aplicación**.
+La aceptación Docker interrogó `--status` desde un contenedor distinto
+tras la caída y recuperación simuladas, verificando la marca temporal
+reciente y la ausencia de estimaciones de disponibilidad. Las pruebas
+unitarias adelantaron el reloj artificialmente para verificar que
+el estado pasa a `stale` sin nuevos sondeos.
+
+La Fase 9 aumenta de **60 % a 65 %**; la suma de diez fases pasa
+de **840 a 845**. La media exacta pasa de **84,0 % a 84,5 %**, que
+el tablero redondea a **85 %**. Es una estimación técnica manual,
+no certificación clínica, disponibilidad ni aprobación de producción.
+
+**Pendientes:** supervisión fuera del host y Docker, notificaciones
+externas, telemetría centralizada entre procesos, custodia/cifrado de
+incidentes, respaldo y recuperación productivos, RPO/RTO, revisión
+operativa y de privacidad, seguridad y autorización de datos reales.
+No se modifica `main`, Render, Vercel, la base alojada ni el modelo 3D.
