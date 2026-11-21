@@ -194,6 +194,7 @@ export function createAnatomyScene(
   loader.setDRACOLoader(draco);
   const objects = new Map<AnatomicalLayer, THREE.Group>();
   const loading = new Set<AnatomicalLayer>();
+  const layerReadyMs: Partial<Record<AnatomicalLayer, number>> = {};
   const settings = new Map<AnatomicalLayer, { visible: boolean; opacity: number }>();
   const assets = new Map<AnatomicalLayer, Set<THREE.Material>>();
   const meshOverlays = new Map<AnatomicalLayer, THREE.MeshBasicMaterial>();
@@ -561,6 +562,7 @@ export function createAnatomyScene(
 
   const load = (layer: AnatomicalLayer) => {
     if (disposed || objects.has(layer) || loading.has(layer)) return;
+    const startedLoading = performance.now();
     loading.add(layer);
     onLayerState(layer, "loading");
     onStatus("Descargando " + (anatomicalLayers.find(item => item.id === layer)?.label || layer).toLowerCase() + "…");
@@ -615,6 +617,9 @@ export function createAnatomyScene(
         if (!fitted) frameBody();
         applyLayer(layer);
         render();
+        // Download + glTF/Draco decoding + CPU scene preparation and first
+        // WebGL submission. GPU completion is NOT included in this duration.
+        layerReadyMs[layer] = Math.round((performance.now() - startedLoading) * 100) / 100;
         queueGeometryLod();
         onStatus("Modelo anatómico preparado · selecciona una estructura");
         onLayerState(layer, "ready");
@@ -873,6 +878,7 @@ export function createAnatomyScene(
       textures: renderer.info.memory.textures,
       meshes,
       overlays,
+      layerReadyMs: { ...layerReadyMs },
     };
   };
   const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
