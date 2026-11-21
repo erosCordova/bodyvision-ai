@@ -40,6 +40,8 @@ error no imprimen respuestas privadas, SQL, claves, tokens ni DSN.
 El ensayo utiliza FastAPI TestClient y conexiones reales de PostgreSQL,
 sin SET ROLE ni motores de propietario inyectados en la aplicación.
 No es una prueba de frontend o HTTP por socket sobre el reemplazo.
+La ampliación posterior por HTTP y navegador se registra por separado
+en `PHASE_9_RECOVERED_HTTP_UI.md`.
 Los 22 segundos del bloque de reposición de este runner no son un RTO.
 El ensayo original de `56e4542` no incluía recuperación MFA;
 la ampliación posterior aceptada consta en `PHASE_9_RECOVERED_MFA.md`.

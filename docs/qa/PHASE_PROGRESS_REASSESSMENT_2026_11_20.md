@@ -480,3 +480,32 @@ La Fase 9 pasa de **80 % a 85 %**. La suma de diez fases pasa de
 técnica manual, no certificación de producción. Siguen pendientes
 frontend/HTTP real sobre el reemplazo, custodia productiva de secretos,
 copias externas, pérdida del host, PITR, RPO/RTO y revisiones independientes.
+
+## Fase 9: interfaz privada y HTTP real sobre la instancia restaurada
+
+Se acredita un entregable técnico de **5 puntos de fase**: la API y
+la interfaz privada local/test operan sobre PostgreSQL 15 restaurado,
+mientras la base original permanece detenida. Uvicorn y Vite comparten
+el espacio de red aislado del reemplazo; Chromium entra con el UID/GID
+del runner. No se publican puertos ni se habilita el acceso privado
+en el build público de producción.
+
+El recorrido usa HTTP real y formularios sin mocks: ingreso MFA,
+consulta de una medición, escritura de otra, logout y rechazo del token
+revocado, nuevo ingreso y consulta de la escritura persistida, y
+aislamiento de otra organización. Evidencias privadas y contextos de
+error quedan fuera de los artefactos publicados y se eliminan al terminar.
+
+La [CI integral 44942197913](https://github.com/erosCordova/bodyvision-ai/actions/runs/44942197913)
+aprobó `344ae817f8a51c110544267d8da12d9e83ebfdfa` en Windows,
+pruebas nativas y Docker: **565 pruebas nativas** (278 backend,
+243 frontend, 36 públicas y 8 privadas) y **un recorrido adicional
+de recuperación**, total **566 de aplicación**, más controles de scripts.
+Evidencia: `PHASE_9_RECOVERED_HTTP_UI.md`.
+
+La Fase 9 pasa de **85 % a 90 %**; la suma de diez fases de
+**865 a 870** y la media exacta de **86,5 % a 87,0 %**. El tablero
+permanece en **87 %** por redondeo. No se modifica ninguna otra fase.
+La valoración es técnica y manual. No cierra recuperación productiva
+de frontend/DNS/TLS fuera del host, custodia de secretos, copias externas,
+PITR, RPO/RTO ni revisiones independientes y recepción operativa real.

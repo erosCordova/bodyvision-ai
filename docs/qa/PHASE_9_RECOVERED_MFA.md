@@ -60,8 +60,9 @@ pasa de 860 a 865 y la media de **86,0 % a 86,5 %**; el tablero
 muestra **87 %** por redondeo. No se modifica la valoración de otras fases.
 
 Se mantienen los límites del laboratorio: FastAPI TestClient con
-conexiones LOGIN reales y roles limitados, sin HTTP por socket o
-frontend sobre el reemplazo. No demuestra custodia productiva de claves,
+conexiones LOGIN reales y roles limitados. La aceptación MFA aquí registrada
+no incluía frontend ni HTTP por socket; esa ampliación posterior consta
+en `PHASE_9_RECOVERED_HTTP_UI.md`. No demuestra custodia productiva de claves,
 recuperación sin contraseña/códigos/clave, revisión independiente de
 seguridad, PITR, pérdida del host ni un RPO/RTO. No se modifican bases
 alojadas, despliegues, el modelo 3D ni datos de personas.

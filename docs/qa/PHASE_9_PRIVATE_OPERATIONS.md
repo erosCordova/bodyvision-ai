@@ -255,3 +255,19 @@ visible como **87 %**. No se acredita custodia productiva, recuperación
 sin credenciales/claves, frontend o HTTP real sobre el reemplazo,
 infraestructura fuera del host ni RPO/RTO.
 Evidencia detallada: `PHASE_9_RECOVERED_MFA.md`.
+
+## Interfaz privada y HTTP real sobre el reemplazo (Fase 9: 90 %)
+
+La [CI integral 44942197913](https://github.com/erosCordova/bodyvision-ai/actions/runs/44942197913)
+aprobó Windows, pruebas nativas y Docker. Se aprobaron 565 pruebas
+nativas y un nuevo recorrido de interfaz recuperada: **566 de aplicación**.
+Chromium verifica ingreso MFA, consulta, escritura desde formulario,
+logout/revocación, reautenticación y lectura persistida, además de
+aislamiento entre organizaciones. La API y la interfaz local/test
+comparten la red aislada del PostgreSQL de reemplazo con el origen apagado.
+
+La Fase 9 sube de 85 % a **90 %**, media de 86,5 % a **87,0 %**;
+el tablero mantiene **87 %**. El acceso privado sigue bloqueado en
+builds de producción. No se acredita recuperación productiva de frontend,
+DNS/TLS, otro host, custodia de claves, PITR ni RPO/RTO.
+Procedimiento y límites: `PHASE_9_RECOVERED_HTTP_UI.md`.

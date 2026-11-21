@@ -348,6 +348,11 @@ Un reporter sanitizado emite solo estado y nombres estáticos de etapas;
 no muestra errores, valores de formularios, tokens ni respuestas HTTP.
 El trap destruye los contenedores y archivos privados ante éxito o fallo.
 
-Esta ampliación requiere aceptación en CI antes de acreditar progreso.
+Esta ampliación fue aceptada en la
+[CI integral 44942197913](https://github.com/erosCordova/bodyvision-ai/actions/runs/44942197913),
+commit `344ae817f8a51c110544267d8da12d9e83ebfdfa`: Windows,
+pruebas nativas y Docker aprobados. Se aprobaron 565 pruebas nativas y
+el recorrido adicional de interfaz recuperada (566 de aplicación).
+Evidencia y límites: `docs/qa/PHASE_9_RECOVERED_HTTP_UI.md`.
 Es una prueba de recuperación local/test y no demuestra recuperación
 del frontend productivo, DNS/TLS, otro host, custodia de secretos ni RPO/RTO.
