@@ -1,7 +1,14 @@
-import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
+import { PoseReview } from "../capture/PoseReview";
+import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
+import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { PrivateAccessPage } from "../access/PrivateAccessPage";
+import { PrivateAdministrationPage } from "../access/PrivateAdministrationPage";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
 function PageTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
@@ -37,25 +44,135 @@ export function MeasurementsPage() {
 }
 
 export function CapturePage() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStream = useRef<MediaStream | null>(null);
+  const cameraRequest = useRef(0);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
-  const [details, setDetails] = useState<{ width: number; height: number } | null>(null);
+  const [review, setReview] = useState<CaptureReview | null>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [validationError, setValidationError] = useState("");
+
+  const closeCamera = () => {
+    cameraRequest.current += 1;
+    cameraStream.current?.getTracks().forEach(track => track.stop());
+    cameraStream.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
+    setCameraReady(false);
+  };
   useEffect(() => {
-    if (!file) { setPreview(""); setDetails(null); return; }
+    return () => {
+      cameraRequest.current += 1;
+      cameraStream.current?.getTracks().forEach(track => track.stop());
+      cameraStream.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    if (!cameraOn || !videoRef.current || !cameraStream.current) return;
+    videoRef.current.srcObject = cameraStream.current;
+    void videoRef.current.play().catch(() => {
+      setValidationError("No se pudo mostrar la cámara. Comprueba los permisos.");
+    });
+  }, [cameraOn]);
+
+  const openCamera = async () => {
+    if (!consent) return;
+    setValidationError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setValidationError("Este navegador no permite la cámara. Usa una conexión HTTPS o localhost.");
+      return;
+    }
+    const pending = ++cameraRequest.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 1920 } },
+      });
+      if (pending !== cameraRequest.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      cameraStream.current = stream;
+      setCameraReady(false);
+      setCameraOn(true);
+    } catch {
+      if (pending === cameraRequest.current) {
+        setValidationError("No se pudo acceder a la cámara. Revisa el permiso y el dispositivo.");
+      }
+    }
+  };
+
+  const takePhoto = async () => {
+    const video = videoRef.current;
+    if (!video || !cameraReady || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement("canvas");
+    const factor = Math.min(1, 1920 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * factor);
+    canvas.height = Math.round(video.videoHeight * factor);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setValidationError("No se pudo preparar la fotografía.");
+      return;
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const photo = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.87));
+    if (!photo || photo.size > 10 * 1024 * 1024) {
+      setValidationError("No se pudo capturar la fotografía dentro del límite de 10 MB.");
+      return;
+    }
+    closeCamera();
+    setFile(new File([photo], "captura-local.jpg", { type: "image/jpeg" }));
+  };
+
+  useEffect(() => {
+    if (!file) {
+      setPreview("");
+      setReview(null);
+      setIsReviewing(false);
+      return;
+    }
+    let active = true;
     const url = URL.createObjectURL(file);
     setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    setIsReviewing(true);
+    setValidationError("");
+    void reviewLocalCapture(file)
+      .then(result => {
+        if (!active) return;
+        setReview(result);
+        setIsReviewing(false);
+      })
+      .catch(error => {
+        if (!active) return;
+        setReview(null);
+        setIsReviewing(false);
+        setFile(null);
+        setValidationError(error instanceof Error ? error.message : "La imagen no pudo revisarse.");
+      });
+    return () => { active = false; URL.revokeObjectURL(url); };
   }, [file]);
   const fileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0] ?? null;
-    setFile(next && next.type.startsWith("image/") && next.size <= 10 * 1024 * 1024 ? next : null);
+    closeCamera();
+    setValidationError("");
+    setReview(null);
+    if (next && !["image/jpeg", "image/png", "image/webp"].includes(next.type)) {
+      setFile(null);
+      setValidationError("Selecciona una imagen JPG, PNG o WebP.");
+    } else if (next && (next.size === 0 || next.size > 10 * 1024 * 1024)) {
+      setFile(null);
+      setValidationError("La imagen debe ocupar más de 0 bytes y menos de 10 MB.");
+    } else {
+      setFile(next);
+    }
     event.target.value = "";
   };
-  const imageWarning = details && (Math.min(details.width, details.height) < 720 ?
-    "Resolución baja para un análisis de pose fiable." : "Resolución suficiente para continuar con una validación técnica; aún no se evaluó la postura.");
   return <div className="enterprise-module">
-    <PageTitle eyebrow="CAPTURA GUIADA · PRIVACIDAD PRIMERO" title="Captura corporal" description="Prepara fotografías con postura, encuadre y luz uniformes. El documento exige consentimiento antes de almacenarlas o analizarlas."/>
+    <PageTitle eyebrow="CAPTURA GUIADA · PRIVACIDAD PRIMERO" title="Captura corporal" description="Selecciona una imagen ficticia o autorizada y revisa resolución, luz, contraste y orientación en tu navegador, sin cargarla al servidor."/>
     <div className="enterprise-capture-grid">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Guía de toma fotográfica</h2><span>ANTES DE PROCESAR</span></div>
@@ -65,42 +182,105 @@ export function CapturePage() {
           <article><span>03</span><div><h3>Iluminación y resolución</h3><p>Evita contraluz, sombras duras, filtros y recortes. Comprueba que pies, cabeza y extremidades estén dentro del encuadre.</p></div></article>
           <article><span>04</span><div><h3>Revisión y trazabilidad</h3><p>Asocia la captura a un expediente autorizado y conserva fuente, fecha, método y resultado de calidad.</p></div></article>
         </div>
-        <label className="enterprise-consent"><input type="checkbox" checked={consent} onChange={e => { setConsent(e.target.checked); if (!e.target.checked) setFile(null); }} />
+        <label className="enterprise-consent"><input type="checkbox" checked={consent} onChange={e => {
+          setConsent(e.target.checked);
+          if (!e.target.checked) {
+            closeCamera();
+            setFile(null);
+            setValidationError("");
+          }
+        }} />
           <span>Confirmo que utilizaré exclusivamente imágenes ficticias o expresamente autorizadas. En esta fase solo se previsualizarán en mi navegador.</span>
         </label>
         <label className={"enterprise-upload" + (consent ? "" : " disabled")}>
           <span>＋</span><strong>Seleccionar imagen para revisión local</strong><small>JPG, PNG o WebP · máximo 10 MB · sin subida al servidor</small>
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!consent} onChange={fileChange}/>
         </label>
+        <div className="enterprise-camera-controls">
+          {!cameraOn ? (
+            <button type="button" className="secondary-button" disabled={!consent}
+              onClick={() => void openCamera()}>Abrir cámara local</button>
+          ) : (
+            <div className="enterprise-camera-session">
+              <video ref={videoRef} playsInline muted autoPlay
+                aria-label="Vista en vivo de la cámara sin transmisión"
+                onLoadedMetadata={() => setCameraReady(true)} />
+              <p>La cámara funciona únicamente en este dispositivo; no se transmite video.</p>
+              <div className="enterprise-camera-buttons">
+                <button type="button" className="primary-button" disabled={!cameraReady}
+                  onClick={() => void takePhoto()}>Tomar fotografía</button>
+                <button type="button" className="secondary-button"
+                  onClick={closeCamera}>Cerrar cámara</button>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Vista previa de captura</h2>
         {preview && file ? <>
-          <img className="enterprise-capture-preview" src={preview} alt="Vista previa local de la imagen seleccionada" onLoad={e => setDetails({ width:e.currentTarget.naturalWidth,height:e.currentTarget.naturalHeight })}/>
+          <img className="enterprise-capture-preview" src={preview} alt="Vista previa local de la imagen seleccionada"/>
           <p className="enterprise-file-detail">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>
-          {details && <p className="enterprise-file-detail">{details.width} × {details.height} píxeles</p>}
-          {imageWarning && <p className="enterprise-quality-note">{imageWarning}</p>}
+          {isReviewing && <p role="status" className="enterprise-quality-note">Revisando la calidad localmente…</p>}
+          {validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
+          {review && <div className="enterprise-quality-review" role="region" aria-label="Resultados de calidad local">
+            <h3>Revisión automática de calidad</h3>
+            <p className="enterprise-file-detail">{review.width} × {review.height} px · Brillo {review.averageBrightness}/255 · Contraste {review.contrast}/128</p>
+            <p role="status" className="enterprise-quality-note">{review.passed
+              ? "Sin alertas técnicas básicas. La postura y la presencia de un cuerpo NO se han comprobado."
+              : "Se encontraron condiciones que conviene mejorar antes de una futura estimación de pose."}</p>
+            <ul>{review.checks.map(check => <li key={check.id}>
+              <strong>{check.passed ? "✓" : "!"} {check.label}</strong>
+              <span>{check.detail}</span>
+            </li>)}</ul>
+            <Link className="secondary-button" to="/analysis" state={{ localCaptureReview: review }}
+              onClick={() => stageCaptureForAnalysis(file, review)}>
+              Ver control de calidad en el módulo de análisis
+            </Link>
+          </div>}
+          {privateAuthEnabled() && review && <SyntheticCaptureArchive file={file} review={review}/>}
           <button className="secondary-button" onClick={() => setFile(null)}>Descartar imagen</button>
         </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>La vista previa aparecerá aquí sin enviar archivos a la API.</p></div>}
-        <Limitation>La subida privada, el registro de consentimiento y la validación automática de calidad aún requieren backend y control de acceso. No introduzcas fotografías médicas reales.</Limitation>
+        {!file && validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
+        <Limitation>La revisión de calidad y la IA de pose se ejecutan localmente y no permiten uso clínico. El archivo cifrado opcional admite exclusivamente PNG ficticios en modo privado de pruebas, con aceptaciones verificadas. No introduzcas fotografías médicas reales.</Limitation>
       </aside>
     </div>
   </div>;
 }
 
 export function AnalysisPage() {
+  const location = useLocation();
+  const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis());
+  useEffect(() => { discardStagedCapture(); }, []);
+  const state = location.state as { localCaptureReview?: CaptureReview } | null;
+  const localReview = localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
+    ? state.localCaptureReview : null);
   const stages = [
-    { name:"Autorización", detail:"Comprobación del expediente y consentimiento", status:"Pendiente de implementar" },
-    { name:"Control de calidad", detail:"Encuadre, resolución, iluminación y postura", status:"Pendiente de implementar" },
-    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker y coordenadas", status:"Pendiente de implementar" },
-    { name:"Revisión humana", detail:"Landmarks, versión del modelo y alertas de calidad", status:"Pendiente de implementar" },
+    { name:"Autorización", detail:"Verificación documental de consentimiento por expediente", status:"Pendiente para uso real" },
+    { name:"Control de calidad", detail:"Resolución, orientación, contraste e iluminación", status:"Revisión local disponible" },
+    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker con 33 landmarks posibles", status:"Local bajo demanda · requiere internet inicial" },
+    { name:"Revisión humana", detail:"Validación profesional de resultados y trazabilidad", status:"Pendiente para uso real" },
   ];
   return <div className="enterprise-module">
-    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="La documentación plantea identificar puntos de pose a partir de imágenes autorizadas, con control de calidad y resultados trazables."/>
+    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="Revisa capturas ficticias localmente con MediaPipe Pose Landmarker. La detección de 33 puntos es experimental y no genera mediciones clínicas."/>
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
-        <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>ESQUEMA EXPLICATIVO</span></div>
-        <div className="enterprise-pose-visual">
+        <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>{localCapture ? "IA LOCAL · RESULTADOS REALES" : "ESQUEMA EXPLICATIVO"}</span></div>
+        {localReview && <div className="enterprise-quality-review enterprise-review-handoff" role="region" aria-label="Control de calidad recibido">
+          <h3>Control técnico de la captura</h3>
+          <p>{localReview.width} × {localReview.height} px · {localReview.checks.filter(item => item.passed).length} de 4 criterios cumplidos.</p>
+          <ul>{localReview.checks.map(check => <li key={check.id}>
+            <strong>{check.passed ? "✓" : "!"} {check.label}</strong><span>{check.detail}</span>
+          </li>)}</ul>
+          <p className="enterprise-hint">La imagen permanece únicamente en la memoria de esta pestaña, sin subirse a la API ni guardarse en el historial del navegador. El control de calidad no confirma consentimiento clínico.</p>
+        </div>}
+        {localCapture && <>
+          <PoseReview file={localCapture.file} review={localCapture.review} />
+          <button type="button" className="secondary-button" onClick={() => setLocalCapture(null)}>
+            Descartar fotografía del análisis
+          </button>
+        </>}
+        {!localCapture && <div className="enterprise-pose-visual">
           <div className="enterprise-pose-model">
             <svg viewBox="0 0 220 360" aria-label="Esquema de puntos corporales, no resultado de inteligencia artificial" role="img">
               <g stroke="#70ebee" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -113,7 +293,7 @@ export function AnalysisPage() {
             <span>ILUSTRACIÓN · SIN DATOS DE PERSONAS</span>
           </div>
           <div><p className="enterprise-hint">Los colores y puntos son únicamente una referencia de interfaz. No se han detectado landmarks ni calculado composición corporal.</p><Link className="primary-button" to="/capture">Preparar captura ↗</Link></div>
-        </div>
+        </div>}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Flujo de análisis esperado</h2>
@@ -168,6 +348,7 @@ export function ReportsPage() {
   </div>;
 }
 export function AdministrationPage() {
+  if (privateAuthEnabled()) return <PrivateAdministrationPage />;
   return <div className="enterprise-module">
     <PageTitle eyebrow="GOBIERNO DE LA PLATAFORMA" title="Administración y seguridad" description="El documento exige roles, consentimiento, auditoría, retención, privacidad y controles de acceso antes de trabajar con datos reales."/>
     <div className="enterprise-admin-grid">
@@ -182,6 +363,7 @@ export function AdministrationPage() {
   </div>;
 }
 export function AccessPage() {
+  if (privateAuthEnabled()) return <PrivateAccessPage />;
   return <div className="enterprise-access">
     <div className="enterprise-access-art"><span>BODYVISION AI</span><h1>Un espacio profesional para explorar el cuerpo.</h1><p>Mediciones, visión anatómica y trazabilidad en una plataforma web.</p><div className="enterprise-access-orbit" aria-hidden="true">✧</div></div>
     <section className="enterprise-access-card"><span className="eyebrow">ACCESO PROFESIONAL</span><h2>Identificación de usuario</h2><p>La autenticación con usuarios y roles es un requisito crítico pendiente de implementar en el backend.</p>

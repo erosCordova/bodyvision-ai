@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../providers/WorkspaceProvider";
+import { privateAuthEnabled, usePrivateAuth } from "../providers/PrivateAuthProvider";
 import "../../styles/enterprise.css";
 
 const sections = [
@@ -17,11 +18,18 @@ const sections = [
 
 export function DataLayout() {
   const { id, setId, api, readOnly } = useWorkspace();
+  const { session, logout } = usePrivateAuth();
+  const protectedMode = privateAuthEnabled();
   const navigate = useNavigate();
   const location = useLocation();
-  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces });
+  const workspaces = useQuery({
+    queryKey: ["workspaces", protectedMode ? session?.user_id : "demo"],
+    queryFn: api.workspaces,
+    enabled: !protectedMode || Boolean(session),
+  });
   const current = sections.find(section => section.route === location.pathname) ||
-    (location.pathname.startsWith("/profiles/") ? sections[1] : sections[0]);
+    (location.pathname.startsWith("/profiles/") ? sections[2] : sections[0]);
+  if (protectedMode && !session) return <Navigate to="/access" replace />;
   return (
     <div className="data-shell enterprise-shell">
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
@@ -44,7 +52,7 @@ export function DataLayout() {
           <div className="enterprise-workspace-hint">
             <span className="enterprise-demo-dot" />
             <strong>ENTORNO FICTICIO</strong>
-            <small>{readOnly ? "Consulta de demostración" : "Operación local de prueba"}</small>
+            <small>{protectedMode ? "Sesión privada de pruebas" : readOnly ? "Consulta de demostración" : "Operación local de prueba"}</small>
           </div>
           <Link to="/access" className="enterprise-security-link">♙ Acceso y seguridad</Link>
           <p>Los datos médicos reales requieren autenticación, autorización y consentimiento.</p>
@@ -59,20 +67,29 @@ export function DataLayout() {
               <span className="sr-only">Organización ficticia</span>
               <select aria-label="Organización ficticia" value={id}
                 onChange={event => { setId(event.target.value); navigate("/"); }}
-                disabled={!workspaces.data}>
+                disabled={protectedMode || !workspaces.data}>
                 {!workspaces.data?.items.some(w => w.id === id) && (
                   <option value={id} hidden>{workspaces.isError ? "Sin conexión" : "Cargando…"}</option>
                 )}
                 {workspaces.data?.items.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </label>
-            <div className="enterprise-avatar" aria-label="Operador de demostración">BV</div>
+            {protectedMode && session && (
+              <button type="button" className="enterprise-logout-button"
+                onClick={() => { void logout().then(revoked => navigate(revoked ? "/access" : "/access?logout=unconfirmed", { replace: true })); }}>
+                Cerrar sesión
+              </button>
+            )}
+            <div className="enterprise-avatar"
+              aria-label={protectedMode ? "Identidad verificada de pruebas" : "Operador de demostración"}>
+              {protectedMode ? "ID" : "BV"}
+            </div>
           </div>
         </header>
         <div className="enterprise-demo-banner">
-          <strong>{readOnly ? "DEMOSTRACIÓN · SOLO LECTURA" : "DATOS FICTICIOS DE DESARROLLO"}</strong>
+          <strong>{protectedMode ? "PRUEBAS CON SESIÓN VERIFICADA · DATOS FICTICIOS" : readOnly ? "DEMOSTRACIÓN · SOLO LECTURA" : "DATOS FICTICIOS DE DESARROLLO"}</strong>
           <span>
-            {readOnly ? "Información sintética. Sin acceso a pacientes reales ni procesamiento de imágenes." :
+            {protectedMode ? "El acceso depende de tu usuario y permisos por expediente. No utilices información real." : readOnly ? "Información sintética. Sin acceso a pacientes reales ni procesamiento de imágenes." :
               "Se usan datos sintéticos: no introduzcas información de personas reales."}
           </span>
           {workspaces.isError && <button onClick={() => void workspaces.refetch()}>Reintentar conexión</button>}
@@ -82,7 +99,7 @@ export function DataLayout() {
         </main>
         <footer className="enterprise-footer">
           <span>© BODYVISION AI · Plataforma de referencia</span>
-          <span>No es un dispositivo médico. Autenticación y privacidad: implementación pendiente.</span>
+          <span>{protectedMode ? "Acceso privado solo para pruebas. Uso médico no autorizado." : "No es un dispositivo médico. Autenticación y privacidad: implementación pendiente."}</span>
         </footer>
       </div>
     </div>

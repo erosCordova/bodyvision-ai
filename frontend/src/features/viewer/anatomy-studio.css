@@ -73,8 +73,11 @@
   display: grid; flex: 1; min-height: 740px;
   height: calc(100vh - 110px);
   grid-template-columns: 266px minmax(350px, 1fr) 325px;
+  /* Do not let the long simulation form enlarge the WebGL viewport.
+     Its contents belong to the independently scrolling right sidebar. */
+  grid-template-rows: minmax(0, 1fr);
 }
-.studio-left { background: #0d1b2d; border-right: 1px solid #29435c; padding: 27px 19px; overflow-y: auto; }
+.studio-left { min-height: 0; background: #0d1b2d; border-right: 1px solid #29435c; padding: 27px 19px; overflow-y: auto; }
 .studio-left-title { padding: 0 7px 22px; }
 .studio-left-title p, .studio-eyebrow {
   color: #7dcce9; font-size: 9px; letter-spacing: .17em; font-weight: 750; margin: 0 0 12px;
@@ -161,7 +164,7 @@
 .studio-dock button { padding: 9px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #b3ccdf; font-size: 10px; }
 .studio-dock button.active, .studio-dock button[aria-pressed=true] { background: #2b5775; color: #f5fcff; border-color: #5087a5; }
 .studio-dock button:hover:not(:disabled) { background: #284a65; }
-.studio-right { background: #101e31; border-left: 1px solid #29435c; display: flex; flex-direction: column; min-width: 0; }
+.studio-right { min-height: 0; background: #101e31; border-left: 1px solid #29435c; display: flex; flex-direction: column; min-width: 0; }
 .studio-right-head { display: grid; gap: 8px; padding: 27px 23px 22px; }
 .studio-right-head span { font-size: 9px; font-weight: 750; letter-spacing: .15em; color: #79c8e5; }
 .studio-right-head strong { font-size: 19px; letter-spacing: -.03em; }
@@ -248,7 +251,7 @@
   .studio-header { grid-template-columns: auto minmax(130px,1fr) auto; padding: 10px 12px; }
   .studio-brand small { display: none; }
   .studio-header-actions .studio-to-dashboard { display: none; }
-  .studio-main { grid-template-columns: 225px minmax(320px,1fr); }
+  .studio-main { height: auto; min-height: 0; flex: none; grid-template-columns: 225px minmax(320px,1fr); grid-template-rows: 740px auto; }
   .studio-right { grid-column: 1 / -1; border-top: 1px solid #29435c; border-left: 0; }
   .studio-right-content { max-height: 550px; }
 }
@@ -308,6 +311,14 @@
 .studio-sim-slider input{width:100%;accent-color:#4bcfe8;cursor:pointer}
 .studio-sim-limits{display:flex;justify-content:space-between;gap:6px}
 .studio-sim-limits small{font-size:9px;color:#91b8ce;line-height:1.5}
+.studio-sim-presets{display:grid;gap:9px;padding:12px;border:1px solid #3b617b;border-radius:10px;background:#17344d}
+.studio-sim-presets>span{color:#c9dced;font-size:11px;font-weight:700}
+.studio-sim-presets small{color:#abc4d8;font-size:10px;line-height:1.5}
+.studio-sim-preset-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.studio-sim-preset-buttons button{min-width:0;padding:10px 5px;border:1px solid #46768d;border-radius:7px;background:#214a63;color:#e0f5fd;font-size:10px;line-height:1.4;cursor:pointer}
+.studio-sim-preset-buttons button[aria-pressed="true"]{background:#28678b;border-color:#8ad9f4;outline:1px solid #8ad9f4}
+.studio-sim-preset-buttons button:focus-visible{outline:2px solid #bdeeff;outline-offset:2px}
+@media(max-width:420px){.studio-sim-preset-buttons{grid-template-columns:1fr}}
 .studio-sim-state{display:flex;align-items:start;gap:12px;background:#18334c;border:1px solid #375775;border-radius:11px;padding:14px}
 .studio-sim-state-icon{font-size:26px;color:#84e0f0;line-height:1}
 .studio-sim-state strong{color:#d8effd;font-size:11px}
@@ -340,3 +351,141 @@
 .studio-sim-no-skin p{font-size:11px;line-height:1.6;margin:0 0 10px}
 .studio-sim-no-skin button{font-size:11px;padding:9px 11px;background:#3c5274;color:#eff9ff;border:1px solid #6387a8;border-radius:8px}
 .studio-sim-no-skin button:hover{background:#506c96}
+
+/* Inspect real GPU draw counts without overlaying a constantly updating FPS counter. */
+.studio-render-info{position:absolute;z-index:6;right:18px;top:105px;width:min(290px,calc(100% - 36px));display:grid;gap:7px;padding:14px;background:#0a1d30f2;border:1px solid #5e93b3;border-radius:12px;box-shadow:0 16px 42px #010d20ac;color:#dceefa;font-size:11px}
+.studio-render-info strong{font-size:12px;color:#e9f9ff}
+.studio-render-info small{color:#9ebdd2;font-size:10px;line-height:1.45}
+.studio-render-info button{justify-self:start;border:1px solid #537894;border-radius:7px;background:#193c55;color:#e0f5ff;padding:6px 11px}
+@media(max-width:700px){.studio-render-info{right:12px;top:90px;width:min(260px,calc(100% - 24px));font-size:10px}}
+
+/* Keyboard navigable 3D canvas, without changing its responsive geometry. */
+.studio-canvas canvas:focus-visible {
+  outline: 3px solid #75ddf4;
+  outline-offset: -5px;
+}
+
+/* The comparison renders the same anatomical mesh twice through WebGL scissors,
+   with fixed reference and scenario labels; it is NOT two independent 3D avatars. */
+.studio-compare{position:absolute;inset:0;z-index:2;pointer-events:none;color:#eaf9ff}
+.studio-compare-divider{position:absolute;top:0;bottom:0;border-left:2px solid #8ae7fa;box-shadow:0 0 0 1px #071b2b,0 0 17px #63ceecaa}
+.studio-compare-before,.studio-compare-after{position:absolute;top:110px;padding:8px 10px;background:#092139dd;border:1px solid #52849d;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:.02em;max-width:44%;text-align:center}
+.studio-compare-before{left:16px}
+.studio-compare-after{right:16px}
+.studio-compare-caption{position:absolute;left:50%;transform:translateX(-50%);bottom:167px;white-space:normal;width:max-content;max-width:85%;text-align:center;font-size:10px;background:#10283bdc;padding:6px 12px;border-radius:9px;color:#d6edf8}
+.studio-comparison-control{margin-top:14px;border:1px solid #4c7893;border-radius:10px;padding:12px;background:#102940}
+.studio-comparison-control small{color:#c2d9e5;font-size:10px;line-height:1.5}
+@media(max-width:700px){
+ .studio-compare-before,.studio-compare-after{top:91px;font-size:8px;padding:7px;max-width:43%}
+ .studio-compare-before{left:9px}
+ .studio-compare-after{right:9px}
+ .studio-compare-caption{bottom:155px;font-size:9px}
+}
+
+
+/* Append-only synthetic scenario archive remains within the existing 3D simulator. */
+.studio-scenario-history {
+  display: grid;
+  gap: 13px;
+  border: 1px solid #42647f;
+  border-radius: 13px;
+  background: #10263b;
+  padding: 16px;
+  min-width: 0;
+}
+.studio-scenario-history-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.studio-scenario-history-head h3 { font-size: 15px; margin: 0; line-height: 1.4; }
+.studio-scenario-history-head .data-badge { flex-shrink: 0; }
+.studio-scenario-history p { font-size: 11px; color: #aec9dc; line-height: 1.6; margin: 0; }
+.studio-scenario-history .studio-sim-number select {
+  width: 100%; min-width: 0; border: 1px solid #4b6886; border-radius: 8px;
+  background: #132b43; color: #eaf8ff; padding: 11px 8px; font-size: 12px;
+}
+.studio-scenario-history .studio-sim-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.studio-scenario-history .studio-sim-success {
+  color: #b5f0da; border-left: 2px solid #78c6aa; background: #14342f;
+  padding: 10px 12px; border-radius: 6px;
+}
+.studio-scenario-records { display: grid; gap: 10px; min-width: 0; }
+.studio-scenario-records h4 { margin: 0; font-size: 12px; }
+.studio-scenario-records ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.studio-scenario-records li {
+  display: grid; gap: 9px; padding: 11px; background: #18334a;
+  border: 1px solid #365975; border-radius: 10px; min-width: 0;
+}
+.studio-scenario-records li > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.studio-scenario-records li strong { font-size: 11px; color: #e0f4fc; }
+.studio-scenario-records li span,.studio-scenario-records li small {
+  font-size: 10px; color: #b7cfe0; overflow-wrap: anywhere;
+}
+.studio-scenario-row-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.studio-scenario-row-actions button {
+  font-size: 11px; color: #eaf7ff; background: #204c67;
+  border: 1px solid #5a87a0; border-radius: 8px; padding: 9px 10px;
+}
+.studio-scenario-history :is(button,select,input):focus-visible {
+  outline: 2px solid #8ce4ff; outline-offset: 2px;
+}
+
+/* Desktop viewer must be a viewport-height application, not an auto-height
+   flex column. Without a definite parent height, the very long simulation
+   sidebar gives the CSS grid an auto block size (~2455px in Playwright).
+   A scrollable right panel and bounded WebGL canvas are essential for the
+   800px-min / 2.4-Mpixel-max synthetic capture contract. */
+@media (min-width: 1051px) {
+  .studio-root {
+    height: 100dvh;
+    min-height: 720px;
+  }
+  .studio-main {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .studio-viewport {
+    min-height: 0;
+  }
+  .studio-right {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .studio-right-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Explicit, accessible paging of a synthetic and immutable scenario archive. */
+.studio-scenario-page-toolbar,.studio-scenario-pagination{
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:9px;
+}
+.studio-scenario-page-toolbar span{font-size:10px;color:#bcd8e9}
+.studio-scenario-page-toolbar button,.studio-scenario-pagination button{
+  padding:8px 10px;background:#204b65;color:#eaf8ff;border:1px solid #5e94b0;
+  border-radius:8px;font-size:11px
+}
+.studio-scenario-page-toolbar button:disabled,.studio-scenario-pagination button:disabled{
+  cursor:not-allowed;opacity:.45
+}
+.studio-scenario-pagination{border-top:1px solid #45647b;padding-top:11px}
+
+/* Version-chain actions use the same read-only synthetic scenarios shown
+   in the archive. Each historical version stays immutable in PostgreSQL. */
+.studio-scenario-chain-row{display:grid;gap:9px;padding:10px 0;border-bottom:1px solid #36546b}
+.studio-scenario-chain-row>div:first-child{display:grid;gap:3px}
+.studio-scenario-chain-row strong{font-size:11px;color:#eaf5fc}
+.studio-scenario-chain-row span{font-size:10px;color:#b1cfe2}
+.studio-scenario-chain-row .studio-scenario-row-actions{display:flex;flex-wrap:wrap;gap:7px}
+.studio-scenario-chain-row button[aria-pressed="true"]{outline:2px solid #8bdcf0;outline-offset:1px}
+.studio-compare-delta{position:absolute;bottom:42px;left:50%;transform:translateX(-50%);
+  background:#142d43df;color:#effaff;border:1px solid #5b91b1;border-radius:7px;
+  padding:6px 10px;font-size:10px;white-space:nowrap;max-width:96%;overflow:hidden;text-overflow:ellipsis}
+
+/* Warn visibly when the existing synthetic shader reaches its geometric clamp.
+   This does not imply a physiological or clinical limit. */
+.studio-sim-warning{padding:10px 12px;border:1px solid #b98742;
+  background:#241f1c;color:#f7dfaf;border-radius:8px;font-size:11px;
+  line-height:1.55;margin:8px 0}

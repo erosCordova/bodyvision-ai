@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
 
 from app.core.config import Settings
+from app.db.session import SCHEMA_REVISION
 from app.main import create_app
 
 
@@ -22,7 +23,7 @@ def test_actual_database_has_revision(database_url):
     try:
         with engine.connect() as conn:
             assert conn.execute(text("SELECT revision FROM system_schema_state")).scalar_one() == (
-                "0002_data_core"
+                SCHEMA_REVISION
             )
             assert conn.execute(text("SHOW server_version_num")).scalar_one().startswith("15")
     finally:

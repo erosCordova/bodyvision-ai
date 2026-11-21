@@ -1,9 +1,15 @@
+import { Navigate } from "react-router-dom";
+import { privateAuthEnabled, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
 import { AnatomyAtlas } from "./AnatomyAtlas";
 
-/** BODYVISION's immersive anatomical atlas replaces the earlier dual-view demo.
- * Legacy surface experimentation remains outside the navigation and can be
- * recovered from Git history if a separate parametric body is needed later.
+/** Immersive anatomical atlas; the original selected 3D avatar is retained.
+ * Private test mode requires a verified session before mounting any viewer
+ * queries, while the public synthetic demo remains readable.
  */
 export function BodyWorkspace() {
+  const { session } = usePrivateAuth();
+  if (privateAuthEnabled() && !session) {
+    return <Navigate to="/access" replace />;
+  }
   return <AnatomyAtlas />;
 }

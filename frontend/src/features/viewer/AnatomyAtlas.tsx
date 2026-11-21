@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
+import { dateTime } from "../../components/ui/States";
+import { Link, useNavigate } from "react-router-dom";
 import {
   anatomicalLayers, createAnatomyScene,
   type AnatomicalLayer, type LayerOpacity, type RenderMode,
   type SceneQuality, type SelectedStructure, type LayerState,
 } from "./AnatomyScene";
-import { anatomySource } from "./atlasSource";
+import { anatomyRevision, anatomySource } from "./atlasSource";
 import { bodyVolumeScenario } from "./bodyVolume";
+import { BASELINE_HEIGHT_CM } from "./bodyStature";
+import { preferredAtlasQuality } from "./renderBudget";
+import { reviewLocalCapture } from "../capture/captureQuality";
+import { stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { anatomyNameKey } from "./anatomyNames";
+import { buildSyntheticScenarioCsv } from "./scenarioCsv";
+import { sampledMorphClamping } from "./morphLimits";
+import { scenarioCompatibilityReason } from "./scenarioCompatibility";
 import "./anatomy-studio.css";
 
 type AtlasController = ReturnType<typeof createAnatomyScene>;
@@ -113,25 +124,117 @@ function findFromMesh(entries: AtlasEntry[], part: SelectedStructure | null) {
 }
 
 export function AnatomyAtlas() {
+  const navigate = useNavigate();
+  const { id: workspaceId, api, readOnly } = useWorkspace();
+  const queryClient = useQueryClient();
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<AtlasController | null>(null);
+  const [panel, setPanel] = useState<Panel>(() => new URLSearchParams(window.location.search).get("panel") === "simulacion" ? "simulacion" : "informacion");
   const [visible, setVisible] = useState<AnatomicalLayer[]>(["skin"]);
   const [opacity, setOpacity] = useState<LayerOpacity>({ ...initialOpacity });
   const [mode, setMode] = useState<RenderMode>("realista");
   const [meshOverlay, setMeshOverlay] = useState(false);
   const [referenceKg, setReferenceKg] = useState(70);
   const [weightVariation, setWeightVariation] = useState(0);
+  const [statureCm, setStatureCm] = useState(BASELINE_HEIGHT_CM);
   const [baselinePreview, setBaselinePreview] = useState(false);
-  const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number } | null>(null);
+  const [comparison, setComparison] = useState(false);
+  const [comparisonDivider, setComparisonDivider] = useState(50);
+  const [historicalBaseline, setHistoricalBaseline] = useState<{
+    id: string; version: number; reference_kg: number; variation_percent: number;
+    stature_cm: number; simulated_kg: number;
+  } | null>(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [captureError, setCaptureError] = useState("");
+  const [savedScenario, setSavedScenario] = useState<{ baseKg: number; delta: number; statureCm: number } | null>(null);
+  const [scenarioProfileId, setScenarioProfileId] = useState(
+    () => new URLSearchParams(window.location.search).get("profile") ?? "",
+  );
+  const [scenarioParentId, setScenarioParentId] = useState("");
+  const [scenarioRevisionNote, setScenarioRevisionNote] = useState("");
+  const [scenarioVersionId, setScenarioVersionId] = useState("");
+  const [scenarioOffset, setScenarioOffset] = useState(0);
+  const [scenarioExportError, setScenarioExportError] = useState("");
+  const [scenarioCompatibilityError, setScenarioCompatibilityError] = useState("");
+  const [scenarioNotice, setScenarioNotice] = useState("");
+  const syntheticProfiles = useQuery({
+    queryKey: ["simulation-profile-options", workspaceId],
+    queryFn: () => api.profiles("", 0),
+    enabled: panel === "simulacion",
+  });
+  const linkedProfile = useQuery({
+    queryKey: ["simulation-linked-profile", workspaceId, scenarioProfileId],
+    queryFn: () => api.profile(scenarioProfileId),
+    enabled: panel === "simulacion" && !!scenarioProfileId,
+  });
+  const scenarioHistory = useQuery({
+    queryKey: ["simulation-history", workspaceId, scenarioProfileId, scenarioOffset],
+    queryFn: () => api.scenarios(scenarioProfileId, scenarioOffset),
+    enabled: panel === "simulacion" && !!scenarioProfileId,
+  });
+  const scenarioVersions = useQuery({
+    queryKey: ["simulation-versions", workspaceId, scenarioProfileId, scenarioVersionId],
+    queryFn: () => api.scenarioVersions(scenarioProfileId, scenarioVersionId),
+    enabled: panel === "simulacion" && !!scenarioProfileId && !!scenarioVersionId,
+  });
+  const saveVersion = useMutation({
+    mutationFn: () => api.saveScenario(scenarioProfileId, {
+      reference_kg: referenceKg,
+      variation_percent: weightVariation,
+      stature_cm: statureCm,
+      ...(scenarioParentId ? {
+        prior_version_id: scenarioParentId,
+        revision_note: scenarioRevisionNote.trim(),
+      } : {}),
+    }, crypto.randomUUID()),
+    onSuccess: async scenario => {
+      setScenarioParentId(scenario.id);
+      setScenarioOffset(0);
+      setScenarioRevisionNote("");
+      setScenarioNotice(`Versión ${scenario.version} registrada como SIMULADO. Las mediciones observadas no se modificaron.`);
+      await queryClient.invalidateQueries({ queryKey: ["simulation-history", workspaceId, scenarioProfileId] });
+      await queryClient.invalidateQueries({ queryKey: ["simulation-versions", workspaceId, scenarioProfileId] });
+    },
+  });
+  const downloadScenarioPage = () => {
+    const page = scenarioHistory.data;
+    if (!page || page.items.length === 0 || scenarioHistory.isFetching) return;
+    setScenarioExportError("");
+    let url: string | null = null;
+    try {
+      const csv = buildSyntheticScenarioCsv(page.items);
+      url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bodyvision-escenarios-simulados-pagina.csv";
+      link.click();
+      const finishedUrl = url;
+      window.setTimeout(() => URL.revokeObjectURL(finishedUrl), 1500);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      setScenarioExportError("No se pudo generar el CSV de escenarios sintéticos.");
+    }
+  };
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
-  const [quality, setQuality] = useState<SceneQuality>("alta");
+  const morphClamping = useMemo(
+    () => sampledMorphClamping(referenceKg, weightVariation),
+    [referenceKg, weightVariation],
+  );
+  const [qualityPreference, setQualityPreference] = useState<SceneQuality | "auto">("auto");
+  const [recommendedQuality, setRecommendedQuality] = useState<SceneQuality>(() => preferredAtlasQuality(
+    window.innerWidth,
+    window.matchMedia("(pointer: coarse)").matches,
+    (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+  ));
+  const quality = qualityPreference === "auto" ? recommendedQuality : qualityPreference;
+  const [renderStats, setRenderStats] = useState<ReturnType<AtlasController["getPerformanceStats"]> | null>(null);
+  const diagnosticsOpen = renderStats !== null;
   const [spin, setSpin] = useState(false);
   const [isolated, setIsolated] = useState(false);
   const [showMarker, setShowMarker] = useState(true);
   const [selected, setSelected] = useState<SelectedStructure | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<AtlasEntry | null>(null);
-  const [panel, setPanel] = useState<Panel>(() => new URLSearchParams(window.location.search).get("panel") === "simulacion" ? "simulacion" : "informacion");
   const [search, setSearch] = useState("");
   const [entries, setEntries] = useState<AtlasEntry[]>([]);
   const [contentReady, setContentReady] = useState(false);
@@ -145,6 +248,19 @@ export function AnatomyAtlas() {
   const [voice, setVoice] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const pointer = window.matchMedia("(pointer: coarse)");
+    const refresh = () => setRecommendedQuality(preferredAtlasQuality(
+      window.innerWidth, pointer.matches,
+      (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+    ));
+    window.addEventListener("resize", refresh);
+    pointer.addEventListener("change", refresh);
+    return () => {
+      window.removeEventListener("resize", refresh);
+      pointer.removeEventListener("change", refresh);
+    };
+  }, []);
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => { setReducedMotion(query.matches); if (query.matches) setSpin(false); };
@@ -196,8 +312,23 @@ export function AnatomyAtlas() {
   useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
   useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
-  useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation), [weightVariation, baselinePreview, restart]);
+  useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation, referenceKg), [weightVariation, referenceKg, baselinePreview, restart]);
+  useEffect(() => controller.current?.setStature(baselinePreview ? BASELINE_HEIGHT_CM : statureCm), [statureCm, baselinePreview, restart]);
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
+  useEffect(() => controller.current?.setComparisonBaseline(historicalBaseline ? {
+    referenceKg: historicalBaseline.reference_kg,
+    variationPercent: historicalBaseline.variation_percent,
+    statureCm: historicalBaseline.stature_cm,
+  } : null), [historicalBaseline, restart]);
+  useEffect(() => controller.current?.setComparison(comparison, comparisonDivider), [comparison, comparisonDivider, restart]);
+  useEffect(() => {
+    if (!diagnosticsOpen) return;
+    // Reading counters does not draw another frame or create an animation loop.
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setRenderStats(controller.current?.getPerformanceStats() ?? null);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [diagnosticsOpen, restart]);
   useEffect(() => {
     const changed = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", changed);
@@ -205,6 +336,25 @@ export function AnatomyAtlas() {
   }, []);
 
   const identified = useMemo(() => findFromMesh(entries, selected) || selectedEntry, [entries, selected, selectedEntry]);
+  const downloadRenderStats = () => {
+    const stats = controller.current?.getPerformanceStats();
+    if (!stats) return;
+    // Explicit allowlist: no image, profile, weight, height or device fingerprint.
+    const report = {
+      schemaVersion: 1,
+      anatomyRevision,
+      capturedAt: new Date().toISOString(),
+      ...stats,
+      timingScope: "CPU command submission only; excludes GPU completion, FPS and clinical assessment",
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "bodyvision-render-diagnostics.json";
+    link.click();
+    // Leave time for the browser to acquire the download before releasing it.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const results = useMemo(() => search.trim().length < 2 ? [] : entries
     .filter(entry => matches(entry, search)).slice(0, 9), [search, entries]);
   const runningTour = tour && tours.find(item => item.id === tour.id);
@@ -291,11 +441,119 @@ export function AnatomyAtlas() {
     if (mode === "holograma") setMode("realista");
     setMeshOverlay(value => !value);
   };
+  const fixHistoricalReference = (row: {
+    id: string; version: number; reference_kg: number; variation_percent: number;
+    stature_cm: number; simulated_kg: number; model_revision: string;
+    algorithm_revision: string; data_type: "SIMULADO";
+  }) => {
+    const reason = scenarioCompatibilityReason(row);
+    if (reason) { setScenarioCompatibilityError(reason); return; }
+    setScenarioCompatibilityError("");
+    setHistoricalBaseline({
+      id: row.id, version: row.version,
+      reference_kg: row.reference_kg,
+      variation_percent: row.variation_percent,
+      stature_cm: row.stature_cm,
+      simulated_kg: row.simulated_kg,
+    });
+    setBaselinePreview(false);
+    setComparison(true);
+    setVisible(["skin"]);
+    setOpacity({ ...initialOpacity });
+    setMode("realista");
+  };
+  const restoreHistoryScenario = (row: {
+    id: string; reference_kg: number; variation_percent: number; stature_cm: number;
+    model_revision: string; algorithm_revision: string; data_type: "SIMULADO";
+  }) => {
+    const reason = scenarioCompatibilityReason(row);
+    if (reason) { setScenarioCompatibilityError(reason); return; }
+    setScenarioCompatibilityError("");
+    setReferenceKg(row.reference_kg);
+    setWeightVariation(row.variation_percent);
+    setStatureCm(row.stature_cm);
+    setScenarioParentId(row.id);
+    setScenarioRevisionNote("");
+    setScenarioNotice("Escenario histórico recuperado sobre el mismo cuerpo 3D. Se requiere un motivo para guardar la siguiente versión.");
+    setBaselinePreview(false);
+    setComparison(false);
+    setVisible(["skin"]);
+    setOpacity({ ...initialOpacity });
+    setMode("realista");
+  };
   const resetSimulation = () => {
     setReferenceKg(70);
     setWeightVariation(0);
+    setStatureCm(BASELINE_HEIGHT_CM);
     setBaselinePreview(false);
+    setComparison(false);
+    setHistoricalBaseline(null);
     setSavedScenario(null);
+  };
+  const analyzeCurrentAvatar = async () => {
+    if (captureBusy || comparison || !controller.current || layerStates.skin !== "ready" ||
+      !visible.includes("skin") || error) return;
+    setCaptureBusy(true);
+    setCaptureError("");
+    let captureStage: "render" | "validate" | "handoff" = "render";
+    try {
+      const snapshot = await controller.current.capturePng(true);
+      if (snapshot.size > 10 * 1024 * 1024) {
+        throw new Error("El archivo de la captura 3D excede 10 MB.");
+      }
+      captureStage = "validate";
+      const file = new File([snapshot], "modelo-3d-sintetico.png", { type: "image/png" });
+      const review = await reviewLocalCapture(file);
+      captureStage = "handoff";
+      stageCaptureForAnalysis(file, review);
+      setCaptureBusy(false);
+      navigate("/analysis", { state: { localCaptureReview: review, source: "atlas-synthetic" } });
+    } catch (cause) {
+      const code = captureStage === "render" ? "BV-3D-CAPTURE" :
+        captureStage === "validate" ? "BV-3D-VALIDATION" : "BV-3D-HANDOFF";
+      // The synthetic scene contains no patient images. Limit console
+      // diagnostics to a stage and JS error message; no bytes/landmarks.
+      const reason = cause instanceof Error ? cause.message : "error desconocido";
+      console.warn("[BodyVision synthetic atlas]", code, reason);
+      const action = captureStage === "render"
+        ? "Prueba a ampliar la vista 3D o cambiar a calidad Alta."
+        : captureStage === "validate"
+          ? "La imagen 3D no superó la validación local; restaura la vista y reintenta."
+          : "No se pudo abrir el análisis local. Vuelve a intentarlo.";
+      setCaptureError(`No se completó la captura sintética (${code}). ${action}`);
+      setCaptureBusy(false);
+    }
+  };
+  const downloadCurrentAvatar = async (exportComparison = false) => {
+    if (captureBusy || comparison !== exportComparison || !controller.current ||
+      layerStates.skin !== "ready" || !visible.includes("skin") || error) return;
+    setCaptureBusy(true);
+    setCaptureError("");
+    let objectUrl: string | null = null;
+    try {
+      const png = await controller.current.capturePng(false, exportComparison ? {
+        referenceKg: historicalBaseline?.simulated_kg ?? referenceKg,
+        referenceCm: historicalBaseline?.stature_cm ?? BASELINE_HEIGHT_CM,
+        scenarioKg: simulatedWeight, scenarioCm: statureCm,
+      } : undefined);
+      if (png.type !== "image/png" || png.size === 0 || png.size > 10 * 1024 * 1024) {
+        throw new Error("La captura PNG 3D no tiene un formato o tamaño válido.");
+      }
+      // Export ONLY the existing synthetic atlas. No upload, external request,
+      // personal file name, duplicate mesh, or persistence in browser storage.
+      objectUrl = URL.createObjectURL(png);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = exportComparison ? "bodyvision-comparacion-3d-sintetica.png" : "bodyvision-atlas-3d-sintetico.png";
+      link.click();
+      const finishedUrl = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(finishedUrl), 1500);
+    } catch {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setCaptureError("No se pudo descargar la imagen 3D ficticia. Comprueba la vista y vuelve a intentarlo.");
+    } finally {
+      setCaptureBusy(false);
+    }
   };
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -376,10 +634,43 @@ export function AnatomyAtlas() {
 
         <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")}>
           <div className="studio-canvas" ref={host} />
+          {comparison && !error && (
+            <div className="studio-compare" aria-label="Comparación dividida del mismo modelo 3D">
+              <div className="studio-compare-divider" style={{ left: `${comparisonDivider}%` }} />
+              <span className="studio-compare-before">{historicalBaseline
+                ? `HISTÓRICO v${historicalBaseline.version} · ${historicalBaseline.simulated_kg} kg / ${historicalBaseline.stature_cm} cm`
+                : `REFERENCIA · ${referenceKg} kg / ${BASELINE_HEIGHT_CM} cm`}</span>
+              <span className="studio-compare-after">ESCENARIO · {simulatedWeight} kg / {statureCm} cm</span>
+              <span className="studio-compare-caption">Dos estados del mismo cuerpo · comparación gráfica, no clínica</span>
+              {historicalBaseline && (
+                <span className="studio-compare-delta" aria-label="Diferencias visuales frente a la versión histórica">
+                  Diferencia frente a v{historicalBaseline.version}:{" "}
+                  {simulatedWeight - historicalBaseline.simulated_kg >= 0 ? "+" : ""}
+                  {(simulatedWeight - historicalBaseline.simulated_kg).toFixed(1)} kg ·{" "}
+                  {statureCm - historicalBaseline.stature_cm >= 0 ? "+" : ""}
+                  {statureCm - historicalBaseline.stature_cm} cm
+                </span>
+              )}
+            </div>
+          )}
           <div className="studio-view-top">
-            <span><i /> {weightVariation !== 0 ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE VOLUMEN · MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
+            <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
             <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
           </div>
+          {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado" data-rendered-frames={renderStats.renderedFrames}>
+            <strong>Diagnóstico de visualización</strong>
+            <span>Resolución: {renderStats.bufferWidth} × {renderStats.bufferHeight} píxeles</span>
+            <span>Geometrías: {renderStats.meshes} · Mallas: {renderStats.overlays}</span>
+            <span>Operaciones gráficas: {renderStats.drawCalls} · Triángulos: {renderStats.triangles.toLocaleString("es-PE")}</span>
+            <span>LOD geométrico: {renderStats.lodMeshes} mallas simplificadas · {renderStats.lodTrianglesSaved.toLocaleString("es-PE")} triángulos reducidos</span>
+            <span>Pasadas por fotograma: {renderStats.renderPasses}</span>
+            <span>Preparación CPU: {renderStats.cpuSubmissionMs === null ? "Sin muestra" : renderStats.cpuSubmissionMs.toFixed(2) + " ms"}</span>
+            <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
+            <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
+            <small>Último fotograma completo. El tiempo CPU no mide la GPU ni los FPS. Se actualiza al interactuar, sin animar el cuerpo.</small>
+            <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
+            <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
+          </aside>}
           <div className="studio-view-angles" role="group" aria-label="Cambiar ángulo">
             <button onClick={() => controller.current?.view("front")}>Frente</button>
             <button onClick={() => controller.current?.view("back")}>Espalda</button>
@@ -394,14 +685,14 @@ export function AnatomyAtlas() {
               <button onClick={() => { controller.current?.clearSelection(); setSelectedEntry(null); setIsolated(false); }}>×</button>
             </div>
           )}
-          {weightVariation !== 0 && (
-            <div className="studio-weight-indicator" role="status">
+          {(weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM) && (
+            <div className="studio-weight-indicator" role="status" style={comparison ? { display: "none" } : undefined}>
               <span>SIMULACIÓN HIPOTÉTICA · NO CLÍNICA</span>
-              <strong>{baselinePreview ? referenceKg : simulatedWeight} kg <small>{baselinePreview ? "Referencia" : "Escenario"}</small></strong>
+              <strong>{baselinePreview ? referenceKg : simulatedWeight} kg · {baselinePreview ? BASELINE_HEIGHT_CM : statureCm} cm <small>{baselinePreview ? "Referencia" : "Escenario"}</small></strong>
               <p>{baselinePreview ? "Vista base temporal" : (weightVariation > 0 ? "+" : "") + weightVariation + "% frente a la referencia"}</p>
             </div>
           )}
-          <div className="studio-viewport-help">Arrastra para rotar · Rueda para acercar · Selecciona una estructura</div>
+          <div className="studio-viewport-help">Arrastra o usa un dedo para rotar · Pellizca para zoom · Con teclado: flechas, + / −, Inicio y Esc</div>
           <div className="studio-view-status" role="status">{status}</div>
           <div className="studio-zoom">
             <button aria-label="Acercar" onClick={() => controller.current?.zoom(0.78)}>+</button>
@@ -417,15 +708,19 @@ export function AnatomyAtlas() {
             </div>
             <div className="studio-dock-group">
               <span>RENDIMIENTO</span>
-              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => setQuality("alta")}>Alta</button>
-              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => setQuality("fluida")}>Fluida</button>
+              <button className={qualityPreference === "auto" ? "active" : ""} aria-pressed={qualityPreference === "auto"}
+                title="Adaptar la calidad a la pantalla y al dispositivo" onClick={() => { setQualityPreference("auto"); setRenderStats(null); }}>Auto</button>
+              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => { setQualityPreference("alta"); setRenderStats(null); }}>Alta</button>
+              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => { setQualityPreference("fluida"); setRenderStats(null); }}>Fluida</button>
+              <button aria-pressed={!!renderStats} onClick={() => setRenderStats(current =>
+                current ? null : controller.current?.getPerformanceStats() ?? null)}>Detalles</button>
             </div>
             <div className="studio-dock-group">
               <span>HERRAMIENTAS</span>
               <button className={meshOverlay ? "active" : ""} aria-pressed={meshOverlay} onClick={toggleMesh} title="Superponer malla poligonal sobre la anatomía">Malla 3D</button>
               <button className={showMarker ? "active" : ""} aria-pressed={showMarker} onClick={() => setShowMarker(v => !v)}>Etiqueta</button>
               <button className={spin ? "active" : ""} aria-pressed={spin} disabled={reducedMotion} onClick={() => setSpin(v => !v)}>Giro</button>
-              <button className={panel === "simulacion" ? "active" : ""} aria-pressed={panel === "simulacion"} onClick={openSimulation}>Simular peso</button>
+              <button className={panel === "simulacion" ? "active" : ""} aria-pressed={panel === "simulacion"} onClick={openSimulation}>Peso y estatura</button>
               <button onClick={() => controller.current?.resetCamera()}>Restablecer</button>
             </div>
           </div>
@@ -443,11 +738,13 @@ export function AnatomyAtlas() {
             {panel === "simulacion" && (
               <div className="studio-simulation">
                 <p className="studio-eyebrow">SIMULACIÓN · SOBRE EL MODELO 3D</p>
-                <h2>Simulador de peso corporal</h2>
-                <p className="studio-sim-lead">Aumenta o disminuye el volumen de la figura anatómica real que estás viendo. No utilizamos una silueta separada.</p>
+                <h2>Simulador de peso y estatura</h2>
+                <p className="studio-sim-lead">Modifica la estatura y el peso hipotéticos sobre el mismo cuerpo anatómico 3D. La malla, las capas y la navegación permanecen integradas.</p>
                 <div className="studio-sim-values">
                   <div><span>REFERENCIA ILUSTRATIVA</span><strong>{referenceKg} <small>kg</small></strong></div>
                   <div><span>PESO HIPOTÉTICO</span><strong>{simulatedWeight} <small>kg</small></strong></div>
+                   <div><span>ESTATURA DE REFERENCIA</span><strong>{BASELINE_HEIGHT_CM} <small>cm</small></strong></div>
+                   <div><span>ESTATURA HIPOTÉTICA</span><strong>{statureCm} <small>cm</small></strong></div>
                 </div>
                 <label className="studio-sim-number">
                   Peso de referencia (solo demostración)
@@ -466,7 +763,71 @@ export function AnatomyAtlas() {
                     }} />
                   <span className="studio-sim-limits"><small>−30% · menor volumen</small><small>+30% · mayor volumen</small></span>
                 </label>
-                {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
+                <div className="studio-sim-presets" role="group" aria-label="Escenarios rápidos de volumen">
+                  <span>Escenarios visuales rápidos</span>
+                  <div className="studio-sim-preset-buttons">
+                    {([
+                      { label: "Menor volumen −15%", delta: -15 },
+                      { label: "Referencia 0%", delta: 0 },
+                      { label: "Mayor volumen +15%", delta: 15 },
+                    ] as const).map(preset => (
+                      <button key={preset.delta} type="button" aria-pressed={weightVariation === preset.delta}
+                        onClick={() => {
+                          setWeightVariation(preset.delta);
+                          setBaselinePreview(false);
+                          setVisible(previous => previous.includes("skin") ? previous : ["skin", ...previous]);
+                          setOpacity(previous => ({ ...previous, skin: 1 }));
+                          setMode("realista");
+                        }}>{preset.label}</button>
+                    ))}
+                  </div>
+                  <small>Escenarios ilustrativos, no recomendaciones de peso.</small>
+                </div>
+                <label className="studio-sim-slider">
+                   <span>Estatura del mismo modelo 3D <strong>{statureCm} cm</strong></span>
+                   <input type="range" aria-label="Ajustar estatura del modelo anatómico"
+                     min="145" max="205" step="1" value={statureCm}
+                     onChange={event => {
+                       setStatureCm(Number(event.target.value));
+                       setBaselinePreview(false);
+                     }} />
+                   <span className="studio-sim-limits"><small>145 cm · más bajo</small><small>205 cm · más alto</small></span>
+                 </label>
+                 <div className="studio-sim-presets" role="group" aria-label="Estaturas rápidas del modelo">
+                   <span>Estatura visual rápida</span>
+                   <div className="studio-sim-preset-buttons">
+                     {([
+                       { label: "Baja 155 cm", height: 155 },
+                       { label: "Referencia 175 cm", height: BASELINE_HEIGHT_CM },
+                       { label: "Alta 195 cm", height: 195 },
+                     ] as const).map(preset => (
+                       <button type="button" key={preset.height} aria-pressed={statureCm === preset.height}
+                         onClick={() => {
+                           setStatureCm(preset.height);
+                           setBaselinePreview(false);
+                         }}>{preset.label}</button>
+                     ))}
+                   </div>
+                   <small>El mismo cuerpo se escala verticalmente; no predice proporciones individuales.</small>
+                 </div>
+                 <div className="studio-sim-state" role="status" aria-label="Diferencia hipotética frente a la referencia">
+                   <span className="studio-sim-state-icon" aria-hidden="true">↔</span>
+                   <div>
+                     <strong>Diferencia del escenario frente a la referencia</strong>
+                     <p>Peso: {simulatedWeight >= referenceKg ? "+" : ""}{Math.round((simulatedWeight - referenceKg) * 10) / 10} kg
+                       {" · "}Estatura: {statureCm >= BASELINE_HEIGHT_CM ? "+" : ""}{statureCm - BASELINE_HEIGHT_CM} cm</p>
+                     <small>Solo visualización ficticia; estas cifras no representan una predicción de salud.</small>
+                   </div>
+                 </div>
+                 {visible.includes("skin") && morphClamping.regions.length > 0 && (
+                   <p className="studio-sim-warning" role="status"
+                     aria-label="Límite gráfico de deformación">
+                     Límite visual alcanzado: algunas regiones del cuerpo 3D ya no
+                     aumentan de tamaño proporcionalmente. No representa una
+                     predicción de cambios corporales reales.
+                   </p>
+                 )}
+                 {!visible.includes("skin") && <div className="studio-sim-no-skin" role="status">
                 <p>La piel está oculta. Activa la superficie corporal para ver el cambio de volumen.</p>
                 <button onClick={() => {
                   setVisible(previous => ["skin", ...previous.filter(layer => layer !== "skin")]);
@@ -477,7 +838,7 @@ export function AnatomyAtlas() {
               <div className="studio-sim-state">
                   <span className="studio-sim-state-icon">{weightVariation > 0 ? "↗" : weightVariation < 0 ? "↘" : "◈"}</span>
                   <div><strong>{weightVariation === 0 ? "Modelo corporal de referencia" : weightVariation > 0 ? "Incremento visual de volumen" : "Reducción visual de volumen"}</strong>
-                    <p>El cambio se aplica a la piel y, con menor intensidad, a músculos. Huesos y nervios conservan sus dimensiones.</p></div>
+                    <p>El volumen cambia suavemente en abdomen, pecho, caderas y piernas; el rostro, las manos y los pies mantienen su forma original. La estatura escala verticalmente el mismo atlas. Son efectos gráficos ilustrativos, no clínicos.</p></div>
                 </div>
                 <div className="studio-sim-mesh">
                   <label><input type="checkbox" checked={meshOverlay} onChange={toggleMesh} />
@@ -485,16 +846,203 @@ export function AnatomyAtlas() {
                   </label>
                 </div>
                 <div className="studio-sim-actions">
-                  <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview} onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
-                  <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation })}>Guardar comparación en esta vista</button>
+                  <button className={baselinePreview ? "active" : ""} aria-pressed={baselinePreview}
+                    disabled={comparison}
+                    onClick={() => setBaselinePreview(value => !value)}>{baselinePreview ? "Ver escenario modificado" : "Comparar con el original"}</button>
+                  <button className={comparison ? "active" : ""} aria-pressed={comparison}
+                    onClick={() => { setBaselinePreview(false); setComparison(value => !value); }}>
+                    {comparison ? "Cerrar comparación dividida" : "Comparar lado a lado"}
+                  </button>
+                  {historicalBaseline && (
+                    <button type="button" onClick={() => setHistoricalBaseline(null)}>
+                      Quitar referencia histórica
+                    </button>
+                  )}
+                  <button onClick={() => setSavedScenario({ baseKg: referenceKg, delta: weightVariation, statureCm })}>Guardar comparación en esta vista</button>
                   <button onClick={resetSimulation}>Restaurar valores</button>
+                  <button type="button" onClick={() => void downloadCurrentAvatar()}
+                    disabled={captureBusy || comparison || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
+                    {captureBusy ? "Preparando captura…" : "Descargar imagen 3D (PNG)"}
+                  </button>
+                  {comparison && (
+                    <button type="button" onClick={() => void downloadCurrentAvatar(true)}
+                      disabled={captureBusy || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
+                      {captureBusy ? "Preparando comparación…" : "Descargar comparación (PNG)"}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => void analyzeCurrentAvatar()}
+                    disabled={captureBusy || comparison || layerStates.skin !== "ready" || !visible.includes("skin") || !!error}>
+                    {captureBusy ? "Preparando captura 3D…" : "Analizar esta vista 3D con IA"}
+                  </button>
                 </div>
+                {comparison && <label className="studio-sim-slider studio-comparison-control">
+                  <span>Posición de la comparación <strong>{comparisonDivider}%</strong></span>
+                  <input type="range" min="15" max="85" step="5"
+                    aria-label="Mover separación entre referencia y escenario"
+                    value={comparisonDivider} onChange={event => setComparisonDivider(Number(event.target.value))}/>
+                  <small>Izquierda: referencia · Derecha: escenario. Se renderizan dos estados del mismo modelo, sin duplicarlo.</small>
+                </label>}
+                {comparison && <p className="studio-sim-disclaimer">Para analizar esta vista con IA, cierra la comparación dividida: el detector local debe recibir una sola figura.</p>}
+                {captureError && <p role="alert" className="studio-sim-disclaimer">{captureError}</p>}
+                <p className="studio-sim-lead">Esta prueba utiliza exclusivamente una imagen del cuerpo anatómico ficticio del atlas. La copia local para IA lleva un fondo neutro opaco para evitar que la transparencia se interprete como oscuridad; el visor original no cambia. No identifica personas ni reconstruye cuerpos reales.</p>
                 {savedScenario && <div className="studio-sim-saved" role="status">
                   <strong>Referencia visual guardada</strong>
-                  <p>Base {savedScenario.baseKg} kg → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg.</p>
-                  <button onClick={() => { setReferenceKg(savedScenario.baseKg); setWeightVariation(savedScenario.delta); setBaselinePreview(false); }}>Recuperar escenario</button>
+                  <p>Base {savedScenario.baseKg} kg / {BASELINE_HEIGHT_CM} cm → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg / {savedScenario.statureCm} cm.</p>
+                  <button onClick={() => { setReferenceKg(savedScenario.baseKg); setWeightVariation(savedScenario.delta); setStatureCm(savedScenario.statureCm); setBaselinePreview(false); }}>Recuperar escenario</button>
                 </div>}
-                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg son etiquetas hipotéticas; la deformación 3D no calcula grasa, masa muscular ni la distribución real del tejido. No modifica mediciones, expedientes ni reportes.</p>
+                <section className="studio-scenario-history" aria-label="Historial de escenarios simulados">
+                  <div className="studio-scenario-history-head">
+                    <div>
+                      <p className="studio-eyebrow">HISTORIAL VERSIONADO · SOLO DATOS FICTICIOS</p>
+                      <h3>Escenarios 3D por expediente</h3>
+                    </div>
+                    <DataTypeBadge type="SIMULADO" />
+                  </div>
+                  <p>Las versiones se guardan por separado de las mediciones observadas. Cada versión conserva su autor, fecha y relación con la anterior.</p>
+                  <label className="studio-sim-number">
+                    Expediente de prueba
+                    <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
+                      onChange={event => {
+                        setScenarioProfileId(event.target.value);
+                        setScenarioCompatibilityError("");
+                        setHistoricalBaseline(null);
+                        setComparison(false);
+                        setScenarioOffset(0);
+                        setScenarioExportError("");
+                        setScenarioParentId("");
+                        setScenarioVersionId("");
+                        setScenarioRevisionNote("");
+                        setScenarioNotice("");
+                        saveVersion.reset();
+                      }}>
+                      <option value="">Seleccionar expediente ficticio</option>
+                      {linkedProfile.data && !syntheticProfiles.data?.items.some(row => row.id === linkedProfile.data?.id) && (
+                        <option value={linkedProfile.data.id}>{linkedProfile.data.display_name || linkedProfile.data.display_code}</option>
+                      )}
+                      {syntheticProfiles.data?.items.map(profile => (
+                        <option key={profile.id} value={profile.id}>{profile.display_name || profile.display_code}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {syntheticProfiles.isError && <p role="alert">No se pudo cargar la lista de expedientes ficticios.</p>}
+                  {linkedProfile.isError && scenarioProfileId && <p role="alert">El expediente seleccionado no está disponible en este espacio de trabajo.</p>}
+                  {scenarioProfileId && linkedProfile.data && (
+                    <>
+                      <p className="studio-sim-lead">Expediente: {linkedProfile.data.display_code} · {linkedProfile.data.status === "active" ? "Activo" : "Solo lectura"}</p>
+                      {scenarioParentId && (
+                        <label className="studio-sim-number">
+                          Motivo de nueva versión (mínimo 5 caracteres)
+                          <input type="text" maxLength={200} value={scenarioRevisionNote}
+                            placeholder="Por ejemplo: ajustar el escenario de peso"
+                            onChange={event => setScenarioRevisionNote(event.target.value)} />
+                        </label>
+                      )}
+                      <div className="studio-sim-actions">
+                        <button type="button" disabled={readOnly || linkedProfile.data.status !== "active" ||
+                            saveVersion.isPending || !!(scenarioParentId && scenarioRevisionNote.trim().length < 5)}
+                          onClick={() => { setScenarioNotice(""); saveVersion.mutate(); }}>
+                          {saveVersion.isPending ? "Guardando versión…" :
+                            scenarioParentId ? "Guardar siguiente versión" : "Crear escenario versionado"}
+                        </button>
+                        {scenarioParentId && <button type="button" onClick={() => {
+                          setScenarioParentId(""); setScenarioRevisionNote(""); setScenarioNotice("");
+                        }}>Comenzar otro escenario</button>}
+                      </div>
+                      {readOnly && <p className="studio-sim-lead">La demostración pública permite consultar el historial, pero no registrar cambios.</p>}
+                      {saveVersion.isError && <p role="alert">{saveVersion.error.message}</p>}
+                      {scenarioNotice && <p role="status" className="studio-sim-success">{scenarioNotice}</p>}
+                      <div className="studio-scenario-records">
+                        <h4>Historial registrado</h4>
+                        {scenarioHistory.data && scenarioHistory.data.total > 0 && (
+                          <div className="studio-scenario-page-toolbar">
+                            <span role="status" aria-label="Página del historial simulado">
+                              Versiones {scenarioHistory.data.offset + 1}–{scenarioHistory.data.offset + scenarioHistory.data.items.length}
+                              {" de "}{scenarioHistory.data.total} · solo SIMULADO
+                            </span>
+                            <button type="button" onClick={downloadScenarioPage}
+                              disabled={scenarioHistory.isFetching || scenarioHistory.data.items.length === 0}>
+                              Exportar página CSV
+                            </button>
+                          </div>
+                        )}
+                        {scenarioExportError && <p role="alert">{scenarioExportError}</p>}
+                        {scenarioCompatibilityError && <p role="alert">{scenarioCompatibilityError}</p>}
+                        {scenarioHistory.isPending && <p>Cargando versiones…</p>}
+                        {scenarioHistory.isError && <p role="alert">No se pudo consultar el historial de simulaciones.</p>}
+                        {scenarioHistory.data?.items.length === 0 && <p>Aún no hay escenarios registrados.</p>}
+                        {scenarioHistory.data && <ol aria-label="Versiones de simulación guardadas">
+                          {scenarioHistory.data.items.map(row => (
+                            <li key={row.id}>
+                              <div>
+                                <strong>Escenario {row.series_id.slice(0, 8)} · v{row.version}</strong>
+                                <span>{row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}</span>
+                                {row.revision_note && <small>{row.revision_note}</small>}
+                                {scenarioCompatibilityReason(row) && <small className="studio-scenario-compatibility-warning">
+                                  {scenarioCompatibilityReason(row)}
+                                </small>}
+                              </div>
+                              <div className="studio-scenario-row-actions">
+                                <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                  onClick={() => restoreHistoryScenario(row)}>Cargar en 3D</button>
+                                <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                  aria-pressed={historicalBaseline?.id === row.id}
+                                  onClick={() => fixHistoricalReference(row)}>
+                                  Fijar como referencia
+                                </button>
+                                <button type="button" onClick={() => setScenarioVersionId(row.id)}>Ver versiones</button>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>}
+                        {!!scenarioHistory.data && scenarioHistory.data.total > 20 && (
+                          <nav className="studio-scenario-pagination" aria-label="Páginas de escenarios simulados">
+                            <button type="button" disabled={scenarioOffset === 0 || scenarioHistory.isFetching}
+                              onClick={() => setScenarioOffset(offset => Math.max(0, offset - 20))}>
+                              Anteriores 20
+                            </button>
+                            <button type="button"
+                              disabled={scenarioHistory.isFetching ||
+                                scenarioOffset + scenarioHistory.data.limit >= scenarioHistory.data.total}
+                              onClick={() => setScenarioOffset(offset => offset + 20)}>
+                              Siguientes 20
+                            </button>
+                          </nav>
+                        )}
+                        {!!scenarioHistory.data && scenarioHistory.data.total > 0 &&
+                          <small>El CSV contiene únicamente la página visible; no incluye nombres, notas, identificadores de personas ni mediciones observadas.</small>}
+                      </div>
+                      {!!scenarioVersionId && <div className="studio-sim-saved" aria-label="Cadena de versiones del escenario">
+                        <strong>Cadena de versiones</strong>
+                        <button type="button" onClick={() => setScenarioVersionId("")}>Cerrar historial</button>
+                        {scenarioVersions.isPending && <p>Consultando versiones…</p>}
+                        {scenarioVersions.isError && <p role="alert">No se pudo recuperar la cadena de versiones.</p>}
+                        {scenarioVersions.data?.map(row => (
+                          <div className="studio-scenario-chain-row" key={row.id}>
+                            <div>
+                              <strong>Versión {row.version} · SIMULADO</strong>
+                              <span>{row.simulated_kg} kg · {row.stature_cm} cm · {dateTime(row.created_at)}</span>
+                              {scenarioCompatibilityReason(row) && <small className="studio-scenario-compatibility-warning">
+                                {scenarioCompatibilityReason(row)}
+                              </small>}
+                            </div>
+                            <div className="studio-scenario-row-actions">
+                              <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                onClick={() => restoreHistoryScenario(row)}>
+                                Cargar v{row.version} en 3D
+                              </button>
+                              <button type="button" disabled={!!scenarioCompatibilityReason(row)}
+                                aria-pressed={historicalBaseline?.id === row.id}
+                                onClick={() => fixHistoricalReference(row)}>
+                                Fijar v{row.version} como referencia
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>}
+                    </>
+                  )}
+                </section>
+                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg y los cm son valores hipotéticos; la deformación 3D no calcula grasa, masa muscular, proporciones anatómicas reales ni predice la apariencia de una persona. No modifica mediciones, expedientes ni reportes.</p>
               </div>
             )}
             {panel === "informacion" && (

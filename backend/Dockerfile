@@ -5,7 +5,8 @@ RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir --requi
 
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS runtime
 ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app \
+    && install -d -m 0700 -o 10001 -g 10001 /var/lib/bodyvision-watchdog
 WORKDIR /app
 COPY --from=dependencies /opt/venv /opt/venv
 COPY --chown=app:app app ./app

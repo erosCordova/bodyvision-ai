@@ -13,6 +13,11 @@ import {
 } from "../../components/ui/States";
 import { Modal } from "../../components/ui/Modal";
 import { MeasurementForm } from "../measurements/MeasurementForm";
+import { MeasurementComparison } from "../analytics/MeasurementComparison";
+import { LongitudinalSummary } from "../analytics/LongitudinalSummary";
+import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { PoseSummaryArchive } from "../capture/PoseSummaryArchive";
+import { ConsentPanel } from "./ConsentPanel";
 const HistoryChart = lazy(() =>
   import("../analytics/HistoryChart").then((module) => ({
     default: module.HistoryChart,
@@ -99,6 +104,9 @@ export function ProfileDetail() {
                 : "Archivado"}{" "}
             · Organización ficticia
           </p>
+          <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
+            Abrir simulador 3D y escenarios ficticios →
+          </Link>
         </div>
         <button
           className="primary-button"
@@ -116,6 +124,7 @@ export function ProfileDetail() {
           ["summary", "Resumen"],
           ["measurements", "Mediciones"],
           ["analytics", "Evolución"],
+          ...(privateAuthEnabled() ? [["pose", "Resultados de pose"]] : []),
         ].map(([code, label]) => (
           <button
             key={code}
@@ -126,6 +135,8 @@ export function ProfileDetail() {
           </button>
         ))}
       </nav>
+      {tab === "pose" && privateAuthEnabled() && <PoseSummaryArchive key={profileId}
+        fixedProfileId={profileId} summary={null} runSerial={0} />}
       {tab === "summary" && (
         <>
           <div className="section-title">
@@ -293,6 +304,25 @@ export function ProfileDetail() {
                   rows={series.data}
                   unit={selectedMetric?.unit ?? ""}
                 />
+                <LongitudinalSummary
+                  rows={series.data}
+                  profileId={profileId}
+                  metricCode={metric}
+                  unit={selectedMetric?.unit ?? ""}
+                />
+                <MeasurementComparison
+                  key={`${metric}-${period}`}
+                  rows={series.data}
+                  unit={selectedMetric?.unit ?? ""}
+                  profileId={profileId}
+                  profileCode={current.display_code}
+                  synthetic={current.synthetic}
+                  metricCode={metric}
+                  metricLabel={selectedMetric?.label ?? metric}
+                  exportReport={privateAuthEnabled()
+                    ? (initial, final) => api.comparisonReport(profileId, initial, final)
+                    : undefined}
+                />
               </Suspense>
             ))}
           <div className="section-title">
@@ -386,6 +416,7 @@ export function ProfileDetail() {
           )}
         </>
       )}
+      {privateAuthEnabled() && <ConsentPanel key={profileId} profileId={profileId} />}
       {form && catalog.data && (
         <MeasurementForm
           profileId={profileId}

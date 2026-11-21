@@ -1,0 +1,76 @@
+.private-access {
+  min-height:100vh; display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,520px);
+  gap:clamp(30px,5vw,90px); align-items:center; padding:clamp(26px,6vw,85px);
+  background:radial-gradient(ellipse at 30% 26%,#1c4469,#07182c 58%,#081423);
+  color:#e8f5ff;
+}
+.private-access-intro{max-width:620px}
+.private-access-brand{display:block;font-size:16px;letter-spacing:.12em;font-weight:700;margin-bottom:85px}
+.private-access-brand strong{color:#4dd9f7}
+.private-access-intro .eyebrow{color:#69d9f8;margin-bottom:18px}
+.private-access-intro h1{font-size:clamp(34px,4vw,60px);line-height:1.1;letter-spacing:-.045em;max-width:620px}
+.private-access-intro>p:not(.eyebrow){color:#bad0e2;font-size:14px;line-height:1.8;max-width:450px;margin:25px 0 32px}
+.private-access-feature{font-size:12px;color:#b8d9e9;padding:11px 0;border-bottom:1px solid #39617a66}
+.private-access-card{
+  background:linear-gradient(155deg,#153149,#0b1b30 84%);border:1px solid #3c6985;
+  padding:clamp(28px,3vw,48px);border-radius:20px;box-shadow:0 24px 70px #020b18a8;
+}
+.private-access-card h2{font-size:25px;letter-spacing:-.03em;margin:12px 0}
+.private-access-description{font-size:12px;color:#b5cfe0;line-height:1.75;margin:12px 0 26px}
+.private-access form{display:flex;flex-direction:column}
+.private-access form>label{font-size:11px;color:#d2e9f6;font-weight:650;margin:15px 0 9px}
+.private-access input{
+  height:46px;width:100%;border:1px solid #4a6782;border-radius:9px;
+  background:#091c30;color:#e7f6ff;padding:0 13px;font:inherit;font-size:12px;outline:none;
+}
+.private-access input:focus-visible{border-color:#54c5e9;box-shadow:0 0 0 3px #39c9f621}
+.private-access form>small{font-size:10px;color:#abc0d1;margin:7px 0 0}
+.private-access-password{position:relative;display:flex;align-items:center}
+.private-access-password input{padding-right:85px}
+.private-access-password button{
+  position:absolute;right:9px;top:7px;bottom:7px;padding:0 11px;
+  border:0;border-radius:6px;background:#244761;color:#cde5f2;font-size:10px;cursor:pointer;
+}
+.private-access-submit,.private-access-link{
+  margin-top:25px;width:100%;padding:14px;border:0;border-radius:9px;
+  background:linear-gradient(95deg,#1abbdc,#39a5df);color:#06243a;
+  font-weight:750;font-size:12px;cursor:pointer;text-align:center;display:block;
+}
+.private-access-submit:hover,.private-access-link:hover{filter:brightness(1.08)}
+.private-access-submit:disabled{cursor:wait;opacity:.75}
+.private-access-secondary{width:100%;margin-top:12px;padding:13px;
+  border-radius:8px;background:transparent;color:#c7e6f1;border:1px solid #56718d;
+  cursor:pointer;font-weight:650;font-size:12px}
+.private-access-details{margin:20px 0}
+.private-access-details div{border-bottom:1px solid #33566c;padding:13px 0}
+.private-access-details dt{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#95bdcf}
+.private-access-details dd{font-size:12px;color:#effaff;margin:6px 0 0;overflow-wrap:anywhere}
+.private-access-error,.private-access-warning{
+  background:#48303d;border:1px solid #c77b90;color:#ffe2e6;
+  padding:12px;border-radius:8px;font-size:11px;line-height:1.55;
+}
+.private-access-disclaimer{margin:27px 0 0;font-size:10px;line-height:1.8;color:#a5bece}
+@media (max-width:900px){.private-access{grid-template-columns:1fr;padding:30px 18px;gap:30px}
+  .private-access-intro{padding:0 10px}.private-access-brand{margin-bottom:38px}
+  .private-access-card{width:100%;max-width:560px;margin:0 auto}}
+@media (max-width:420px){.private-access-intro h1{font-size:32px}.private-access-card{padding:22px}}
+
+.private-mfa-enroll h3{margin:18px 0 8px;font-size:17px;color:#effaff}
+.private-mfa-secret{
+  display:block;padding:18px 14px;border-radius:10px;word-break:break-all;
+  text-align:center;letter-spacing:.09em;line-height:1.7;font-size:14px;
+  background:#061627;border:1px solid #52738d;color:#84e4fd;user-select:all;
+}
+.private-mfa-code-grid{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;
+  margin:20px 0;
+}
+.private-mfa-code-grid code{
+  display:block;overflow-wrap:anywhere;text-align:center;padding:10px 8px;
+  background:#061b2e;border:1px solid #41637c;border-radius:7px;
+  color:#d5f5ff;font-size:11px;letter-spacing:.025em;
+}
+.private-mfa-enroll form>label{font-size:12px;color:#d2e9f6;font-weight:650;margin:15px 0 9px}
+@media (max-width:480px){
+  .private-mfa-code-grid{grid-template-columns:1fr}
+}

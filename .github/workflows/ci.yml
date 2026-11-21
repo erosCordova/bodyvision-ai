@@ -6,9 +6,25 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A new commit supersedes old CI runs for this branch/PR. Avoid wasting
+# expensive Docker/WebGL runners on stale commits.
+concurrency:
+  # v2 bypasses an uninterruptible historical run with the previous concurrency key.
+  group: bodyvision-ci-v2-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
+  windows-scripts:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Validate installation scripts in Windows Git Bash
+        shell: bash
+        run: python -m unittest discover -s scripts/tests -v
   native-checks:
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3
@@ -22,6 +38,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://bodyvision_app@127.0.0.1:5432/bodyvision
       MIGRATION_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/bodyvision
       TEST_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/bodyvision
+      AUTH_DATABASE_URL: postgresql+psycopg://bodyvision_auth_app@127.0.0.1:5432/bodyvision
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,15 +47,27 @@ jobs:
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - name: Install Python dependencies
         run: python -m pip install --require-hashes -r backend/requirements-dev.lock
+      - name: Startup checker regression tests (standard library only)
+        run: python -m unittest discover -s scripts/tests -v
       - name: Initialize least privilege role (ephemeral CI database only)
-        run: psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
+        run: |
+          psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
+          psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_auth_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;'
+      - name: Pose expiry retention acceptance in isolated PostgreSQL
+        working-directory: backend
+        timeout-minutes: 5
+        run: |
+          alembic upgrade head
+          pytest -q -x tests/integration/test_pose_summary_retention.py
       - name: Backend quality and migrations
+        timeout-minutes: 15
         working-directory: backend
         run: |
           ruff check app tests alembic
           ruff format --check app tests alembic
           alembic upgrade head
-          pytest -q
+          # Fail fast on the first regression; passing runs still execute the full suite.
+          pytest -q -x
           alembic downgrade base
           alembic upgrade head
       - name: Frontend checks
@@ -55,18 +84,42 @@ jobs:
           cd frontend
           npm audit --audit-level=high
       - name: Start native services and test browser
+        timeout-minutes: 8
         run: |
           cd backend
           python -m app.seed
           uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log > /tmp/api.log 2>&1 &
           cd ../frontend
           npm run dev > /tmp/web.log 2>&1 &
-          npx playwright install --with-deps chromium
+          # ubuntu-24.04 already provides the required runtime libraries.
+          # Avoid unrelated apt/Mesa/font downloads blocking the browser tests.
+          npx playwright install chromium
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:5173/api/v1/health/ready; then break; fi
             sleep 1
           done
           npm run test:e2e
+          python ../scripts/check_local_installation.py --base-url http://127.0.0.1:5173 --json
+      - name: Test private identity and permissions in browser
+        timeout-minutes: 3
+        env:
+          IDENTITY_ENABLED: 'true'
+          PRIVATE_BROWSER_FIXTURES: 'true'
+          VITE_ENABLE_PRIVATE_AUTH: 'true'
+          API_PROXY_TARGET: http://127.0.0.1:8001
+        run: |
+          # Ephemeral key exists only in this disposable private CI process.
+          export CAPTURE_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          cd backend
+          PYTHONPATH=. python tests/browser/seed_private.py
+          uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8001 --no-access-log > /tmp/private-api.log 2>&1 &
+          cd ../frontend
+          npm run dev -- --port 5174 --strictPort > /tmp/private-web.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5174/api/v1/health/ready; then break; fi
+            sleep 1
+          done
+          npx playwright test --config playwright.private.config.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,6 +129,7 @@ jobs:
           if-no-files-found: ignore
   docker-smoke:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Full fresh Docker startup
@@ -85,10 +139,170 @@ jobs:
           docker compose up --build --wait --wait-timeout 240
           curl --fail http://127.0.0.1:8080/api/v1/health/live
           curl --fail http://127.0.0.1:8080/api/v1/health/ready
+          python3 scripts/check_local_installation.py --json
           docker compose run --rm seed
-          docker compose run --rm api-test
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-tests.sql
+          # Capture the first failing test instead of risking runner exhaustion.
+          # The faulthandler prints a blocked test's stack before a resource kill.
+          # Verbose progress identifies the exact test; cap runner exposure.
+          timeout --signal=TERM --kill-after=10s 300s docker compose run --rm api-test \
+            pytest -vv -x -o faulthandler_timeout=90 -p no:cacheprovider
           docker compose run --rm frontend-test
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-tests.sql
+          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-after-tests.sql
+          python3 scripts/check_local_installation.py --json
+      - name: Verify synthetic PostgreSQL backup restoration in isolated test database
+        run: |
+          # All data is synthetic. The restore target is an ephemeral database
+          # inside db-test, never the application db or a hosted Neon database.
+          docker compose exec -T db sh -c 'pg_dump --format=custom --no-owner --no-acl -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-backup-ci.dump
+          test -s /tmp/bodyvision-backup-ci.dump
+          docker compose exec -T db-test sh -c 'createdb -U "$POSTGRES_USER" bodyvision_restored_ci'
+          docker compose exec -T db-test sh -c 'pg_restore --exit-on-error --no-owner --no-acl -U "$POSTGRES_USER" -d bodyvision_restored_ci' < /tmp/bodyvision-backup-ci.dump
+          docker compose exec -T db-test sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" bodyvision_restored_ci' > /tmp/bodyvision-restored-ci.sql
+          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-tests.sql /tmp/bodyvision-restored-ci.sql
+          docker compose exec -T db-test sh -c 'dropdb -U "$POSTGRES_USER" bodyvision_restored_ci'
+          rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - name: Install browser driver for compiled Docker UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
+      - name: Browser acceptance against compiled Docker UI
+        working-directory: frontend
+        run: npx playwright test --config playwright.docker.config.ts
+      - name: Purge synthetic expirations with backend stopped
+        run: |
+          # Disposable synthetic fixtures only; no production database or HTTP API.
+          docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' <<'SQL'
+          DO $probe$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM profiles
+              WHERE organization_id='10000000-0000-4000-8000-000000000001'
+                AND display_code='FICT-01'
+            ) THEN RAISE EXCEPTION 'Missing fictional fixture'; END IF;
+          END $probe$;
+          INSERT INTO synthetic_capture_objects(
+            id,organization_id,profile_id,created_by,original_bytes,
+            width,height,sha256_digest,ciphertext,created_at,expires_at
+          )
+          SELECT examples.id,p.organization_id,p.id,p.created_by,100,
+            32,64,repeat('0',64),decode(repeat('ab',96),'hex'),
+            CASE WHEN examples.expired THEN now()-interval '8 days' ELSE now() END,
+            CASE WHEN examples.expired THEN now()-interval '1 day'
+                 ELSE now()+interval '7 days' END
+          FROM profiles p CROSS JOIN (
+            VALUES
+              ('90000000-0000-4000-8000-0000000000aa'::uuid,true),
+              ('90000000-0000-4000-8000-0000000000bb'::uuid,false)
+          ) AS examples(id,expired)
+          WHERE p.organization_id='10000000-0000-4000-8000-000000000001'
+            AND p.display_code='FICT-01';
+          SQL
+          docker compose stop backend
+          docker compose --profile maintenance run --rm --no-deps \
+            -e IDENTITY_ENABLED=true \
+            -e BODYVISION_ENABLE_CAPTURE_RETENTION=synthetic-only \
+            capture-retention python -m app.workers.independent_capture_retention --once
+          docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' <<'SQL'
+          DO $probe$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM synthetic_capture_objects
+              WHERE id='90000000-0000-4000-8000-0000000000aa'
+            ) THEN RAISE EXCEPTION 'Expired fictional capture was not purged'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM synthetic_capture_objects
+              WHERE id='90000000-0000-4000-8000-0000000000bb'
+            ) THEN RAISE EXCEPTION 'Valid fictional capture was modified'; END IF;
+          END $probe$;
+          DELETE FROM synthetic_capture_objects
+          WHERE id='90000000-0000-4000-8000-0000000000bb';
+          SQL
+          docker compose up -d --wait --wait-timeout 120 backend
+          python3 scripts/check_local_installation.py --json
+      - name: Recreate local containers while preserving the application volume
+        run: |
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-before-restart.sql
+          docker compose --profile test down
+          docker compose up --wait --wait-timeout 120
+          python3 scripts/check_local_installation.py --json
+          docker compose exec -T db sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-after-restart.sql
+          python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-restart.sql /tmp/bodyvision-after-restart.sql
+      - name: Watchdog detects API outage and recovery without backend process
+        run: |
+          docker compose --profile watchdog build watchdog
+          docker compose stop backend
+          set +e
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --once \
+            > /tmp/bodyvision-watchdog-down.txt
+          watchdog_status=$?
+          set -e
+          test "$watchdog_status" -eq 1
+          grep -q '"state": "unreachable"' /tmp/bodyvision-watchdog-down.txt
+          docker compose up -d --wait --wait-timeout 120 backend
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --once \
+            > /tmp/bodyvision-watchdog-up.txt
+          grep -q '"state": "ready"' /tmp/bodyvision-watchdog-up.txt
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --history \
+            > /tmp/bodyvision-watchdog-history.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          events = [
+              json.loads(line) for line in
+              Path("/tmp/bodyvision-watchdog-history.jsonl").read_text().splitlines()
+              if line.strip()
+          ]
+          assert [event["state"] for event in events] == ["unreachable", "ready"]
+          assert all(set(event) == {"event", "state", "checked_at"} for event in events)
+          PY
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --once \
+            > /tmp/bodyvision-watchdog-repeat.txt
+          test ! -s /tmp/bodyvision-watchdog-repeat.txt
+          # Report one fully recovered episode without claiming uptime or SLA.
+          docker compose --profile watchdog run --rm --no-deps \
+            -e BODYVISION_ENABLE_WATCHDOG=synthetic-only \
+            watchdog python -m app.workers.independent_service_watchdog --incidents \
+            > /tmp/bodyvision-watchdog-incidents.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("/tmp/bodyvision-watchdog-incidents.json").read_text())
+          assert report["event"] == "synthetic_watchdog_incident_report"
+          assert report["coverage"] == "transitions_only_no_uptime_estimate"
+          assert report["episode_count"] == 1
+          assert report["recoveries_observed"] == 1
+          assert report["episodes"][0]["first_nonready_state"] == "unreachable"
+          assert report["episodes"][0]["outcome"] == "recovery_observed"
+          assert report["episodes"][0]["seconds_between_observations"] >= 0
+          assert "availability_percent" not in report
+          PY
+          python3 scripts/check_local_installation.py --json
+      - name: Browser confirms retained correction history after restart
+        working-directory: frontend
+        env:
+          DOCKER_HANDOFF_STAGE: after-restart
+        run: npx playwright test --config playwright.docker.config.ts
+      - name: Upload Docker handoff evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bodyvision-docker-handoff
+          path: frontend/test-results
+          if-no-files-found: ignore
       - name: Stop disposable environment
         if: always()
-        run: docker compose down -v
+        run: docker compose --profile test down -v
 

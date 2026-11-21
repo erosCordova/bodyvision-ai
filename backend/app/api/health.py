@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.db.session import SCHEMA_REVISION
+from app.db.session import DEMO_SCHEMA_REVISION, SCHEMA_REVISION
 
 router = APIRouter(prefix="/api/v1/health", tags=["Health"])
 
@@ -42,7 +42,12 @@ def ready(request: Request) -> ReadyResponse | JSONResponse:
             revision = connection.execute(
                 text("SELECT revision FROM system_schema_state WHERE singleton = true")
             ).scalar_one()
-            if revision != SCHEMA_REVISION:
+            expected_revision = (
+                DEMO_SCHEMA_REVISION
+                if request.app.state.settings.app_env == "demo"
+                else SCHEMA_REVISION
+            )
+            if revision != expected_revision:
                 raise ValueError("Schema mismatch")
     except (SQLAlchemyError, ValueError):
         return JSONResponse(
