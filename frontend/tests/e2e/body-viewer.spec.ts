@@ -110,7 +110,7 @@ test("anatomical search supports keyboard selection in Spanish without a mouse",
   await expect(page.getByRole("listbox", { name: "Resultados anatómicos" })).toHaveCount(0);
 });
 
-test("anatomical favorites are session-only and refocus the original mesh", async ({ page }) => {
+test("anatomical favorites persist only within the tab and support a study route", async ({ page }) => {
   const writes: string[] = [];
   page.on("request", request => {
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
@@ -120,19 +120,29 @@ test("anatomical favorites are session-only and refocus the original mesh", asyn
   await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
   await page.getByRole("button", { name: "Esqueleto", exact: true }).click();
   const input = page.getByRole("textbox", { name: "Buscar estructura anatómica" });
+  const saved = page.getByRole("region", { name: "Estructuras favoritas" });
   await input.fill("femur");
   await page.getByRole("option", { name: /Fémur/i }).first().click();
-  await expect(page.getByRole("heading", { name: /Fémur/i })).toBeVisible();
   await page.getByRole("button", { name: "Guardar en favoritos" }).click();
-  const saved = page.getByRole("region", { name: "Estructuras favoritas" });
   await expect(saved.getByRole("button", { name: /Abrir Fémur/i })).toHaveCount(1);
-  await page.getByRole("tab", { name: "Recorridos" }).click();
+  await input.fill("humerus");
+  await page.getByRole("option", { name: /Húmero/i }).first().click();
+  await page.getByRole("button", { name: "Guardar en favoritos" }).click();
+  await expect(saved.getByRole("button", { name: /Abrir Húmero/i })).toHaveCount(1);
+  await saved.getByRole("button", { name: "Siguiente" }).click();
+  await expect(page.getByRole("heading", { name: /Fémur/i })).toBeVisible();
+  await saved.getByRole("button", { name: "Anterior" }).click();
+  await expect(page.getByRole("heading", { name: /Húmero/i })).toBeVisible();
+  await page.reload();
+  await expect(saved.getByRole("button", { name: /Abrir Fémur/i })).toHaveCount(1);
+  await expect(saved.getByRole("button", { name: /Abrir Húmero/i })).toHaveCount(1);
   await saved.getByRole("button", { name: /Abrir Fémur/i }).click();
   await expect(page.getByRole("heading", { name: /Fémur/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Quitar de favoritos", exact: true })).toBeVisible();
-  await saved.getByRole("button", { name: /Quitar Fémur.*de favoritos/i }).click();
+  await saved.getByRole("button", { name: "Vaciar favoritos" }).click();
   await expect(saved.getByRole("button", { name: /Abrir Fémur/i })).toHaveCount(0);
-  await expect(saved).toContainText("Solo en esta sesión");
+  await page.reload();
+  await expect(saved.getByRole("button", { name: /Abrir Húmero/i })).toHaveCount(0);
+  await expect(saved).toContainText("No se guardan en expedientes");
   expect(writes).toEqual([]);
 });
 
