@@ -95,7 +95,10 @@ La prueba comprueba que el destino tiene inicialmente cero tablas de
 usuario; vuelve a verificar el respaldo contra su manifiesto,
 lo restaura en el PostgreSQL aislado y compara la exportación
 lógica de los datos recuperados con la instantánea anterior
-mediante `verify_test_isolation.py`. No depende de que la base
+mediante `verify_restored_data.py`, que conserva multiplicidad de filas,
+columnas y secuencias sin depender del orden físico del clúster.
+`verify_test_isolation.py` conserva la comparación estricta para la
+preservación de la misma base. No depende de que la base
 principal esté levantada para realizar esa restauración.
 
 Solo después de superar esa comparación destruye el PostgreSQL
@@ -133,6 +136,14 @@ de restaurar. **No importa secretos ni roles productivos.**
 Para un procedimiento real serían necesarios inventario,
 aprovisionamiento seguro y comprobación independiente de roles,
 permisos y secretos de la infraestructura destino.
+
+El ensayo usa `--no-owner --no-acl`: no restaura propietarios ni
+permisos GRANT. Los roles del destino permanecen `NOLOGIN` y no
+se conecta la API a la base recuperada. Por tanto, este control
+demuestra recuperación del esquema y contenido ficticios, pero
+no demuestra que la aplicación pueda operar sobre el reemplazo
+con sus credenciales, permisos RLS y claves. Ese criterio sigue
+pendiente, separado del reinicio posterior de la aplicación original.
 
 
 ## Comparación semántica de datos en clústeres separados
