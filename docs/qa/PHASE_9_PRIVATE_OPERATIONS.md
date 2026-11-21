@@ -239,3 +239,19 @@ La Fase 9 aumenta de 75 % a **80 %** y la media de 85,5 % a **86,0 %**;
 el tablero continúa en **86 %**. No incluye frontend/HTTP por socket
 sobre el destino, recuperación MFA, custodia productiva, pérdida del host
 ni RPO/RTO. Evidencia y límites: `PHASE_9_RECOVERED_APPLICATION.md`.
+
+## Recuperación de MFA sobre el reemplazo (Fase 9: 85 %)
+
+La [CI integral 44939248415](https://github.com/erosCordova/bodyvision-ai/actions/runs/44939248415)
+aprobó Windows, pruebas nativas y Docker con **562 pruebas de aplicación**.
+La cuenta MFA se configura antes del respaldo y se comprueban sesión
+restaurada, TOTP y recuperación de uso único, claves externas, reemplazo
+del factor y revocación de sesiones y códigos anteriores. Un código
+consumido antes del backup no se habilita de nuevo. La auditoría posterior
+es válida y no hay acceso SQL directo de los roles a secretos MFA.
+
+La Fase 9 aumenta de 80 % a **85 %**; la media de 86,0 % a **86,5 %**,
+visible como **87 %**. No se acredita custodia productiva, recuperación
+sin credenciales/claves, frontend o HTTP real sobre el reemplazo,
+infraestructura fuera del host ni RPO/RTO.
+Evidencia detallada: `PHASE_9_RECOVERED_MFA.md`.

@@ -41,7 +41,9 @@ El ensayo utiliza FastAPI TestClient y conexiones reales de PostgreSQL,
 sin SET ROLE ni motores de propietario inyectados en la aplicación.
 No es una prueba de frontend o HTTP por socket sobre el reemplazo.
 Los 22 segundos del bloque de reposición de este runner no son un RTO.
-No recupera MFA, custodia productiva de claves, PITR, copias externas ni
+El ensayo original de `56e4542` no incluía recuperación MFA;
+la ampliación posterior aceptada consta en `PHASE_9_RECOVERED_MFA.md`.
+No cubre custodia productiva de claves, PITR, copias externas ni
 infraestructura fuera del host. No modifica Neon, despliegues o datos reales.
 
 Las pruebas de restricciones del runner cubren opt-in, entorno/base/rol

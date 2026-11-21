@@ -450,3 +450,33 @@ PostgreSQL real, sin HTTP por socket ni frontend sobre el reemplazo.
 No cierra recuperación MFA, custodia productiva de secretos, copias
 externas, pérdida física del host, PITR ni RPO/RTO. No modifica Neon,
 despliegues, `main`, el modelo 3D o datos reales.
+
+## Fase 9: recuperación MFA y reemplazo de factor después de restaurar
+
+Se acredita un entregable técnico de **5 puntos de fase**: una cuenta
+ficticia configurada con MFA antes del respaldo conserva su sesión
+verificada y permite autenticación TOTP o por código de recuperación
+sobre el PostgreSQL 15 restaurado, con la base original detenida.
+Un código consumido antes del respaldo sigue rechazado; códigos nuevos
+y TOTP aceptados no pueden reutilizarse. La clave MFA externa es distinta
+de la de capturas; sin clave no inicia la configuración MFA y con una
+clave incorrecta no se emite token. Ambos roles SQL tienen denegado el
+acceso directo a semillas cifradas y verificadores.
+
+También se comprueba el reemplazo del factor con contraseña y código
+válido: semilla nueva, sesiones anteriores revocadas, nueva confirmación,
+ocho códigos nuevos, rechazo de un código antiguo aún no usado y
+auditoría válida. Se utiliza el reloj real y la ventana TOTP existente.
+
+La [CI integral 44939248415](https://github.com/erosCordova/bodyvision-ai/actions/runs/44939248415)
+aprobó `0eba8fd7ae21bcc20db08d1c2bfe0cb11e91a5f9` en Windows,
+pruebas nativas y Docker: **562 pruebas de aplicación** (275 backend,
+243 frontend, 36 navegador público y 8 privado), más controles de
+scripts y restauración. Evidencia: `PHASE_9_RECOVERED_MFA.md`.
+
+La Fase 9 pasa de **80 % a 85 %**. La suma de diez fases pasa de
+**860 a 865**, promedio de **86,0 % a 86,5 %**; el tablero muestra
+**87 %** por redondeo. Las otras fases no cambian. Es una valoración
+técnica manual, no certificación de producción. Siguen pendientes
+frontend/HTTP real sobre el reemplazo, custodia productiva de secretos,
+copias externas, pérdida del host, PITR, RPO/RTO y revisiones independientes.

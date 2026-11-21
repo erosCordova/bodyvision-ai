@@ -308,7 +308,11 @@ se utiliza el siguiente paso permitido por la ventana existente de +1,
 sin esperas ni modificación del reloj de la aplicación.
 
 El evento `synthetic_recovered_mfa_verified` solo se emite al aprobar
-todas estas comprobaciones. Esta ampliación requiere aceptación en CI
-antes de modificar el avance. No demuestra custodia productiva de
+todas estas comprobaciones. La ampliación fue aceptada en la
+[CI integral 44939248415](https://github.com/erosCordova/bodyvision-ai/actions/runs/44939248415),
+commit `0eba8fd7ae21bcc20db08d1c2bfe0cb11e91a5f9`, con Windows,
+pruebas nativas y Docker aprobados y 562 pruebas de aplicación.
+La evidencia completa figura en `docs/qa/PHASE_9_RECOVERED_MFA.md`.
+No demuestra custodia productiva de
 secretos, recuperación sin claves/códigos ni seguridad ante un operador
 que deshabilite deliberadamente MFA en la configuración.
