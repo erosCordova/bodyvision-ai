@@ -331,3 +331,43 @@ externas, telemetría centralizada entre procesos, custodia/cifrado de
 incidentes, respaldo y recuperación productivos, RPO/RTO, revisión
 operativa y de privacidad, seguridad y autorización de datos reales.
 No se modifica `main`, Render, Vercel, la base alojada ni el modelo 3D.
+
+
+## Fase 9: control de integridad anterior a restauración de PostgreSQL
+
+Se añade un entregable operativo sintético valorado manualmente en
+**5 puntos de fase**: el simulacro de restauración genera un manifiesto
+SHA-256, tamaño y formato de un respaldo PostgreSQL `pg_dump --format=custom`,
+y exige su coincidencia **antes** de invocar `pg_restore`.
+Rechaza una copia deliberadamente alterada y comprueba que el respaldo
+original sí se restaura correctamente en `db-test`; a continuación
+mantiene la comprobación de equivalencia lógica del contenido.
+
+El comprobador es independiente de frameworks, se habilita solo con
+`APP_ENV=test`, `CI=true` y opt-in `synthetic-only`, limita el tamaño,
+rechaza enlaces simbólicos, sobreescritura del manifiesto, datos con
+formato equivocado y JSON inesperado. No registra contenido, SQL o
+secretos; tampoco publica los archivos de backup como artefactos.
+
+En la [CI integral 44927716849](https://github.com/erosCordova/bodyvision-ai/actions/runs/44927716849),
+commit `4f2d4e9b9dc0f36a1d84d8c316e6f5f79bbda7c5`,
+aprobaron Windows, `native-checks` y `docker-smoke`.
+La batería nativa aprobó 255 pruebas backend, 243 frontend,
+36 navegador público y 8 privado (**542 pruebas de aplicación**);
+las pruebas de scripts verificaron creación, manipulación, rechazo
+y opt-in en Linux y Windows. Docker aprobó la restauración de
+la copia verificada y el rechazo controlado de una copia corrupta.
+
+La Fase 9 pasa de **65 % a 70 %**. La suma de diez fases
+pasa de **845 a 850**: el promedio global exacto pasa de
+**84,5 % a 85,0 %** y el porcentaje visible **permanece en 85 %**
+por el redondeo anterior. Esto no acredita recuperación productiva,
+cifrado ni protección ante un atacante que reemplace a la vez
+archivo y manifiesto. No establece objetivos RPO/RTO, almacenamiento
+externo de respaldo ni controles para datos reales.
+
+Quedan pendientes copias y custodia productivas, ensayo de recuperación
+operativa ante caída del host, restauraciones geográficas, notificaciones
+externas, recuperación/rotación de secretos, legalidad y evaluación de
+seguridad. `main`, Render, Vercel, la base alojada y el modelo 3D
+permanecen sin cambios.

@@ -174,3 +174,28 @@ la API. El procedimiento no demuestra SLA ni observa el host apagado.
 Por alcance verificado, la Fase 9 pasa de 60 % a **65 %**, y el
 promedio global manual de diez fases pasa de 84,0 % a **84,5 %**,
 mostrado como **85 %** por redondeo.
+
+
+## Puerta de integridad de respaldo sintético (Fase 9: 70 %)
+
+El paso de restauración de CI ahora ejecuta
+`scripts/verify_restore_manifest.py` antes de `pg_restore`.
+Verifica cabecera de formato personalizado, tamaño dentro de un
+límite fijo y digest SHA-256 contra un manifiesto generado
+localmente con datos **exclusivamente ficticios**. El pipeline
+altera deliberadamente una copia del respaldo, comprueba su
+rechazo y solo entonces restaura el archivo original en
+`bodyvision_restored_ci`, base efímera aislada. El respaldo
+no se adjunta a artefactos ni se utiliza contra Neon.
+
+La [CI 44927716849](https://github.com/erosCordova/bodyvision-ai/actions/runs/44927716849)
+aprobó Windows, Docker, controles nativos, 542 pruebas de
+aplicación y regresiones de scripts Linux/Windows. El paso Docker
+de restauración con el nuevo gate terminó con éxito.
+
+Con esta evidencia, la Fase 9 pasa de 65 % a **70 %**
+por valoración manual; el promedio global sube de 84,5 % a
+**85,0 %** (visible **85 %**). SHA-256 sin autenticación
+no protege frente a sustitución simultánea de manifiesto
+y respaldo. No equivale a respaldo cifrado/externo,
+PITR, RPO/RTO o recuperación de infraestructura real.
