@@ -67,8 +67,7 @@ class WatchdogHistory:
             raise ValueError("An aware clock is required")
         with closing(self._connect()) as connection:
             row = connection.execute(
-                "SELECT state, checked_at, interval_seconds "
-                "FROM watchdog_latest_probe WHERE id = 1"
+                "SELECT state, checked_at, interval_seconds FROM watchdog_latest_probe WHERE id = 1"
             ).fetchone()
         status: dict[str, object] = {
             "event": "synthetic_watchdog_probe_status",
