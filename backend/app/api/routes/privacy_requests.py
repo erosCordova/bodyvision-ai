@@ -133,8 +133,19 @@ def profile_requests(
 ):
     _require_private(scope)
     records.profile(scope, profile_id)
-    query = "WHERE r.organization_id=:org AND r.profile_id=:profile"
-    params = {"org": scope.organization_id, "profile": profile_id, "limit": limit, "offset": offset}
+    # The subject's history is private to the authenticated submitter;
+    # a different specialist with access to the same expediente cannot
+    # inspect the other person's ARCO request. Administrators use the
+    # separately authorized review queue instead.
+    query = """WHERE r.organization_id=:org AND r.profile_id=:profile
+      AND r.requested_by=:actor"""
+    params = {
+        "org": scope.organization_id,
+        "profile": profile_id,
+        "actor": scope.actor_id,
+        "limit": limit,
+        "offset": offset,
+    }
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM {TABLE}
