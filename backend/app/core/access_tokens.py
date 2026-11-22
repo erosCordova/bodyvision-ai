@@ -21,7 +21,7 @@ ACCESS_LIFETIME = timedelta(minutes=15)
 _ACCESS_HEADER = b'{"alg":"HS256","typ":"JWT"}'
 _SESSION_DIGEST = re.compile(r"[0-9a-f]{64}")
 _BASE64URL = re.compile(r"[A-Za-z0-9_-]+")
-_SIGNING_KEY_FORMAT = re.compile(r"[A-Za-z0-9_-]{42}[AQgw]")
+_SIGNING_KEY_FORMAT = re.compile(r"[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]")
 _ACCESS_FIELDS = {"iss", "aud", "sub", "org", "role", "sid", "iat", "nbf", "exp", "jti"}
 
 
