@@ -6,7 +6,9 @@ En el entorno local/test con identidad privada optativa:
 - Registrar solicitudes de **acceso, rectificación, cancelación, oposición y exportación**
   vinculadas a un expediente al que el usuario tenga permiso explícito de lectura.
 - Ver historial paginado, estados `received` e `in_review`, fecha de registro
-  y fecha objetivo **interna y ficticia de 7 días** para revisar, no plazo legal.
+  y objetivo **interno y ficticio configurable de 1 a 30 días** (7 por defecto).
+  El aviso de atraso persiste al iniciar revisión y no equivale a un plazo legal.
+  [Configuración y regresión de objetivos](PHASE_9_PRIVACY_REVIEW_DEADLINES.md).
 - Cola administrativa aislada por RLS, sin acceso implícito a expedientes por ser
   administrador. Solo la cuenta administradora con permiso específico de
   escritura puede iniciar el triaje de una solicitud.
