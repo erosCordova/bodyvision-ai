@@ -1,0 +1,51 @@
+name: DIAG (temporary)
+on:
+  push:
+    branches: [arena/f3299ba6-bodyvision-ai]
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3
+        env:
+          POSTGRES_DB: bodyvision
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: [127.0.0.1:5432:5432]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://bodyvision_app@127.0.0.1:5432/bodyvision
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/bodyvision
+      TEST_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/bodyvision
+      AUTH_DATABASE_URL: postgresql+psycopg://bodyvision_auth_app@127.0.0.1:5432/bodyvision
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install --require-hashes -r backend/requirements-dev.lock
+      - name: Roles
+        run: |
+          psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO bodyvision_app;'
+          psql 'postgresql://postgres@127.0.0.1:5432/bodyvision' -v ON_ERROR_STOP=1 -c 'CREATE ROLE bodyvision_auth_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;'
+      - name: Reproduce CI backend step and annotate failures
+        working-directory: backend
+        run: |
+          set +e
+          {
+            echo "## ruff check"; ruff check app tests alembic; echo "ruff_check=$?"
+            echo "## ruff format"; ruff format --check app tests alembic; echo "ruff_format=$?"
+            echo "## upgrade"; alembic upgrade head; echo "upgrade=$?"
+            echo "## pytest"; pytest -q -x; echo "pytest=$?"
+            echo "## downgrade"; alembic downgrade base; echo "downgrade=$?"
+            echo "## upgrade2"; alembic upgrade head; echo "upgrade2=$?"
+          } > /tmp/all.log 2>&1
+          tail -100 /tmp/all.log
+          if grep -qE '=(1|2|3|4)$' /tmp/all.log; then
+            msg=$(tail -c 7000 /tmp/all.log | tr '\n' '|')
+            echo "::error title=ci-repro::${msg}"
+            exit 1
+          fi
