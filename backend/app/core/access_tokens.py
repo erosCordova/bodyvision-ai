@@ -96,9 +96,7 @@ def issue_access_token(
     body = _encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signing_input = (_encode(_ACCESS_HEADER) + "." + body).encode("ascii")
     signature = _encode(hmac.new(signing_key, signing_input, hashlib.sha256).digest())
-    return signing_input.decode("ascii") + "." + signature, datetime.fromtimestamp(
-        expiration, UTC
-    )
+    return signing_input.decode("ascii") + "." + signature, datetime.fromtimestamp(expiration, UTC)
 
 
 def _unique_object(items: list[tuple[str, object]]) -> dict[str, object]:
