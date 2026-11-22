@@ -53,13 +53,22 @@ captura, no usarse automáticamente para tomar decisiones sobre personas.
 
 ## Puertas de aceptación
 
-El commit final debe aprobar Windows, Docker, frontend, backend,
-Chromium público con inferencia real y Chromium privado, además de la
-aceptación independiente de retención. Los nuevos campos del reporte
-`test-results/pose-robustness-matrix.json` deben contener únicamente
-agregados y ninguna coordenada. No modificar `main`, Neon ni despliegues.
+**Aceptación técnica aprobada el 21-11-2026 (hora de Lima).**
+La [CI integral 44965518513](https://github.com/erosCordova/bodyvision-ai/actions/runs/44965518513)
+del commit `337d0c8a99d890a5b4dc40d2ffe036c928e7497d` terminó con
+`success`: **278 tests backend, 268 frontend, 43 navegador público
+(incluida la inferencia real de reflejo/repetición) y 8 privado**;
+597 pruebas de aplicación en total, además de Windows, Docker,
+migraciones y controles de dependencias. La
+[aceptación de retención 44965518523](https://github.com/erosCordova/bodyvision-ai/actions/runs/44965518523)
+también aprobó. El artefacto `bodyvision-browser-evidence` conserva
+`test-results/pose-robustness-matrix.json` con agregados, no puntos.
 
-El porcentaje de fase solo se reevalúa tras CI integral verde y revisión
-manual del criterio de aceptación. El cierre al 100 % sigue condicionado
-a un corpus consentido y autorizado con anotaciones humanas, pruebas
-físicas en varios equipos, rendimiento/seguridad y revisión independiente.
+Con esta aceptación técnica adicional se revisa **manualmente** la Fase 5
+de **85 % a 90 %** y el promedio de diez fases de **88,0 % a 88,5 %**,
+representado como **89 %** en el tablero. No se considera una validación
+clínica, antropométrica, de exactitud o de rendimiento en dispositivos reales.
+El cierre al 100 % sigue condicionado a corpus consentido y autorizado,
+anotaciones humanas, ensayos físicos y revisión independiente. La ejecución
+de la CI no garantiza ausencia absoluta de defectos y no justifica
+habilitar fotografías reales.
