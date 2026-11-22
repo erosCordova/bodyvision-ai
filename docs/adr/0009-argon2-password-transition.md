@@ -1,6 +1,6 @@
 # ADR 0009 — transición de contraseñas a Argon2id
 
-Estado: implementación para validación local/CI ficticia; no habilita producción.
+Estado: aceptado técnicamente en local/CI ficticia; no habilita producción.
 Implementa la elección de contraseña del ADR 0002. JWT/refresh y los demás
 componentes de identidad conservan sus pendientes; este ADR no los reemplaza.
 
@@ -58,8 +58,30 @@ documentado de memoria baja; su capacidad productiva concurrente aún requiere
 medición. Ambos lockfiles agregan argon2-cffi y sus bindings con hashes, sin
 cambiar las versiones previamente fijadas.
 
-La aceptación integral se registrará tras CI. Las pruebas específicas cubren
+Las pruebas específicas cubren
 legacy y PHC, rechazo de parámetros abusivos antes del KDF, preservación de
 recuperación MFA, actualización única, MFA correcto, sesión anterior válida,
 hash obsoleto rechazado, rol de datos y rollback por fallo real del trigger
 de auditoría. No se modifica Neon ni se procesa información de personas reales.
+
+## Aceptación técnica — 21 de noviembre de 2026
+
+La [CI integral 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816) aprobó
+`06336d08ceb719b51c465b6cc15d8b17f6e9a973`: **335 backend, 274 frontend,
+43 recorridos públicos y 9 privados = 661 pruebas de aplicación**.
+También aprobaron Windows, PostgreSQL 15, instalación de dependencias con
+hashes, auditoría de dependencias, Docker, restauración y navegador sobre
+la base recuperada. Docker ejecutó 233 pruebas backend y omitió 102 que
+requieren roles/credenciales de la suite nativa; esta última ejecutó las
+335 sin omisiones. No se suman las repeticiones Docker al total de 661.
+La [retención independiente 44982522804](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522804)
+aprobó sobre el mismo commit, incluida reversión/restauración del esquema.
+
+En local aprobaron 334 pruebas y se excluyó solo la aserción que exige
+PostgreSQL 15, porque el servidor temporal era 16; CI cubrió esa aserción.
+La fase 3 sigue en 90 % y el global en 91,5 % exacto / 92 % redondeado.
+No se registra aceptación de fase 0 ni cierre integral de identidad: JWT/refresh,
+invitaciones y matriz de roles del contrato siguen pendientes.
+
+La actualización posterior de documentos y textos de seguimiento pasó
+ESLint y las cuatro pruebas de progreso. No cambia funcionalidad ni porcentajes.

@@ -5,8 +5,10 @@ local/test. La habilitación real conserva sus criterios de salida.
 
 ## Controles actuales
 
-- PBKDF2-HMAC-SHA256 con 600.000 iteraciones según el código actual, sesiones
-  opacas revocables y token únicamente en memoria React.
+- Argon2id para contraseñas nuevas y actualización transaccional de hashes
+  PBKDF2 históricos solo tras autenticación completa; códigos MFA separados.
+  Sesiones opacas revocables y token únicamente en memoria React. Véase
+  [ADR 0009](../adr/0009-argon2-password-transition.md).
 - Administrator/specialist/member, RLS, concesiones por expediente y aislamiento
   por organización; el administrador no obtiene lectura sensible implícita.
 - MFA TOTP/códigos de un uso en modo privado habilitado; semillas cifradas con
@@ -34,16 +36,17 @@ local, no evidencia de un endpoint de producción seguro.
 El versionado de observaciones, la idempotencia y las restricciones de catálogo
 se conservan. El selector ficticio de organización no se reutiliza como identidad.
 
-La [CI 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
-es la evidencia integral actual: 647 pruebas de aplicación con su alcance
+La [CI 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816)
+es la evidencia integral actual: 661 pruebas de aplicación con su alcance
 ficticio. No sustituye una revisión externa de seguridad.
 
 ## Diferencias y pendientes
 
-El [ADR 0002](../adr/0002-identity-tenancy.md) plantea argon2id, JWT y refresh
-rotatorio; el código usa PBKDF2 y sesiones opacas. Debe resolverse esa diferencia
-explícitamente. Este documento la describe, no aprueba su equivalencia para
-el objetivo real. Invitación, recuperación objetivo y matriz completa de roles
+El [ADR 0002](../adr/0002-identity-tenancy.md) plantea Argon2id, JWT y refresh
+rotatorio. La contraseña ya usa Argon2id; JWT/refresh sigue pendiente porque
+la implementación conserva sesiones opacas. Este documento describe esa
+diferencia y no aprueba su equivalencia para el objetivo real.
+Invitación, recuperación objetivo y matriz completa de roles
 conservan su revisión e implementación pendientes.
 
 Reescribir toda la auditoría y su cabecera requiere una referencia independiente

@@ -818,3 +818,29 @@ Una referencia de revisión ficticia no prueba identidad ni aprobación humana.
 Procedimiento: `docs/operations/SYNTHETIC_OFFLINE_MFA_RECOVERY.md`.
 Orden decidido por el usuario: cerrar fases antes de Figma y mejora visual,
 registrado en `PHASE_COMPLETION_PRIORITY.md`; no se rediseña la interfaz.
+
+
+## Fase 3 — Argon2id y actualización autenticada de contraseñas (21-11-2026)
+
+Se implementa la contraseña Argon2id del ADR 0002 con política explícita
+de 64 MiB/t=3/p=4 y validación de parámetros antes del KDF. Las cuentas
+PBKDF2 históricas se actualizan solo tras contraseña y MFA válidos, en
+la misma transacción de sesión/auditoría, sin invalidar otras sesiones
+por un mero cambio de representación del secreto. Un fallo de auditoría
+revierte hash, sesión y estado MFA. Los códigos MFA mantienen su formato
+anterior y el rol de datos no puede ejecutar la función de actualización.
+
+La [CI integral 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816) aprobó
+`06336d08ceb719b51c465b6cc15d8b17f6e9a973`: **335 backend, 274 frontend,
+43 públicas y 9 privadas = 661 pruebas de aplicación**, más Windows y Docker.
+La [retención independiente 44982522804](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522804)
+aprobó sobre el mismo commit. La reversión/restauración del esquema pasó;
+un downgrade DDL no convierte hashes Argon2id a PBKDF2 ni permite volver
+a un backend que ignore Argon2id. El despliegue exige coordinación del esquema
+y backend. Evidencia y limitaciones: [ADR 0009](../adr/0009-argon2-password-transition.md).
+
+No se aumenta la estimación: fase 3 **90 %**, suma **915**, media exacta
+**91,5 %** y global mostrado **92 %**. Se resuelve un componente del contrato;
+JWT/refresh, invitación y matriz completa de roles conservan sus pendientes.
+La aceptación de fase 0 continúa pendiente y no se atribuye aprobación al
+usuario por pedir continuar. No hay cambios en Neon, main o despliegues.

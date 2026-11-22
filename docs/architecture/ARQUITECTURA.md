@@ -1,6 +1,6 @@
 # Arquitectura de BodyVision — estado revisado
 
-Revisión: 21 de noviembre de 2026. Esquema privado 0022_report_format_audit.
+Revisión: 21 de noviembre de 2026. Esquema privado 0023_argon2_passwords.
 La descripción inicial de F2 se conserva en Git; este documento distingue
 la implementación actual del objetivo todavía pendiente.
 
@@ -10,6 +10,8 @@ la implementación actual del objetivo todavía pendiente.
   loopback en local; Vite usa proxy durante desarrollo.
 - FastAPI usa SQLAlchemy y PostgreSQL; credenciales separadas de migración,
   datos y autenticación, RLS y permisos por organización/expediente.
+- Las contraseñas nuevas usan Argon2id; las históricas PBKDF2 se actualizan
+  tras autenticación completa, con auditoría y rollback transaccional.
 - El modo privado local/test ofrece sesiones opacas, roles, MFA, consentimiento
   ficticio, PNG sintéticos cifrados, resúmenes de pose, mediciones y escenarios
   versionados, PDF/CSV y auditoría.
@@ -41,5 +43,5 @@ operación productiva no se dan por resueltos mediante sus equivalentes de prueb
 Los ADR iniciales describen objetivos; no prueban que estén implementados.
 
 La [propuesta de fase 0](../qa/PHASE_0_SCOPE_REVIEW.md) registra diferencias y
-riesgos para revisión. La [CI 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
-aprobó 647 pruebas del código revisado. No certifica el contrato completo.
+riesgos para revisión. La [CI 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816)
+aprobó 661 pruebas del código revisado. No certifica el contrato completo.
