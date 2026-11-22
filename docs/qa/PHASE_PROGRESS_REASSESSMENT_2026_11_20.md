@@ -678,3 +678,49 @@ certifica que toda la organización esté limpia. Tampoco detecta
 backups, WAL, instantáneas externas, fotos descargadas, copias no
 inventariadas ni procesos cuando Docker/PostgreSQL estén apagados.
 No habilita datos reales ni modifica main, Neon o despliegues.
+
+
+## Fase 4 — purga manual acotada por expediente (21-11-2026)
+
+Se limitó la ruta ya existente
+\`POST /api/v1/profiles/{id}/captures/purge-expired\` a un **lote de
+100 capturas ficticias vencidas** por operación, con orden explícito,
+bloqueo de filas \`FOR UPDATE SKIP LOCKED\` y confinamiento a
+organización/expediente/permiso de edición vigente. El resultado devuelve
+cantidad eliminada, límite de lote y si se alcanzó ese límite. Un lote
+completo **no prueba que existan más**: la interfaz informa solamente
+que *podría* quedar una cola pendiente. No modifica archivos vigentes.
+
+El botón «Eliminar lote de capturas vencidas» se añadió al archivo
+privado del expediente, condicionado a doble consentimiento ficticio
+y permiso de edición. El servidor sigue verificando autorización y
+registra \`capture.purge\` en la **misma transacción** que el borrado;
+un fallo de auditoría hace rollback y no entrega éxito.
+
+La prueba positiva con 105 capturas vencidas y dos vigentes comprueba
+respuestas **100 + 5 + 0**; revisa los dos ciphertext vigentes, la
+cadena de tres eventos de auditoría, los errores de usuarios sin
+permisos y el bloqueo de organización ajena. Una prueba negativa
+inyecta un fallo de auditoría y comprueba que el objeto vencido
+permanece en PostgreSQL. Chromium privado pulsa el botón y comprueba
+la respuesta del servidor.
+
+**CI final aceptada:**
+https://github.com/erosCordova/bodyvision-ai/actions/runs/44972541109
+para el commit \`363fe90a76e970791a30a6d087780cea0d4e3b4c\`:
+**295 backend, 272 frontend, 43 navegador público y 8 privado =
+618 pruebas de aplicación**; Docker y Windows aprobados.
+La [retención independiente](https://github.com/erosCordova/bodyvision-ai/actions/runs/44972541211)
+también concluyó satisfactoriamente.
+
+Por la aceptación de un control adicional de seguridad y retención
+verificado de extremo a extremo, se reevalúa manualmente la Fase 4 de
+**85 % a 90 %**. Las diez fases suman **905 puntos**; el promedio
+global pasa de **90,0 % a 90,5 % exacto**, que el tablero mostrará
+como **91 % por redondeo**. No significa 91 % exacto.
+
+Esta purga solo elimina filas activas del PostgreSQL de pruebas.
+No elimina WAL, backups, snapshots, archivos ya descargados ni
+copias de terceros. No garantiza limpieza cuando Docker o PostgreSQL
+estén apagados ni autoriza tratamiento de fotografías reales.
+Se mantienen sin cambios producción, \`main\`, Neon y el atlas 3D.
