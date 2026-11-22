@@ -724,3 +724,28 @@ No elimina WAL, backups, snapshots, archivos ya descargados ni
 copias de terceros. No garantiza limpieza cuando Docker o PostgreSQL
 estén apagados ni autoriza tratamiento de fotografías reales.
 Se mantienen sin cambios producción, \`main\`, Neon y el atlas 3D.
+
+
+## Fase 7 — formato auditado de exportaciones PDF y CSV (21-11-2026)
+
+Se completa el pendiente de distinción auditada: las exportaciones nuevas
+registran `report.export.pdf` o `report.export.csv`, según la ruta del
+servidor. El ID de respuesta coincide con el evento confirmado; los eventos
+históricos genéricos mantienen sus hashes y el formato desconocido.
+La firma SQL antigua deja de estar disponible al rol de aplicación;
+la nueva valida formatos, identidad y acceso ficticio vigente. Una falla
+de auditoría impide entregar el archivo. La migración 0022 es reversible.
+
+La [CI integral 44975198450](https://github.com/erosCordova/bodyvision-ai/actions/runs/44975198450)
+aprobó `92823d4dc7dd04e735244940674673f41532c741` con **297 backend,
+272 frontend, 43 públicas y 8 privadas: 620 pruebas de aplicación**,
+además de Docker y Windows. Retención independiente 44975198474 aprobada.
+Las pruebas verifican cadena mixta, preservación de hashes, rechazo de
+formatos aportados por el cliente, permisos y contextos no autorizados.
+
+La Fase 7 conserva su **90 %**; la suma de las diez fases continúa en
+**905 puntos**, promedio **90,5 % exacto**, **91 % redondeado**.
+No se eleva el porcentaje por resolver este pendiente parcial. Continúan
+firma/autenticidad externas, confirmación de recepción del archivo,
+historiales de más de 500 observaciones y revisión independiente.
+Evidencia ampliada: `PHASE_7_REPORT_FORMAT_AUDIT_2026_11_21.md`.

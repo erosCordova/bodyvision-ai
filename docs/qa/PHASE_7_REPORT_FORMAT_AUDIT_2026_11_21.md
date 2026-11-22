@@ -34,7 +34,15 @@ entregan archivos cuando falla la auditoría.
 La validación local suplementaria utiliza un PostgreSQL 16 descartable;
 el PostgreSQL 15 fijado del proyecto se verifica en CI. Se comprueba
 upgrade/downgrade de la nueva migración y el ciclo completo base/head.
-Los resultados integrales de CI se registrarán después de su ejecución.
+La [CI integral 44975198450](https://github.com/erosCordova/bodyvision-ai/actions/runs/44975198450)
+aprobó el commit `92823d4dc7dd04e735244940674673f41532c741`:
+**297 backend, 272 frontend, 43 navegador público y 8 privado = 620
+pruebas de aplicación**. Windows y Docker finalizaron con `success`,
+incluida restauración, MFA, HTTP privado y conservación tras reinicio.
+La [retención independiente 44975198474](https://github.com/erosCordova/bodyvision-ai/actions/runs/44975198474)
+también aprobó. La comprobación local suplementaria aprobó seis pruebas
+específicas y 296 backend, excluyendo solo la aserción de versión 15;
+la CI sí aprobó las 297 sobre la versión PostgreSQL 15 fijada.
 
 ## Alcance de aceptación
 
@@ -44,3 +52,6 @@ Se mantiene su estimación de **90 %** y el global en **90,5 % exacto,
 el disco del usuario ni interpretación clínica. Continúan pendientes
 los historiales superiores a 500 observaciones y los restantes criterios
 de aceptación independiente. Solo expedientes ficticios en local/test.
+
+La reversión de la migración debe acompañarse de la versión correspondiente
+del backend; el control de preparación exige la revisión de esquema vigente.
