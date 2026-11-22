@@ -7,8 +7,9 @@ alone cannot keep an unattended session alive.
 
 import re
 
-from alembic import op
 from sqlalchemy import text
+
+from alembic import op
 
 revision = "0027_private_idle_activity"
 down_revision = "0026_refresh_session_families"
