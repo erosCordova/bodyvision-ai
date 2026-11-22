@@ -49,6 +49,13 @@ def upgrade() -> None:
             organization_id=NULLIF(current_setting('app.organization_id',true),'')::uuid
             AND current_setting('app.identity_verified',true)='yes'
             AND has_profile_access(profile_id)
+            AND EXISTS (
+              SELECT 1 FROM public.profile_access a
+              WHERE a.organization_id=synthetic_privacy_requests.organization_id
+                AND a.profile_id=synthetic_privacy_requests.profile_id
+                AND a.user_id=NULLIF(current_setting('app.actor_id',true),'')::uuid
+                AND (a.expires_at IS NULL OR a.expires_at>now())
+            )
           );
         CREATE POLICY privacy_request_submit ON public.synthetic_privacy_requests
           FOR INSERT WITH CHECK (
@@ -103,6 +110,14 @@ def upgrade() -> None:
           ELSIF target_profile IS NULL
             OR NOT has_profile_access(target_profile,
               event_name='privacy.request.review_started')
+            OR NOT EXISTS (
+              SELECT 1 FROM public.profile_access a
+              WHERE a.organization_id=tenant AND a.profile_id=target_profile
+                AND a.user_id=actor
+                AND (a.expires_at IS NULL OR a.expires_at>now())
+                AND (event_name<>'privacy.request.review_started'
+                  OR a.access_level IN ('write','manage'))
+            )
             OR (event_name='privacy.request.review_started' AND NOT administrator)
           THEN
             RAISE EXCEPTION 'Privacy profile scope denied' USING ERRCODE='42501';
