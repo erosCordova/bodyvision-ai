@@ -54,7 +54,7 @@ class RecoveryVerificationError(RuntimeError):
 
 @dataclass(frozen=True)
 class PurgedCapture:
-    identifier: UUID
+    identifier: UUID | str
     sha256_digest: str
 
 
@@ -187,19 +187,31 @@ def read_only_engine(url: str) -> Engine:
 
 def find_reappeared(engine: Engine, manifest: Sequence[PurgedCapture]) -> list[dict[str, str]]:
     """Return manifest captures still present in the restored copy."""
-    if (
-        not isinstance(manifest, (list, tuple))
-        or not 1 <= len(manifest) <= MAX_MANIFEST_ENTRIES
-        or any(
+    if not isinstance(manifest, (list, tuple)) or not 1 <= len(manifest) <= MAX_MANIFEST_ENTRIES:
+        raise RecoveryVerificationDenied("Manifiesto en memoria no válido o excesivo.")
+    identifiers: list[UUID] = []
+    digests: list[str] = []
+    for item in manifest:
+        if (
             not isinstance(item, PurgedCapture)
-            or not isinstance(item.identifier, UUID)
             or not isinstance(item.sha256_digest, str)
             or DIGEST.fullmatch(item.sha256_digest) is None
-            for item in manifest
-        )
-    ):
-        raise RecoveryVerificationDenied("Manifiesto en memoria no válido o excesivo.")
-    if len({item.identifier for item in manifest}) != len(manifest):
+        ):
+            raise RecoveryVerificationDenied("Manifiesto en memoria no válido o excesivo.")
+        if isinstance(item.identifier, UUID):
+            identifier = item.identifier
+        elif isinstance(item.identifier, str):
+            try:
+                identifier = UUID(item.identifier)
+            except ValueError:
+                raise RecoveryVerificationDenied("Identificador no válido.") from None
+            if str(identifier) != item.identifier:
+                raise RecoveryVerificationDenied("Se requiere UUID canónico.")
+        else:
+            raise RecoveryVerificationDenied("Identificador no válido.")
+        identifiers.append(identifier)
+        digests.append(item.sha256_digest)
+    if len(set(identifiers)) != len(identifiers):
         raise RecoveryVerificationDenied("Identificadores repetidos en la verificación.")
     statement = text(
         "SELECT id,sha256_digest FROM synthetic_capture_objects "
@@ -224,8 +236,8 @@ def find_reappeared(engine: Engine, manifest: Sequence[PurgedCapture]) -> list[d
             rows = connection.execute(
                 statement,
                 {
-                    "identifiers": [entry.identifier for entry in manifest],
-                    "digests": [entry.sha256_digest for entry in manifest],
+                    "identifiers": identifiers,
+                    "digests": digests,
                 },
             ).all()
     except SQLAlchemyError as exc:
