@@ -101,7 +101,6 @@ def test_verified_request_timeout_is_observed_without_raw_sql(protected):
     assert "57014" not in json.dumps(body)
 
 
-
 def test_capture_inventory_is_admin_only_rls_scoped_and_read_only(protected):
     import hashlib
     from uuid import uuid4
@@ -136,10 +135,14 @@ def test_capture_inventory_is_admin_only_rls_scoped_and_read_only(protected):
                     )
                 """),
                 {
-                    "id": identifier, "org": FIRST_WORKSPACE, "profile": profile,
-                    "actor": editor[0], "bytes": len(image),
+                    "id": identifier,
+                    "org": FIRST_WORKSPACE,
+                    "profile": profile,
+                    "actor": editor[0],
+                    "bytes": len(image),
                     "digest": hashlib.sha256(image).hexdigest(),
-                    "cipher": encrypted, "expired": is_expired,
+                    "cipher": encrypted,
+                    "expired": is_expired,
                 },
             )
     # An administrator without a profile grant sees only their own empty
@@ -154,8 +157,7 @@ def test_capture_inventory_is_admin_only_rls_scoped_and_read_only(protected):
                 INSERT INTO profile_access(id,organization_id,profile_id,user_id,access_level)
                 VALUES(:id,:org,:profile,:actor,'read')
             """),
-            {"id": uuid4(), "org": FIRST_WORKSPACE,
-             "profile": profile, "actor": administrator[0]},
+            {"id": uuid4(), "org": FIRST_WORKSPACE, "profile": profile, "actor": administrator[0]},
         )
     response = client.get(endpoint, headers=admin)
     assert response.status_code == 200, response.text
@@ -166,21 +168,33 @@ def test_capture_inventory_is_admin_only_rls_scoped_and_read_only(protected):
     assert body["oldest_expired_at"] is not None
     assert body["purge_executed"] is False
     assert "no-store" in response.headers["cache-control"]
-    assert client.get(
-        endpoint,
-        headers={**admin, "X-Workspace-ID": str(SECOND_WORKSPACE)},
-    ).status_code == 400
+    assert (
+        client.get(
+            endpoint,
+            headers={**admin, "X-Workspace-ID": str(SECOND_WORKSPACE)},
+        ).status_code
+        == 400
+    )
     for sensitive in (
-        str(FIRST_WORKSPACE), str(SECOND_WORKSPACE), str(profile),
-        str(expired), str(current), str(editor[0]),
-        admin["Authorization"], "ciphertext", "password",
+        str(FIRST_WORKSPACE),
+        str(SECOND_WORKSPACE),
+        str(profile),
+        str(expired),
+        str(current),
+        str(editor[0]),
+        admin["Authorization"],
+        "ciphertext",
+        "password",
     ):
         assert sensitive not in response.text
     with owner.connect() as connection:
-        assert connection.execute(
-            text("SELECT count(*) FROM synthetic_capture_objects WHERE profile_id=:id"),
-            {"id": profile},
-        ).scalar_one() == 2
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM synthetic_capture_objects WHERE profile_id=:id"),
+                {"id": profile},
+            ).scalar_one()
+            == 2
+        )
     # Losing the only grant immediately removes the observation.
     with owner.begin() as connection:
         connection.execute(

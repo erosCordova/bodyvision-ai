@@ -79,7 +79,6 @@ def operations(request: Request):
     return result
 
 
-
 class CaptureRetentionInventory(BaseModel):
     scope: Literal["current_organization_accessible_profiles_only"]
     checked_at: datetime
@@ -133,10 +132,12 @@ def capture_retention_inventory(request: Request, scope: Scope):
                   statement_timestamp() AS checked
              FROM visible"""
     )
-    row = scope.connection.execute(
-        statement,
-        {"org": scope.organization_id, "limit": CAPTURE_INVENTORY_LIMIT + 1},
-    ).mappings().one()
-    return describe_capture_retention(
-        row["observed"], row["oldest"], row["checked"]
+    row = (
+        scope.connection.execute(
+            statement,
+            {"org": scope.organization_id, "limit": CAPTURE_INVENTORY_LIMIT + 1},
+        )
+        .mappings()
+        .one()
     )
+    return describe_capture_retention(row["observed"], row["oldest"], row["checked"])
