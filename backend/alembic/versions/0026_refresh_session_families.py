@@ -171,7 +171,9 @@ _PREVIOUS_ROTATE_SESSION = """
 def upgrade() -> None:
     op.execute("""
         ALTER TABLE public.auth_sessions
-          ADD COLUMN family_id uuid,
+          -- A session inserted outside the issuance function still opens its
+          -- own family instead of failing the not-null constraint.
+          ADD COLUMN family_id uuid DEFAULT gen_random_uuid(),
           ADD COLUMN parent_session_id uuid,
           ADD COLUMN consumed_at timestamptz;
         -- Historical sessions predate lineage: each one becomes its own family.

@@ -90,14 +90,25 @@ distinto del rol de API, datos exclusivamente ficticios.
 
 - `alembic upgrade head` y ciclo `downgrade base` → `upgrade head`: correctos.
 - Ruta `0025` → `0026` con una sesión previa: `family_id = id` rellenado.
+  La función heredada del *downgrade* se ejecutó realmente para comprobar que
+  no referencia columnas eliminadas.
 - `ruff check` y `ruff format --check`: correctos.
-- `pytest -q` backend completo: **382 aprobadas, 15 omitidas, 1 fallo**
+- `pytest -q` backend completo sobre TCP con `127.0.0.1` (para que también se
+  ejecutasen las pruebas que solo corren contra PostgreSQL local):
+  **397 aprobadas, 0 omitidas, 1 fallo**
   (`tests/integration/test_postgres.py::test_actual_database_has_revision`),
   que exige PostgreSQL 15 y por eso no aplica al servidor local 16.2; la CI
   nativa ejecuta ese caso sobre PostgreSQL 15.
 - `pytest` focalizado (`test_refresh_reuse`, `test_session_rotation`,
   `test_cookie_access`, `test_jwt_access`, `test_account_security`,
-  `test_mfa_step_up`, `test_first_admin_bootstrap`): 35 aprobadas, 2 omitidas.
+  `test_mfa_step_up`, `test_first_admin_bootstrap`): 35 aprobadas.
+
+La CI del primer intento detectó un fallo real que estas pruebas locales no
+cubrían: `test_mfa_key_rotation.py` inserta una sesión directamente sin
+`family_id`. La columna mantiene `DEFAULT gen_random_uuid()` para que una
+sesión creada fuera de `issue_private_session()` abra su propia familia en
+lugar de romper la restricción; la CI posterior a la corrección valida ese
+caso sobre PostgreSQL 15.
 
 La evidencia de CI del PR se enlaza en el issue #37 y en el propio pull request.
 Este documento no declara aprobación de CI antes de que exista el run.
