@@ -72,11 +72,18 @@ def list_profiles(
     offset: int = Query(0, ge=0),
     search: str = Query("", max_length=100),
 ):
-    condition = """organization_id=:org AND
-        (display_code ILIKE :search OR COALESCE(display_name,'') ILIKE :search)"""
+    # Defense in depth: RLS already filters profiles by the authenticated
+    # actor's unexpired grant. Apply the same predicate explicitly to BOTH
+    # rows and count so the endpoint remains scoped even if RLS changes.
+    # Escape ILIKE wildcards: search means literal substring, not a SQL pattern.
+    condition = """organization_id=:org AND has_profile_access(id) AND
+        (display_code ILIKE :search ESCAPE :escape_char OR
+         COALESCE(display_name,'') ILIKE :search ESCAPE :escape_char)"""
+    pattern = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     params = {
         "org": scope.organization_id,
-        "search": "%" + search + "%",
+        "search": "%" + pattern + "%",
+        "escape_char": "\\",
         "limit": limit,
         "offset": offset,
     }

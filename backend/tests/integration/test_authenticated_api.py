@@ -2140,3 +2140,91 @@ def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(pr
     # at teardown. The real write-after-reactivation path is covered by the
     # dedicated F2 data-core integration test and the private browser flow.
     assert client.get(path, headers=editor).json()["display_name"] == "Reactivado"
+
+
+def test_private_profile_list_uses_current_grants_for_rows_total_and_search(protected):
+    """RLS and explicit repository predicates must agree under revoke/expiry."""
+    client, owner, profile, users = protected
+    editor, reader, outsider, admin = users
+    member_token = authenticate(client, reader[0], reader[1]).json()["token"]
+    admin_token = authenticate(client, admin[0], admin[1]).json()["token"]
+    outsider_token = authenticate(client, outsider[0], outsider[1]).json()["token"]
+    editor_token = authenticate(client, editor[0], editor[1]).json()["token"]
+
+    def directory(token, search="", limit=20, offset=0):
+        return client.get(
+            "/api/v1/profiles",
+            params={"search": search, "limit": limit, "offset": offset},
+            headers=headers(token),
+        )
+
+    visible = directory(member_token)
+    assert visible.status_code == 200, visible.text
+    assert visible.json()["total"] == 1
+    assert [item["id"] for item in visible.json()["items"]] == [str(profile)]
+    code = visible.json()["items"][0]["display_code"]
+    assert directory(editor_token).json()["total"] == 1
+    for token in (admin_token, outsider_token):
+        result = directory(token)
+        assert result.status_code == 200
+        assert result.json()["total"] == 0
+        assert result.json()["items"] == []
+
+    # Totals are computed AFTER authorization and BEFORE paging.
+    first = directory(member_token, code.lower(), limit=1, offset=0)
+    second = directory(member_token, code.lower(), limit=1, offset=1)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["total"] == second.json()["total"] == 1
+    assert [item["id"] for item in first.json()["items"]] == [str(profile)]
+    assert second.json()["items"] == []
+
+    # Search is a literal substring, not a caller-defined ILIKE pattern.
+    # Otherwise '%' and '_' could bypass the intended search narrowing.
+    for wildcard in ("%", "_", "\\"):
+        result = directory(member_token, wildcard)
+        assert result.status_code == 200, result.text
+        assert result.json()["items"] == []
+        assert result.json()["total"] == 0
+
+    assert directory(member_token, limit=0).status_code == 422
+    assert directory(member_token, offset=-1).status_code == 422
+
+    # Expire only the grant: login stays active, but both rows and totals vanish.
+    with owner.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE profile_access SET expires_at=now()-interval '1 minute' "
+                "WHERE profile_id=:profile AND user_id=:user"
+            ),
+            {"profile": profile, "user": reader[0]},
+        )
+    assert client.get("/api/v1/auth/me", headers=headers(member_token)).status_code == 200
+    expired = directory(member_token)
+    assert expired.status_code == 200
+    assert expired.json()["total"] == 0 and expired.json()["items"] == []
+    assert (
+        client.get(f"/api/v1/profiles/{profile}", headers=headers(member_token)).status_code == 404
+    )
+
+    with owner.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE profile_access SET expires_at=now()+interval '30 days' "
+                "WHERE profile_id=:profile AND user_id=:user"
+            ),
+            {"profile": profile, "user": reader[0]},
+        )
+    assert directory(member_token).json()["total"] == 1
+
+    revoked = client.post(
+        "/api/v1/auth/profile-access/revoke",
+        json={"profile_id": str(profile), "user_id": str(reader[0])},
+        headers=headers(admin_token),
+    )
+    assert revoked.status_code == 200, revoked.text
+    after_revoke = directory(member_token)
+    assert after_revoke.status_code == 200
+    assert after_revoke.json()["total"] == 0 and after_revoke.json()["items"] == []
+    assert (
+        client.get(f"/api/v1/profiles/{profile}", headers=headers(member_token)).status_code == 404
+    )
