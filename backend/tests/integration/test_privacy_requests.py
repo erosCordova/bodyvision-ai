@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 from sqlalchemy import text
-
 from test_authenticated_api import authenticate, headers
 from test_authenticated_api import protected as protected
 
