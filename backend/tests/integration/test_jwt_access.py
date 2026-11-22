@@ -92,9 +92,7 @@ def test_jwt_does_not_bypass_new_mfa_enforcement(protected):
     _enable(client)
     specialist = authenticate(client, *users[0][:2]).json()["token"]
     member = authenticate(client, *users[1][:2]).json()["token"]
-    professional_jwt = client.post(EXCHANGE, headers=headers(specialist)).json()[
-        "access_token"
-    ]
+    professional_jwt = client.post(EXCHANGE, headers=headers(specialist)).json()["access_token"]
     member_jwt = client.post(EXCHANGE, headers=headers(member)).json()["access_token"]
     client.app.state.settings = client.app.state.settings.model_copy(update={"mfa_enabled": True})
     assert client.get(IDENTITY, headers=headers(professional_jwt)).status_code == 401
