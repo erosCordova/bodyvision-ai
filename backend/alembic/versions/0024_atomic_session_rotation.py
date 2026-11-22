@@ -104,7 +104,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP FUNCTION public.private_rotate_session(char(64),char(64),uuid,uuid,uuid)"
-    )
+    op.execute("DROP FUNCTION public.private_rotate_session(char(64),char(64),uuid,uuid,uuid)")
     op.execute("UPDATE system_schema_state SET revision='0023_argon2_passwords'")
