@@ -125,7 +125,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     @app.exception_handler(DomainError)
     async def domain_error(request: Request, exc: DomainError) -> JSONResponse:
-        return JSONResponse(
+        response = JSONResponse(
             status_code=exc.status,
             content={
                 "code": exc.code,
@@ -134,6 +134,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 "correlation_id": request.state.correlation_id,
             },
         )
+        for name, path in exc.clear_cookies:
+            response.delete_cookie(key=name, path=path, samesite="strict")
+        return response
 
     @app.exception_handler(IntegrityError)
     async def integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:

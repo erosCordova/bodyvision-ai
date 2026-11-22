@@ -18,7 +18,7 @@ const sections = [
 
 export function DataLayout() {
   const { id, setId, api, readOnly } = useWorkspace();
-  const { session, logout } = usePrivateAuth();
+  const { session, restoring, logout } = usePrivateAuth();
   const protectedMode = privateAuthEnabled();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,6 +29,7 @@ export function DataLayout() {
   });
   const current = sections.find(section => section.route === location.pathname) ||
     (location.pathname.startsWith("/profiles/") ? sections[2] : sections[0]);
+  if (protectedMode && restoring) return <p role="status">Restaurando sesión privada de pruebas…</p>;
   if (protectedMode && !session) return <Navigate to="/access" replace />;
   return (
     <div className="data-shell enterprise-shell">

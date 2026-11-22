@@ -272,13 +272,28 @@ def rotate_session(request: Request, *, token_override: str | None = None) -> Se
     The database serializes concurrent rotations, inherits MFA verification,
     and preserves the original session expiry. No token is returned until the
     revocation, insertion and audit event have committed.
+
+    Rotation lineage is persisted: replaying a token already consumed by a
+    previous rotation outside a short concurrency window terminates the whole
+    family, including the live replacement, and returns no credentials.
+
+    The database decides whether an opaque refresh override is still valid;
+    pre-resolving it here would turn every replay into a generic 401 before
+    reuse detection could run. MFA and role are still enforced inside the same
+    transaction, so a failed check rolls the rotation back completely.
     """
-    resolve_identity(request, token_override=token_override)
+    settings = request.app.state.settings
+    if token_override is None:
+        resolve_identity(request)
+    elif not settings.identity_enabled:
+        raise DomainError(404, "NOT_FOUND", "Recurso no disponible.")
     if request.headers.get("X-Workspace-ID"):
         raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
-    old_digest = hash_session_token(
-        bearer_token(request) if token_override is None else token_override
-    )
+    raw_token = bearer_token(request) if token_override is None else token_override
+    try:
+        old_digest = hash_session_token(raw_token)
+    except (ValueError, UnicodeError):
+        raise DomainError(401, "SESSION_EXPIRED", "La sesión ya no es válida.") from None
     replacement, replacement_digest = issue_session_token()
     with request.app.state.auth_engine.begin() as connection:
         result = connection.execute(
@@ -295,10 +310,31 @@ def rotate_session(request: Request, *, token_override: str | None = None) -> Se
                 "correlation": UUID(request.state.correlation_id),
             },
         ).scalar_one()
+        if (
+            result["status"] == "rotated"
+            and settings.mfa_enabled
+            and result["role"] in {"administrator", "specialist"}
+        ):
+            verified = connection.execute(
+                text("SELECT private_mfa_session_verified(CAST(:digest AS char(64)))"),
+                {"digest": replacement_digest},
+            ).scalar_one()
+            if not verified:
+                # Raising inside the transaction restores the consumed token.
+                raise DomainError(401, "MFA_REQUIRED", "Se requiere verificación de dos factores.")
+    if result["status"] == "reuse-detected":
+        # The family is already revoked and audited by the database function.
+        raise DomainError(
+            401,
+            "SESSION_REUSE_DETECTED",
+            "La sesión fue revocada por reutilización de un token anterior.",
+        )
     if result["status"] == "relogin-required":
         raise DomainError(401, "SESSION_RELOGIN_REQUIRED", "Inicia sesión nuevamente.")
     if result["status"] != "rotated":
         raise DomainError(401, "SESSION_EXPIRED", "La sesión ya no es válida.")
+    request.state.operations_organization = result["organization_id"]
+    request.state.verified_session_digest = replacement_digest
     return SessionRead(
         token=replacement,
         expires_at=result["expires_at"],

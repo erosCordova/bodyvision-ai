@@ -168,13 +168,20 @@ def test_rotation_denies_active_sessions_without_writing(local_owner):
     old_key, new_key = generate_mfa_encryption_key(), generate_mfa_encryption_key()
     original = encrypt_totp_seed(new_totp_seed(), old_key)
     organization, user = add_test_factor(local_owner, original)
+    session_id = uuid4()
+    # Sessions must always declare their family: the first session opens it.
     local_owner.execute(
         text(
             "INSERT INTO public.auth_sessions "
-            "(id,organization_id,user_id,token_sha256,expires_at) "
-            "VALUES (:id,:org,:user,:digest,now()+interval '1 hour')"
+            "(id,organization_id,user_id,token_sha256,expires_at,family_id) "
+            "VALUES (:id,:org,:user,:digest,now()+interval '1 hour',:id)"
         ),
-        {"id": uuid4(), "org": organization, "user": user, "digest": "c" * 64},
+        {
+            "id": session_id,
+            "org": organization,
+            "user": user,
+            "digest": "c" * 64,
+        },
     )
     with pytest.raises(RotationDenied, match="sesiones MFA activas"):
         rotate_synthetic_mfa_key(local_owner, old_key, new_key, environment=ALLOWED)

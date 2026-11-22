@@ -27,5 +27,8 @@ describe("private comparison PDF delivery", () => {
       .rejects.toThrow("PDF válido");
     expect(comparisonDownloadSchema.safeParse({ ...report, filename: "../../bad.html" }).success)
       .toBe(false);
+    expect(comparisonDownloadSchema.safeParse({
+      ...report, filename: "bodyvision-22222222-2222-4222-8222-222222222222.pdf",
+    }).success).toBe(false);
   });
 });

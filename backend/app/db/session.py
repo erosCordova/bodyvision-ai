@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0025_synthetic_invitations"
+SCHEMA_REVISION = "0026_refresh_session_families"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 

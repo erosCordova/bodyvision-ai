@@ -6,6 +6,7 @@ import { chronologicalMeasurements, compareMeasurements } from "./measurementCom
 import { buildComparisonReport, type ComparisonReport } from "./comparisonReport";
 import { saveComparisonPdf, verifiedComparisonPdf } from "./serverComparisonDownload";
 import type { ComparisonDownload } from "./serverComparisonDownload";
+import { verifySavedReportFile, type SavedReportReference } from "./savedReportVerification";
 import { ComparisonPrintView } from "./ComparisonPrintView";
 
 const formatSigned = (value: number) =>
@@ -48,11 +49,18 @@ export function MeasurementComparison({
   const [printReport, setPrintReport] = useState<ComparisonReport | null>(null);
   const [printError, setPrintError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [verifiedCopyStatus, setVerifiedCopyStatus] = useState("");
+  const [downloadProof, setDownloadProof] = useState<SavedReportReference | null>(null);
+  const savedFilePicker = useRef<HTMLInputElement>(null);
   const downloadAttempt = useRef(0);
   useEffect(() => {
     downloadAttempt.current += 1;
     setDownloading(false);
     setPrintError("");
+    setDownloadProof(null);
+    setVerifiedCopyStatus("");
+    setVerificationPending(false);
     return () => { downloadAttempt.current += 1; };
   }, [profileId, fromId, toId]);
   const downloadReport = async () => {
@@ -63,12 +71,32 @@ export function MeasurementComparison({
     try {
       const report = await exportReport(fromId, toId);
       const blob = await verifiedComparisonPdf(report);
-      if (attempt === downloadAttempt.current) saveComparisonPdf(blob, report.filename);
+      if (attempt === downloadAttempt.current) {
+        saveComparisonPdf(blob, report.filename);
+        setDownloadProof({ filename: report.filename, sha256: report.sha256, format: "pdf" });
+        setVerifiedCopyStatus("");
+      }
     } catch (error) {
       if (attempt === downloadAttempt.current)
         setPrintError(error instanceof Error ? error.message : "No se pudo descargar el PDF.");
     } finally {
       if (attempt === downloadAttempt.current) setDownloading(false);
+    }
+  };
+  const checkSavedFile = async (file?: File) => {
+    if (!file || !downloadProof || verificationPending) return;
+    const attempt = downloadAttempt.current;
+    setVerificationPending(true);
+    setVerifiedCopyStatus("");
+    try {
+      await verifySavedReportFile(file, downloadProof);
+      if (attempt === downloadAttempt.current)
+        setVerifiedCopyStatus("Copia PDF verificada desde el archivo guardado en este equipo.");
+    } catch (error) {
+      if (attempt === downloadAttempt.current)
+        setVerifiedCopyStatus(error instanceof Error ? error.message : "No se pudo verificar la copia guardada.");
+    } finally {
+      if (attempt === downloadAttempt.current) setVerificationPending(false);
     }
   };
   const preparePrint = () => {
@@ -152,6 +180,22 @@ export function MeasurementComparison({
               </button>
               <small className="muted">El informe verifica las fuentes vigentes y registra la exportación.
                 Solo datos ficticios; sin firma digital.</small>
+              {downloadProof && <>
+                <input ref={savedFilePicker} type="file" accept=".pdf,application/pdf" hidden
+                  aria-label="Seleccionar PDF descargado para verificar"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    if (file) void checkSavedFile(file);
+                  }} />
+                <button type="button" disabled={verificationPending}
+                  onClick={() => savedFilePicker.current?.click()}>
+                  {verificationPending ? "Verificando copia…" : "Verificar PDF guardado"}
+                </button>
+                <small className="muted">Selecciona el archivo descargado: se leerá solo en tu navegador
+                  para contrastarlo con la huella del servidor. No acredita firma digital.</small>
+                {verifiedCopyStatus && <p role="status">{verifiedCopyStatus}</p>}
+              </>}
             </> : <>
               <button type="button" disabled={!result || !synthetic}
                 onClick={preparePrint}>Preparar informe PDF</button>
