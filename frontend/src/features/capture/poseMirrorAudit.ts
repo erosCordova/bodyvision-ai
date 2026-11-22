@@ -69,3 +69,37 @@ export function summarizeSyntheticPoseMirror(
     clinicalAccuracyMeasured: false,
   };
 }
+
+/**
+ * Repetition comparison of the same synthetic image in one warm model session.
+ * Counts only landmarks actually shown in both runs; never persists points.
+ * No real-image accuracy or landmark correctness can be inferred.
+ */
+export function summarizeSyntheticPoseRepeat(
+  first: readonly SyntheticPosePoint[],
+  second: readonly SyntheticPosePoint[],
+) {
+  const a = indexVisiblePoints(first);
+  const b = indexVisiblePoints(second);
+  const distances: number[] = [];
+  for (let index = 0; index < POSE_LANDMARK_COUNT; index++) {
+    const before = a.get(index);
+    const after = b.get(index);
+    if (before && after) {
+      distances.push(Math.hypot(before.x - after.x, before.y - after.y) / Math.SQRT2);
+    }
+  }
+  distances.sort((x, y) => x - y);
+  const sufficient = distances.length >= MIN_MIRROR_COMPARISONS;
+  return {
+    matchedLandmarks: distances.length,
+    firstVisible: a.size,
+    secondVisible: b.size,
+    medianNormalizedDifference: sufficient
+      ? rounded(distances[Math.floor((distances.length - 1) / 2)]) : null,
+    p95NormalizedDifference: sufficient
+      ? rounded(distances[Math.ceil(distances.length * 0.95) - 1]) : null,
+    sufficientForDescriptiveSummary: sufficient,
+    clinicalAccuracyMeasured: false,
+  };
+}
