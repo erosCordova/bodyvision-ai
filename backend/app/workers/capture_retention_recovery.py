@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
 DIGEST = re.compile(r"[0-9a-f]{64}")
+MAX_MANIFEST_BYTES = 256 * 1024
+MAX_MANIFEST_ENTRIES = 500
 RLS_SCOPED_ROLES = {"bodyvision_app", "bodyvision_auth_app"}
 STATUS_NO_REAPPEARANCE = "no-reappearance-observed"
 STATUS_DISCREPANCY = "discrepancy"
@@ -55,29 +58,80 @@ class PurgedCapture:
     sha256_digest: str
 
 
-def load_manifest(path: str | Path) -> tuple[PurgedCapture, ...]:
-    """Read a JSON manifest of purged captures and validate it strictly."""
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate keys rather than silently trusting the last value."""
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise RecoveryVerificationDenied("Manifiesto con campos duplicados.")
+        result[key] = value
+    return result
+
+
+def _read_bounded_manifest(path: str | Path) -> bytes:
+    """Read one regular file through its descriptor, rejecting links and changes."""
+    source_path = Path(path)
     try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise RecoveryVerificationDenied("Manifiesto de purga ilegible.") from exc
-    entries = payload.get("purged_captures") if isinstance(payload, dict) else payload
-    if not isinstance(entries, list) or not entries:
-        raise RecoveryVerificationDenied("El manifiesto de purga está vacío.")
+        if source_path.is_symlink():
+            raise RecoveryVerificationDenied("No se permiten enlaces simbólicos.")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(source_path, flags)
+        with os.fdopen(descriptor, "rb") as source:
+            before = os.fstat(source.fileno())
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or not 1 <= before.st_size <= MAX_MANIFEST_BYTES
+            ):
+                raise RecoveryVerificationDenied("Tamaño o tipo de manifiesto no permitido.")
+            data = source.read(MAX_MANIFEST_BYTES + 1)
+            after = os.fstat(source.fileno())
+            fingerprint = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+            if (
+                len(data) != before.st_size
+                or len(data) > MAX_MANIFEST_BYTES
+                or fingerprint(before) != fingerprint(after)
+            ):
+                raise RecoveryVerificationDenied("Manifiesto modificado durante su lectura.")
+            return data
+    except (OSError, UnicodeError) as exc:
+        raise RecoveryVerificationDenied("Manifiesto de purga ilegible.") from None
+
+
+def load_manifest(path: str | Path) -> tuple[PurgedCapture, ...]:
+    """Read a strictly bounded synthetic purge manifest; never ingest other data."""
+    try:
+        payload = json.loads(
+            _read_bounded_manifest(path).decode("utf-8"),
+            object_pairs_hook=_unique_json_object,
+        )
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise RecoveryVerificationDenied("Manifiesto de purga ilegible.") from None
+    if isinstance(payload, dict):
+        if set(payload) != {"purged_captures"}:
+            raise RecoveryVerificationDenied("Campos de manifiesto no permitidos.")
+        entries = payload["purged_captures"]
+    else:
+        entries = payload
+    if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_MANIFEST_ENTRIES:
+        raise RecoveryVerificationDenied("Cantidad de capturas fuera del límite de verificación.")
     unique: dict[UUID, PurgedCapture] = {}
     for entry in entries:
-        if not isinstance(entry, dict):
+        if not isinstance(entry, dict) or set(entry) != {"id", "sha256_digest"}:
             raise RecoveryVerificationDenied("Entrada de manifiesto no válida.")
-        raw_id, digest = entry.get("id"), entry.get("sha256_digest")
+        raw_id, digest = entry["id"], entry["sha256_digest"]
         if not isinstance(digest, str) or DIGEST.fullmatch(digest) is None:
             raise RecoveryVerificationDenied("Digest de manifiesto no válido.")
+        if not isinstance(raw_id, str):
+            raise RecoveryVerificationDenied("Identificador de manifiesto no válido.")
         try:
-            identifier = UUID(str(raw_id))
-        except (ValueError, TypeError, AttributeError) as exc:
+            identifier = UUID(raw_id)
+        except ValueError as exc:
             raise RecoveryVerificationDenied("Identificador de manifiesto no válido.") from exc
+        if str(identifier) != raw_id:
+            raise RecoveryVerificationDenied("Se requiere UUID canónico en el manifiesto.")
         prior = unique.get(identifier)
         if prior is not None and prior.sha256_digest != digest:
-            # A contradictory manifest must not silently hide a capture.
             raise RecoveryVerificationDenied("Manifiesto con digest contradictorio.")
         unique[identifier] = PurgedCapture(identifier, digest)
     return tuple(unique.values())
@@ -127,8 +181,20 @@ def read_only_engine(url: str) -> Engine:
 
 def find_reappeared(engine: Engine, manifest: Sequence[PurgedCapture]) -> list[dict[str, str]]:
     """Return manifest captures still present in the restored copy."""
-    if not manifest:
-        raise RecoveryVerificationDenied("Se requiere un manifiesto no vacío.")
+    if (
+        not isinstance(manifest, (list, tuple))
+        or not 1 <= len(manifest) <= MAX_MANIFEST_ENTRIES
+        or any(
+            not isinstance(item, PurgedCapture)
+            or not isinstance(item.identifier, UUID)
+            or not isinstance(item.sha256_digest, str)
+            or DIGEST.fullmatch(item.sha256_digest) is None
+            for item in manifest
+        )
+    ):
+        raise RecoveryVerificationDenied("Manifiesto en memoria no válido o excesivo.")
+    if len({item.identifier for item in manifest}) != len(manifest):
+        raise RecoveryVerificationDenied("Identificadores repetidos en la verificación.")
     statement = text(
         "SELECT id,sha256_digest FROM synthetic_capture_objects "
         "WHERE id IN :identifiers OR sha256_digest IN :digests"
