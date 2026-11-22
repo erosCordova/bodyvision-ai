@@ -1,6 +1,6 @@
 """Cross-role synthetic privacy intake. Real rights remain unimplemented."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import text
 from test_authenticated_api import authenticate, headers
@@ -34,7 +34,10 @@ def test_synthetic_privacy_intake_and_administrative_triage(protected):
     assert record["status"] == "received" and record["profile_id"] == str(profile_id)
     assert record["reviewed_by"] is None
     assert "personal" not in record and "payload" not in record
-    assert client.get(base, headers=editor).json()["total"] == 1
+    # The specialist can open this expediente but not another person's
+    # request metadata: only its submitter sees it in profile history.
+    assert client.get(base, headers=editor).json()["total"] == 0
+    assert client.get(base, headers=member).json()["total"] == 1
     assert client.get(base, headers=outsider).status_code == 404
     assert request_status(client, base, member, valid) == 409
     assert client.get(base + "?limit=0", headers=member).status_code == 422
@@ -165,3 +168,91 @@ def test_privacy_queue_filters_overdue_and_revoked_grants(protected):
         ]
         == 1
     )
+
+
+def test_request_history_isolation_between_same_profile_grantees_and_admin_queue(protected):
+    client, owner, profile_id, users = protected
+    editor, member, _, administrator = (login(client, person) for person in users)
+    root = f"/api/v1/profiles/{profile_id}/privacy-requests"
+    own_request = client.post(
+        root, headers=member, json={"request_type": "access", "synthetic_confirmed": True}
+    )
+    other_request = client.post(
+        root, headers=editor, json={"request_type": "export", "synthetic_confirmed": True}
+    )
+    assert own_request.status_code == other_request.status_code == 201
+    own_id = own_request.json()["id"]
+    other_id = other_request.json()["id"]
+
+    def history(authorization, page=0):
+        return client.get(
+            root + f"?limit=1&offset={page}", headers=authorization
+        )
+
+    member_page = history(member)
+    editor_page = history(editor)
+    assert member_page.status_code == editor_page.status_code == 200
+    assert member_page.json()["total"] == editor_page.json()["total"] == 1
+    assert [row["id"] for row in member_page.json()["items"]] == [own_id]
+    assert [row["id"] for row in editor_page.json()["items"]] == [other_id]
+    assert history(member, 1).json()["items"] == []
+    assert history(member, 1).json()["total"] == 1
+
+    # The SQL RLS policy itself must restrict reads independently of the
+    # HTTP WHERE predicate. The local disposable PostgreSQL owner can set
+    # the exact runtime role for this one transaction (never production).
+    with owner.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE bodyvision_app"))
+        conn.execute(
+            text("SELECT set_config('app.organization_id',:org,true)"),
+            {"org": str(users[1][1])},
+        )
+        conn.execute(
+            text("SELECT set_config('app.actor_id',:actor,true)"),
+            {"actor": str(users[1][0])},
+        )
+        conn.execute(text("SELECT set_config('app.identity_verified','yes',true)"))
+        visible_ids = conn.execute(
+            text(
+                "SELECT id FROM synthetic_privacy_requests "
+                "WHERE organization_id=:org ORDER BY id"
+            ),
+            {"org": users[1][1]},
+        ).scalars().all()
+    assert visible_ids == [UUID(own_id)]
+
+    # Queue remains separate: administrator still needs a profile grant
+    # and must not inherit another person's request history.
+    assert client.get("/api/v1/privacy-requests", headers=administrator).json()["total"] == 0
+    assert history(administrator).json()["total"] == 0
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO profile_access
+              (id,organization_id,profile_id,user_id,access_level)
+              VALUES (:id,:org,:profile,:user,'manage')"""),
+            {"id": uuid4(), "org": users[3][1],
+             "profile": profile_id, "user": users[3][0]},
+        )
+    queue = client.get("/api/v1/privacy-requests?limit=1", headers=administrator)
+    assert queue.status_code == 200
+    assert queue.json()["total"] == 2 and len(queue.json()["items"]) == 1
+    assert history(administrator).json()["total"] == 0
+
+    review = client.post(
+        f"/api/v1/privacy-requests/{own_id}/review", headers=administrator
+    )
+    assert review.status_code == 200, review.text
+    assert review.json()["status"] == "in_review"
+    assert history(member).json()["items"][0]["status"] == "in_review"
+    assert history(editor).json()["items"][0]["id"] == other_id
+
+    with owner.connect() as conn:
+        privileges = (
+            conn.execute(
+                text(
+                    "SELECT has_function_privilege('bodyvision_auth_app',"
+                    "'public.can_view_synthetic_privacy_request(uuid)','EXECUTE')"
+                )
+            ).scalar_one()
+        )
+        assert privileges is False
