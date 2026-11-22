@@ -80,11 +80,25 @@ test("private identity, user creation, RLS grants, revocation and logout work to
     const memberHeaders = { Authorization: `Bearer ${member.token}` };
     const beforeGrant = await memberPage.request.get(profilePath, { headers: memberHeaders });
     expect(beforeGrant.status()).toBe(404);
+    const directoryBefore = await memberPage.request.get("/api/v1/profiles", {
+      headers: memberHeaders,
+    });
+    expect(directoryBefore.status()).toBe(200);
+    expect((await directoryBefore.json() as { total: number }).total).toBe(0);
 
     await page.getByLabel("Expediente del catálogo", { exact: true }).selectOption(profileId);
     await page.getByRole("button", { name: "Conceder permiso", exact: true }).click();
     await expect(page.getByText("Permiso ficticio concedido durante 30 días.", { exact: true })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Permiso concedido", exact: true }).first()).toBeVisible();
+    const directoryGranted = await memberPage.request.get("/api/v1/profiles", {
+      headers: memberHeaders,
+    });
+    expect(directoryGranted.status()).toBe(200);
+    const grantedList = await directoryGranted.json() as {
+      total: number; items: { id: string }[];
+    };
+    expect(grantedList.total).toBe(1);
+    expect(grantedList.items.map(item => item.id)).toEqual([profileId]);
 
     await memberPage.getByRole("link", { name: "Dashboard", exact: true }).click();
     await memberPage.getByRole("link", { name: "Expedientes", exact: true }).click();
@@ -103,6 +117,15 @@ test("private identity, user creation, RLS grants, revocation and logout work to
     expect(stillAuthenticated.status()).toBe(200);
     const revokedRead = await memberPage.request.get(profilePath, { headers: memberHeaders });
     expect(revokedRead.status()).toBe(404);
+    const directoryRevoked = await memberPage.request.get("/api/v1/profiles", {
+      headers: memberHeaders,
+    });
+    expect(directoryRevoked.status()).toBe(200);
+    const revokedList = await directoryRevoked.json() as {
+      total: number; items: { id: string }[];
+    };
+    expect(revokedList.total).toBe(0);
+    expect(revokedList.items).toEqual([]);
     await memberPage.getByRole("link", { name: "Expedientes", exact: true }).click();
     await expect(memberPage.getByText("Aún no hay expedientes", { exact: true })).toBeVisible();
 
