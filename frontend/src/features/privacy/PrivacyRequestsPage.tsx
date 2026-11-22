@@ -164,7 +164,8 @@ export function PrivacyRequestsPage() {
       {notice && <p role="status">{notice}</p>}
     </section>
     <section className="enterprise-panel">
-      <h2>Historial del expediente</h2>
+      <h2>Mis solicitudes del expediente</h2>
+      <p>Este historial solo muestra las solicitudes que registraste con tu propia sesión.</p>
       {history.isLoading && <p role="status">Consultando solicitudes…</p>}
       {history.isError && <p role="alert">No se pudo cargar el historial.
         <button type="button" onClick={() => { void history.refetch(); }}>Reintentar</button></p>}
