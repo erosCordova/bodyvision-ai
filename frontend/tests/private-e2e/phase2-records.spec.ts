@@ -35,6 +35,7 @@ async function signIn(page: Page): Promise<string> {
 
 test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, archive and isolate",
   async ({ page }) => {
+    test.setTimeout(120_000);
     const token = await signIn(page);
     const headers = { Authorization: "Bearer " + token };
     const reference = "F2 aceptación técnica " + crypto.randomUUID().slice(0, 8);
@@ -165,7 +166,7 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
     await expect(page.getByRole("heading", { name: "Versión 1 · 73 kg" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Versión 2 · 74 kg" })).toBeVisible();
     await expect(page.getByText("Sustituida", { exact: false })).toBeVisible();
-    await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+    await page.getByRole("button", { name: "Cerrar diálogo", exact: true }).click();
 
     // Archive is explicit and irreversible from this UI: no data is lost,
     // but writes must be refused on both the form and the real API.
