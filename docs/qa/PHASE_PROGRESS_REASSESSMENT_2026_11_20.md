@@ -538,3 +538,33 @@ VRAM, FPS, consumo energético ni precisión morfológica o clínica.
 Quedan pendientes referencias morfológicas autorizadas, pruebas reales,
 revisión independiente de privacidad y aceptación humana. La base
 alojada, los despliegues públicos y la rama principal no se modifican.
+
+
+## Fase 8: aceptación técnica de simulación regional (21-11-2026)
+
+El mismo modelo anatómico 3D conserva sus capas, el esqueleto, el simulador de
+peso/estatura, la malla y el flujo de comparación. Se añade un inspector
+reproducible del efecto de las fórmulas de GPU en cinco zonas de piel: 
+variación lateral y frontal, valores positivos/negativos y saturación del
+shader, sin presentarlos como mediciones reales de composición corporal.
+
+La [CI integral 44964440107](https://github.com/erosCordova/bodyvision-ai/actions/runs/44964440107)
+aprobó el commit `1a86016f1f3d70218869325b7223bf2ac155fe46`:
+**278 pruebas backend, 262 frontend, 43 navegador público y 8 privado**
+(591 pruebas de aplicación), más Windows, Docker, compilaciones, controles
+de dependencias y recuperación con datos sintéticos. La 
+[retención 44964440089](https://github.com/erosCordova/bodyvision-ai/actions/runs/44964440089)
+también aprobó. Las nuevas pruebas verifican cambios reversibles,
+invariancia del esqueleto frente al peso, y diez escenarios de peso/estatura
+sin incrementar geometrías o texturas del mismo canvas.
+Véase `docs/qa/PHASE_8_REGIONAL_SIMULATION_AUDIT_2026_11_21.md`.
+
+La Fase 8 aumenta de **85 % a 90 %** en evaluación manual de su alcance
+técnico. La suma de fases pasa de **875 a 880** y su promedio de
+**87,5 % a 88,0 %**; el valor redondeado del tablero sigue siendo **88 %**.
+
+No se ha validado precisión morfológica, predicción de cambios anatómicos,
+rendimiento físico de GPU/VRAM, FPS o conformidad clínica. Se mantienen
+pendientes referencias anatómicas autorizadas, pruebas en dispositivos físicos,
+consentimiento y aprobación humana antes de uso real. No se alteraron
+`main`, Neon ni los despliegues públicos.
