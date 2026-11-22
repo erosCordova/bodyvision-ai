@@ -104,11 +104,14 @@ distinto del rol de API, datos exclusivamente ficticios.
   `test_mfa_step_up`, `test_first_admin_bootstrap`): 35 aprobadas.
 
 La CI del primer intento detectó un fallo real que estas pruebas locales no
-cubrían: `test_mfa_key_rotation.py` inserta una sesión directamente sin
-`family_id`. La columna mantiene `DEFAULT gen_random_uuid()` para que una
-sesión creada fuera de `issue_private_session()` abra su propia familia en
-lugar de romper la restricción; la CI posterior a la corrección valida ese
-caso sobre PostgreSQL 15.
+cubrían: `test_mfa_key_rotation.py` solo se ejecuta contra PostgreSQL en
+`127.0.0.1` y su fixture inserta una sesión directamente. Tras la revisión de
+ChatGPT se descartó un `DEFAULT` en la columna: `family_id` sigue siendo
+`NOT NULL` **sin default**, de modo que ningún camino puede crear una sesión
+sin linaje por omisión. La fixture declara ahora `family_id` explícito (la
+sesión inicial abre su propia familia) y se revisó que no exista ningún otro
+`INSERT` directo en pruebas. Con esa corrección la suite completa se ejecutó
+localmente sin omisiones y la CI la validó sobre PostgreSQL 15.
 
 ### Evidencia de CI (run real)
 
