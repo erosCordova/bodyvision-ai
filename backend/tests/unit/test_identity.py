@@ -54,6 +54,12 @@ def test_session_tokens_are_random_and_only_digest_is_persisted():
         hash_session_token("short")
     with pytest.raises(ValueError):
         hash_session_token("ñ" * 45)
+    # Session IDs are exactly 32 random bytes encoded as 43 base64url characters.
+    # Reject alternate lengths, whitespace, padded tokens and punctuation
+    # before reaching the session lookup in PostgreSQL.
+    for malformed in ("A" * 42, "A" * 44, "A" * 43 + "=", "A" * 42 + "/", "A" * 42 + " ", "A" * 42 + "\\t"):
+        with pytest.raises(ValueError):
+            hash_session_token(malformed)
 
 
 def test_tenant_and_role_boundaries_are_default_deny():
