@@ -32,6 +32,7 @@ from app.services.auth_sessions import (
     login,
     logout,
     resolve_identity,
+    rotate_session,
 )
 from app.services.consents import ConsentAcceptance, ConsentHistory, consent_operation
 from app.services.mfa_service import (
@@ -93,6 +94,11 @@ def get_session(request: Request) -> IdentityRead:
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def end_session(request: Request) -> None:
     logout(request)
+
+
+@router.post("/sessions/rotate", response_model=SessionRead)
+def rotate_current_session(request: Request) -> SessionRead:
+    return rotate_session(request)
 
 
 @router.get("/sessions", response_model=OwnSessionsRead)
