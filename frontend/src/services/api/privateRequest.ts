@@ -1,4 +1,4 @@
-import { invalidatePrivateSession } from "./sessionInvalidation";
+import { invalidatePrivateSession, tryRefreshPrivateSession } from "./sessionInvalidation";
 
 export async function secureRequest(
   token: string,
@@ -6,17 +6,26 @@ export async function secureRequest(
   init: RequestInit = {},
 ): Promise<unknown> {
   if (token.length < 40) throw new Error("Se requiere una sesión de pruebas.");
-  const response = await fetch(`/api/v1/auth${path}`, {
+  const send = (bearer: string) => fetch(`/api/v1/auth${path}`, {
     ...init,
     cache: "no-store",
     credentials: "same-origin",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${bearer}`,
       "Content-Type": "application/json",
     },
   });
+  let currentToken = token;
+  let response = await send(currentToken);
   if (response.status === 401) {
-    invalidatePrivateSession(token);
+    const replacement = await tryRefreshPrivateSession(token);
+    if (replacement && replacement !== token) {
+      currentToken = replacement;
+      response = await send(replacement);
+    }
+  }
+  if (response.status === 401) {
+    invalidatePrivateSession(currentToken);
     throw new Error("La sesión ha caducado. Inicia sesión de nuevo.");
   }
   if (response.status === 403 || response.status === 429) {

@@ -225,7 +225,7 @@ export function PrivateAdministrationPage() {
           {showInvitations ? "Cerrar invitaciones" : "Gestionar invitaciones ficticias"}
         </button>
       </div>
-      {showInvitations && session && <PrivateInvitationPanel key={session.token}
+      {showInvitations && session && <PrivateInvitationPanel key={`${session.organization_id}:${session.user_id}:${session.role}`}
         token={session.token} onChanged={() => {
           setAuditRevision(value => value + 1);
           setAuditStatus("loading");

@@ -105,6 +105,9 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   const [idleWarning, setIdleWarning] = useState(false);
   const activeSession = useRef<PrivateSession | null>(null);
   const epoch = useRef(0);
+  // Bounded predecessors from this login only. A delayed 401 may arrive after
+  // another request already rotated the cookie and replaced the access JWT.
+  const retiredAccessTokens = useRef(new Set<string>());
   const queryClient = useQueryClient();
 
   const setActive = useCallback((value: PrivateSession | null) => {
@@ -131,8 +134,12 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
 
   const refreshSession = useCallback(async (token: string): Promise<string | null> => {
     const prior = activeSession.current;
-    if (!privateCookieAuthEnabled() || prior?.kind !== "cookie" || prior.token !== token)
+    if (!privateCookieAuthEnabled() || prior?.kind !== "cookie")
       return null;
+    if (prior.token !== token) {
+      return retiredAccessTokens.current.has(token)
+        && Date.parse(prior.expires_at) > Date.now() ? prior.token : null;
+    }
     const ticket = epoch.current;
     try {
       const response = await refreshCookieOnce();
@@ -145,6 +152,10 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
         || replacement.role !== prior.role
       ) return null;
       if (ticket !== epoch.current || activeSession.current?.token !== token) return null;
+      retiredAccessTokens.current.add(token);
+      if (retiredAccessTokens.current.size > 16) {
+        retiredAccessTokens.current.delete(retiredAccessTokens.current.values().next().value!);
+      }
       setActive(replacement);
       return replacement.token;
     } catch {
@@ -163,6 +174,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
       // Responses from an old token must never destroy a newer session.
       if (activeSession.current?.token !== token) return;
       epoch.current += 1;
+      retiredAccessTokens.current.clear();
       discardStagedCapture();
       setActive(null);
       setRestoring(false);
@@ -189,6 +201,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
         throw new Error("El acceso privado no está disponible en la demostración.");
       }
       const ticket = ++epoch.current;
+      retiredAccessTokens.current.clear();
       const cookieFlow = privateCookieAuthEnabled();
       const response = cookieFlow
         ? await cookieAccessRequest("login", credentials)
@@ -255,6 +268,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     if (!parsed.success) throw new Error("No se recibieron los códigos de recuperación.");
     const verified = validateSession(body);
     epoch.current += 1;
+    retiredAccessTokens.current.clear();
     discardStagedCapture();
     await queryClient.cancelQueries();
     queryClient.clear();
@@ -289,6 +303,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   const logout = useCallback(async (): Promise<boolean> => {
     const prior = activeSession.current;
     epoch.current += 1;
+    retiredAccessTokens.current.clear();
     discardStagedCapture();
     setActive(null);
     setRestoring(false);
