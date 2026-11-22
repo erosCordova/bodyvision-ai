@@ -44,7 +44,6 @@ def test_text_cells_cannot_trigger_spreadsheet_formula():
     "rows,metric,unit",
     [
         ([], "weight", "kg"),
-        ([source(days=1), source(days=1)], "weight", "kg"),
         ([source(days=1)], "height", "kg"),
         ([source(days=1)], "weight", "cm"),
         ([source(days=1, value="NaN")], "weight", "kg"),
@@ -56,6 +55,14 @@ def test_text_cells_cannot_trigger_spreadsheet_formula():
 def test_csv_rejects_inconsistent_sources(rows, metric, unit):
     with pytest.raises(ValueError):
         render_longitudinal_csv(rows, metric, unit)
+
+
+def test_duplicate_source_id_is_rejected_without_rejecting_distinct_same_time_sources():
+    first = source(days=1)
+    second = source(days=1)
+    with pytest.raises(ValueError):
+        render_longitudinal_csv([first, first], "weight", "kg")
+    assert len(render_longitudinal_csv([first, second], "weight", "kg")) > 0
 
 
 def test_csv_does_not_silently_truncate_more_than_500_sources():
