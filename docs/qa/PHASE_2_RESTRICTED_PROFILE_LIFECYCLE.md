@@ -55,3 +55,35 @@ modelo anatómico ni la plataforma de despliegue.
 El tablero conserva provisionalmente **95 % en F2 y 92,5 % global
 (93 % visible)** hasta disponer de evidencia de CI y aceptación formal.
 No se modifica `main` ni se habilita `production`.
+
+## Evidencia de integración y aceptación sintética — 22-11-2026
+
+El [PR #55](https://github.com/erosCordova/bodyvision-ai/pull/55)
+se fusionó en `feature/phase3-auth-security` con el commit
+`ab85623c4d4de678d23489977b36b0b73ba050bd`.
+
+La [CI integral #45069987874](https://github.com/erosCordova/bodyvision-ai/actions/runs/45069987874)
+aprobó en el commit `8905f7354f218510d63604ae532e3c0a48ac8215`:
+**440 backend + 331 frontend + 44 navegador público +
+13 navegador privado + 4 navegador cookies = 832 pruebas de aplicación**.
+Los trabajos `native-checks`, `windows-scripts` y
+`docker-smoke` terminaron con `success`. También aprobaron
+migraciones, compilación, restauración PostgreSQL aislada, permisos y
+proceso de pruebas en navegador. La
+[aceptación independiente de retención #45069987864](https://github.com/erosCordova/bodyvision-ai/actions/runs/45069987864)
+terminó con `success`.
+
+La primera ejecución del cambio detectó un cierre JSX faltante; la
+siguiente detectó formato Ruff. Posteriormente la nueva prueba
+privada precisó un ajuste de limpieza para no borrar mediciones
+inmutables y la prueba E2E precisó volver a consultar el servidor
+después de una escritura creada fuera de la caché React Query.
+Las correcciones se integraron antes del run final aprobado;
+no se deshabilitó ningún bloqueo de seguridad.
+
+**Alcance:** se corrigió el estado restringido y se comprobó
+autorización/reativación de extremo a extremo con datos ficticios.
+No hay firma de QA independiente, consentimiento legal,
+autorización para pacientes, custodia externa ni cierre formal
+de F2. La estimación de F2 sigue en 95 % y el promedio manual
+en 92,5 % (93 % visible). No hubo merge a `main` ni despliegue.
