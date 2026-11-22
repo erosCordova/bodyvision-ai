@@ -363,7 +363,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
             {showPoints && <g fill="#fff6b1" stroke="#034057"
               strokeWidth={Math.max(1, Math.min(review.width, review.height) * 0.0017)}>
               {estimate!.landmarks.map((point, index) => displayedPoint(index) ?
-                <circle key={index} cx={point.x * review.width} cy={point.y * review.height}
+                <circle key={index} data-pose-index={index} cx={point.x * review.width} cy={point.y * review.height}
                   r={Math.max(3, Math.min(review.width, review.height) * 0.006)}/> : null)}
             </g>}
           </svg>
