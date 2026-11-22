@@ -74,7 +74,12 @@ def _read_bounded_manifest(path: str | Path) -> bytes:
     try:
         if source_path.is_symlink():
             raise RecoveryVerificationDenied("No se permiten enlaces simbólicos.")
-        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         descriptor = os.open(source_path, flags)
         with os.fdopen(descriptor, "rb") as source:
             before = os.fstat(source.fileno())
@@ -86,12 +91,8 @@ def _read_bounded_manifest(path: str | Path) -> bytes:
                 raise RecoveryVerificationDenied("Tamaño o tipo de manifiesto no permitido.")
             data = source.read(MAX_MANIFEST_BYTES + 1)
             after = os.fstat(source.fileno())
-            before_fingerprint = (
-                before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns
-            )
-            after_fingerprint = (
-                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns
-            )
+            before_fingerprint = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            after_fingerprint = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
             if (
                 len(data) != before.st_size
                 or len(data) > MAX_MANIFEST_BYTES
@@ -110,7 +111,7 @@ def load_manifest(path: str | Path) -> tuple[PurgedCapture, ...]:
             _read_bounded_manifest(path).decode("utf-8"),
             object_pairs_hook=_unique_json_object,
         )
-    except (UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError):
         raise RecoveryVerificationDenied("Manifiesto de purga ilegible.") from None
     if isinstance(payload, dict):
         if set(payload) != {"purged_captures"}:
