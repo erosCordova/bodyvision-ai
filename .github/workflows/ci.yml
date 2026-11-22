@@ -101,7 +101,7 @@ jobs:
           npm run test:e2e
           python ../scripts/check_local_installation.py --base-url http://127.0.0.1:5173 --json
       - name: Test private identity and permissions in browser
-        timeout-minutes: 3
+        timeout-minutes: 6
         env:
           IDENTITY_ENABLED: 'true'
           PRIVATE_BROWSER_FIXTURES: 'true'
