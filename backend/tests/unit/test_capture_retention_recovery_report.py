@@ -270,3 +270,31 @@ def test_manifest_rejects_named_pipe_without_waiting_for_writer(tmp_path):
     os.mkfifo(fifo)
     with pytest.raises(RecoveryVerificationDenied):
         load_manifest(fifo)
+
+
+def test_programmatic_verifier_accepts_canonical_string_uuid_without_weakening_checks():
+    identifier = uuid4()
+    connection = MagicMock()
+    connection.execute.side_effect = [
+        MagicMock(one=lambda: ("postgres", False, True)),
+        MagicMock(all=lambda: []),
+    ]
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value = connection
+    assert find_reappeared(engine, (PurgedCapture(str(identifier), _digest()),)) == []
+    arguments = connection.execute.call_args.args
+    assert arguments[1]["identifiers"] == [identifier]
+
+    engine.connect.reset_mock()
+    for invalid in (
+        PurgedCapture(str(identifier).upper(), _digest()),
+        PurgedCapture("invalid", _digest()),
+    ):
+        with pytest.raises(RecoveryVerificationDenied):
+            find_reappeared(engine, (invalid,))
+    with pytest.raises(RecoveryVerificationDenied):
+        find_reappeared(
+            engine,
+            (PurgedCapture(identifier, _digest()), PurgedCapture(str(identifier), _digest())),
+        )
+    engine.connect.assert_not_called()
