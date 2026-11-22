@@ -598,3 +598,42 @@ Se mantienen sin resolver validación sobre fotos autorizadas con
 referencia humana independiente, rendimiento en hardware físico,
 examen clínico y aprobación legal/privacidad para datos reales.
 No se alteraron `main`, Neon ni los despliegues públicos.
+
+
+## Fase 7: exportación longitudinal privada y auditada (21-11-2026)
+
+Se incorpora en Expedientes → Evolución la descarga de CSV con las
+observaciones vigentes del periodo seleccionado. El servidor obtiene
+hasta 500 filas de PostgreSQL en una única consulta autorizada y registra
+la generación en la cadena privada de auditoría antes de entregarla.
+Los archivos contienen UUID de las fuentes, fechas UTC, valores y unidades,
+método y indicador de registro atípico, no simulaciones, expedientes
+de otra organización, imágenes o datos personales. Se rechazan fuentes
+ausentes/inconsistentes y más de 500 observaciones, en vez de declarar
+completa una exportación truncada. La interfaz comprueba la integridad
+SHA-256 antes de iniciar la descarga.
+
+El [CI integral 44967597848](https://github.com/erosCordova/bodyvision-ai/actions/runs/44967597848)
+aprobó el commit \`3b94390acfd630937e150164973822d0b52e9a9c\`:
+**291 pruebas backend, 270 frontend, 43 navegador público y 8 privado**,
+612 pruebas de aplicación en total, además de Windows, Docker,
+migraciones, restauración aislada y controles de retención.
+La [retención independiente 44967597819](https://github.com/erosCordova/bodyvision-ai/actions/runs/44967597819)
+también aprobó. Las pruebas nuevas abarcan la respuesta CSV desde
+PostgreSQL, aislamiento, exactitud de IDs y Decimal, modificación
+de fuentes vigentes, fallo cerrado de auditoría, digest y descarga
+desde navegador privado.
+
+Se registra el cumplimiento del bloque técnico de generación
+longitudinal trazable y se reevalúa manualmente **Fase 7 del 80 % al 90 %**.
+Las diez fases pasan de sumar **885 a 895 puntos**, por lo que el promedio
+exacto pasa de **88,5 % a 89,5 %**, mostrado como **90 % por redondeo**.
+El tablero no expresa un 90 % exacto ni una certificación de producto.
+
+Quedan pendientes firma digital externa, persistencia probatoria del
+archivo distribuido y recepción independiente, gestión de historiales
+superiores a 500 observaciones, autorización para información personal
+real, seguridad/privacidad y validación clínica. El evento de auditoría
+solo acredita generación de informe y no distingue el formato, y el hash
+transmitido en la misma respuesta no acredita la autoría de manera
+independiente. No se modifican \`main\`, Neon ni despliegues públicos.
