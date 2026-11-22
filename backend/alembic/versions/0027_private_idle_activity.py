@@ -25,16 +25,19 @@ IDLE_EXPIRY = re.compile(
 
 
 def _rewrite_resolver(with_idle: bool) -> None:
-    definition = op.get_bind().execute(
-        text(
-            "SELECT pg_get_functiondef("
-            "'public.resolve_authenticated_session(char(64))'::regprocedure)"
+    definition = (
+        op.get_bind()
+        .execute(
+            text(
+                "SELECT pg_get_functiondef("
+                "'public.resolve_authenticated_session(char(64))'::regprocedure)"
+            )
         )
-    ).scalar_one()
+        .scalar_one()
+    )
     if with_idle:
         result, matches = EXPIRY.subn(
-            "(s.expires_at > now() AND "
-            "s.last_activity_at > now() - interval '15 minutes')",
+            "(s.expires_at > now() AND s.last_activity_at > now() - interval '15 minutes')",
             definition,
         )
     else:

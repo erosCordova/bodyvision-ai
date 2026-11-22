@@ -108,10 +108,13 @@ def test_idle_clock_survives_one_time_cookie_refresh_and_expires(protected):
             {"digest": next_digest},
         )
     assert client.post(REFRESH, headers=CSRF).status_code == 401
-    assert client.get(
-        "/api/v1/auth/access/me",
-        headers=headers(refreshed.json()["access_token"]),
-    ).status_code == 401
+    assert (
+        client.get(
+            "/api/v1/auth/access/me",
+            headers=headers(refreshed.json()["access_token"]),
+        ).status_code
+        == 401
+    )
 
 
 def test_jwt_bearer_activity_updates_exact_live_session(protected):
@@ -123,14 +126,17 @@ def test_jwt_bearer_activity_updates_exact_live_session(protected):
         }
     )
     opaque = authenticate(client, *users[0][:2]).json()["token"]
-    jwt = client.post(
-        "/api/v1/auth/access/exchange", headers=headers(opaque)
-    ).json()["access_token"]
+    jwt = client.post("/api/v1/auth/access/exchange", headers=headers(opaque)).json()[
+        "access_token"
+    ]
     assert client.post(ACTIVITY, headers=headers(jwt)).status_code == 204
-    assert client.post(
-        ACTIVITY,
-        headers={**headers(jwt), "X-Workspace-ID": str(users[2][1])},
-    ).status_code == 400
+    assert (
+        client.post(
+            ACTIVITY,
+            headers={**headers(jwt), "X-Workspace-ID": str(users[2][1])},
+        ).status_code
+        == 400
+    )
     with owner.begin() as connection:
         connection.execute(
             text(

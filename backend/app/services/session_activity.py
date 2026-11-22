@@ -21,10 +21,7 @@ def acknowledge_private_activity(request: Request) -> None:
     digest = verified_session_digest(request)
     with request.app.state.auth_engine.begin() as connection:
         updated = connection.execute(
-            text(
-                "SELECT public.private_confirm_session_activity("
-                "CAST(:digest AS char(64)))"
-            ),
+            text("SELECT public.private_confirm_session_activity(CAST(:digest AS char(64)))"),
             {"digest": digest},
         ).scalar_one()
     if not updated:
