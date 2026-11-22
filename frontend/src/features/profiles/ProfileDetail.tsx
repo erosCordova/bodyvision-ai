@@ -236,7 +236,7 @@ export function ProfileDetail() {
                     setEditing(false);
                     update.mutate({ status: reactivate ? "active" : "restricted" });
                   }
-                }
+                }}
               >
                 {current.status === "restricted"
                   ? "Habilitar registro"
