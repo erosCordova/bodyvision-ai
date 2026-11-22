@@ -129,13 +129,16 @@ def profile_requests(
     _require_private(scope)
     records.profile(scope, profile_id)
     query = "WHERE organization_id=:org AND profile_id=:profile"
-    params = {"org": scope.organization_id, "profile": profile_id,
-              "limit": limit, "offset": offset}
-    rows = scope.connection.execute(
-        text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests
+    params = {"org": scope.organization_id, "profile": profile_id, "limit": limit, "offset": offset}
+    rows = (
+        scope.connection.execute(
+            text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests
         {query} ORDER BY received_at DESC,id DESC LIMIT :limit OFFSET :offset"""),
-        params,
-    ).mappings().all()
+            params,
+        )
+        .mappings()
+        .all()
+    )
     total = scope.connection.execute(
         text(f"SELECT count(*) FROM synthetic_privacy_requests {query}"), params
     ).scalar_one()
@@ -152,12 +155,16 @@ def review_queue(
     _require_administrator(scope)
     params = {"org": scope.organization_id, "limit": limit, "offset": offset}
     where = "WHERE organization_id=:org"
-    rows = scope.connection.execute(
-        text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests {where}
+    rows = (
+        scope.connection.execute(
+            text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests {where}
         ORDER BY CASE WHEN status='received' THEN 0 ELSE 1 END,
           review_target_at,id LIMIT :limit OFFSET :offset"""),
-        params,
-    ).mappings().all()
+            params,
+        )
+        .mappings()
+        .all()
+    )
     total = scope.connection.execute(
         text(f"SELECT count(*) FROM synthetic_privacy_requests {where}"), params
     ).scalar_one()
