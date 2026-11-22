@@ -117,11 +117,13 @@ def test_wrong_key_revocation_clock_and_claim_constraints():
     for difference in bad:
         with pytest.raises(ValueError):
             verify_access_token(_forge({**signed_payload, **difference}), KEY, now=CLOCK)
-    repeated = token.split(".")
-    duplicated = (
-        repeated[1].replace(".", "")
-    )
-    assert duplicated
+    # Reject duplicate signed JSON members, even when the HMAC is correct.
+    raw = json.dumps(signed_payload, separators=(",", ":"))
+    duplicate = raw.replace('{"iss":', '{"iss":"duplicate","iss":', 1)
+    message = token.split(".")[0] + "." + _encode(duplicate.encode("utf-8"))
+    signature = _encode(hmac.new(KEY, message.encode("ascii"), hashlib.sha256).digest())
+    with pytest.raises(ValueError):
+        verify_access_token(message + "." + signature, KEY, now=CLOCK)
 
 
 def test_invalid_token_issuance_and_external_key_configuration():
@@ -156,4 +158,5 @@ def test_invalid_token_issuance_and_external_key_configuration():
         jwt_signing_key=SecretStr(_encode(KEY)),
     )
     assert active.jwt_access_enabled
-    assert secrets.compare_digest(decode_signing_key(active.jwt_signing_key.get_secret_value()), KEY)
+    configured_key = decode_signing_key(active.jwt_signing_key.get_secret_value())
+    assert secrets.compare_digest(configured_key, KEY)
