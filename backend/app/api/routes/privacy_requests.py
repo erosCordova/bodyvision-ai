@@ -51,13 +51,17 @@ class PrivacyRequestPage(BaseModel):
 
 def _require_private(scope: Workspace) -> None:
     if not scope.authenticated or scope.correlation_id is None:
-        raise DomainError(403, "FORBIDDEN", "Disponible únicamente con identidad ficticia verificada.")
+        raise DomainError(
+            403, "FORBIDDEN", "Disponible únicamente con identidad ficticia verificada."
+        )
 
 
 def _require_administrator(scope: Workspace) -> None:
     _require_private(scope)
     if scope.role != "administrator":
-        raise DomainError(403, "FORBIDDEN", "Solo el administrador ficticio puede iniciar la revisión.")
+        raise DomainError(
+            403, "FORBIDDEN", "Solo el administrador ficticio puede iniciar la revisión."
+        )
 
 
 def _audit(scope: Workspace, profile_id: UUID | None, event: str) -> None:
