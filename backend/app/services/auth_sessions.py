@@ -222,9 +222,7 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
 
 def logout(request: Request, *, token_override: str | None = None) -> None:
     resolve_identity(request, token_override=token_override)
-    digest = hash_session_token(
-        bearer_token(request) if token_override is None else token_override
-    )
+    digest = hash_session_token(bearer_token(request) if token_override is None else token_override)
     with request.app.state.auth_engine.begin() as connection:
         # Audit the verified actor before revocation invalidates the token.
         connection.execute(
