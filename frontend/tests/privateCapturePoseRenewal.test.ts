@@ -54,7 +54,7 @@ describe("private captures and pose after access renewal", () => {
       if (operation === "download") {
         const file = await api.download(ID);
         expect(file.type).toBe("image/png");
-        const contents = await new Promise(resolve => {
+        const contents = typeof file.text === "function" ? await file.text() : await new Promise(resolve => {
           const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsText(file);
         });
         expect(contents).toBe("synthetic bytes");
