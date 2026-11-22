@@ -125,10 +125,14 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
             nonlocal calls
             calls += 1
             if calls == 2:
-                # Same-length modification during the open descriptor's read.
+                # Make the concurrent mutation observable on NTFS as well as
+                # POSIX. A same-length write may not advance filesystem time
+                # metadata within the Windows runner's timestamp window.
                 with self.backup.open("r+b") as output:
                     output.seek(7)
                     output.write(b"CHANGED")
+                    output.seek(0, os.SEEK_END)
+                    output.write(b"!")
             return original_fstat(descriptor)
 
         with patch.object(restore.os, "fstat", side_effect=mutate_before_final_stat):
