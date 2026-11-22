@@ -2140,6 +2140,8 @@ def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(pr
     # at teardown. The real write-after-reactivation path is covered by the
     # dedicated F2 data-core integration test and the private browser flow.
     assert client.get(path, headers=editor).json()["display_name"] == "Reactivado"
+
+
 def test_private_profile_list_uses_current_grants_for_rows_total_and_search(protected):
     """RLS and explicit repository predicates must agree under revoke/expiry."""
     client, owner, profile, users = protected
