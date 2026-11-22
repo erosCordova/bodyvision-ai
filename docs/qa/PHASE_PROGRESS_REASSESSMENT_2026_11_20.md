@@ -568,3 +568,33 @@ rendimiento físico de GPU/VRAM, FPS o conformidad clínica. Se mantienen
 pendientes referencias anatómicas autorizadas, pruebas en dispositivos físicos,
 consentimiento y aprobación humana antes de uso real. No se alteraron
 `main`, Neon ni los despliegues públicos.
+
+
+## Fase 5: estabilidad de pose por reflejo y repetición (21-11-2026)
+
+Se amplía la matriz de nueve variantes sintéticas del atlas 3D con un
+indicador descriptivo de diferencias de puntos MediaPipe bajo reflejo
+horizontal y una segunda inferencia sobre el mismo frontal. Los 33 índices
+izquierda/derecha se emparejan correctamente, y se calculan cobertura,
+mediana/P95 de distancias normalizadas solo con al menos ocho puntos comunes.
+Los casos insuficientes devuelven valores nulos, y las muestras repetidas
+requieren estabilidad de la decisión de detección. Los informes JSON de CI
+contienen **solo agregados**, no fotografías ni coordenadas.
+
+La [CI integral 44965518513](https://github.com/erosCordova/bodyvision-ai/actions/runs/44965518513)
+aprobó el commit `337d0c8a99d890a5b4dc40d2ffe036c928e7497d`:
+**278 pruebas de backend, 268 frontend, 43 públicas y 8 privadas**,
+597 pruebas de aplicación en total; además aprobaron Docker, Windows y
+compilaciones. La [retención 44965518523](https://github.com/erosCordova/bodyvision-ai/actions/runs/44965518523)
+también terminó con `success`.
+Documento: `docs/qa/PHASE_5_SYNTHETIC_MIRROR_REPEAT_2026_11_21.md`.
+
+Se revisa manualmente **Fase 5 de 85 % a 90 %** porque el bloque de
+estabilidad técnica reproducible tiene pruebas y criterios aprobados;
+la suma de las diez fases pasa de **880 a 885**, con promedio de
+**88,0 % a 88,5 %** y tablero redondeado de **88 % a 89 %**.
+
+Se mantienen sin resolver validación sobre fotos autorizadas con
+referencia humana independiente, rendimiento en hardware físico,
+examen clínico y aprobación legal/privacidad para datos reales.
+No se alteraron `main`, Neon ni los despliegues públicos.
