@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decisiones éticas · Presentación</title>
+<style>
+:root{color-scheme:dark;--bg:#102638;--mint:#43d6ae;--soft:#d7e2e4}
+*{box-sizing:border-box}body{margin:0;background:#0a1822;color:#fff;font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;display:flex;flex-direction:column}
+header{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:#102638;border-bottom:1px solid #294454}
+.brand{font-weight:700;letter-spacing:.02em}.brand b{color:var(--mint)}.hint{color:#aabcc4;font-size:12px}
+main{flex:1;display:grid;place-items:center;padding:18px}.frame{width:min(100%,1280px);position:relative;box-shadow:0 20px 70px #0008;border-radius:7px;overflow:hidden;background:#102638;aspect-ratio:16/9}
+.frame img{width:100%;height:100%;object-fit:contain;display:block}.nav{display:flex;justify-content:center;align-items:center;gap:14px;padding:12px 16px 18px}.nav button{border:1px solid #466071;background:#19384d;color:white;border-radius:10px;padding:10px 16px;cursor:pointer;font:inherit}.nav button:hover{border-color:var(--mint);color:var(--mint)}.nav button:disabled{opacity:.4;cursor:default}.counter{min-width:86px;text-align:center;font-variant-numeric:tabular-nums;color:var(--soft)}.dots{display:flex;justify-content:center;gap:7px;padding-bottom:16px}.dots button{width:8px;height:8px;border:0;border-radius:50%;background:#466071;padding:0;cursor:pointer}.dots button.active{background:var(--mint);transform:scale(1.35)}
+@media(max-width:640px){header{height:50px;padding:0 12px}.hint{display:none}main{padding:8px}.nav{gap:7px;padding:9px}.nav button{padding:8px 11px;font-size:13px}}
+</style>
+</head>
+<body>
+<header><div class="brand">TRABAJO FINAL <b>· ÉTICA PROFESIONAL</b></div><div style="display:flex;align-items:center;gap:16px"><div class="hint">Usa ← → para cambiar de diapositiva · F para pantalla completa</div><a href="Presentacion_trabajo_final_etica.pptx" download style="background:#43d6ae;color:#102638;text-decoration:none;padding:8px 13px;border-radius:9px;font-weight:700;font-size:13px">Descargar PowerPoint</a></div></header>
+<main><div class="frame"><img id="slide" src="slides/slide-01.jpg" alt="Diapositiva 1 de 10"></div></main>
+<div class="nav"><button id="prev" aria-label="Anterior">← Anterior</button><span id="counter" class="counter">1 / 10</span><button id="next" aria-label="Siguiente">Siguiente →</button><button id="full" aria-label="Pantalla completa">⛶</button></div>
+<div class="dots" id="dots" aria-label="Ir a diapositiva"></div>
+<script>
+let n=1;const total=10,img=document.getElementById('slide'),counter=document.getElementById('counter'),prev=document.getElementById('prev'),next=document.getElementById('next'),dots=document.getElementById('dots');
+for(let i=1;i<=total;i++){let b=document.createElement('button');b.setAttribute('aria-label','Diapositiva '+i);b.onclick=()=>show(i);dots.appendChild(b)}
+function show(v){n=Math.max(1,Math.min(total,v));img.src=`slides/slide-${String(n).padStart(2,'0')}.jpg`;img.alt=`Diapositiva ${n} de ${total}`;counter.textContent=`${n} / ${total}`;prev.disabled=n===1;next.disabled=n===total;[...dots.children].forEach((d,i)=>d.classList.toggle('active',i+1===n))}
+prev.onclick=()=>show(n-1);next.onclick=()=>show(n+1);document.getElementById('full').onclick=()=>document.querySelector('.frame').requestFullscreen?.();document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();show(n+1)}if(e.key==='ArrowLeft'){e.preventDefault();show(n-1)}if(e.key.toLowerCase()==='f')document.querySelector('.frame').requestFullscreen?.()});show(1);
+</script>
+</body></html>
