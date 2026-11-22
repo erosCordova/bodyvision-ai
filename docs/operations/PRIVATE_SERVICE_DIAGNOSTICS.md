@@ -35,3 +35,20 @@ expedientes ni la base alojada.
 Los contadores se reinician con la aplicación. Este procedimiento no sustituye
 histórico centralizado, avisos externos, ensayos de RPO/RTO, una restauración
 productiva, revisión de carga simultánea ni recepción operativa independiente.
+
+
+## Diagnóstico específico de capturas vencidas
+
+La consulta **Comprobar capturas vencidas** no depende del contador de
+respuestas recientes: obtiene el inventario de PostgreSQL exclusivamente
+bajo identidad de administrador local/test y concesiones explícitas
+de acceso a cada expediente. Una muestra de 1001 filas permite
+distinguir el recuento exacto hasta 1000 de «al menos 1000».
+Solo se muestra la cantidad y la fecha más antigua, sin fotos,
+códigos personales ni identificadores. La consulta **no borra**.
+Si no devuelve resultados, no implica que la organización completa,
+los backups o el disco estén libres de capturas expiradas.
+
+Validado con CI 44971391963 en PostgreSQL y navegador; requiere
+revisión humana de políticas de eliminación y custodia de respaldos
+antes de cualquier dato real.

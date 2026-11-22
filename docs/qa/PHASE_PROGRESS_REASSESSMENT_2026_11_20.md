@@ -637,3 +637,44 @@ real, seguridad/privacidad y validación clínica. El evento de auditoría
 solo acredita generación de informe y no distingue el formato, y el hash
 transmitido en la misma respuesta no acredita la autoría de manera
 independiente. No se modifican \`main\`, Neon ni despliegues públicos.
+
+
+## Fase 4 — inventario de capturas vencidas con permisos explícitos (21-11-2026)
+
+Se agregó a Administración → Estado del servicio la consulta privada
+"Comprobar capturas vencidas". El endpoint solo admite un administrador
+verificado en entorno local/test con cifrado habilitado y nunca ejecuta
+borrados. Obtiene un máximo de 1001 filas sintéticas solo para determinar
+si el recuento visible supera 1000; devuelve contador acotado, fecha de
+la captura vencida más antigua y fecha de consulta. No devuelve nombres,
+identificadores, fotografías, ciphertext ni secretos.
+
+La consulta exige **concesión de acceso vigente** a cada expediente y
+mantiene las políticas RLS de PostgreSQL. Un primer ensayo de integración
+reveló que la afirmación de aislamiento era incompleta: el administrador
+sin concesión visible recibía un recuento. Se reforzó la consulta SQL con
+EXISTS contra profile_access y el actor verificado, y se volvió a ejecutar
+la batería completa. La versión final comprueba cero sin concesión,
+uno tras conceder permiso y cero de nuevo al retirarlo, además de roles
+no autorizados, otra organización, sesión caducada y no mutación de datos.
+
+**Aceptación técnica:** CI
+https://github.com/erosCordova/bodyvision-ai/actions/runs/44971391963
+aprobó el commit 3fba6a0368bdf255d2358f728dd39e225a63206b:
+293 pruebas de backend, 272 frontend, 43 navegador público y
+8 privado, 616 de aplicación en total; Windows, Docker, migraciones,
+respaldo/restauración aislada y retención independientes aprobados.
+CI de retención:
+https://github.com/erosCordova/bodyvision-ai/actions/runs/44971391969
+
+Con este control de observabilidad y defensa en profundidad, la fase 4
+se reevalúa manualmente de **80 % a 85 %**; el promedio de las diez fases
+pasa de **89,5 % a 90,0 % exactos**. El tablero permanece en **90 %**,
+pero ahora esa cifra no depende de redondeo.
+
+**Advertencia:** el inventario observa únicamente los expedientes a los
+que el administrador tiene permiso explícito. Un contador cero no
+certifica que toda la organización esté limpia. Tampoco detecta
+backups, WAL, instantáneas externas, fotos descargadas, copias no
+inventariadas ni procesos cuando Docker/PostgreSQL estén apagados.
+No habilita datos reales ni modifica main, Neon o despliegues.

@@ -94,3 +94,23 @@ siguen pendientes.
 aprobó el test sintético en Docker con la API detenida y su reinicio
 saludable posterior. No prueba que un programador externo esté activo
 cuando Docker o PostgreSQL estén apagados.
+
+
+## Inventario de vencidos visible para el administrador (21-11-2026)
+
+En Administración → Estado del servicio, el administrador privado de
+prueba puede pulsar **Comprobar capturas vencidas**. Es una lectura
+acotada a sus expedientes con autorización explícita vigente. Devuelve
+cantidad vencida, fecha de la más antigua y aviso si se alcanzan
+1000 registros (en ese caso el total real no se conoce). Un recuento
+cero tampoco cubre expedientes sin permiso, otras organizaciones,
+backups, WAL ni ficheros descargados.
+
+No ejecuta ninguna purga; las eliminaciones siguen a cargo del
+trabajador de retención o del flujo autorizado. La ausencia de
+capturas pendientes visibles **no equivale a eliminación verificable**.
+Nunca contiene bytes, tokens ni identificadores de expedientes.
+
+La CI 44971391963 validó las políticas RLS y, adicionalmente,
+la comprobación explícita de concesión vigente por expediente,
+con revocación efectiva, sin alterar el inventario consultado.
