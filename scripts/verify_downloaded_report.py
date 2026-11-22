@@ -14,6 +14,8 @@ import json
 import os
 import re
 import stat
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import UUID
 
@@ -43,26 +45,43 @@ def _validate_csv(content: bytes, expected_rows: int) -> int:
         reader = csv.reader(io.StringIO(decoded, newline=""), strict=True)
         if tuple(next(reader, ())) != CSV_COLUMNS:
             raise DownloadRejected("Unexpected CSV header")
-        seen = set()
+        seen: set[UUID] = set()
+        first_metric: str | None = None
+        first_unit: str | None = None
+        previous_key: tuple[datetime, str] | None = None
         count = 0
         for row in reader:
             if len(row) != len(CSV_COLUMNS):
                 raise DownloadRejected("Malformed CSV record")
             try:
                 source = UUID(row[0])
-            except (ValueError, AttributeError) as exc:
-                raise DownloadRejected("Invalid CSV source identifier") from exc
+                value = Decimal(row[3])
+                if not re.fullmatch(
+                    r"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z",
+                    row[1],
+                ):
+                    raise DownloadRejected("Invalid UTC timestamp")
+                moment = datetime.fromisoformat(row[1].replace("Z", "+00:00"))
+            except (ValueError, AttributeError, InvalidOperation) as exc:
+                raise DownloadRejected("Invalid CSV field") from exc
+            key = (moment.astimezone(UTC), str(source))
             if (
-                source in seen
-                or not row[1].endswith("Z")
+                str(source) != row[0]
+                or source in seen
+                or not value.is_finite()
                 or not row[2]
-                or not row[3]
                 or not row[4]
                 or row[5] not in {"manual", "device"}
                 or row[6] not in {"true", "false"}
+                or (first_metric is not None and row[2] != first_metric)
+                or (first_unit is not None and row[4] != first_unit)
+                or (previous_key is not None and key <= previous_key)
             ):
                 raise DownloadRejected("Inconsistent CSV record")
             seen.add(source)
+            first_metric = row[2]
+            first_unit = row[4]
+            previous_key = key
             count += 1
             if count > expected_rows:
                 raise DownloadRejected("Unexpected CSV row count")
