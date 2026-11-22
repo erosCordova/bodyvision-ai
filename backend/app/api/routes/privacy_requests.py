@@ -177,7 +177,7 @@ def review_queue(
         AND a.user_id=:actor
         AND (a.expires_at IS NULL OR a.expires_at>now())
     )
-    AND (:filter_status IS NULL OR r.status=:filter_status)
+    AND (CAST(:filter_status AS text) IS NULL OR r.status=:filter_status)
     AND (:overdue_only=false OR
          (r.status='received' AND r.review_target_at<clock_timestamp()))"""
     rows = (
