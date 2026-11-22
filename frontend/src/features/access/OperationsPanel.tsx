@@ -135,7 +135,7 @@ export function OperationsPanel({ token }: { token: string }) {
         ? "private-admin-error" : "private-admin-success"}>
         <strong>{inventory.count_capped
           ? `Al menos ${inventory.display_limit} capturas vencidas visibles`
-          : `${inventory.expired_count} capturas vencidas visibles`}</strong>
+          : `${inventory.expired_count} ${inventory.expired_count === 1 ? "captura vencida visible" : "capturas vencidas visibles"}`}</strong>
         <p>Consulta: {limaTime(inventory.checked_at)} (Lima).
           {inventory.oldest_expired_at &&
             ` La más antigua venció el ${limaTime(inventory.oldest_expired_at)}.`}

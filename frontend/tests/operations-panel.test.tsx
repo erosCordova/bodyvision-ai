@@ -82,7 +82,7 @@ describe("administrator service operations", () => {
     render(<OperationsPanel token={token}/>);
     expect(fetcher).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Comprobar capturas vencidas" }));
-    await screen.findByText("1 capturas vencidas visibles");
+    await screen.findByText("1 captura vencida visible");
     expect(screen.getByText(/exclusivamente expedientes/)).toBeVisible();
     expect(screen.getByText(/No se ha ejecutado ninguna purga/)).toBeVisible();
     expect(screen.getByText(/no toda la organización/)).toBeVisible();
@@ -90,7 +90,7 @@ describe("administrator service operations", () => {
       "/api/v1/auth/captures/retention-inventory",
     );
     expect((fetcher.mock.calls[0][1] as RequestInit).headers)
-      .toMatchObject({ Authorization: \`Bearer \${token}\` });
+      .toMatchObject({ Authorization: `Bearer ${token}` });
     expect(document.body.textContent).not.toContain(token);
   });
   it("cannot present a capped inventory as a complete or global count", async () => {
