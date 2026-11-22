@@ -41,6 +41,10 @@ def test_synthetic_privacy_intake_and_administrative_triage(protected):
     queue = "/api/v1/privacy-requests"
     assert client.get(queue, headers=editor).status_code == 403
     assert client.get(queue, headers=administrator).json()["total"] == 0
+    # Even an administrator cannot examine or triage the request without
+    # an independent, explicit grant on this precise expediente.
+    path = f"/api/v1/privacy-requests/{record['id']}/review"
+    assert client.post(path, headers=administrator).status_code == 404
 
     with owner.begin() as conn:
         conn.execute(
@@ -50,7 +54,6 @@ def test_synthetic_privacy_intake_and_administrative_triage(protected):
             {"id": uuid4(), "org": users[3][1], "profile": profile_id, "user": users[3][0]},
         )
     assert client.get(queue, headers=administrator).json()["total"] == 1
-    path = f"/api/v1/privacy-requests/{record['id']}/review"
     for unauthorized in (editor, member, outsider):
         assert client.post(path, headers=unauthorized).status_code == 403
     reviewed = client.post(path, headers=administrator)
