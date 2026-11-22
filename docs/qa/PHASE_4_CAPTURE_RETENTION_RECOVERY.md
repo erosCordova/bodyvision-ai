@@ -140,3 +140,21 @@ correspondientes. CI no equivale a aprobación clínica, legal ni de privacidad.
 
 La CI de este endurecimiento se registra por separado; no reemplaza las
 limitaciones existentes ni concede aceptación legal o clínica.
+
+
+## Protección adicional del manifiesto de restauración (22-11-2026)
+
+El verificador ahora rechaza **antes de conectarse** manifiestos mayores de
+256 KiB, más de 500 entradas por comprobación, claves JSON duplicadas,
+campos imprevistos, UUID no canónicos, rutas simbólicas, archivos con
+múltiples enlaces duros y archivos que cambian durante la lectura. Se
+comprueba el descriptor abierto y no solo la ruta. La entrada programática
+tiene el mismo límite de lote y rechaza IDs repetidos.
+
+Si una purga alcanza más de 500 capturas, la recepción divide su inventario
+en manifiestos independientes de hasta 500 elementos sin afirmar cobertura
+global. No se adjuntan manifiestos, identificadores, digests ni archivos
+restaurados a los artefactos públicos de CI. La verificación sigue siendo
+**local/test, read-only, parcial**: no limpia backups, WAL ni réplicas, ni
+sustituye recepción independiente. El avance global se mantiene en 93 %
+hasta disponer de evidencias adicionales de cierre.

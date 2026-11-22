@@ -1,12 +1,15 @@
 """Manifest and report rules for purge-versus-restore verification (no database)."""
 
 import json
+import os
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
 from app.workers.capture_retention_recovery import (
+    MAX_MANIFEST_BYTES,
+    MAX_MANIFEST_ENTRIES,
     STATUS_DISCREPANCY,
     STATUS_NO_REAPPEARANCE,
     PurgedCapture,
@@ -184,3 +187,114 @@ def test_verification_environment_accepts_an_explicit_synthetic_restore():
         )
         == url
     )
+
+
+def test_manifest_fails_closed_on_oversized_or_embedded_private_data(tmp_path):
+    path = tmp_path / "manifest.json"
+    path.write_bytes(b" " * (MAX_MANIFEST_BYTES + 1))
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(path)
+
+    identifier = str(uuid4())
+    for payload in (
+        {"purged_captures": [{"id": identifier, "sha256_digest": _digest()}], "secret": "never"},
+        [{"id": identifier, "sha256_digest": _digest(), "image": "secret"}],
+        [{"id": identifier.upper(), "sha256_digest": _digest()}],
+    ):
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(RecoveryVerificationDenied):
+            load_manifest(path)
+
+
+def test_manifest_rejects_duplicate_json_keys_and_large_batches(tmp_path):
+    path = tmp_path / "manifest.json"
+    identifier = str(uuid4())
+    path.write_text(
+        '{"purged_captures": [], "purged_captures": [{"id": "'
+        + identifier
+        + '", "sha256_digest": "'
+        + _digest()
+        + '"}]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(path)
+    path.write_text(
+        json.dumps([{"id": identifier, "sha256_digest": _digest()}] * (MAX_MANIFEST_ENTRIES + 1)),
+        encoding="utf-8",
+    )
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(path)
+
+
+def test_manifest_rejects_hard_links_and_symbolic_links(tmp_path):
+    path = tmp_path / "manifest.json"
+    path.write_text(
+        json.dumps([{"id": str(uuid4()), "sha256_digest": _digest()}]),
+        encoding="utf-8",
+    )
+    hardlink = tmp_path / "hardlink.json"
+    try:
+        os.link(path, hardlink)
+    except (OSError, NotImplementedError):
+        pytest.skip("Hard links unavailable on this filesystem")
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(path)
+    hardlink.unlink()
+    symlink = tmp_path / "symlink.json"
+    try:
+        symlink.symlink_to(path)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symbolic links unavailable on this filesystem")
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(symlink)
+
+
+def test_programmatic_verifier_rejects_unsafe_batch_before_connecting():
+    engine = MagicMock()
+    valid = PurgedCapture(uuid4(), _digest())
+    for manifest in (
+        [valid] * (MAX_MANIFEST_ENTRIES + 1),
+        [valid, valid],
+        [PurgedCapture(uuid4(), "wrong")],
+    ):
+        with pytest.raises(RecoveryVerificationDenied):
+            find_reappeared(engine, manifest)
+    engine.connect.assert_not_called()
+
+
+def test_manifest_rejects_named_pipe_without_waiting_for_writer(tmp_path):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("Named pipes unavailable on this filesystem")
+    fifo = tmp_path / "fifo.json"
+    os.mkfifo(fifo)
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(fifo)
+
+
+def test_programmatic_verifier_accepts_canonical_string_uuid_without_weakening_checks():
+    identifier = uuid4()
+    connection = MagicMock()
+    connection.execute.side_effect = [
+        MagicMock(one=lambda: ("postgres", False, True)),
+        MagicMock(all=lambda: []),
+    ]
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value = connection
+    assert find_reappeared(engine, (PurgedCapture(str(identifier), _digest()),)) == []
+    arguments = connection.execute.call_args.args
+    assert arguments[1]["identifiers"] == [identifier]
+
+    engine.connect.reset_mock()
+    for invalid in (
+        PurgedCapture(str(identifier).upper(), _digest()),
+        PurgedCapture("invalid", _digest()),
+    ):
+        with pytest.raises(RecoveryVerificationDenied):
+            find_reappeared(engine, (invalid,))
+    with pytest.raises(RecoveryVerificationDenied):
+        find_reappeared(
+            engine,
+            (PurgedCapture(identifier, _digest()), PurgedCapture(str(identifier), _digest())),
+        )
+    engine.connect.assert_not_called()
