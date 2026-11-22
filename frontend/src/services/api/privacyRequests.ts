@@ -13,6 +13,7 @@ export const privacyRequestSchema = z.object({
   review_target_at: z.string().datetime({ offset: true }),
   review_started_at: z.string().datetime({ offset: true }).nullable(),
   reviewed_by: z.string().uuid().nullable(),
+  profile_code: z.string().min(1),
 }).strict();
 export type PrivacyRequest = z.infer<typeof privacyRequestSchema>;
 const page = z.object({

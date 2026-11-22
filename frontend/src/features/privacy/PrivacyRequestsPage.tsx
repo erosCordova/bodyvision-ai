@@ -14,6 +14,8 @@ export function PrivacyRequestsPage() {
   const { session } = usePrivateAuth();
   const { id: workspaceId, api: records } = useWorkspace();
   const [profileId, setProfileId] = useState("");
+  const [profileSearch, setProfileSearch] = useState("");
+  const [profileListOffset, setProfileListOffset] = useState(0);
   const [kind, setKind] = useState<PrivacyKind>("access");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -25,13 +27,17 @@ export function PrivacyRequestsPage() {
     [workspaceId, session],
   );
   const profiles = useQuery({
-    queryKey: ["privacy-profiles", session?.organization_id, session?.user_id],
-    queryFn: () => records.profiles(),
+    queryKey: [
+      "privacy-profiles", session?.organization_id, session?.user_id,
+      profileSearch, profileListOffset,
+    ],
+    queryFn: () => records.profiles(profileSearch, profileListOffset),
     enabled: Boolean(session),
   });
   useEffect(() => {
-    const options = profiles.data?.items ?? [];
-    if (!profileId || !options.some(item => item.id === profileId)) {
+    if (!profiles.data) return;
+    const options = profiles.data.items;
+    if (!options.some(item => item.id === profileId)) {
       setProfileId(options[0]?.id ?? "");
     }
   }, [profileId, profiles.data]);
@@ -87,7 +93,7 @@ export function PrivacyRequestsPage() {
   const rows = (items: PrivacyRequest[], canReview: boolean) => (
     <ul>
       {items.map(item => <li key={item.id}>
-        <strong>{kindLabels[item.request_type]}</strong>
+        <strong>{item.profile_code} · {kindLabels[item.request_type]}</strong>
         {" · "}{item.status === "received" ? "Recibida" : "En revisión"}
         <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de revisión: {dateLabel(item.review_target_at)}.</p>
         {canReview && item.status === "received" && <button type="button"
@@ -105,11 +111,36 @@ export function PrivacyRequestsPage() {
       <h2>Registrar solicitud ficticia</h2>
       {profiles.isLoading && <p role="status">Consultando expedientes autorizados…</p>}
       {profiles.isError && <p role="alert">No se pudieron cargar los expedientes.</p>}
+      <label htmlFor="privacy-profile-search">Buscar expediente por código o referencia</label>
+      <input id="privacy-profile-search" type="search" value={profileSearch}
+        onChange={event => {
+          setProfileSearch(event.target.value);
+          setProfileListOffset(0);
+          setProfileId("");
+          setProfileOffset(0);
+        }}
+        placeholder="Código o referencia ficticia" />
+      {profiles.data && <div className="pagination">
+        <span>{profiles.data.total} expedientes disponibles</span>
+        <button type="button" disabled={profileListOffset === 0}
+          onClick={() => {
+            setProfileListOffset(Math.max(0, profileListOffset - 12));
+            setProfileId("");
+            setProfileOffset(0);
+          }}>Anterior expediente</button>
+        <button type="button" disabled={profileListOffset + 12 >= profiles.data.total}
+          onClick={() => {
+            setProfileListOffset(profileListOffset + 12);
+            setProfileId("");
+            setProfileOffset(0);
+          }}>Siguiente expediente</button>
+      </div>}
       <form onSubmit={event => { void submit(event); }}>
         <label htmlFor="privacy-profile">Expediente autorizado</label>
         <select id="privacy-profile" value={profileId}
           onChange={event => { setProfileId(event.target.value); setProfileOffset(0); }}
           disabled={!profiles.data?.items.length || pending}>
+          {!profileId && <option value="">Selecciona un expediente autorizado</option>}
           {(profiles.data?.items ?? []).map(item =>
             <option key={item.id} value={item.id}>{item.display_code}</option>)}
         </select>

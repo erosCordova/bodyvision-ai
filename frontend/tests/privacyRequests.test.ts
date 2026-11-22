@@ -11,6 +11,7 @@ const record = {
   review_target_at: "2026-11-29T13:00:00Z",
   review_started_at: null,
   reviewed_by: null,
+  profile_code: "BV-FAKE123",
 };
 
 describe("solicitudes ARCO ficticias", () => {
