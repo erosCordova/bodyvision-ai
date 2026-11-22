@@ -2139,7 +2139,10 @@ def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(pr
     assert blocked.status_code == 409
     assert client.get(path + "/measurements", headers=reader).status_code == 200
     assert client.patch(path, headers=editor, json={"status": "active"}).status_code == 200
-    assert client.patch(path, headers=editor, json={"display_name": "Reactivado"}).status_code == 200
+    assert (
+        client.patch(path, headers=editor, json={"display_name": "Reactivado"}).status_code
+        == 200
+    )
     enabled = client.post(
         path + "/measurements",
         headers={**editor, "Idempotency-Key": str(uuid4())},
