@@ -19,6 +19,7 @@ import {
   waitForPendingCookieRefresh,
 } from "../../services/api/cookieSession";
 import { discardStagedCapture } from "../../features/capture/captureHandoff";
+import { usePrivateSessionIdle } from "./usePrivateSessionIdle";
 
 /**
  * This switch is deliberately impossible in a production Vite build.
@@ -57,6 +58,7 @@ export class PrivateAuthError extends Error {
 type AuthContextType = {
   session: PrivateSession | null;
   restoring: boolean;
+  idleExpired: boolean;
   login: (credentials: LoginCredentials) => Promise<PrivateSession>;
   beginMfaEnrollment: (credentials: LoginCredentials) => Promise<string>;
   confirmMfaEnrollment: (credentials: EnrollmentConfirmation) => Promise<string[]>;
@@ -97,6 +99,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   // sessionStorage, cookies, URL parameters or a React Query cache for it.
   const [session, setSession] = useState<PrivateSession | null>(null);
   const [restoring, setRestoring] = useState(() => privateCookieAuthEnabled());
+  const [idleExpired, setIdleExpired] = useState(false);
   const activeSession = useRef<PrivateSession | null>(null);
   const epoch = useRef(0);
   const queryClient = useQueryClient();
@@ -201,6 +204,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
       discardStagedCapture();
       await queryClient.cancelQueries();
       queryClient.clear();
+      setIdleExpired(false);
       setActive(verified);
       setRestoring(false);
       return verified;
@@ -252,6 +256,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     queryClient.clear();
     // MFA enrollment confirmation still produces a legacy opaque session.
     // Do not pretend that this response sets a refresh cookie.
+    setIdleExpired(false);
     setActive(verified);
     setRestoring(false);
     return parsed.data.recovery_codes;
@@ -305,9 +310,16 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     }
   }, [queryClient, setActive]);
 
+  const onIdle = useCallback(() => {
+    setIdleExpired(true);
+    void logout();
+  }, [logout]);
+
+  usePrivateSessionIdle(session, onIdle);
+
   const value = useMemo(
-    () => ({ session, restoring, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
-    [session, restoring, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
+    () => ({ session, restoring, idleExpired, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
+    [session, restoring, idleExpired, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

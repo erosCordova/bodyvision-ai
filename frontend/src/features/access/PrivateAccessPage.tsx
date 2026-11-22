@@ -18,7 +18,7 @@ const roleLabel = {
 export function PrivateAccessPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, restoring, login, logout, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor } = usePrivateAuth();
+  const { session, restoring, idleExpired, login, logout, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor } = usePrivateAuth();
   const [organizationId, setOrganizationId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -202,6 +202,7 @@ export function PrivateAccessPage() {
             <h2>Iniciar sesión</h2>
             <p className="private-access-description">Introduzca las credenciales ficticias entregadas por el administrador de pruebas. No utilice credenciales personales.</p>
             {securityNotice && <p role="status" className="account-security-success">{securityNotice}</p>}
+            {idleExpired && <p role="alert" className="private-access-warning">Sesión cerrada tras 15 minutos sin actividad. Inicia sesión nuevamente.</p>}
             {enrollmentUri ? (
               <section aria-label="Activar segundo factor" className="private-mfa-enroll">
                 <h3>Vincula tu autenticador</h3>

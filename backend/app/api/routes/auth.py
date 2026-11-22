@@ -53,6 +53,7 @@ from app.services.mfa_service import (
     confirm_enrollment,
 )
 from app.services.password_reset import PasswordResetInput, PasswordResetRead, reset_password
+from app.services.session_activity import acknowledge_private_activity
 from app.services.user_invitations import (
     InvitationAcceptedRead,
     InvitationAcceptInput,
@@ -140,6 +141,11 @@ def get_session(request: Request) -> IdentityRead:
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def end_session(request: Request) -> None:
     logout(request)
+
+
+@router.post("/activity", status_code=status.HTTP_204_NO_CONTENT)
+def confirm_private_activity(request: Request) -> None:
+    acknowledge_private_activity(request)
 
 
 @router.post("/sessions/rotate", response_model=SessionRead)
