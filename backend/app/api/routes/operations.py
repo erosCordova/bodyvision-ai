@@ -141,8 +141,11 @@ def capture_retention_inventory(request: Request, scope: Scope):
     row = (
         scope.connection.execute(
             statement,
-            {"org": scope.organization_id, "actor": scope.actor_id,
-             "limit": CAPTURE_INVENTORY_LIMIT + 1},
+            {
+                "org": scope.organization_id,
+                "actor": scope.actor_id,
+                "limit": CAPTURE_INVENTORY_LIMIT + 1,
+            },
         )
         .mappings()
         .one()
