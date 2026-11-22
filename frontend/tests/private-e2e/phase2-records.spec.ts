@@ -192,7 +192,8 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
         data: { ...preciseInput, value: 75,
           correction_reason: "El expediente ya está archivado." } },
     );
-    expect(deniedWrite.status()).not.toBe(201);
+    expect(deniedWrite.status()).toBe(409);
+    expect((await deniedWrite.json() as { code: string }).code).toBe("CONFLICT");
 
     // A different tenant has no authority to read even a fictional identifier.
     const outsider = await page.request.post("/api/v1/auth/login", {
