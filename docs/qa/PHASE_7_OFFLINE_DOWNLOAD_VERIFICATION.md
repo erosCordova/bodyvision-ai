@@ -47,8 +47,10 @@ rutas existentes. En Windows pueden utilizarse rutas locales entre comillas.
   `{"event":"downloaded_report_verified","format":"csv","rows":2}`; código 0.
 - Rechazo: `{"event":"downloaded_report_rejected"}`; código 2, sin ruta ni
   datos del archivo. Rechaza nombre/ID equivocados, hash alterado,
-  estructura PDF/CSV incompatible, recuento incorrecto, enlaces simbólicos,
-  enlaces duros, archivos demasiado grandes y modificaciones durante lectura.
+  estructura PDF/CSV incompatible, recuento incorrecto, fechas UTC inválidas,
+  valores numéricos no finitos, métricas/unidades mezcladas y filas fuera de
+  orden, enlaces simbólicos, enlaces duros, archivos demasiado grandes y
+  modificaciones durante lectura.
 - La comprobación del SHA-256 es **posterior a la descarga**; si el archivo se
   modifica después de comprobarlo, debe repetirse la verificación.
 
@@ -75,4 +77,4 @@ python -m unittest discover -s scripts/tests -v
 Este comando ya está en los jobs `windows-scripts` y `native-checks` de
 `.github/workflows/ci.yml`. Los tests crean únicamente PDFs/CSV ficticios
 temporales: verifican casos correctos y rechazos por cambios de bytes,
-recuento, esquema, identificador, nombre, enlaces, truncado y formato.
+recuento, esquema, identificador, nombre, fechas, valores, orden, enlaces, truncado y formato.
