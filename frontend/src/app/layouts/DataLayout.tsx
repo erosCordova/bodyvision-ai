@@ -18,7 +18,7 @@ const sections = [
 
 export function DataLayout() {
   const { id, setId, api, readOnly } = useWorkspace();
-  const { session, restoring, logout } = usePrivateAuth();
+  const { session, restoring, logout, idleWarning, continueWorking } = usePrivateAuth();
   const protectedMode = privateAuthEnabled();
   const navigate = useNavigate();
   const location = useLocation();
@@ -95,6 +95,13 @@ export function DataLayout() {
           </span>
           {workspaces.isError && <button onClick={() => void workspaces.refetch()}>Reintentar conexión</button>}
         </div>
+        {protectedMode && session && idleWarning && <div className="enterprise-idle-warning"
+          role="status" aria-live="polite">
+          <strong>Tu sesión de pruebas se cerrará pronto por inactividad.</strong>
+          <span>Quedan menos de 2 minutos. Si continúas trabajando, el servidor comprobará
+            que tu sesión todavía esté vigente.</span>
+          <button type="button" onClick={continueWorking}>Continuar trabajando</button>
+        </div>}
         <main id="main-content" className="data-main enterprise-main" key={id}>
           <Outlet />
         </main>

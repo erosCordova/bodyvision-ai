@@ -367,3 +367,13 @@
 }
 .enterprise-logout-button:hover{background:#285474}
 .enterprise-logout-button:focus-visible{outline:2px solid #81d9f4;outline-offset:2px}
+
+/* Private-only idle notice: never shown in the public demonstration. */
+.enterprise-idle-warning{display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+  padding:12px 18px;background:#463524;border-bottom:1px solid #b99050;color:#fff1d1;
+  font-size:12px;line-height:1.55}
+.enterprise-idle-warning strong{font-weight:750}
+.enterprise-idle-warning span{flex:1;min-width:220px}
+.enterprise-idle-warning button{background:#f8dfac;border:1px solid #d4a856;
+  color:#3d2a11;border-radius:7px;padding:9px 12px;font-weight:750;cursor:pointer}
+.enterprise-idle-warning button:focus-visible{outline:3px solid #fff;outline-offset:2px}

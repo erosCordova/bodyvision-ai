@@ -4,19 +4,27 @@
  * Interactions are deliberately scoped to pointer, touch and keyboard input,
  * with a throttled bearer heartbeat checked by PostgreSQL.
  */
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 export const PRIVATE_IDLE_LIMIT_MS = 15 * 60_000;
+export const PRIVATE_IDLE_WARNING_MS = 2 * 60_000;
 const ACTIVITY_HEARTBEAT_MS = 60_000;
 
 export function usePrivateSessionIdle(
   session: { token: string } | null,
   onIdle: () => void,
+  onWarning: (visible: boolean) => void,
 ) {
   const lastInteraction = useRef<number | null>(null);
   const lastHeartbeat = useRef<number | null>(null);
   const expiring = useRef(false);
+  const requestActivity = useRef<() => void>(() => {});
 
+  const confirmActivity = useCallback(() => {
+    // Only real button activation invokes this explicit activity callback.
+    // The server may still reject it if the idle window has already elapsed.
+    requestActivity.current();
+  }, []);
   const token = session?.token ?? null;
 
   useEffect(() => {
@@ -24,6 +32,8 @@ export function usePrivateSessionIdle(
       lastInteraction.current = null;
       lastHeartbeat.current = null;
       expiring.current = false;
+      requestActivity.current = () => {};
+      onWarning(false);
       return;
     }
 
@@ -33,10 +43,12 @@ export function usePrivateSessionIdle(
     }
     let active = true;
     let timeout = 0;
+    let warningTimeout = 0;
 
     const expire = () => {
       if (!active || expiring.current) return;
       expiring.current = true;
+      onWarning(false);
       onIdle();
     };
     const overdue = () => {
@@ -49,7 +61,18 @@ export function usePrivateSessionIdle(
     };
     const schedule = () => {
       window.clearTimeout(timeout);
-      const remaining = PRIVATE_IDLE_LIMIT_MS - (Date.now() - (lastInteraction.current ?? Date.now()));
+      window.clearTimeout(warningTimeout);
+      const elapsed = Date.now() - (lastInteraction.current ?? Date.now());
+      const warningIn = PRIVATE_IDLE_LIMIT_MS - PRIVATE_IDLE_WARNING_MS - elapsed;
+      if (warningIn <= 0) {
+        onWarning(true);
+      } else {
+        onWarning(false);
+        warningTimeout = window.setTimeout(() => {
+          if (active && !overdue()) onWarning(true);
+        }, warningIn);
+      }
+      const remaining = PRIVATE_IDLE_LIMIT_MS - elapsed;
       timeout = window.setTimeout(() => {
         if (!overdue()) schedule();
       }, Math.max(1, remaining));
@@ -75,7 +98,13 @@ export function usePrivateSessionIdle(
         // Network loss cannot extend the server-side idle window.
       });
     };
-    const resume = () => { void overdue(); };
+    requestActivity.current = interact;
+    const resume = () => {
+      if (overdue()) return;
+      // Focus/visibility cannot renew activity: only reveal a due warning.
+      const elapsed = Date.now() - (lastInteraction.current ?? Date.now());
+      if (elapsed >= PRIVATE_IDLE_LIMIT_MS - PRIVATE_IDLE_WARNING_MS) onWarning(true);
+    };
 
     schedule();
     window.addEventListener("pointerdown", interact, { passive: true });
@@ -85,12 +114,15 @@ export function usePrivateSessionIdle(
     document.addEventListener("visibilitychange", resume);
     return () => {
       active = false;
+      requestActivity.current = () => {};
       window.clearTimeout(timeout);
+      window.clearTimeout(warningTimeout);
       window.removeEventListener("pointerdown", interact);
       window.removeEventListener("keydown", interact);
       window.removeEventListener("touchstart", interact);
       window.removeEventListener("focus", resume);
       document.removeEventListener("visibilitychange", resume);
     };
-  }, [token, onIdle]);
+  }, [token, onIdle, onWarning]);
+  return confirmActivity;
 }

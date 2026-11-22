@@ -59,6 +59,8 @@ type AuthContextType = {
   session: PrivateSession | null;
   restoring: boolean;
   idleExpired: boolean;
+  idleWarning: boolean;
+  continueWorking: () => void;
   login: (credentials: LoginCredentials) => Promise<PrivateSession>;
   beginMfaEnrollment: (credentials: LoginCredentials) => Promise<string>;
   confirmMfaEnrollment: (credentials: EnrollmentConfirmation) => Promise<string[]>;
@@ -100,6 +102,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<PrivateSession | null>(null);
   const [restoring, setRestoring] = useState(() => privateCookieAuthEnabled());
   const [idleExpired, setIdleExpired] = useState(false);
+  const [idleWarning, setIdleWarning] = useState(false);
   const activeSession = useRef<PrivateSession | null>(null);
   const epoch = useRef(0);
   const queryClient = useQueryClient();
@@ -205,6 +208,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
       await queryClient.cancelQueries();
       queryClient.clear();
       setIdleExpired(false);
+      setIdleWarning(false);
       setActive(verified);
       setRestoring(false);
       return verified;
@@ -257,6 +261,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     // MFA enrollment confirmation still produces a legacy opaque session.
     // Do not pretend that this response sets a refresh cookie.
     setIdleExpired(false);
+    setIdleWarning(false);
     setActive(verified);
     setRestoring(false);
     return parsed.data.recovery_codes;
@@ -311,15 +316,16 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   }, [queryClient, setActive]);
 
   const onIdle = useCallback(() => {
+    setIdleWarning(false);
     setIdleExpired(true);
     void logout();
   }, [logout]);
 
-  usePrivateSessionIdle(session, onIdle);
+  const continueWorking = usePrivateSessionIdle(session, onIdle, setIdleWarning);
 
   const value = useMemo(
-    () => ({ session, restoring, idleExpired, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
-    [session, restoring, idleExpired, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
+    () => ({ session, restoring, idleExpired, idleWarning, continueWorking, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
+    [session, restoring, idleExpired, idleWarning, continueWorking, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

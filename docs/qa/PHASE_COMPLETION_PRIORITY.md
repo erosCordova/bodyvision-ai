@@ -40,8 +40,10 @@ sustituye las pruebas funcionales, la arquitectura ni los criterios de cierre.
 
 La recuperación asistida ficticia de la fase 3 fue aceptada en
 [CI 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
-con 647 pruebas de aplicación aprobadas. Seguridad se estima en 90 %;
-el promedio global es 91,5 % exacto, mostrado como 92 % redondeado.
+con 647 pruebas de aplicación aprobadas. En esa revisión de 2026-11-21, seguridad se estimaba en 90 % y
+el promedio global era 91,5 % (92 % redondeado). La reevaluación
+posterior del 22 de noviembre, con F3 y F8 en 95 % y total 92,5 %
+(93 % visible), está en [el informe de avance actualizado](PHASE_PROGRESS_REASSESSMENT_2026_11_22.md).
 Esta entrega no equivale al cierre completo de todas las fases.
 
 ## Preparación de cierre de fase 0

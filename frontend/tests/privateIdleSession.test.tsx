@@ -19,10 +19,12 @@ const access = () => ({
 });
 
 function Harness() {
-  const { session, idleExpired, login } = usePrivateAuth();
+  const { session, idleExpired, idleWarning, continueWorking, login } = usePrivateAuth();
   return <section>
     <p>{session ? "Autenticado" : "Sin sesión"}</p>
     <p>{idleExpired ? "Inactividad detectada" : "Sin bloqueo"}</p>
+    {session && idleWarning && <><p>Advertencia de cierre</p>
+      <button onClick={continueWorking}>Continuar trabajando</button></>}
     <button onClick={() => { void login(credentials); }}>Entrar</button>
   </section>;
 }
@@ -100,6 +102,64 @@ describe("private idle session end-to-end browser boundary", () => {
     await screen.findByText("Sin sesión");
     expect(screen.getByText("Inactividad detectada")).toBeInTheDocument();
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
+  });
+
+  it("warns two minutes before idle and continues only through explicit human action", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ code: "REFRESH_REQUIRED" }, 401))
+      .mockResolvedValueOnce(response(access()))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetcher);
+    mount();
+    await screen.findByText("Sin sesión");
+    fireEvent.click(screen.getByText("Entrar"));
+    await screen.findByText("Autenticado");
+    const start = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(start + 14 * 60_000);
+    // Merely refocusing does not generate a server heartbeat.
+    fireEvent.focus(window);
+    await screen.findByText("Advertencia de cierre");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Continuar trabajando" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    expect(fetcher.mock.calls[2][0]).toBe("/api/v1/auth/activity");
+    expect(screen.queryByText("Advertencia de cierre")).not.toBeInTheDocument();
+    vi.spyOn(Date, "now").mockReturnValue(start + 16 * 60_000);
+    fireEvent.focus(window);
+    expect(screen.getByText("Autenticado")).toBeInTheDocument();
+    vi.spyOn(Date, "now").mockReturnValue(start + 30 * 60_000);
+    fireEvent.focus(window);
+    await screen.findByText("Sin sesión");
+    expect(screen.getByText("Inactividad detectada")).toBeInTheDocument();
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("warns without renewing session, and a late continuation cannot resurrect access", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ code: "REFRESH_REQUIRED" }, 401))
+      .mockResolvedValueOnce(response(access()))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetcher);
+    mount();
+    await screen.findByText("Sin sesión");
+    fireEvent.click(screen.getByText("Entrar"));
+    await screen.findByText("Autenticado");
+    const start = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(start + 13 * 60_000);
+    fireEvent.focus(window);
+    await screen.findByText("Advertencia de cierre");
+    vi.spyOn(Date, "now").mockReturnValue(start + 16 * 60_000);
+    fireEvent.click(screen.getByRole("button", { name: "Continuar trabajando" }));
+    await screen.findByText("Sin sesión");
+    expect(screen.queryByText("Advertencia de cierre")).not.toBeInTheDocument();
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/v1/auth/access/refresh",
+      "/api/v1/auth/access/login",
+      "/api/v1/auth/access/logout",
+    ]);
   });
 
   it("ends the local session on an authoritative 401 activity response", async () => {
