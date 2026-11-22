@@ -35,6 +35,12 @@ from app.services.auth_sessions import (
     rotate_session,
 )
 from app.services.consents import ConsentAcceptance, ConsentHistory, consent_operation
+from app.services.jwt_access import (
+    AccessIdentityRead,
+    AccessTokenRead,
+    exchange_access_token,
+    get_access_identity,
+)
 from app.services.mfa_service import (
     EnrollmentConfirmation,
     EnrollmentConfirmedRead,
@@ -62,6 +68,16 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authenticated identity"])
 @router.post("/login", response_model=SessionRead)
 def create_session(request: Request, data: LoginInput) -> SessionRead:
     return login(request, data)
+
+
+@router.post("/access/exchange", response_model=AccessTokenRead)
+def exchange_private_access(request: Request) -> AccessTokenRead:
+    return exchange_access_token(request)
+
+
+@router.get("/access/me", response_model=AccessIdentityRead)
+def get_access_session(request: Request) -> AccessIdentityRead:
+    return get_access_identity(request)
 
 
 @router.post("/mfa/enrollment", response_model=EnrollmentRead)
