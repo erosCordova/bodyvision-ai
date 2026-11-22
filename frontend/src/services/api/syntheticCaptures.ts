@@ -62,7 +62,11 @@ export function syntheticCapturesApi(token: string, profileId: string) {
     remove: async (id: string) => {
       await scopedFetch(token, `${root}/${id}`, { method: "DELETE" });
     },
-    purgeExpired: async () => z.object({ deleted: z.number().int() }).parse(
+    purgeExpired: async () => z.object({
+      deleted: z.number().int().min(0).max(100),
+      batch_limit: z.literal(100),
+      limit_reached: z.boolean(),
+    }).parse(
       await (await scopedFetch(token, root + "/purge-expired", { method: "POST" })).json(),
     ),
   };

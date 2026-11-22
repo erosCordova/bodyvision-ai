@@ -1692,8 +1692,141 @@ def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected
     assert client.get(path, headers=writer).json()["total"] == 0
     purged = client.post(f"{path}/purge-expired", headers=writer)
     assert purged.status_code == 200, purged.text
-    assert purged.json() == {"deleted": 1}
+    assert purged.json() == {"deleted": 1, "batch_limit": 100, "limit_reached": False}
     assert client.delete(f"{path}/{image_id}", headers=writer).status_code == 404
+
+
+
+
+
+def test_manual_capture_purge_is_bounded_scoped_and_audited(protected):
+    """A private writer may purge <=100 expired records, never live or foreign ones."""
+    import hashlib
+
+    from sqlalchemy import text
+
+    client, owner, profile_id, users = protected
+    editor, reader, outsider = users[:3]
+    writer = headers(authenticate(client, editor[0], editor[1]).json()["token"])
+    readonly = headers(authenticate(client, reader[0], reader[1]).json()["token"])
+    foreign = headers(authenticate(client, outsider[0], outsider[1]).json()["token"])
+    path = f"/api/v1/profiles/{profile_id}/captures/purge-expired"
+    assert client.post(path).status_code == 401
+    assert client.post(path, headers=readonly).status_code == 403
+    assert client.post(path, headers=foreign).status_code == 404
+
+    png = _synthetic_png()
+    encrypted = Fernet(Fernet.generate_key()).encrypt(png)
+    identities = [(uuid4(), True) for _ in range(105)] + [
+        (uuid4(), False), (uuid4(), False)
+    ]
+    with owner.begin() as connection:
+        connection.execute(
+            text("""
+                INSERT INTO synthetic_capture_objects(
+                    id,organization_id,profile_id,created_by,original_bytes,
+                    width,height,sha256_digest,ciphertext,created_at,expires_at
+                ) VALUES(
+                    :id,:org,:profile,:actor,:size,32,64,:digest,:cipher,
+                    CASE WHEN :expired THEN now()-interval '8 days' ELSE now() END,
+                    CASE WHEN :expired THEN now()-interval '1 day'
+                        ELSE now()+interval '7 days' END
+                )
+            """),
+            [
+                {
+                    "id": identity,
+                    "org": FIRST_WORKSPACE,
+                    "profile": profile_id,
+                    "actor": editor[0],
+                    "size": len(png),
+                    "digest": hashlib.sha256(png).hexdigest(),
+                    "cipher": encrypted,
+                    "expired": expired,
+                }
+                for identity, expired in identities
+            ],
+        )
+    results = []
+    for _ in range(3):
+        response = client.post(path, headers=writer)
+        assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "no-store"
+        results.append(response.json())
+    assert results == [
+        {"deleted": 100, "batch_limit": 100, "limit_reached": True},
+        {"deleted": 5, "batch_limit": 100, "limit_reached": False},
+        {"deleted": 0, "batch_limit": 100, "limit_reached": False},
+    ]
+    with owner.connect() as connection:
+        survivors = connection.execute(
+            text("""
+                SELECT id,ciphertext FROM synthetic_capture_objects
+                 WHERE profile_id=:profile
+            """),
+            {"profile": profile_id},
+        ).mappings().all()
+        assert {row["id"] for row in survivors} == {
+            identities[105][0], identities[106][0]
+        }
+        assert all(bytes(row["ciphertext"]) == encrypted for row in survivors)
+        assert connection.execute(
+            text("""
+                SELECT count(*) FROM security_audit_events
+                 WHERE resource_id=:profile AND action='capture.purge'
+            """),
+            {"profile": profile_id},
+        ).scalar_one() == 3
+
+
+def test_manual_capture_purge_rolls_back_if_audit_fails(protected):
+    from sqlalchemy import event
+
+    client, owner, profile_id, users = protected
+    editor = users[0]
+    writer = headers(authenticate(client, editor[0], editor[1]).json()["token"])
+    path = f"/api/v1/profiles/{profile_id}/captures/purge-expired"
+    png = _synthetic_png()
+    capture = uuid4()
+    with owner.begin() as connection:
+        connection.execute(
+            text("""
+                INSERT INTO synthetic_capture_objects(
+                    id,organization_id,profile_id,created_by,original_bytes,
+                    width,height,sha256_digest,ciphertext,created_at,expires_at
+                ) VALUES(
+                    :id,:org,:profile,:actor,:size,32,64,:digest,:cipher,
+                    now()-interval '8 days',now()-interval '1 day'
+                )
+            """),
+            {
+                "id": capture,
+                "org": FIRST_WORKSPACE,
+                "profile": profile_id,
+                "actor": editor[0],
+                "size": len(png),
+                "digest": __import__("hashlib").sha256(png).hexdigest(),
+                "cipher": Fernet(Fernet.generate_key()).encrypt(png),
+            },
+        )
+
+    def deny_audit(conn, cursor, statement, parameters, context, executemany):
+        if "audit_synthetic_capture" in statement:
+            raise RuntimeError("synthetic audit failure")
+
+    engine = client.app.state.engine
+    event.listen(engine, "before_cursor_execute", deny_audit)
+    try:
+        response = client.post(path, headers=writer)
+        assert response.status_code == 500
+        assert "deleted" not in response.text
+    finally:
+        event.remove(engine, "before_cursor_execute", deny_audit)
+    with owner.connect() as connection:
+        assert connection.execute(
+            text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
+            {"id": capture},
+        ).scalar_one() == 1
 
 
 def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):

@@ -96,6 +96,17 @@ test("private capture archives only synthetic PNG after both consents, then dele
   expect(file.suggestedFilename()).toBe("captura-ficticia.png");
   await privateArchive.getByRole("button", { name: "Borrar definitivamente" }).click();
   await expect(privateArchive).toContainText("No hay PNG ficticios guardados");
+  const purgeResponse = page.waitForResponse(response =>
+    response.url().endsWith(`/profiles/${profile}/captures/purge-expired`) &&
+    response.request().method() === "POST",
+  );
+  await privateArchive.getByRole("button", { name: "Eliminar lote de capturas vencidas" }).click();
+  const purged = await purgeResponse;
+  expect(purged.status()).toBe(200);
+  expect(await purged.json()).toEqual({
+    deleted: 0, batch_limit: 100, limit_reached: false,
+  });
+  await expect(privateArchive).toContainText("Lote de limpieza: 0 capturas");
   const count = await page.request.get(`/api/v1/profiles/${profile}/captures`, { headers });
   expect(count.status()).toBe(200);
   expect((await count.json() as { total: number }).total).toBe(0);

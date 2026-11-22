@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/v1", tags=["Private fictional capture archive"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 FIELDS = """id,profile_id,created_by,format,original_bytes,width,height,
  sha256_digest,created_at,expires_at"""
+MANUAL_PURGE_BATCH = 100
 
 
 class SyntheticCaptureRead(BaseModel):
@@ -40,6 +41,12 @@ class SyntheticCaptureRead(BaseModel):
 class SyntheticCaptureList(BaseModel):
     items: list[SyntheticCaptureRead]
     total: int
+
+
+class SyntheticPurgeResult(BaseModel):
+    deleted: int
+    batch_limit: int = MANUAL_PURGE_BATCH
+    limit_reached: bool
 
 
 def _cipher(request: Request) -> CaptureCipher:
@@ -229,24 +236,43 @@ def delete_synthetic_capture(profile_id: UUID, capture_id: UUID, scope: Scope, r
     return Response(status_code=204)
 
 
-@router.post("/profiles/{profile_id}/captures/purge-expired")
+@router.post(
+    "/profiles/{profile_id}/captures/purge-expired", response_model=SyntheticPurgeResult
+)
 def purge_expired_synthetic_captures(profile_id: UUID, scope: Scope, request: Request):
+    """One bounded, audited, per-profile batch; never claims global completion."""
     _cipher(request)
     if scope.role not in {"administrator", "specialist"}:
         raise DomainError(403, "FORBIDDEN", "Se requiere permiso de edición.")
     records.profile(scope, profile_id, write=True)
     deleted = (
         scope.connection.execute(
-            text("""DELETE FROM synthetic_capture_objects
-          WHERE organization_id=:org AND profile_id=:profile AND expires_at<=now()
-          RETURNING id"""),
-            {"org": scope.organization_id, "profile": profile_id},
+            text("""WITH eligible AS MATERIALIZED (
+              SELECT id FROM synthetic_capture_objects
+               WHERE organization_id=:org AND profile_id=:profile
+                 AND expires_at<=statement_timestamp()
+               ORDER BY expires_at,id
+               LIMIT :limit FOR UPDATE SKIP LOCKED
+            )
+            DELETE FROM synthetic_capture_objects c USING eligible e
+             WHERE c.id=e.id AND c.organization_id=:org AND c.profile_id=:profile
+             RETURNING c.id"""),
+            {
+                "org": scope.organization_id,
+                "profile": profile_id,
+                "limit": MANUAL_PURGE_BATCH,
+            },
         )
         .scalars()
         .all()
     )
+    # Fail closed: audit and deletion commit together.
     _audit(scope, "capture.purge", profile_id)
-    return {"deleted": len(deleted)}
+    return {
+        "deleted": len(deleted),
+        "batch_limit": MANUAL_PURGE_BATCH,
+        "limit_reached": len(deleted) == MANUAL_PURGE_BATCH,
+    }
 
 
 @router.post("/profiles/{profile_id}/captures/rotate-key")

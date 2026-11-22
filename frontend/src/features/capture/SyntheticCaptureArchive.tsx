@@ -73,6 +73,22 @@ export function SyntheticCaptureArchive({
     },
     onError: problem => setError(problem.message),
   });
+  const purge = useMutation({
+    mutationFn: async () => {
+      if (!session || !profileId || !canWrite)
+        throw new Error("Se requiere permiso de edición del expediente ficticio.");
+      return syntheticCapturesApi(session.token, profileId).purgeExpired();
+    },
+    onSuccess: async result => {
+      setNotice(`Lote de limpieza: ${result.deleted} capturas ficticias vencidas eliminadas de PostgreSQL.`
+        + (result.limit_reached
+          ? " Se alcanzó el máximo de 100 por operación; podría haber más. Puedes repetir."
+          : " No se encontraron más capturas visibles en este lote."));
+      setError("");
+      await cache.invalidateQueries({ queryKey: ["synthetic-capture-archive", ...scope, profileId] });
+    },
+    onError: problem => setError(problem.message),
+  });
   const remove = useMutation({
     mutationFn: async (id: string) => {
       if (!session) throw new Error("Se requiere una sesión privada.");
@@ -158,6 +174,15 @@ export function SyntheticCaptureArchive({
       {!review.passed && <p>Corrige las advertencias de calidad antes de conservar esta imagen.</p>}
       {profileId && consentOk && <>
         <h3>Capturas cifradas del expediente</h3>
+        {canWrite && <div className="enterprise-camera-buttons">
+          <button type="button" className="secondary-button"
+            disabled={purge.isPending || upload.isPending || remove.isPending}
+            onClick={() => { setNotice(""); setError(""); purge.mutate(); }}>
+            {purge.isPending ? "Limpiando lote…" : "Eliminar lote de capturas vencidas"}
+          </button>
+          <small>Solo este expediente ficticio, hasta 100 por solicitud.
+            No borra fotos vigentes, respaldos, WAL ni descargas.</small>
+        </div>}
         {archive.isPending && <p role="status">Consultando capturas…</p>}
         {archive.isError && <p role="alert">{archive.error.message}</p>}
         {archive.data && <>
