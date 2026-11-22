@@ -110,8 +110,20 @@ sesión creada fuera de `issue_private_session()` abra su propia familia en
 lugar de romper la restricción; la CI posterior a la corrección valida ese
 caso sobre PostgreSQL 15.
 
-La evidencia de CI del PR se enlaza en el issue #37 y en el propio pull request.
-Este documento no declara aprobación de CI antes de que exista el run.
+### Evidencia de CI (run real)
+
+- [CI 44989824988](https://github.com/erosCordova/bodyvision-ai/actions/runs/44989824988)
+  sobre `73c9d5c`: `native-checks` (Ruff, migraciones, suite backend completa,
+  ciclo de esquema, frontend, dependencias y navegador) **aprobado**;
+  `docker-smoke` **aprobado**; `windows-scripts` **aprobado**.
+- [Retención de pose 44989825018](https://github.com/erosCordova/bodyvision-ai/actions/runs/44989825018)
+  **aprobada** sobre el mismo commit.
+- El estado `Vercel` del PR aparece en fallo por el límite de compilaciones del
+  plan de la cuenta (`build-rate-limit`), no por este cambio. No hubo despliegue
+  productivo ni se autoriza ninguno.
+
+Las suites aprobadas no sustituyen la revisión externa de seguridad ni
+registran aceptación de fase.
 
 ## 5. Límites y pendientes que siguen abiertos
 

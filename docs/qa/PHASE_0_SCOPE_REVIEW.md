@@ -68,7 +68,10 @@ access JWT y refresh rotatorio con detección de reutilización descrito en
 [PHASE_3_ROTATING_REFRESH](PHASE_3_ROTATING_REFRESH.md). Ambos avances son
 parciales, opt-in y solo local/test: no registran aceptación del plan, no
 cambian los porcentajes y no cierran "Recordarme", inactividad, adopción por el
-frontend ni la matriz de roles del contrato.
+frontend ni la matriz de roles del contrato. La
+[CI 44989824988](https://github.com/erosCordova/bodyvision-ai/actions/runs/44989824988)
+aprobó ese subcomponente en `73c9d5c` (native, Docker y Windows); sigue sin
+sustituir una revisión externa de seguridad.
 La [CI 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816) aprobó ese avance en
 `06336d08ceb719b51c465b6cc15d8b17f6e9a973`: 661 pruebas de aplicación,
 Windows y Docker; el porcentaje de las fases no cambia.
