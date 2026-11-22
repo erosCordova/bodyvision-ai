@@ -60,8 +60,7 @@ def test_csv_rejects_inconsistent_sources(rows, metric, unit):
 
 def test_csv_does_not_silently_truncate_more_than_500_sources():
     rows = [
-        source(days=MAX_LONGITUDINAL_ROWS + 1 - index)
-        for index in range(MAX_LONGITUDINAL_ROWS + 1)
+        source(days=MAX_LONGITUDINAL_ROWS + 1 - index) for index in range(MAX_LONGITUDINAL_ROWS + 1)
     ]
     with pytest.raises(ValueError):
         render_longitudinal_csv(rows, "weight", "kg")

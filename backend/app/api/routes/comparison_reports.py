@@ -117,9 +117,7 @@ class LongitudinalDownload(BaseModel):
     sha256: str
 
 
-@router.post(
-    "/profiles/{profile_id}/reports/longitudinal", response_model=LongitudinalDownload
-)
+@router.post("/profiles/{profile_id}/reports/longitudinal", response_model=LongitudinalDownload)
 def export_longitudinal(
     profile_id: UUID, selection: LongitudinalSelection, scope: Scope, request: Request
 ):
