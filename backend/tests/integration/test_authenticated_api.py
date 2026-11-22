@@ -459,7 +459,7 @@ def test_administrator_provisions_synthetic_member_and_audit_is_tenant_bound(pro
         )
         assert info["email"] == email
         assert PASSWORD not in info["password_hash"]
-        assert info["password_hash"].startswith("pbkdf2_sha256$")
+        assert info["password_hash"].startswith("$argon2id$v=19$m=65536,t=3,p=4$")
         assert info["account_status"] == "active"
         assert not info["is_local_operator"]
 

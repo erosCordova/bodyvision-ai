@@ -15,7 +15,7 @@ from urllib.parse import quote, urlencode
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from app.core.identity import hash_password, verify_password
+from app.core.identity import hash_recovery_secret, verify_password
 
 TOTP_DIGITS = 6
 TOTP_PERIOD = 30
@@ -97,7 +97,7 @@ def normalize_recovery_code(code: str) -> str:
 
 def hash_recovery_code(code: str) -> str:
     """Use the application's salted PBKDF2 verifier, not plain SHA-256."""
-    return hash_password(normalize_recovery_code(code))
+    return hash_recovery_secret(normalize_recovery_code(code))
 
 
 def verify_recovery_code(code: str, stored_hash: str) -> bool:

@@ -24,7 +24,8 @@ def test_hashes_are_salted_and_passwords_never_stored_plaintext():
     assert verify_password("Some strong demo passphrase 2026!", first)
     assert not verify_password("not the right password", first)
     assert not verify_password("Some strong demo passphrase 2026!", "corrupted")
-    assert not verify_password("Some strong demo passphrase 2026!", first.replace("600000", "1"))
+    assert first.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
+    assert not verify_password("Some strong demo passphrase 2026!", first.replace("m=65536", "m=1"))
     assert not verify_password("Some strong demo passphrase 2026!", first[:-2])
     with pytest.raises(ValueError):
         hash_password("too-short")

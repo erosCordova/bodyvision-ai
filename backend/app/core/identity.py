@@ -1,22 +1,32 @@
-"""Identity primitives for the next secure API iteration.
-
-These functions do not authenticate the existing synthetic workspace selector.
-No login endpoint is exposed until protected endpoints and provisioning are
-ready. Never log passwords, session tokens, or personal information.
-"""
+"""Private identity primitives; never log passwords, tokens or stored verifiers."""
 
 import hashlib
 import hmac
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import BoundedSemaphore
 from typing import Literal
 from uuid import UUID
+
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
+from argon2.low_level import Type
 
 PBKDF2_ITERATIONS = 600_000
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 128
 SESSION_TOKEN_BYTES = 32
+_ARGON2 = PasswordHasher(
+    time_cost=3, memory_cost=65536, parallelism=4, hash_len=32, salt_len=16, type=Type.ID
+)
+# Bound KDF memory use per process to two concurrent 64 MiB operations.
+_KDF_SLOTS = BoundedSemaphore(2)
+_ARGON2_FORMAT = re.compile(
+    r"\$argon2id\$v=19\$m=65536,t=3,p=4\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}"
+)
+_LEGACY_FORMAT = re.compile(r"pbkdf2_sha256\$600000\$[0-9a-f]{32}\$[0-9a-f]{64}")
 Role = Literal["administrator", "specialist", "member"]
 Purpose = Literal["capture", "pose", "report", "storage"]
 Action = Literal[
@@ -30,7 +40,27 @@ Action = Literal[
 
 
 def hash_password(password: str, *, salt: bytes | None = None) -> str:
-    """PBKDF2-HMAC-SHA256 with a random 128-bit salt; never persist plaintext."""
+    """Current Argon2id policy. Explicit salt is reserved for deterministic tests."""
+    if (
+        not isinstance(password, str)
+        or not PASSWORD_MIN_LENGTH <= len(password) <= PASSWORD_MAX_LENGTH
+    ):
+        raise ValueError("Password length is outside the permitted range")
+    if salt is not None and (not isinstance(salt, bytes) or len(salt) != 16):
+        raise ValueError("Invalid salt")
+    with _KDF_SLOTS:
+        return _ARGON2.hash(password, salt=salt)
+
+
+def hash_recovery_secret(secret: str) -> str:
+    """Keep the historical format for random 128-bit MFA codes, not passwords."""
+    if not isinstance(secret, str) or re.fullmatch(r"[0-9A-F]{32}", secret) is None:
+        raise ValueError("Invalid recovery secret")
+    return _hash_legacy_secret(secret)
+
+
+def _hash_legacy_secret(password: str, *, salt: bytes | None = None) -> str:
+    """Compatibility fixture/recovery-code helper; never use for new passwords."""
     if not PASSWORD_MIN_LENGTH <= len(password) <= PASSWORD_MAX_LENGTH:
         raise ValueError("Password length is outside the permitted range")
     if salt is None:
@@ -42,7 +72,22 @@ def hash_password(password: str, *, salt: bytes | None = None) -> str:
 
 
 def verify_password(password: str, stored: str) -> bool:
-    """Fail closed for all malformed or outdated password verifiers."""
+    """Verify current hashes or bounded legacy PBKDF2 without trusting KDF parameters."""
+    if (
+        not isinstance(password, str)
+        or not isinstance(stored, str)
+        or len(password) > PASSWORD_MAX_LENGTH
+        or len(stored) > 256
+    ):
+        return False
+    if _ARGON2_FORMAT.fullmatch(stored):
+        try:
+            with _KDF_SLOTS:
+                return _ARGON2.verify(stored, password)
+        except (VerificationError, InvalidHashError, UnicodeError):
+            return False
+    if not _LEGACY_FORMAT.fullmatch(stored):
+        return False
     try:
         algorithm, count, salt_hex, digest_hex = stored.split("$")
         if algorithm != "pbkdf2_sha256" or int(count) != PBKDF2_ITERATIONS:
@@ -55,6 +100,11 @@ def verify_password(password: str, stored: str) -> bool:
         return hmac.compare_digest(digest, expected)
     except (ValueError, TypeError, AttributeError, UnicodeError):
         return False
+
+
+def password_needs_upgrade(stored: str) -> bool:
+    """Only recognized legacy hashes are eligible; policy changes need a migration."""
+    return isinstance(stored, str) and _LEGACY_FORMAT.fullmatch(stored) is not None
 
 
 def login_bucket_digest(organization_id: UUID, email: str) -> str:

@@ -20,6 +20,7 @@ from app.core.identity import (
     login_bucket_digest,
     verify_password,
 )
+from app.services.password_hashes import upgrade_authenticated_password
 
 
 class LoginInput(BaseModel):
@@ -43,11 +44,11 @@ class IdentityRead(BaseModel):
     role: Role
 
 
-# No recognizable account is a required first-user setup feature. This fake
-# verifier keeps wrong-email and wrong-password paths in the same KDF family.
+# Unknown accounts use the current KDF policy; legacy accounts retain their
+# historical verification path until successful authenticated upgrade.
 DUMMY_VERIFIER = (
-    "pbkdf2_sha256$600000$00000000000000000000000000000000"
-    "$185ea9b1250c78edb53095b2a8e56856cd8accaa3cda7b8a759a0689ead3fea7"
+    "$argon2id$v=19$m=65536,t=3,p=4$AAAAAAAAAAAAAAAAAAAAAA"
+    "$elRMODmdQvmhOQjrtA8tRI59xc4oOmWdW1Xkc3PlRAI"
 )
 
 
@@ -189,6 +190,8 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
             ).scalar_one()
             if not marked:
                 raise DomainError(401, "MFA_CODE_INVALID", "Verificación rechazada.")
+        # Wrong/missing MFA has already failed; hash/session/audit commit together.
+        upgrade_authenticated_password(request, connection, digest, credentials.password, verifier)
         # Clear the counter only if the session insertion also commits.
         connection.execute(
             text("SELECT clear_auth_login_attempts(:org,CAST(:digest AS char(64)))"),

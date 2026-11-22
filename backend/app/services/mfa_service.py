@@ -31,6 +31,7 @@ from app.core.mfa import (
     verify_totp,
 )
 from app.services.auth_sessions import DUMMY_VERIFIER, SessionRead
+from app.services.password_hashes import upgrade_authenticated_password
 
 PRIVILEGED_ROLES = {"administrator", "specialist"}
 MFA_MISSING = "Debes configurar la verificación de dos factores antes de ingresar."
@@ -171,6 +172,7 @@ def _issue_verified_session(
     user: UUID,
     verifier: str,
     bucket: str,
+    password: str,
 ) -> SessionRead:
     token, digest = issue_session_token()
     session = connection.execute(
@@ -191,6 +193,7 @@ def _issue_verified_session(
     ).scalar_one()
     if not marked:
         raise DomainError(401, "MFA_CODE_INVALID", MFA_INVALID)
+    upgrade_authenticated_password(request, connection, digest, password, verifier)
     _clear_throttle(connection, organization, bucket)
     connection.execute(
         text(
@@ -265,7 +268,13 @@ def confirm_enrollment(
             recovery_codes=encoded,
         )
         session = _issue_verified_session(
-            request, connection, credentials.organization_id, user, verifier, bucket
+            request,
+            connection,
+            credentials.organization_id,
+            user,
+            verifier,
+            bucket,
+            credentials.password.get_secret_value(),
         )
     return EnrollmentConfirmedRead(**session.model_dump(), recovery_codes=codes)
 
