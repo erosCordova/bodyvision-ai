@@ -67,10 +67,7 @@ def upgrade() -> None:
         f"FOR SELECT USING ({READ_POLICY_PREFIX} "
         "AND public.can_view_synthetic_privacy_request(requested_by))"
     )
-    op.execute(
-        "UPDATE public.system_schema_state "
-        "SET revision='0029_privacy_request_isolation'"
-    )
+    op.execute("UPDATE public.system_schema_state SET revision='0029_privacy_request_isolation'")
 
 
 def downgrade() -> None:
@@ -80,7 +77,4 @@ def downgrade() -> None:
         f"FOR SELECT USING ({READ_POLICY_PREFIX})"
     )
     op.execute("DROP FUNCTION public.can_view_synthetic_privacy_request(uuid)")
-    op.execute(
-        "UPDATE public.system_schema_state "
-        "SET revision='0028_synthetic_privacy_requests'"
-    )
+    op.execute("UPDATE public.system_schema_state SET revision='0028_synthetic_privacy_requests'")
