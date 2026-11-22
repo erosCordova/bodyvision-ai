@@ -57,7 +57,15 @@ def test_session_tokens_are_random_and_only_digest_is_persisted():
     # Session IDs are exactly 32 random bytes encoded as 43 base64url characters.
     # Reject alternate lengths, whitespace, padded tokens and punctuation
     # before reaching the session lookup in PostgreSQL.
-    for malformed in ("A" * 42, "A" * 44, "A" * 43 + "=", "A" * 42 + "/", "A" * 42 + " ", "A" * 42 + "\\t"):
+    malformed_tokens = (
+        "A" * 42,
+        "A" * 44,
+        "A" * 43 + "=",
+        "A" * 42 + "/",
+        "A" * 42 + " ",
+        "A" * 42 + "\t",
+    )
+    for malformed in malformed_tokens:
         with pytest.raises(ValueError):
             hash_session_token(malformed)
 
