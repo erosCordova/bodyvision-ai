@@ -153,8 +153,21 @@ def review_queue(
     offset: int = Query(0, ge=0, le=10000),
 ):
     _require_administrator(scope)
-    params = {"org": scope.organization_id, "limit": limit, "offset": offset}
-    where = "WHERE organization_id=:org"
+    params = {
+        "org": scope.organization_id,
+        "actor": scope.actor_id,
+        "limit": limit,
+        "offset": offset,
+    }
+    # Defense in depth: an administrator never inherits profile contents by role.
+    # Apply the exact same explicit profile grant to both page and total.
+    where = """WHERE organization_id=:org AND EXISTS (
+      SELECT 1 FROM profile_access AS a
+      WHERE a.organization_id=synthetic_privacy_requests.organization_id
+        AND a.profile_id=synthetic_privacy_requests.profile_id
+        AND a.user_id=:actor
+        AND (a.expires_at IS NULL OR a.expires_at>now())
+    )"""
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests {where}
