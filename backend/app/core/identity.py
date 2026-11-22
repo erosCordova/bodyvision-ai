@@ -18,6 +18,8 @@ PBKDF2_ITERATIONS = 600_000
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 128
 SESSION_TOKEN_BYTES = 32
+# Canonical unpadded base64url encoding of 32 cryptographically random bytes.
+_SESSION_TOKEN_FORMAT = re.compile(r"[A-Za-z0-9_-]{43}")
 _ARGON2 = PasswordHasher(
     time_cost=3, memory_cost=65536, parallelism=4, hash_len=32, salt_len=16, type=Type.ID
 )
@@ -120,7 +122,7 @@ def issue_session_token() -> tuple[str, str]:
 
 
 def hash_session_token(token: str) -> str:
-    if not isinstance(token, str) or not (40 <= len(token) <= 256):
+    if not isinstance(token, str) or _SESSION_TOKEN_FORMAT.fullmatch(token) is None:
         raise ValueError("Invalid session token")
     try:
         return hashlib.sha256(token.encode("ascii")).hexdigest()
