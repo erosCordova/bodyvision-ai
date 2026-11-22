@@ -3,10 +3,10 @@ import re
 from typing import Literal
 
 from cryptography.fernet import Fernet
-
-from app.core.access_tokens import decode_signing_key
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.access_tokens import decode_signing_key
 
 
 class Settings(BaseSettings):
