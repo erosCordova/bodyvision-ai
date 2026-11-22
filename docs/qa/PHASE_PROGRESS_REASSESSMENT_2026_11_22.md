@@ -74,3 +74,22 @@ HTTP: 401 anterior a la mutación, 201 tras renovación y un único registro.
 
 **Sin incremento de estimación:** F3 95 %, suma 925, promedio 92,5 % exacto y
 93 % mostrado. [Evidencia y límites](PHASE_3_ADMIN_SESSION_CONTINUITY.md).
+
+## Continuidad de captura y pose con renovación compartida
+
+Capturas y resúmenes de pose adoptan la misma renovación acotada de acceso
+que administración y expedientes. Conservan PNG, payload mínimo y clave de
+idempotencia. Cancelar una consulta o vencer su espera impide su reintento
+sin cancelar la renovación que otra consulta necesita; los fallos inciertos
+de red no repiten escrituras. El formulario conserva la operación de pose al
+renovarse el JWT y descarta la confirmación al cambiar de identidad.
+
+La [CI 45039841043](https://github.com/erosCordova/bodyvision-ai/actions/runs/45039841043)
+aprobó `f5e9b2a032f8d490501fe22632be12560ab4b5de`: **430 backend, 328 frontend,
+44 navegador público, 11 privado y 4 cookie = 817 pruebas de aplicación**;
+Windows y Docker aprobados. La [retención 45039841169](https://github.com/erosCordova/bodyvision-ai/actions/runs/45039841169)
+también fue exitosa. El navegador verificó subida única, preview conservada,
+SHA-256 de descarga, borrado y guardado de pose tras rotaciones reales.
+
+Se mantienen F4 y F5 en 90 %, suma 925 y media **92,5 % exacto / 93 % mostrado**.
+[Evidencia y límites](PHASE_4_5_SESSION_CONTINUITY.md).

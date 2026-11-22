@@ -23,7 +23,7 @@ pendiente ni su aviso final. Cambiar identidad sí limpia la confirmación.
 - Cancelar una consulta impide su reintento, incluso si espera una renovación.
   No cancela la renovación compartida que otra consulta todavía necesita.
 - El presupuesto de siete segundos del servicio de pose incluye la espera
-  por renovación. Un vencimiento no deja una escritura diferida del cliente.
+  por renovación. Si vence durante esa espera, el cliente no envía el reintento.
 - Los fallos de red, 403, 409 y 500 no repiten operaciones; un resultado
   incierto de subida no se trata como rechazo previo de autorización.
 - Un segundo 401 invalida el token que realmente falló y termina el intento.
@@ -47,8 +47,23 @@ resultado y no añade mediciones observadas. No intercepta HTTP ni altera reloje
 La clave de cifrado usada en ese job es efímera y no se imprime.
 
 Las 328 pruebas de frontend (64 archivos), TypeScript, ESLint y compilación
-de producción aprobaron localmente. La aceptación integral del commit se
-registrará al terminar GitHub Actions.
+de producción aprobaron localmente.
+
+### Aceptación integral confirmada
+
+La [CI 45039841043](https://github.com/erosCordova/bodyvision-ai/actions/runs/45039841043)
+aprobó el commit `f5e9b2a032f8d490501fe22632be12560ab4b5de`:
+**430 backend + 328 frontend + 44 navegador público + 11 privado + 4 cookie
+= 817 pruebas de aplicación**, con Windows y Docker aprobados. La
+[retención independiente 45039841169](https://github.com/erosCordova/bodyvision-ai/actions/runs/45039841169)
+aprobó sobre el mismo commit.
+
+El recorrido nuevo pasó en 4,3 segundos en ese runner: subida con 401/201 y
+un único registro, vista previa conservada, descarga con SHA-256 idéntico,
+borrado y guardado de pose con la misma clave/cuerpo y aviso final conservado.
+Las lecturas de Blob se verifican tanto con la implementación nativa de Node
+como con FileReader en jsdom. El tiempo observado no es una garantía productiva.
+
 El navegador local no puede iniciarse por las restricciones de sockets del
 entorno; esa limitación no se presenta como una prueba de aplicación aprobada.
 
