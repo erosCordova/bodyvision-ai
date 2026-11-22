@@ -97,3 +97,50 @@ def test_jwt_does_not_bypass_new_mfa_enforcement(protected):
     client.app.state.settings = client.app.state.settings.model_copy(update={"mfa_enabled": True})
     assert client.get(IDENTITY, headers=headers(professional_jwt)).status_code == 401
     assert client.get(IDENTITY, headers=headers(member_jwt)).status_code == 200
+
+
+
+def test_jwt_authorizes_private_workspace_with_existing_rls_and_revocation(protected):
+    client, owner, profile, users = protected
+    _enable(client)
+    editor, member, outsider = users[:3]
+    tokens = {}
+    for actor in (editor, member, outsider):
+        opaque = authenticate(client, *actor[:2]).json()["token"]
+        jwt = client.post(EXCHANGE, headers=headers(opaque))
+        assert jwt.status_code == 200, jwt.text
+        tokens[actor[2] + str(actor[0])] = (opaque, jwt.json()["access_token"])
+    editor_opaque, editor_jwt = tokens[editor[2] + str(editor[0])]
+    _, member_jwt = tokens[member[2] + str(member[0])]
+    _, outsider_jwt = tokens[outsider[2] + str(outsider[0])]
+    path = f"/api/v1/profiles/{profile}"
+
+    assert client.get(path, headers=headers(editor_jwt)).status_code == 200
+    assert client.get(path, headers=headers(member_jwt)).status_code == 200
+    assert client.get(path, headers=headers(outsider_jwt)).status_code == 404
+    assert client.get("/api/v1/workspaces", headers=headers(editor_jwt)).json()["items"] == [
+        {"id": str(editor[1]), "name": "Centro Horizonte (ficticio)"}
+    ]
+    assert (
+        client.patch(path, headers=headers(member_jwt), json={"display_name": "Forbidden"})
+        .status_code
+        == 403
+    )
+    corrected = client.patch(
+        path, headers=headers(editor_jwt), json={"display_name": "Corrección ficticia"}
+    )
+    assert corrected.status_code == 200, corrected.text
+    assert (
+        client.get(path, headers={**headers(editor_jwt), "X-Workspace-ID": str(outsider[1])})
+        .status_code
+        == 400
+    )
+
+    with owner.begin() as connection:
+        connection.execute(
+            text("DELETE FROM profile_access WHERE profile_id=:profile AND user_id=:actor"),
+            {"profile": profile, "actor": editor[0]},
+        )
+    assert client.get(path, headers=headers(editor_jwt)).status_code == 404
+    assert client.post("/api/v1/auth/logout", headers=headers(editor_opaque)).status_code == 204
+    assert client.get(path, headers=headers(editor_jwt)).status_code == 401

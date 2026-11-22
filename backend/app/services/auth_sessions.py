@@ -67,6 +67,16 @@ def bearer_token(request: Request) -> str:
 def resolve_identity(request: Request, *, token_override: str | None = None) -> Identity:
     if not request.app.state.settings.identity_enabled:
         raise DomainError(404, "NOT_FOUND", "Recurso no disponible.")
+    # During local/test migration, application data endpoints accept the
+    # short-lived JWT only after a live PostgreSQL session, role and MFA check.
+    # Explicit opaque token overrides are reserved for refresh cookies.
+    if token_override is None and request.app.state.settings.jwt_access_enabled:
+        raw_header = request.headers.get("Authorization", "")
+        scheme, separator, credential = raw_header.partition(" ")
+        if separator and scheme.lower() == "bearer" and credential.count(".") == 2:
+            from app.services.jwt_access import resolve_access_identity
+
+            return resolve_access_identity(request)
     token = bearer_token(request) if token_override is None else token_override
     try:
         digest = hash_session_token(token)

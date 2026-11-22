@@ -124,3 +124,24 @@ def test_cookie_refresh_rejects_expired_database_session(protected):
             {"digest": hash_session_token(cookie)},
         )
     assert client.post(ROOT + "/refresh", headers=CSRF).status_code == 401
+
+
+
+def test_refresh_cookie_jwt_can_access_private_profile_then_revokes(protected):
+    client, _, profile, users = protected
+    _enable(client)
+    credentials = _credentials(users[0])
+    issued = client.post(ROOT + "/login", headers=CSRF, json=credentials)
+    assert issued.status_code == 200, issued.text
+    original = issued.json()["access_token"]
+    profile_path = f"/api/v1/profiles/{profile}"
+    assert client.get(profile_path, headers=headers(original)).status_code == 200
+
+    renewed = client.post(ROOT + "/refresh", headers=CSRF)
+    assert renewed.status_code == 200, renewed.text
+    new_access = renewed.json()["access_token"]
+    assert client.get(profile_path, headers=headers(original)).status_code == 401
+    assert client.get(profile_path, headers=headers(new_access)).status_code == 200
+
+    assert client.post(ROOT + "/logout", headers=CSRF).status_code == 204
+    assert client.get(profile_path, headers=headers(new_access)).status_code == 401
