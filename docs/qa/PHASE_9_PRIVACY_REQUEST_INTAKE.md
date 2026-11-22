@@ -156,3 +156,28 @@ No se certifica atención de derechos legales, datos reales, eliminación
 de copias externas ni plazos normativos; los siete días son exclusivamente
 un objetivo interno de simulación. No hay cambio de `main` ni despliegue.
 La estimación manual se mantiene en 92,5 % global (93 % visible).
+
+## Segregación de metadatos por autor — PR #57
+
+La revisión posterior detectó que la RLS de `synthetic_privacy_requests`
+autorizaba la lectura por **expediente** y no discriminaba entre las
+personas que registraron solicitudes sobre ese mismo expediente.
+Con dos concesiones válidas, un grantee podía consultar el tipo,
+estado y fecha de la solicitud del otro. Esta brecha de privacidad
+se corrigió en local/test sintético sin afirmar exposición real.
+
+El historial por expediente muestra ahora **solo solicitudes del
+actor autenticado**, tanto en filas como en total. La nueva política
+RLS `0029` impone lo mismo directamente en PostgreSQL. La cola de
+revisión conserva el acceso de un administrador activo únicamente
+si tiene además concesión explícita al expediente. Se actualizó
+la revisión de esquema esperada para mantener operativo el
+monitor de salud después de la migración.
+
+El [PR #57](https://github.com/erosCordova/bodyvision-ai/pull/57)
+se fusionó con [CI #45082050616](https://github.com/erosCordova/bodyvision-ai/actions/runs/45082050616)
+**834 pruebas de aplicación** aprobadas y
+[retención #45082050639](https://github.com/erosCordova/bodyvision-ai/actions/runs/45082050639)
+exitosa. Véase la
+[evidencia de aislamiento por solicitante](PHASE_9_PRIVACY_REQUESTER_ISOLATION.md).
+No se responde, exporta, elimina ni satisface jurídicamente una solicitud.
