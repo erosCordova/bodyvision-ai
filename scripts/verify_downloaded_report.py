@@ -57,7 +57,7 @@ def _validate_csv(content: bytes, expected_rows: int) -> int:
                 source = UUID(row[0])
                 value = Decimal(row[3])
                 if not re.fullmatch(
-                    r"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z",
+                    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z",
                     row[1],
                 ):
                     raise DownloadRejected("Invalid UTC timestamp")
