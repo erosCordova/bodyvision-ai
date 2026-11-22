@@ -160,7 +160,8 @@ def test_privacy_queue_filters_overdue_and_revoked_grants(protected):
         )
     assert client.get(queue + "?status=in_review", headers=administrator).json()["total"] == 0
     assert (
-        client.get(f"/api/v1/profiles/{profile_id}/privacy-requests", headers=member)
-        .json()["total"]
+        client.get(f"/api/v1/profiles/{profile_id}/privacy-requests", headers=member).json()[
+            "total"
+        ]
         == 1
     )
