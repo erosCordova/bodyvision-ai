@@ -65,3 +65,19 @@ Esta primera entrega es un registro y triaje **exclusivamente sintético**.
 La fase 9 del tablero (operación) no corresponde directamente a F9 del
 contrato (privacidad), por lo que **no aumenta automáticamente la media manual
 de 92,5 % / 93 % redondeado**. No se fusionó `main`, ni se desplegó.
+
+## Ampliación de navegación y aceptación por navegador (PR pendiente)
+
+Se reemplaza el selector limitado a los primeros 12 expedientes por
+búsqueda por código o referencia y páginas de 12 elementos. La cola
+identifica cada solicitud con el código del expediente, sin revelar el
+nombre del titular ni otros datos personales. La API devuelve ese código
+solo tras comprobar el permiso de lectura del expediente, la organización
+y el rol; la cola conserva la concesión explícita obligatoria.
+
+El ensayo E2E de Playwright recorre login privado, creación de expediente
+ficticio, búsqueda desde la UI, registro de solicitud, bloqueo de duplicados,
+revisión administrativa y comprobación del aislamiento de otra organización.
+
+La aprobación no implica atención ARCO legal ni la autorización de datos
+reales. El avance de las fases permanece estimado en 92,5 % / 93 % redondeado.

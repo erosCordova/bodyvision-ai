@@ -19,8 +19,10 @@ from app.repositories import records
 router = APIRouter(prefix="/api/v1", tags=["Synthetic privacy requests"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 REQUEST_TYPES = ("access", "rectification", "cancellation", "opposition", "export")
-FIELDS = """id,profile_id,request_type,status,requested_by,received_at,review_target_at,
- review_started_at,reviewed_by"""
+FIELDS = """r.id,r.profile_id,r.request_type,r.status,r.requested_by,r.received_at,
+ r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code"""
+TABLE = """synthetic_privacy_requests r JOIN profiles p
+  ON p.organization_id=r.organization_id AND p.id=r.profile_id"""
 
 
 class PrivacyRequestInput(BaseModel):
@@ -40,6 +42,7 @@ class PrivacyRequestRead(BaseModel):
     review_target_at: datetime
     review_started_at: datetime | None
     reviewed_by: UUID | None
+    profile_code: str
 
 
 class PrivacyRequestPage(BaseModel):
@@ -79,8 +82,8 @@ def _audit(scope: Workspace, profile_id: UUID | None, event: str) -> None:
 def _read(scope: Workspace, identifier: UUID) -> dict:
     result = (
         scope.connection.execute(
-            text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests
-            WHERE id=:id AND organization_id=:org"""),
+            text(f"""SELECT {FIELDS} FROM {TABLE}
+            WHERE r.id=:id AND r.organization_id=:org"""),
             {"id": identifier, "org": scope.organization_id},
         )
         .mappings()
@@ -128,19 +131,19 @@ def profile_requests(
 ):
     _require_private(scope)
     records.profile(scope, profile_id)
-    query = "WHERE organization_id=:org AND profile_id=:profile"
+    query = "WHERE r.organization_id=:org AND r.profile_id=:profile"
     params = {"org": scope.organization_id, "profile": profile_id, "limit": limit, "offset": offset}
     rows = (
         scope.connection.execute(
-            text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests
-        {query} ORDER BY received_at DESC,id DESC LIMIT :limit OFFSET :offset"""),
+            text(f"""SELECT {FIELDS} FROM {TABLE}
+        {query} ORDER BY r.received_at DESC,r.id DESC LIMIT :limit OFFSET :offset"""),
             params,
         )
         .mappings()
         .all()
     )
     total = scope.connection.execute(
-        text(f"SELECT count(*) FROM synthetic_privacy_requests {query}"), params
+        text(f"SELECT count(*) FROM synthetic_privacy_requests r {query}"), params
     ).scalar_one()
     _audit(scope, profile_id, "privacy.request.listed")
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
@@ -161,25 +164,25 @@ def review_queue(
     }
     # Defense in depth: an administrator never inherits profile contents by role.
     # Apply the exact same explicit profile grant to both page and total.
-    where = """WHERE organization_id=:org AND EXISTS (
+    where = """WHERE r.organization_id=:org AND EXISTS (
       SELECT 1 FROM profile_access AS a
-      WHERE a.organization_id=synthetic_privacy_requests.organization_id
-        AND a.profile_id=synthetic_privacy_requests.profile_id
+      WHERE a.organization_id=r.organization_id
+        AND a.profile_id=r.profile_id
         AND a.user_id=:actor
         AND (a.expires_at IS NULL OR a.expires_at>now())
     )"""
     rows = (
         scope.connection.execute(
-            text(f"""SELECT {FIELDS} FROM synthetic_privacy_requests {where}
-        ORDER BY CASE WHEN status='received' THEN 0 ELSE 1 END,
-          review_target_at,id LIMIT :limit OFFSET :offset"""),
+            text(f"""SELECT {FIELDS} FROM {TABLE} {where}
+        ORDER BY CASE WHEN r.status='received' THEN 0 ELSE 1 END,
+          r.review_target_at,r.id LIMIT :limit OFFSET :offset"""),
             params,
         )
         .mappings()
         .all()
     )
     total = scope.connection.execute(
-        text(f"SELECT count(*) FROM synthetic_privacy_requests {where}"), params
+        text(f"SELECT count(*) FROM synthetic_privacy_requests r {where}"), params
     ).scalar_one()
     _audit(scope, None, "privacy.queue.listed")
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
