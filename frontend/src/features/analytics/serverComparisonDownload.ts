@@ -6,6 +6,9 @@ export const comparisonDownloadSchema = z.object({
   filename: z.string().regex(/^bodyvision-[a-f0-9-]{36}\.pdf$/),
   pdf_base64: z.string().min(1).max(100000),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
+}).refine((report) => report.filename === `bodyvision-${report.report_id}.pdf`, {
+  message: "El nombre del archivo no corresponde al informe.",
+  path: ["filename"],
 });
 export type ComparisonDownload = z.infer<typeof comparisonDownloadSchema>;
 
