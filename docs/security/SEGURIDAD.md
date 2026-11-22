@@ -43,11 +43,16 @@ ficticio. No sustituye una revisión externa de seguridad.
 ## Diferencias y pendientes
 
 El [ADR 0002](../adr/0002-identity-tenancy.md) plantea Argon2id, JWT y refresh
-rotatorio. La contraseña ya usa Argon2id; JWT/refresh sigue pendiente porque
-la implementación conserva sesiones opacas. Este documento describe esa
-diferencia y no aprueba su equivalencia para el objetivo real.
-Invitación, recuperación objetivo y matriz completa de roles
-conservan su revisión e implementación pendientes.
+rotatorio. La contraseña ya usa Argon2id, y desde la migración
+`0026_refresh_session_families` existe un access JWT de 15 minutos verificado
+contra la sesión viva más un refresh rotatorio en cookie `HttpOnly` con
+detección de reutilización que revoca la familia comprometida
+([informe](../qa/PHASE_3_ROTATING_REFRESH.md)). Sigue siendo una implementación
+parcial, opt-in y solo local/test: "Recordarme", inactividad, adopción del
+flujo por el frontend, recuperación objetivo, invitación por email real, matriz
+completa de roles, cookie segura forzada tras terminación TLS y revisión
+externa continúan pendientes. Este documento no aprueba equivalencia con el
+objetivo real.
 
 Reescribir toda la auditoría y su cabecera requiere una referencia independiente
 para detectar la reconstrucción. Anclaje/custodia externos, claves productivas,

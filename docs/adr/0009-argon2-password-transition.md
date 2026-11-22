@@ -80,8 +80,11 @@ aprobó sobre el mismo commit, incluida reversión/restauración del esquema.
 En local aprobaron 334 pruebas y se excluyó solo la aserción que exige
 PostgreSQL 15, porque el servidor temporal era 16; CI cubrió esa aserción.
 La fase 3 sigue en 90 % y el global en 91,5 % exacto / 92 % redondeado.
-No se registra aceptación de fase 0 ni cierre integral de identidad: JWT/refresh,
-invitaciones y matriz de roles del contrato siguen pendientes.
+No se registra aceptación de fase 0 ni cierre integral de identidad: el
+access JWT y el refresh rotatorio ya existen de forma parcial y solo local/test
+([informe](../qa/PHASE_3_ROTATING_REFRESH.md)), pero "Recordarme", inactividad,
+adopción por el frontend, invitaciones por email real y matriz de roles del
+contrato siguen pendientes.
 
 La actualización posterior de documentos y textos de seguimiento pasó
 ESLint y las cuatro pruebas de progreso. No cambia funcionalidad ni porcentajes.
