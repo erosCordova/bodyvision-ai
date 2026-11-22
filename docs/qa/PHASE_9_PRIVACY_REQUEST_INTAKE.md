@@ -109,7 +109,7 @@ extrapola a cumplimiento legal ni modifica la evaluación manual
 92,5 % / 93 % mostrada. `main` continúa sin fusionar ni desplegar.
 
 
-## Triaje filtrado y revisión interna atrasada — PR en validación
+## Triaje filtrado y revisión interna atrasada — PR #52 fusionado
 
 La cola administrativa incorpora filtros por estado recibido/en revisión y
 por solicitudes recibidas cuyo objetivo interno de siete días ya quedó atrás.
@@ -127,3 +127,32 @@ El caso Playwright comprueba los filtros visibles con solicitudes ficticias.
 
 El objetivo es operación sintética: no hay atención jurídica, validación
 de identidad real, ni autorización para datos médicos reales.
+
+### Evidencias de entrega y límites (22-11-2026)
+
+El [PR #52](https://github.com/erosCordova/bodyvision-ai/pull/52)
+se fusionó en `feature/phase3-auth-security`, commit
+`67aaf8aa9de75b7544f63665b959fe2a93d39160`.
+La [CI #45063482302](https://github.com/erosCordova/bodyvision-ai/actions/runs/45063482302)
+terminó **success**, intento 2, sobre el commit
+`1d38f1a9efa949ac79b7f42606d56e53ac949102`:
+**439 backend + 331 frontend + 44 navegador público +
+12 navegador privado + 4 navegador cookie = 830 pruebas de aplicación**.
+Windows, Docker, migraciones, build, navegación y permisos aprobados.
+La [retención independiente #45063482306](https://github.com/erosCordova/bodyvision-ai/actions/runs/45063482306)
+también concluyó con éxito.
+
+El primer intento falló únicamente en la prueba preexistente
+`tests/cookie-e2e/admin-after-refresh.spec.ts`: recibió una
+respuesta 201 a la creación de una invitación sin observar primero la 401
+que exigía el ensayo. La creación única tuvo éxito, y los 12 escenarios
+privados (incluida privacidad F9) aprobaron. La repetición del job fallido
+(segunda ejecución del mismo run) aprobó las cuatro pruebas cookie
+**sin alterar el código de aplicación**. Se deja registrado como
+indicio de prueba sensible a temporización, no como corrección
+confirmada de una anomalía de producción.
+
+No se certifica atención de derechos legales, datos reales, eliminación
+de copias externas ni plazos normativos; los siete días son exclusivamente
+un objetivo interno de simulación. No hay cambio de `main` ni despliegue.
+La estimación manual se mantiene en 92,5 % global (93 % visible).
