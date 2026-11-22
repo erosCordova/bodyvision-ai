@@ -107,3 +107,23 @@ ARCO, representantes, seguridad externa, eliminación de backups/WAL
 y despliegue con datos reales siguen pendientes. Este avance no se
 extrapola a cumplimiento legal ni modifica la evaluación manual
 92,5 % / 93 % mostrada. `main` continúa sin fusionar ni desplegar.
+
+
+## Triaje filtrado y revisión interna atrasada — PR en validación
+
+La cola administrativa incorpora filtros por estado recibido/en revisión y
+por solicitudes recibidas cuyo objetivo interno de siete días ya quedó atrás.
+El campo booleano `review_overdue` proviene de PostgreSQL y solo es verdadero
+para solicitudes **aún recibidas**, no para las que entraron en revisión.
+No se introducen plazos legales ficticios ni se cambian estados a
+`completed`. La consulta y el recuento utilizan exactamente los mismos
+filtros parametrizados, limitaciones de página, organización y permisos
+explícitos por expediente. El historial también marca atrasos internos.
+
+El test de integración crea una solicitud, simula su antigüedad solo en la
+base descartable, valida los filtros, pasa a revisión y verifica la pérdida
+inmediata de visibilidad al revocarse la concesión al administrador.
+El caso Playwright comprueba los filtros visibles con solicitudes ficticias.
+
+El objetivo es operación sintética: no hay atención jurídica, validación
+de identidad real, ni autorización para datos médicos reales.

@@ -22,6 +22,8 @@ export function PrivacyRequestsPage() {
   const [notice, setNotice] = useState("");
   const [profileOffset, setProfileOffset] = useState(0);
   const [queueOffset, setQueueOffset] = useState(0);
+  const [queueStatus, setQueueStatus] = useState<"all" | "received" | "in_review">("all");
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const privateClient = useMemo(
     () => session ? privacyRequestsApi(workspaceId, session.token) : null,
     [workspaceId, session],
@@ -47,8 +49,11 @@ export function PrivacyRequestsPage() {
     enabled: Boolean(privateClient && profileId),
   });
   const queue = useQuery({
-    queryKey: ["privacy-queue", session?.user_id, session?.role, queueOffset],
-    queryFn: () => privateClient!.listQueue(queueOffset),
+    queryKey: [
+      "privacy-queue", session?.organization_id, session?.user_id, session?.role,
+      queueOffset, queueStatus, overdueOnly,
+    ],
+    queryFn: () => privateClient!.listQueue(queueOffset, queueStatus, overdueOnly),
     enabled: Boolean(privateClient && session?.role === "administrator"),
   });
 
@@ -96,6 +101,7 @@ export function PrivacyRequestsPage() {
         <strong>{item.profile_code} · {kindLabels[item.request_type]}</strong>
         {" · "}{item.status === "received" ? "Recibida" : "En revisión"}
         <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de revisión: {dateLabel(item.review_target_at)}.</p>
+        {item.review_overdue && <p>Revisión interna atrasada (no es un plazo legal).</p>}
         {canReview && item.status === "received" && <button type="button"
           disabled={pending} onClick={() => { void review(item); }}>Iniciar revisión</button>}
       </li>)}
@@ -174,6 +180,21 @@ export function PrivacyRequestsPage() {
     {session.role === "administrator" && <section className="enterprise-panel">
       <h2>Cola de revisión administrativa</h2>
       <p>Solo aparecen expedientes con permiso explícito. Iniciar revisión no significa atender ni cerrar la solicitud.</p>
+      <label htmlFor="privacy-queue-status">Filtrar solicitudes por estado</label>
+      <select id="privacy-queue-status" value={queueStatus}
+        onChange={event => {
+          setQueueStatus(event.target.value as "all" | "received" | "in_review");
+          setQueueOffset(0);
+        }}>
+        <option value="all">Todos los estados</option>
+        <option value="received">Recibidas</option>
+        <option value="in_review">En revisión</option>
+      </select>
+      <label htmlFor="privacy-queue-overdue">
+        <input id="privacy-queue-overdue" type="checkbox" checked={overdueOnly}
+          onChange={event => { setOverdueOnly(event.target.checked); setQueueOffset(0); }} />
+        Solo solicitudes con revisión interna atrasada
+      </label>
       {queue.isLoading && <p role="status">Consultando cola…</p>}
       {queue.isError && <p role="alert">No se pudo consultar la cola.
         <button type="button" onClick={() => { void queue.refetch(); }}>Reintentar</button></p>}

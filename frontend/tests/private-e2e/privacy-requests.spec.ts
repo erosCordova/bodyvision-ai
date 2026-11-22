@@ -80,6 +80,19 @@ test("F9 private ARCO intake UI: search expediente, submit, de-duplicate, triage
       hasText: profile.display_code,
     })).toContainText("En revisión");
     await expect(history).toContainText("En revisión");
+    const statusFilter = queue.getByRole("combobox", { name: "Filtrar solicitudes por estado" });
+    await statusFilter.selectOption("received");
+    await expect(queue).not.toContainText(profile.display_code);
+    await statusFilter.selectOption("in_review");
+    await expect(queue).toContainText(profile.display_code);
+    await queue.getByRole("checkbox", {
+      name: "Solo solicitudes con revisión interna atrasada",
+    }).check();
+    await expect(queue).not.toContainText(profile.display_code);
+    await queue.getByRole("checkbox", {
+      name: "Solo solicitudes con revisión interna atrasada",
+    }).uncheck();
+    await expect(queue).toContainText(profile.display_code);
 
     const otherLogin = await page.request.post("/api/v1/auth/login", {
       data: {
