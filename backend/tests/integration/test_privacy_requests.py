@@ -1,5 +1,6 @@
 """Cross-role synthetic privacy intake. Real rights remain unimplemented."""
 
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -150,12 +151,24 @@ def test_privacy_queue_filters_overdue_and_revoked_grants(protected):
 
     updated = client.post(f"/api/v1/privacy-requests/{reference}/review", headers=administrator)
     assert updated.status_code == 200, updated.text
-    assert updated.json()["review_overdue"] is False
-    assert client.get(queue + "?overdue_only=true", headers=administrator).json()["total"] == 0
+    assert updated.json()["review_overdue"] is True
+    assert updated.json()["review_target_at"] == due.json()["items"][0]["review_target_at"]
+    assert client.get(queue + "?overdue_only=true", headers=administrator).json()["total"] == 1
+    assert (
+        client.get(queue + "?overdue_only=true&status=received", headers=administrator).json()[
+            "total"
+        ]
+        == 0
+    )
     in_review = client.get(queue + "?status=in_review", headers=administrator)
     assert in_review.status_code == 200
     assert in_review.json()["total"] == 1
-    assert in_review.json()["items"][0]["review_overdue"] is False
+    assert in_review.json()["items"][0]["review_overdue"] is True
+    assert client.get(base, headers=member).json()["items"][0]["review_overdue"] is True
+    second_page = client.get(
+        queue + "?overdue_only=true&status=in_review&limit=1&offset=1", headers=administrator
+    )
+    assert second_page.json()["items"] == [] and second_page.json()["total"] == 1
     with owner.begin() as conn:
         conn.execute(
             text("DELETE FROM profile_access WHERE profile_id=:profile AND user_id=:actor"),
@@ -168,6 +181,46 @@ def test_privacy_queue_filters_overdue_and_revoked_grants(protected):
         ]
         == 1
     )
+
+
+def test_privacy_target_configuration_is_snapshotted_not_retroactive(protected, monkeypatch):
+    client, owner, profile_id, users = protected
+    member = login(client, users[1])
+    base = f"/api/v1/profiles/{profile_id}/privacy-requests"
+    valid = {"request_type": "access", "synthetic_confirmed": True}
+    # The caller cannot choose/reset the server-controlled deadline.
+    assert client.post(base, headers=member, json={**valid, "target_days": 30}).status_code == 422
+    settings = client.app.state.settings
+    assert settings.privacy_review_target_days == 7
+    original = client.post(base, headers=member, json=valid)
+    assert original.status_code == 201, original.text
+    first = original.json()
+    assert datetime.fromisoformat(first["review_target_at"]) - datetime.fromisoformat(
+        first["received_at"]
+    ) == timedelta(days=7)
+
+    monkeypatch.setattr(settings, "privacy_review_target_days", 2)
+    next_request = client.post(base, headers=member, json={**valid, "request_type": "export"})
+    assert next_request.status_code == 201, next_request.text
+    second = next_request.json()
+    assert datetime.fromisoformat(second["review_target_at"]) - datetime.fromisoformat(
+        second["received_at"]
+    ) == timedelta(days=2)
+    assert first["review_overdue"] is second["review_overdue"] is False
+
+    monkeypatch.setattr(settings, "privacy_review_target_days", 30)
+    persisted = client.get(base, headers=member).json()
+    deadlines = {item["id"]: item["review_target_at"] for item in persisted["items"]}
+    assert deadlines[first["id"]] == first["review_target_at"]
+    assert deadlines[second["id"]] == second["review_target_at"]
+    with owner.connect() as conn:
+        stored = conn.execute(
+            text(
+                "SELECT review_target_at-received_at FROM synthetic_privacy_requests WHERE id=:id"
+            ),
+            {"id": second["id"]},
+        ).scalar_one()
+    assert stored == timedelta(days=2)
 
 
 def test_request_history_isolation_between_same_profile_grantees_and_admin_queue(protected):

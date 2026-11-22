@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 
@@ -19,9 +19,17 @@ from app.repositories import records
 router = APIRouter(prefix="/api/v1", tags=["Synthetic privacy requests"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 REQUEST_TYPES = ("access", "rectification", "cancellation", "opposition", "export")
-FIELDS = """r.id,r.profile_id,r.request_type,r.status,r.requested_by,r.received_at,
+# Both implemented states are unresolved. Beginning review must not clear an
+# overdue alert or reset the stored target. now() is stable for this transaction,
+# so row flags, filters and totals use exactly the same database clock.
+OVERDUE = "(r.status IN ('received','in_review') AND r.review_target_at <= now())"
+FIELDS = (
+    """r.id,r.profile_id,r.request_type,r.status,r.requested_by,r.received_at,
  r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code,
- (r.status='received' AND r.review_target_at < clock_timestamp()) AS review_overdue"""
+ """
+    + OVERDUE
+    + " AS review_overdue"
+)
 TABLE = """synthetic_privacy_requests r JOIN profiles p
   ON p.organization_id=r.organization_id AND p.id=r.profile_id"""
 
@@ -101,20 +109,22 @@ def _read(scope: Workspace, identifier: UUID) -> dict:
     response_model=PrivacyRequestRead,
     status_code=201,
 )
-def submit_request(profile_id: UUID, data: PrivacyRequestInput, scope: Scope):
+def submit_request(profile_id: UUID, data: PrivacyRequestInput, scope: Scope, request: Request):
     _require_private(scope)
     records.profile(scope, profile_id)
     identifier = uuid4()
     scope.connection.execute(
         text("""INSERT INTO synthetic_privacy_requests
-          (id,organization_id,profile_id,request_type,requested_by,review_target_at)
-          VALUES (:id,:org,:profile,:type,:actor,clock_timestamp()+interval '7 days')"""),
+          (id,organization_id,profile_id,request_type,requested_by,received_at,review_target_at)
+          VALUES (:id,:org,:profile,:type,:actor,now(),
+                  now()+:target_days*interval '24 hours')"""),
         {
             "id": identifier,
             "org": scope.organization_id,
             "profile": profile_id,
             "type": data.request_type,
             "actor": scope.actor_id,
+            "target_days": request.app.state.settings.privacy_review_target_days,
         },
     )
     _audit(scope, profile_id, "privacy.request.created")
@@ -181,7 +191,8 @@ def review_queue(
     }
     # Defense in depth: an administrator never inherits profile contents by role.
     # Apply the exact same explicit profile grant to both page and total.
-    where = """WHERE r.organization_id=:org AND EXISTS (
+    where = (
+        """WHERE r.organization_id=:org AND EXISTS (
       SELECT 1 FROM profile_access AS a
       WHERE a.organization_id=r.organization_id
         AND a.profile_id=r.profile_id
@@ -189,8 +200,10 @@ def review_queue(
         AND (a.expires_at IS NULL OR a.expires_at>now())
     )
     AND (CAST(:filter_status AS text) IS NULL OR r.status=:filter_status)
-    AND (:overdue_only=false OR
-         (r.status='received' AND r.review_target_at<clock_timestamp()))"""
+    AND (:overdue_only=false OR """
+        + OVERDUE
+        + ")"
+    )
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM {TABLE} {where}

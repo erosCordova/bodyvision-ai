@@ -39,6 +39,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Run setup first}
       CORS_ORIGINS: ${CORS_ORIGINS:?Run setup first}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Run setup first}
+      PRIVACY_REVIEW_TARGET_DAYS: ${PRIVACY_REVIEW_TARGET_DAYS:-7}
       TZ: America/Lima
     depends_on:
       migrate: {condition: service_completed_successfully}

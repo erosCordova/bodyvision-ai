@@ -7,6 +7,7 @@ import {
 } from "../../services/api/privacyRequests";
 
 const dateLabel = (value: string) => new Date(value).toLocaleString("es-PE", {
+  timeZone: "America/Lima",
   day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
 });
 
@@ -100,8 +101,8 @@ export function PrivacyRequestsPage() {
       {items.map(item => <li key={item.id}>
         <strong>{item.profile_code} · {kindLabels[item.request_type]}</strong>
         {" · "}{item.status === "received" ? "Recibida" : "En revisión"}
-        <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de revisión: {dateLabel(item.review_target_at)}.</p>
-        {item.review_overdue && <p>Revisión interna atrasada (no es un plazo legal).</p>}
+        <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de atención (hora de Lima): {dateLabel(item.review_target_at)}.</p>
+        {item.review_overdue && <p role="status">Atención interna atrasada (no es un plazo legal).</p>}
         {canReview && item.status === "received" && <button type="button"
           disabled={pending} onClick={() => { void review(item); }}>Iniciar revisión</button>}
       </li>)}
@@ -180,7 +181,8 @@ export function PrivacyRequestsPage() {
     </section>
     {session.role === "administrator" && <section className="enterprise-panel">
       <h2>Cola de revisión administrativa</h2>
-      <p>Solo aparecen expedientes con permiso explícito. Iniciar revisión no significa atender ni cerrar la solicitud.</p>
+      <p>Solo aparecen expedientes con permiso explícito. Iniciar revisión no significa atender ni cerrar la solicitud;
+        conserva el objetivo original y cualquier aviso de atraso.</p>
       <label htmlFor="privacy-queue-status">Filtrar solicitudes por estado</label>
       <select id="privacy-queue-status" value={queueStatus}
         onChange={event => {
@@ -194,7 +196,7 @@ export function PrivacyRequestsPage() {
       <label htmlFor="privacy-queue-overdue">
         <input id="privacy-queue-overdue" type="checkbox" checked={overdueOnly}
           onChange={event => { setOverdueOnly(event.target.checked); setQueueOffset(0); }} />
-        Solo solicitudes con revisión interna atrasada
+        Solo solicitudes con atención interna atrasada
       </label>
       {queue.isLoading && <p role="status">Consultando cola…</p>}
       {queue.isError && <p role="alert">No se pudo consultar la cola.

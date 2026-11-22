@@ -3,7 +3,7 @@ import re
 from typing import Literal
 
 from cryptography.fernet import Fernet
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.access_tokens import decode_signing_key
@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     capture_decryption_keys: list[SecretStr] = []
     capture_retention_interval_seconds: int = 900
     capture_retention_enabled: bool = True
+    # Internal elapsed-day target for new synthetic requests, never a legal deadline.
+    privacy_review_target_days: int = Field(default=7, ge=1, le=30)
 
     @field_validator("database_url")
     @classmethod
