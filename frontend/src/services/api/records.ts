@@ -227,6 +227,9 @@ export function recordsApi(workspace: string, token?: string) {
       ),
     versions: (id: string) =>
       get(`/measurements/${id}/versions`, z.array(measurementSchema)),
+    versionsPage: (id: string, offset = 0) =>
+      get(`/measurements/${id}/versions/page?limit=20&offset=${offset}`,
+        pageOf(measurementSchema)),
     derived: (id: string) =>
       get(`/profiles/${id}/analytics/derived`, z.array(derivedSchema)),
     series: (id: string, metric: string, period: string) =>

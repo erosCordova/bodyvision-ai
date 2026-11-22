@@ -219,3 +219,54 @@ test("demo metadata makes all profile editing controls read-only", async ({
     page.getByRole("button", { name: "Archivar expediente", exact: true }),
   ).toBeDisabled();
 });
+
+
+test("long correction history is browsable in bounded pages without losing version order", async ({
+  page, request,
+}) => {
+  test.setTimeout(90000);
+  const headers = { "X-Workspace-ID": "10000000-0000-4000-8000-000000000001" };
+  const created = await request.post("/api/v1/profiles", {
+    headers, data: { display_name: "Historial largo ficticio", birth_year: 1995 },
+  });
+  expect(created.status()).toBe(201);
+  const profile = await created.json() as { id: string };
+  const data = {
+    metric_code: "weight", value: 72, unit: "kg", method: "manual",
+    measured_at: "2026-11-01T10:00:00Z",
+  };
+  const first = await request.post(`/api/v1/profiles/${profile.id}/measurements`, {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data,
+  });
+  expect(first.status()).toBe(201);
+  let latest = (await first.json() as { id: string }).id;
+  for (let i = 1; i <= 21; i += 1) {
+    const saved = await request.patch(`/api/v1/measurements/${latest}`, {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        ...data, value: Number((72 - i * 0.1).toFixed(2)),
+        correction_reason: "Corrección ficticia de paginación",
+      },
+    });
+    expect(saved.status()).toBe(201);
+    latest = (await saved.json() as { id: string }).id;
+  }
+
+  await page.goto(`/profiles/${profile.id}?tab=measurements`);
+  await expect(page.getByRole("cell", { name: "69.9 kg", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Ver versiones", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Historial de correcciones: 22 versiones.")).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Versión 1 · 72 kg" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Versión 20 · 70.1 kg" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Versión 21 · 70 kg" })).not.toBeVisible();
+  await dialog.getByRole("button", { name: "Más versiones" }).click();
+  await expect(dialog.getByRole("heading", { name: "Versión 21 · 70 kg" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Versión 22 · 69.9 kg" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Versión 1 · 72 kg" })).not.toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Más versiones" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Versiones anteriores" }).click();
+  await expect(dialog.getByRole("heading", { name: "Versión 1 · 72 kg" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Versiones anteriores" })).toBeDisabled();
+});

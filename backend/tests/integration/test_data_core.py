@@ -338,3 +338,67 @@ def test_demo_database_rejects_sql_writes_even_with_owner_connection(db_url):
             assert error.value.orig.sqlstate == "25006"
     finally:
         engine.dispose()
+
+
+def test_correction_lineage_is_paged_without_unrelated_profile_measurements(client):
+    """26 corrections are read in exact order, even from a middle version."""
+    profile = new_profile(client)
+    data = entry(72)
+    first_response = post(client, profile, data)
+    assert first_response.status_code == 201, first_response.text
+    first = first_response.json()["id"]
+    ids = [first]
+    latest = first
+    for i in range(1, 26):
+        correction = client.patch(
+            f"/api/v1/measurements/{latest}",
+            json={
+                **data,
+                "value": round(72 - i * 0.1, 2),
+                "correction_reason": "Corrección sintética paginada",
+            },
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        assert correction.status_code == 201, correction.text
+        latest = correction.json()["id"]
+        ids.append(latest)
+
+    unrelated = post(client, profile, entry(180, metric="height", unit="cm"))
+    assert unrelated.status_code == 201, unrelated.text
+
+    base = f"/api/v1/measurements/{ids[12]}/versions"
+    first_page = client.get(base + "/page?limit=20&offset=0")
+    second_page = client.get(base + "/page?limit=20&offset=20")
+    assert first_page.status_code == 200, first_page.text
+    assert second_page.status_code == 200, second_page.text
+    one = first_page.json()
+    two = second_page.json()
+    assert one["total"] == two["total"] == 26
+    assert one["limit"] == two["limit"] == 20
+    assert one["offset"] == 0 and two["offset"] == 20
+    assert [x["id"] for x in one["items"] + two["items"]] == ids
+    assert all(x["data_type"] == "OBSERVADO" for x in one["items"] + two["items"])
+    assert all(x["metric_code"] == "weight" for x in one["items"] + two["items"])
+    assert unrelated.json()["id"] not in ids
+
+    empty = client.get(base + "/page?limit=20&offset=40")
+    assert empty.status_code == 200
+    assert empty.json()["items"] == [] and empty.json()["total"] == 26
+    assert client.get(base + "/page?limit=0").status_code == 422
+    assert client.get(base + "/page?limit=51").status_code == 422
+    assert client.get(base + "/page?offset=-1").status_code == 422
+
+    # Preserve existing client contracts and allow opening from any version.
+    legacy = client.get(f"/api/v1/measurements/{ids[0]}/versions")
+    assert legacy.status_code == 200
+    assert [x["id"] for x in legacy.json()] == ids
+    latest_page = client.get(f"/api/v1/measurements/{ids[-1]}/versions/page")
+    assert [x["id"] for x in latest_page.json()["items"]] == ids[:20]
+    assert latest_page.json()["total"] == 26
+
+    # RLS + profile grant: a different test organization cannot see the chain.
+    denied = client.get(
+        base + "/page",
+        headers={"X-Workspace-ID": str(SECOND_WORKSPACE)},
+    )
+    assert denied.status_code == 404

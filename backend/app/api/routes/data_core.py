@@ -23,6 +23,7 @@ from app.schemas.core import (
     ProfileUpdate,
 )
 from app.services.measurements import derived, save
+from app.services.measurement_versions import correction_history
 from app.services.profile_audit import record_profile_event
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
@@ -241,31 +242,24 @@ def correct_measurement(
 
 @router.get("/measurements/{measurement_id}/versions", response_model=list[MeasurementRead])
 def versions(measurement_id: UUID, scope: Scope):
-    row = records.measurement(scope, measurement_id)
-    # Build the entire linear chain, including when an older version was requested.
-    rows = [
-        dict(x)
-        for x in scope.connection.execute(
-            text("""
-      SELECT m.*,u.display_name AS responsible FROM measurements m
-      JOIN users u ON u.id=m.created_by AND u.organization_id=m.organization_id
-      WHERE m.organization_id=:org AND m.profile_id=:profile ORDER BY m.created_at,m.id
-    """),
-            {"org": scope.organization_id, "profile": row["profile_id"]},
-        ).mappings()
-    ]
-    index = {x["id"]: x for x in rows}
-    root = row
-    while root["supersedes_id"]:
-        root = index[root["supersedes_id"]]
-    chain = [root]
-    while True:
-        following = next((x for x in rows if x["supersedes_id"] == chain[-1]["id"]), None)
-        if not following:
-            break
-        chain.append(following)
-    record_profile_event(scope, "measurement.read", row["profile_id"])
-    return chain
+    """Backward-compatible response shape without scanning unrelated measurements."""
+    result = correction_history(scope, measurement_id, limit=None)
+    record_profile_event(scope, "measurement.read", result["items"][0]["profile_id"])
+    return result["items"]
+
+
+@router.get("/measurements/{measurement_id}/versions/page", response_model=MeasurementList)
+def paginated_versions(
+    measurement_id: UUID,
+    scope: Scope,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+):
+    """Bounded page and exact total of an authorized immutable correction chain."""
+    result = correction_history(scope, measurement_id, limit=limit, offset=offset)
+    anchor = records.measurement(scope, measurement_id)
+    record_profile_event(scope, "measurement.read", anchor["profile_id"])
+    return result
 
 
 @router.get("/profiles/{profile_id}/analytics/derived", response_model=list[DerivedRead])

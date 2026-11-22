@@ -33,6 +33,7 @@ export function ProfileDetail() {
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<Measurement | "new" | null>(null);
   const [versionId, setVersionId] = useState<string | null>(null);
+  const [versionOffset, setVersionOffset] = useState(0);
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -54,8 +55,8 @@ export function ProfileDetail() {
     queryFn: () => api.series(profileId, metric, period),
   });
   const versions = useQuery({
-    queryKey: ["versions", id, versionId],
-    queryFn: () => api.versions(versionId!),
+    queryKey: ["versions", id, versionId, versionOffset],
+    queryFn: () => api.versionsPage(versionId!, versionOffset),
     enabled: !!versionId,
   });
   const update = useMutation({
@@ -386,7 +387,7 @@ export function ProfileDetail() {
                             )}
                           </td>
                           <td>
-                            <button onClick={() => setVersionId(row.id)}>
+                            <button onClick={() => { setVersionOffset(0); setVersionId(row.id); }}>
                               Ver versiones
                             </button>
                             <button
@@ -440,7 +441,7 @@ export function ProfileDetail() {
       {versionId && (
         <Modal
           title="Versiones de la medición"
-          onClose={() => setVersionId(null)}
+          onClose={() => { setVersionId(null); setVersionOffset(0); }}
         >
           {versions.isPending ? (
             <LoadingState />
@@ -450,12 +451,14 @@ export function ProfileDetail() {
               retry={() => void versions.refetch()}
             />
           ) : (
-            <ol className="version-list">
-              {versions.data.map((row, index) => (
+            <div>
+              <p role="status">Historial de correcciones: {versions.data.total} versiones.</p>
+              <ol className="version-list" start={versionOffset + 1}>
+                {versions.data.items.map((row, index) => (
                 <li key={row.id}>
                   <DataTypeBadge type="OBSERVADO" />
                   <h3>
-                    Versión {index + 1} · {row.value} {row.unit}
+                    Versión {versionOffset + index + 1} · {row.value} {row.unit}
                   </h3>
                   <p>
                     {row.is_current ? "Vigente" : "Sustituida"} ·{" "}
@@ -468,7 +471,23 @@ export function ProfileDetail() {
                   </small>
                 </li>
               ))}
-            </ol>
+              </ol>
+              {versions.data.total > versions.data.limit && <nav
+                aria-label="Páginas de versiones de la medición"
+                className="enterprise-pagination">
+                <button type="button" disabled={versionOffset === 0}
+                  onClick={() => setVersionOffset(v => Math.max(0, v - 20))}>
+                  Versiones anteriores
+                </button>
+                <span>{versionOffset + 1}–{Math.min(versionOffset + 20, versions.data.total)}
+                  de {versions.data.total}</span>
+                <button type="button"
+                  disabled={versionOffset + 20 >= versions.data.total}
+                  onClick={() => setVersionOffset(v => v + 20)}>
+                  Más versiones
+                </button>
+              </nav>}
+            </div>
           )}
         </Modal>
       )}
