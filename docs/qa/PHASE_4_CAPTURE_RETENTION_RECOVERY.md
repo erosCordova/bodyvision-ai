@@ -158,3 +158,31 @@ restaurados a los artefactos públicos de CI. La verificación sigue siendo
 **local/test, read-only, parcial**: no limpia backups, WAL ni réplicas, ni
 sustituye recepción independiente. El avance global se mantiene en 93 %
 hasta disponer de evidencias adicionales de cierre.
+
+## Integración validada con Arena y ChatGPT — 22-11-2026
+
+La protección adicional del manifiesto se integró mediante el
+[PR #49](https://github.com/erosCordova/bodyvision-ai/pull/49)
+en la rama compartida `feature/phase3-auth-security`, commit de merge
+`0e03cc29305cb230371e957454a6525471af1682`. La rama ya contenía
+la integración de Arena del
+[PR #48](https://github.com/erosCordova/bodyvision-ai/pull/48).
+No se fusionó `main` ni se realizó despliegue.
+
+La [CI integral #45054653287](https://github.com/erosCordova/bodyvision-ai/actions/runs/45054653287)
+resultó **exitosa** sobre el commit funcional `5a5d0f9c`:
+436 pruebas backend, 328 frontend, 44 navegador público, 11 navegador privado
+y 4 navegador cookie (**823 pruebas de aplicación**), además de lint,
+formato, migraciones, Windows y Docker aprobados. La
+[retención independiente #45054653271](https://github.com/erosCordova/bodyvision-ai/actions/runs/45054653271)
+también concluyó con éxito. El caso real de restauración en PostgreSQL
+acepta UUID canónicos de prueba como texto o tipo UUID, sin permitir
+duplicados lógicos ni formatos no canónicos.
+
+Las pruebas automatizadas de manifiesto comprueban límite de bytes,
+rechazo de campos inesperados y claves duplicadas, límites de lotes,
+enlaces duros/simbólicos, archivos especiales y mutación observable
+durante lectura. El control **no certifica eliminación global** ni
+inspección de WAL/backups externos; la recepción formal de privacidad
+y el uso con datos reales siguen bloqueados. Por ello F4 permanece
+en 90 % y el avance global estimado en 93 %.
