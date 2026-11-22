@@ -239,7 +239,6 @@ def logout(request: Request) -> None:
         ).scalar_one()
 
 
-
 def rotate_session(request: Request) -> SessionRead:
     """Consume one authenticated token and return its one-time replacement.
 
