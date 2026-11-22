@@ -6,7 +6,7 @@ this migration is not legal ARCO fulfillment or a patient-data authorization.
 
 from alembic import op
 
-revision = "0029_privacy_request_owner_isolation"
+revision = "0029_privacy_request_isolation"
 down_revision = "0028_synthetic_privacy_requests"
 branch_labels = None
 depends_on = None
@@ -69,7 +69,7 @@ def upgrade() -> None:
     )
     op.execute(
         "UPDATE public.system_schema_state "
-        "SET revision='0029_privacy_request_owner_isolation'"
+        "SET revision='0029_privacy_request_isolation'"
     )
 
 
