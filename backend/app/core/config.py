@@ -3,6 +3,8 @@ import re
 from typing import Literal
 
 from cryptography.fernet import Fernet
+
+from app.core.access_tokens import decode_signing_key
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +19,8 @@ class Settings(BaseSettings):
     identity_enabled: bool = False
     auth_database_url: SecretStr | None = None
     mfa_enabled: bool = False
+    jwt_access_enabled: bool = False
+    jwt_signing_key: SecretStr | None = None
     mfa_encryption_key: SecretStr | None = None
     capture_encryption_key: SecretStr | None = None
     capture_decryption_keys: list[SecretStr] = []
@@ -58,6 +62,24 @@ class Settings(BaseSettings):
                 raise ValueError("AUTH_DATABASE_URL is required for private authentication")
             if self.auth_database_url.get_secret_value() == self.database_url.get_secret_value():
                 raise ValueError("The authenticated database must use a distinct role")
+        if self.jwt_access_enabled:
+            if not self.identity_enabled or self.app_env not in {"local", "test"}:
+                raise ValueError("JWT access requires private local/test identity")
+            if self.jwt_signing_key is None:
+                raise ValueError("JWT access requires an external signing key")
+            decode_signing_key(self.jwt_signing_key.get_secret_value())
+            if (
+                self.mfa_encryption_key
+                and self.jwt_signing_key.get_secret_value()
+                == self.mfa_encryption_key.get_secret_value()
+            ):
+                raise ValueError("JWT and MFA signing secrets must differ")
+            if (
+                self.capture_encryption_key
+                and self.jwt_signing_key.get_secret_value()
+                == self.capture_encryption_key.get_secret_value()
+            ):
+                raise ValueError("JWT and capture signing secrets must differ")
         if self.mfa_enabled:
             if not self.identity_enabled or self.mfa_encryption_key is None:
                 raise ValueError(
