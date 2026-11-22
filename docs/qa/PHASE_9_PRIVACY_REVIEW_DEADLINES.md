@@ -47,7 +47,7 @@ amplía el acceso de la cola a expedientes sin concesión explícita.
   objetivo de las 13:00 UTC. TypeScript, ESLint y compilación aprobados.
 - Ruff y formato de backend aprobados. El recorrido Playwright privado se
   amplió para comprobar siete días exactos y conservación del objetivo tras
-  iniciar revisión; su ejecución integral queda pendiente de CI.
+  iniciar revisión; la aceptación integral aprobada se registra a continuación.
 
 ## Límites y avance
 
@@ -61,3 +61,27 @@ este defecto no equivale a superar las puertas externas de una fase.
 La integración exige CI integral, Windows/Docker y retención independiente
 aprobadas sobre el mismo cambio. Sin modificación de `main`, sin despliegue
 y sin conexión a Neon o a una base con datos reales durante las pruebas.
+
+## CI integral e integración aprobadas — 22-11-2026
+
+El [PR #58](https://github.com/erosCordova/bodyvision-ai/pull/58) se fusionó en
+`feature/phase3-auth-security` mediante el commit
+`af761efc2cc3949887c58026492a4ab9e6a30942`.
+El commit funcional validado es
+`48f0debc37c977b1c8d3c458c1704a0b9479120d`.
+
+La [CI integral #45084759477](https://github.com/erosCordova/bodyvision-ai/actions/runs/45084759477)
+terminó en `success` con `native-checks`, `windows-scripts` y `docker-smoke`
+aprobados: **449 backend + 332 frontend + 44 navegador público + 13 navegador
+privado + 4 sesiones cookie = 842 pruebas de aplicación**, sin sumar las
+repeticiones de Docker/retención al total. PostgreSQL **15**, migraciones
+reversibles, permisos SQL, Ruff, TypeScript, ESLint, compilación y auditoría
+de dependencias aprobaron. El recorrido privado real verificó el objetivo
+exacto de siete días y que iniciar revisión conserva la misma fecha.
+
+Docker verificó arranque limpio, restauración aislada, navegador compilado,
+purga con API apagada, vigilancia de caída/recuperación y conservación del
+historial tras recrear contenedores. La
+[retención independiente #45084759483](https://github.com/erosCordova/bodyvision-ai/actions/runs/45084759483)
+aprobó el mismo commit. No se atribuye recepción legal, clínica o de producto.
+El avance global permanece en **92,5 % / 93 % visible**.
