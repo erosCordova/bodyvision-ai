@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.services.account_security import (
     AccountConfirmation,
@@ -35,6 +35,7 @@ from app.services.auth_sessions import (
     rotate_session,
 )
 from app.services.consents import ConsentAcceptance, ConsentHistory, consent_operation
+from app.services.cookie_access import cookie_login, cookie_logout, cookie_refresh
 from app.services.jwt_access import (
     AccessIdentityRead,
     AccessTokenRead,
@@ -68,6 +69,23 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authenticated identity"])
 @router.post("/login", response_model=SessionRead)
 def create_session(request: Request, data: LoginInput) -> SessionRead:
     return login(request, data)
+
+
+@router.post("/access/login", response_model=AccessTokenRead)
+def create_cookie_session(
+    request: Request, response: Response, data: LoginInput
+) -> AccessTokenRead:
+    return cookie_login(request, response, data)
+
+
+@router.post("/access/refresh", response_model=AccessTokenRead)
+def renew_cookie_session(request: Request, response: Response) -> AccessTokenRead:
+    return cookie_refresh(request, response)
+
+
+@router.post("/access/logout", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_cookie_session(request: Request, response: Response) -> None:
+    cookie_logout(request, response)
 
 
 @router.post("/access/exchange", response_model=AccessTokenRead)
