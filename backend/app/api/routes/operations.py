@@ -123,9 +123,15 @@ def capture_retention_inventory(request: Request, scope: Scope):
     # No ciphertext or per-file metadata are ever returned.
     statement = text(
         """WITH visible AS MATERIALIZED (
-            SELECT expires_at,id FROM synthetic_capture_objects
-            WHERE organization_id=:org AND expires_at<=statement_timestamp()
-            ORDER BY expires_at,id LIMIT :limit
+            SELECT c.expires_at,c.id FROM synthetic_capture_objects c
+            WHERE c.organization_id=:org AND c.expires_at<=statement_timestamp()
+              AND EXISTS(
+                SELECT 1 FROM profile_access a
+                WHERE a.organization_id=c.organization_id
+                  AND a.profile_id=c.profile_id AND a.user_id=:actor
+                  AND (a.expires_at IS NULL OR a.expires_at>statement_timestamp())
+              )
+            ORDER BY c.expires_at,c.id LIMIT :limit
            )
            SELECT count(*)::integer AS observed,
                   min(expires_at) AS oldest,
@@ -135,7 +141,8 @@ def capture_retention_inventory(request: Request, scope: Scope):
     row = (
         scope.connection.execute(
             statement,
-            {"org": scope.organization_id, "limit": CAPTURE_INVENTORY_LIMIT + 1},
+            {"org": scope.organization_id, "actor": scope.actor_id,
+             "limit": CAPTURE_INVENTORY_LIMIT + 1},
         )
         .mappings()
         .one()
