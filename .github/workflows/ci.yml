@@ -9,8 +9,8 @@ permissions:
 # A new commit supersedes old CI runs for this branch/PR. Avoid wasting
 # expensive Docker/WebGL runners on stale commits.
 concurrency:
-  # v2 bypasses an uninterruptible historical run with the previous concurrency key.
-  group: bodyvision-ci-v2-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # v3 bypasses an uninterruptible superseded run holding the v2 queue.
+  group: bodyvision-ci-v3-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   windows-scripts:
