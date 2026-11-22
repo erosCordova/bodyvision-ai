@@ -2202,7 +2202,10 @@ def test_private_profile_list_uses_current_grants_for_rows_total_and_search(prot
     expired = directory(member_token)
     assert expired.status_code == 200
     assert expired.json()["total"] == 0 and expired.json()["items"] == []
-    assert client.get(f"/api/v1/profiles/{profile}", headers=headers(member_token)).status_code == 404
+    assert (
+        client.get(f"/api/v1/profiles/{profile}", headers=headers(member_token)).status_code
+        == 404
+    )
 
     with owner.begin() as connection:
         connection.execute(
@@ -2223,4 +2226,7 @@ def test_private_profile_list_uses_current_grants_for_rows_total_and_search(prot
     after_revoke = directory(member_token)
     assert after_revoke.status_code == 200
     assert after_revoke.json()["total"] == 0 and after_revoke.json()["items"] == []
-    assert client.get(f"/api/v1/profiles/{profile}", headers=headers(member_token)).status_code == 404
+    assert (
+        client.get(f"/api/v1/profiles/{profile}", headers=headers(member_token)).status_code
+        == 404
+    )
