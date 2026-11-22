@@ -2087,6 +2087,7 @@ def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
         )
         assert retained == [active_id]
 
+
 def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(protected):
     client, _, profile, users = protected
     specialist, member, outsider, administrator = users
@@ -2104,25 +2105,18 @@ def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(pr
     assert client.get(path, headers=reader).json()["status"] == "restricted"
 
     assert (
-        client.patch(
-            path, headers=editor, json={"display_name": "No permitido"}
-        ).status_code
-        == 409
+        client.patch(path, headers=editor, json={"display_name": "No permitido"}).status_code == 409
     )
     assert (
         client.patch(
-            path, headers=editor,
-            json={"status": "active", "display_name": "Atajo no permitido"}
+            path, headers=editor, json={"status": "active", "display_name": "Atajo no permitido"}
         ).status_code
         == 409
     )
     assert client.get(path, headers=editor).json()["display_name"] != "Atajo no permitido"
     assert client.patch(path, headers=reader, json={"status": "active"}).status_code == 403
     assert client.patch(path, headers=foreign, json={"status": "active"}).status_code == 404
-    assert (
-        client.patch(path, headers=ungranted_admin, json={"status": "active"}).status_code
-        == 404
-    )
+    assert client.patch(path, headers=ungranted_admin, json={"status": "active"}).status_code == 404
 
     write = {
         "metric_code": "weight",
@@ -2140,8 +2134,7 @@ def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(pr
     assert client.get(path + "/measurements", headers=reader).status_code == 200
     assert client.patch(path, headers=editor, json={"status": "active"}).status_code == 200
     assert (
-        client.patch(path, headers=editor, json={"display_name": "Reactivado"}).status_code
-        == 200
+        client.patch(path, headers=editor, json={"display_name": "Reactivado"}).status_code == 200
     )
     enabled = client.post(
         path + "/measurements",
