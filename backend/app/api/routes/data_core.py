@@ -141,17 +141,35 @@ def get_profile(profile_id: UUID, scope: Scope):
 @router.patch("/profiles/{profile_id}", response_model=ProfileRead)
 def update_profile(profile_id: UUID, data: ProfileUpdate, scope: Scope):
     require_writer(scope)
-    current = records.profile(scope, profile_id)
-    permitted = scope.connection.execute(
-        text("SELECT has_profile_access(:id,true)"), {"id": profile_id}
-    ).scalar_one()
-    if not permitted:
-        raise DomainError(404, "NOT_FOUND", "Expediente no disponible.")
-    if current["status"] == "archived":
-        raise DomainError(409, "CONFLICT", "El expediente archivado es de solo lectura.")
     fields = data.model_dump(exclude_unset=True)
     if not fields or ("status" in fields and fields["status"] is None):
         raise DomainError(422, "VALIDATION_ERROR", "Indica un cambio válido.")
+    # The status is authoritative and must be locked before inspecting any
+    # proposed write. This uses the same row lock as measurement insertion,
+    # so an in-flight restriction cannot race with an observed measurement.
+    current = (
+        scope.connection.execute(
+            text("""SELECT p.status FROM profiles p
+              WHERE p.id=:id AND p.organization_id=:org
+                AND has_profile_access(p.id,true)
+              FOR UPDATE OF p"""),
+            {"id": profile_id, "org": scope.organization_id},
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if current is None:
+        raise DomainError(404, "NOT_FOUND", "Expediente no disponible.")
+    if current["status"] == "archived":
+        raise DomainError(409, "CONFLICT", "El expediente archivado es de solo lectura.")
+    if current["status"] == "restricted":
+        # Reactivation is the ONLY write to a restricted expediente.
+        # The reference must be changed in a separate, authorized request
+        # AFTER the profile has returned to active.
+        if fields != {"status": "active"}:
+            raise DomainError(
+                409, "CONFLICT", "Reactiva el expediente antes de modificar sus datos."
+            )
     params = {"org": scope.organization_id, "id": profile_id, **fields}
     assignments = ",".join(key + "=:" + key for key in fields)
     scope.connection.execute(
