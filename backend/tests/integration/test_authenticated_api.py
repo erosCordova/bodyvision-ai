@@ -162,13 +162,17 @@ def protected():
             # Owner-only cleanup of accounts accepted via synthetic invitations.
             # Delete invitation FKs before deleting either invitee or inviter.
             fixture_user_ids = [x[0] for x in users]
-            invited_users = conn.execute(
-                text(
-                    "SELECT accepted_by FROM synthetic_user_invitations "
-                    "WHERE created_by = ANY(:ids) AND accepted_by IS NOT NULL"
-                ),
-                {"ids": fixture_user_ids},
-            ).scalars().all()
+            invited_users = (
+                conn.execute(
+                    text(
+                        "SELECT accepted_by FROM synthetic_user_invitations "
+                        "WHERE created_by = ANY(:ids) AND accepted_by IS NOT NULL"
+                    ),
+                    {"ids": fixture_user_ids},
+                )
+                .scalars()
+                .all()
+            )
             conn.execute(
                 text("DELETE FROM synthetic_user_invitations WHERE created_by = ANY(:ids)"),
                 {"ids": fixture_user_ids},

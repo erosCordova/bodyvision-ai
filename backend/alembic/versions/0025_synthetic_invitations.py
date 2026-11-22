@@ -321,12 +321,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP FUNCTION public.private_list_synthetic_invitations(char(64),integer,integer)"
-    )
-    op.execute(
-        "DROP FUNCTION public.private_revoke_synthetic_invitation(char(64),uuid,uuid,uuid)"
-    )
+    op.execute("DROP FUNCTION public.private_list_synthetic_invitations(char(64),integer,integer)")
+    op.execute("DROP FUNCTION public.private_revoke_synthetic_invitation(char(64),uuid,uuid,uuid)")
     op.execute(
         "DROP FUNCTION public.private_accept_synthetic_invitation("
         "char(64),uuid,uuid,text,uuid,uuid)"

@@ -29,9 +29,7 @@ def invite(client, bearer, email, role="member", name="Invitado ficticio"):
 
 
 def accept(client, token, password=INVITEE_PASSWORD):
-    return client.post(
-        ROOT + "/accept", json={"token": token, "password": password}
-    )
+    return client.post(ROOT + "/accept", json={"token": token, "password": password})
 
 
 def test_invite_accept_role_assignment_and_no_implicit_profile_access(protected):
@@ -45,16 +43,19 @@ def test_invite_accept_role_assignment_and_no_implicit_profile_access(protected)
     assert invite(client, specialist, email).status_code == 403
     assert invite(client, "A" * 43, email).status_code == 401
     assert client.get(ROOT, headers=headers(member)).status_code == 403
-    assert client.post(
-        ROOT,
-        headers=headers(admin),
-        json={
-            "email": email,
-            "display_name": "Invitado",
-            "role": "administrator",
-            "administrator_password": PASSWORD,
-        },
-    ).status_code == 422
+    assert (
+        client.post(
+            ROOT,
+            headers=headers(admin),
+            json={
+                "email": email,
+                "display_name": "Invitado",
+                "role": "administrator",
+                "administrator_password": PASSWORD,
+            },
+        ).status_code
+        == 422
+    )
     rejected = client.post(
         ROOT,
         headers=headers(admin),
@@ -86,8 +87,7 @@ def test_invite_accept_role_assignment_and_no_implicit_profile_access(protected)
         for role in ("bodyvision_app", "bodyvision_auth_app"):
             assert not conn.execute(
                 text(
-                    "SELECT has_table_privilege(:role,"
-                    "'public.synthetic_user_invitations','SELECT')"
+                    "SELECT has_table_privilege(:role,'public.synthetic_user_invitations','SELECT')"
                 ),
                 {"role": role},
             ).scalar_one()
@@ -130,18 +130,25 @@ def test_invite_accept_role_assignment_and_no_implicit_profile_access(protected)
         json={"display_name": "Unauthorized edit"},
     ).status_code in {403, 404}
     with owner.connect() as conn:
-        assert conn.execute(
-            text("SELECT count(*) FROM profile_access WHERE user_id=:user"),
-            {"user": user_id},
-        ).scalar_one() == 0
-        actions = conn.execute(
-            text(
-                "SELECT action FROM security_audit_events "
-                "WHERE actor_id IN (:admin,:user) "
-                "AND action IN ('admin.invitation_created','auth.invitation_accepted')"
-            ),
-            {"admin": users[3][0], "user": user_id},
-        ).scalars().all()
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM profile_access WHERE user_id=:user"),
+                {"user": user_id},
+            ).scalar_one()
+            == 0
+        )
+        actions = (
+            conn.execute(
+                text(
+                    "SELECT action FROM security_audit_events "
+                    "WHERE actor_id IN (:admin,:user) "
+                    "AND action IN ('admin.invitation_created','auth.invitation_accepted')"
+                ),
+                {"admin": users[3][0], "user": user_id},
+            )
+            .scalars()
+            .all()
+        )
         assert "admin.invitation_created" in actions
         assert "auth.invitation_accepted" in actions
 
@@ -157,20 +164,19 @@ def test_invitation_revoke_expire_and_tenant_isolation(protected):
     token = created.json()["token"]
 
     assert client.get(ROOT, headers=headers(foreign)).status_code == 403
-    assert client.post(
-        f"{ROOT}/{invite_id}/revoke", headers=headers(foreign)
-    ).status_code == 403
-    assert client.post(
-        f"{ROOT}/{invite_id}/revoke",
-        headers={**headers(admin), "X-Workspace-ID": str(users[2][1])},
-    ).status_code == 400
+    assert client.post(f"{ROOT}/{invite_id}/revoke", headers=headers(foreign)).status_code == 403
+    assert (
+        client.post(
+            f"{ROOT}/{invite_id}/revoke",
+            headers={**headers(admin), "X-Workspace-ID": str(users[2][1])},
+        ).status_code
+        == 400
+    )
 
     revoked = client.post(f"{ROOT}/{invite_id}/revoke", headers=headers(admin))
     assert revoked.status_code == 200, revoked.text
     assert revoked.json()["status"] == "revoked"
-    assert client.post(
-        f"{ROOT}/{invite_id}/revoke", headers=headers(admin)
-    ).status_code == 404
+    assert client.post(f"{ROOT}/{invite_id}/revoke", headers=headers(admin)).status_code == 404
     assert accept(client, token).status_code == 401
 
     renewed = invite(client, admin, email, role="specialist")
@@ -206,10 +212,13 @@ def test_concurrent_redeem_consume_token_once(protected):
         result = list(executor.map(lambda _: accept(client, token).status_code, range(2)))
     assert sorted(result) == [201, 401]
     with owner.connect() as conn:
-        assert conn.execute(
-            text("SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"),
-            {"org": users[3][1], "email": email},
-        ).scalar_one() == 1
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM users WHERE organization_id=:org AND email=:email"),
+                {"org": users[3][1], "email": email},
+            ).scalar_one()
+            == 1
+        )
 
 
 def test_invitation_creation_and_redemption_work_with_revocation_checked_jwt(protected):

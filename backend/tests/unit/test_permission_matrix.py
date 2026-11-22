@@ -40,21 +40,26 @@ def test_role_capability_matrix(role, action, access, purpose, expected):
     now = datetime.now(UTC)
     consent = (
         ConsentState(
-            purpose=purpose, accepted_at=now - timedelta(minutes=1),
-            version="bv-synthetic-v1", status="accepted"
+            purpose=purpose,
+            accepted_at=now - timedelta(minutes=1),
+            version="bv-synthetic-v1",
+            status="accepted",
         )
         if purpose is not None
         else None
     )
     identity = Identity(organization, uuid4(), role, True)
-    assert authorized(
-        identity,
-        organization,
-        action,
-        access_level=access,
-        consent=consent,
-        at=now,
-    ) is expected
+    assert (
+        authorized(
+            identity,
+            organization,
+            action,
+            access_level=access,
+            consent=consent,
+            at=now,
+        )
+        is expected
+    )
     assert not authorized(
         identity,
         uuid4(),
@@ -79,10 +84,17 @@ def test_revoked_consent_never_authorizes_capture_or_reports():
     now = datetime.now(UTC)
     for purpose, action in (("capture", "capture:create"), ("report", "report:read")):
         revoked = ConsentState(
-            purpose=purpose, accepted_at=now - timedelta(days=1),
-            revoked_at=now, version="bv-synthetic-v1", status="revoked",
+            purpose=purpose,
+            accepted_at=now - timedelta(days=1),
+            revoked_at=now,
+            version="bv-synthetic-v1",
+            status="revoked",
         )
         assert not authorized(
-            identity, organization, action, access_level="manage",
-            consent=revoked, at=now,
+            identity,
+            organization,
+            action,
+            access_level="manage",
+            consent=revoked,
+            at=now,
         )

@@ -183,7 +183,8 @@ def issue_private_invitation(
 
 @router.get("/invitations", response_model=InvitationListRead)
 def own_private_invitations(
-    request: Request, limit: int = Query(20, ge=1, le=50),
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
     offset: int = Query(0, ge=0),
 ) -> InvitationListRead:
     return list_invitations(request, limit, offset)
@@ -197,9 +198,7 @@ def accept_private_invitation(
 
 
 @router.post("/invitations/{invitation_id}/revoke", response_model=InvitationRevokedRead)
-def revoke_private_invitation(
-    request: Request, invitation_id: UUID
-) -> InvitationRevokedRead:
+def revoke_private_invitation(request: Request, invitation_id: UUID) -> InvitationRevokedRead:
     return revoke_invitation(request, invitation_id)
 
 
