@@ -98,6 +98,7 @@ def test_jwt_does_not_bypass_new_mfa_enforcement(protected):
     assert client.get(IDENTITY, headers=headers(professional_jwt)).status_code == 401
     assert client.get(IDENTITY, headers=headers(member_jwt)).status_code == 200
 
+
 def test_jwt_authorizes_private_workspace_with_existing_rls_and_revocation(protected):
     client, owner, profile, users = protected
     _enable(client)
@@ -162,9 +163,7 @@ def test_jwt_supports_tenant_scoped_admin_and_consent_endpoints(protected):
     audit = client.get("/api/v1/auth/audit", headers=headers(admin_jwt))
     assert audit.status_code == 200, audit.text
 
-    consent = client.get(
-        f"/api/v1/auth/profiles/{profile}/consents", headers=headers(editor_jwt)
-    )
+    consent = client.get(f"/api/v1/auth/profiles/{profile}/consents", headers=headers(editor_jwt))
     assert consent.status_code == 200, consent.text
     sessions = client.get("/api/v1/auth/sessions", headers=headers(editor_jwt))
     assert sessions.status_code == 200, sessions.text
