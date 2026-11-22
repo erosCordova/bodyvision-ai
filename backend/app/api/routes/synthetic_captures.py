@@ -236,9 +236,7 @@ def delete_synthetic_capture(profile_id: UUID, capture_id: UUID, scope: Scope, r
     return Response(status_code=204)
 
 
-@router.post(
-    "/profiles/{profile_id}/captures/purge-expired", response_model=SyntheticPurgeResult
-)
+@router.post("/profiles/{profile_id}/captures/purge-expired", response_model=SyntheticPurgeResult)
 def purge_expired_synthetic_captures(profile_id: UUID, scope: Scope, request: Request):
     """One bounded, audited, per-profile batch; never claims global completion."""
     _cipher(request)

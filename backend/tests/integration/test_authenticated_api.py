@@ -1698,7 +1698,6 @@ def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected
 
 
 
-
 def test_manual_capture_purge_is_bounded_scoped_and_audited(protected):
     """A private writer may purge <=100 expired records, never live or foreign ones."""
     import hashlib
@@ -1717,9 +1716,7 @@ def test_manual_capture_purge_is_bounded_scoped_and_audited(protected):
 
     png = _synthetic_png()
     encrypted = Fernet(Fernet.generate_key()).encrypt(png)
-    identities = [(uuid4(), True) for _ in range(105)] + [
-        (uuid4(), False), (uuid4(), False)
-    ]
+    identities = [(uuid4(), True) for _ in range(105)] + [(uuid4(), False), (uuid4(), False)]
     with owner.begin() as connection:
         connection.execute(
             text("""
@@ -1759,24 +1756,29 @@ def test_manual_capture_purge_is_bounded_scoped_and_audited(protected):
         {"deleted": 0, "batch_limit": 100, "limit_reached": False},
     ]
     with owner.connect() as connection:
-        survivors = connection.execute(
-            text("""
+        survivors = (
+            connection.execute(
+                text("""
                 SELECT id,ciphertext FROM synthetic_capture_objects
                  WHERE profile_id=:profile
             """),
-            {"profile": profile_id},
-        ).mappings().all()
-        assert {row["id"] for row in survivors} == {
-            identities[105][0], identities[106][0]
-        }
+                {"profile": profile_id},
+            )
+            .mappings()
+            .all()
+        )
+        assert {row["id"] for row in survivors} == {identities[105][0], identities[106][0]}
         assert all(bytes(row["ciphertext"]) == encrypted for row in survivors)
-        assert connection.execute(
-            text("""
+        assert (
+            connection.execute(
+                text("""
                 SELECT count(*) FROM security_audit_events
                  WHERE resource_id=:profile AND action='capture.purge'
             """),
-            {"profile": profile_id},
-        ).scalar_one() == 3
+                {"profile": profile_id},
+            ).scalar_one()
+            == 3
+        )
 
 
 def test_manual_capture_purge_rolls_back_if_audit_fails(protected):
@@ -1823,10 +1825,13 @@ def test_manual_capture_purge_rolls_back_if_audit_fails(protected):
     finally:
         event.remove(engine, "before_cursor_execute", deny_audit)
     with owner.connect() as connection:
-        assert connection.execute(
-            text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
-            {"id": capture},
-        ).scalar_one() == 1
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM synthetic_capture_objects WHERE id=:id"),
+                {"id": capture},
+            ).scalar_one()
+            == 1
+        )
 
 
 def test_capture_key_rotation_is_atomic_and_never_exposes_old_keys(protected):
