@@ -33,6 +33,17 @@ async function signIn(page: Page): Promise<string> {
   return session.token;
 }
 
+// In the legacy private UI the access token is deliberately memory-only.
+// A full page reload must require login again; persistence applies to PostgreSQL
+// records, NOT to a browser credential or a fake automatic reauthentication.
+async function reloadAndReauthenticate(page: Page, profileId: string): Promise<void> {
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true }))
+    .toBeVisible();
+  await signIn(page);
+  await page.goto("/profiles/" + profileId);
+}
+
 test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, archive and isolate",
   async ({ page }) => {
     test.setTimeout(120_000);
@@ -60,7 +71,7 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
       .fill(editedName);
     await page.getByRole("button", { name: "Guardar referencia" }).click();
     await expect(page.getByRole("heading", { name: editedName, exact: true })).toBeVisible();
-    await page.reload();
+    await reloadAndReauthenticate(page, profileId);
     await expect(page.getByRole("heading", { name: editedName, exact: true })).toBeVisible();
 
     // Create an observed measurement from the actual form, including API audit.
@@ -111,7 +122,7 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
     );
     expect(invalid.status()).toBe(422);
 
-    await page.reload();
+    await reloadAndReauthenticate(page, profileId);
     await page.getByRole("button", { name: "Mediciones", exact: true }).click();
     const table = page.getByRole("table", { name: /Mediciones observadas vigentes/ });
     await expect(table).toContainText("73 kg");
@@ -154,7 +165,7 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
     expect(versions[1].value).toBe(74);
 
     // The table must show the current version while the history retains both.
-    await page.reload();
+    await reloadAndReauthenticate(page, profileId);
     await page.getByRole("button", { name: "Mediciones", exact: true }).click();
     const afterCorrection = page.getByRole("table", {
       name: /Mediciones observadas vigentes/,
@@ -176,7 +187,7 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
       response.url().endsWith("/api/v1/profiles/" + profileId + "/archive"));
     await page.getByRole("button", { name: "Archivar expediente" }).click();
     expect((await archiveResponse).status()).toBe(200);
-    await page.reload();
+    await reloadAndReauthenticate(page, profileId);
     await expect(page.getByRole("heading", { name: editedName, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "+ Registrar medición" })).toBeDisabled();
     await page.getByRole("button", { name: "Mediciones", exact: true }).click();
