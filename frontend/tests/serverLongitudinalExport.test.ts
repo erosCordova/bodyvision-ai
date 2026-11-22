@@ -38,6 +38,9 @@ describe("private longitudinal CSV delivery", () => {
       .rejects.toThrow();
     expect(longitudinalDownloadSchema.safeParse({ ...report, filename: "../../bad.csv" }).success)
       .toBe(false);
+    expect(longitudinalDownloadSchema.safeParse({
+      ...report, filename: "bodyvision-historial-22222222-2222-4222-8222-222222222222.csv",
+    }).success).toBe(false);
     expect(longitudinalDownloadSchema.safeParse({ ...report, row_count: MAX_LONGITUDINAL_BYTES + 1 }).success)
       .toBe(false);
   });

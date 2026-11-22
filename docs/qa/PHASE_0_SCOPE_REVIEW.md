@@ -53,7 +53,7 @@ Cada una requiere implementación o una decisión técnica específica y sus pru
 
 | Área | Estado revisado | Cierre pendiente | Fuente |
 |---|---|---|---|
-| Identidad | Argon2id para contraseñas nuevas, compatibilidad/actualización PBKDF2 tras autenticación completa y sesiones opacas revocables | JWT/refresh, invitación y recuperación objetivo | [Código](../../backend/app/core/identity.py), [sesiones](../../backend/app/services/auth_sessions.py), [ADR](../adr/0002-identity-tenancy.md) |
+| Identidad | Argon2id para contraseñas nuevas, compatibilidad/actualización PBKDF2 tras autenticación completa, sesiones revocables, access JWT de 15 min revalidado contra la sesión viva y refresh rotatorio en cookie HttpOnly con detección de reutilización y revocación de familia (opt-in local/test) | "Recordarme", inactividad y re-login, adopción del flujo por el frontend, invitación por email real, recuperación objetivo y matriz completa de roles | [Código](../../backend/app/core/identity.py), [sesiones](../../backend/app/services/auth_sessions.py), [informe](PHASE_3_ROTATING_REFRESH.md), [ADR](../adr/0002-identity-tenancy.md) |
 | Roles | Administrator, specialist y member ficticios | Matriz completa del contrato y función de privacidad | [Código](../../backend/app/core/identity.py), contrato |
 | Captura | PNG sintético cifrado en PostgreSQL y retención | Objetos privados, formatos y ciclo de vida objetivo | [API](../../backend/app/api/routes/synthetic_captures.py), [ADR](../adr/0003-storage-and-retention.md) |
 | Pose | MediaPipe en navegador; resúmenes declarados por cliente | Cola/worker y evaluación independiente del objetivo | [Inferencia](../../frontend/src/features/capture/poseInference.ts), [API](../../backend/app/api/routes/pose_summaries.py) |
@@ -63,8 +63,15 @@ Cada una requiere implementación o una decisión técnica específica y sus pru
 | Operación | Restauración y vigilancia local probadas | Custodia/respaldos y supervisión externos, carga y objetivos medidos | [Prioridades](PHASE_COMPLETION_PRIORITY.md), [configuración](../../backend/app/core/config.py) |
 
 La fila de identidad incorpora la implementación posterior del
-[ADR 0009](../adr/0009-argon2-password-transition.md). Este avance técnico
-no registra aceptación del plan ni resuelve JWT/refresh o la matriz de roles.
+[ADR 0009](../adr/0009-argon2-password-transition.md) y el subcomponente de
+access JWT y refresh rotatorio con detección de reutilización descrito en
+[PHASE_3_ROTATING_REFRESH](PHASE_3_ROTATING_REFRESH.md). Ambos avances son
+parciales, opt-in y solo local/test: no registran aceptación del plan, no
+cambian los porcentajes y no cierran "Recordarme", inactividad, adopción por el
+frontend ni la matriz de roles del contrato. La
+[CI 44989824988](https://github.com/erosCordova/bodyvision-ai/actions/runs/44989824988)
+aprobó ese subcomponente en `73c9d5c` (native, Docker y Windows); sigue sin
+sustituir una revisión externa de seguridad.
 La [CI 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816) aprobó ese avance en
 `06336d08ceb719b51c465b6cc15d8b17f6e9a973`: 661 pruebas de aplicación,
 Windows y Docker; el porcentaje de las fases no cambia.

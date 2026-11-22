@@ -2,6 +2,8 @@
 
 Legacy bearer sessions remain available during migration of the frontend.
 This cookie never appears in JSON or JavaScript and rotates on every refresh.
+A replayed refresh token revokes its whole session family and the stale cookie
+is removed from the browser before the 401 is returned.
 """
 
 from datetime import UTC, datetime
@@ -78,7 +80,19 @@ def cookie_refresh(request: Request, response: Response) -> AccessTokenRead:
     token = request.cookies.get(REFRESH_COOKIE)
     if token is None:
         raise DomainError(401, "REFRESH_REQUIRED", "Inicia sesión nuevamente.")
-    replacement = rotate_session(request, token_override=token)
+    try:
+        replacement = rotate_session(request, token_override=token)
+    except DomainError as error:
+        if error.code == "SESSION_REUSE_DETECTED":
+            # Never keep replaying a credential the server just invalidated.
+            raise DomainError(
+                error.status,
+                error.code,
+                error.message,
+                error.details,
+                clear_cookies=((REFRESH_COOKIE, REFRESH_PATH),),
+            ) from error
+        raise
     result = _access_payload(request, replacement)
     _set_refresh_cookie(request, response, replacement)
     return result

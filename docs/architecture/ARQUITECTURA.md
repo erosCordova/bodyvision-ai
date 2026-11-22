@@ -37,7 +37,9 @@ SQL y el selector ficticio de organización no constituye una credencial.
 ## Diferencias respecto al objetivo
 
 El [contrato](../requirements/IMPLEMENTATION_SPEC.md) mantiene la plataforma
-para uso real como objetivo. Identidad objetivo/refresh, objetos privados,
+para uso real como objetivo. La identidad objetivo (refresh productivo,
+"Recordarme", inactividad, recuperación y revisión externa) solo cuenta con un
+subcomponente local/test de JWT y refresh rotatorio; objetos privados,
 cola/worker de pose, solicitudes de privacidad, revisión independiente y
 operación productiva no se dan por resueltos mediante sus equivalentes de prueba.
 Los ADR iniciales describen objetivos; no prueban que estén implementados.

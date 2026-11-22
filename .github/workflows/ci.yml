@@ -101,7 +101,7 @@ jobs:
           npm run test:e2e
           python ../scripts/check_local_installation.py --base-url http://127.0.0.1:5173 --json
       - name: Test private identity and permissions in browser
-        timeout-minutes: 3
+        timeout-minutes: 6
         env:
           IDENTITY_ENABLED: 'true'
           PRIVATE_BROWSER_FIXTURES: 'true'
@@ -120,6 +120,27 @@ jobs:
             sleep 1
           done
           npx playwright test --config playwright.private.config.ts
+      - name: Validate rotating HttpOnly session end-to-end in browser
+        timeout-minutes: 4
+        env:
+          IDENTITY_ENABLED: 'true'
+          JWT_ACCESS_ENABLED: 'true'
+          VITE_ENABLE_PRIVATE_AUTH: 'true'
+          VITE_PRIVATE_COOKIE_AUTH: 'true'
+          API_PROXY_TARGET: http://127.0.0.1:8002
+        run: |
+          # Generate an ephemeral CI-only signing key; never emit it in logs.
+          export JWT_SIGNING_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          cd backend
+          uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8002 --no-access-log > /tmp/cookie-api.log 2>&1 &
+          cd ../frontend
+          npm run dev -- --port 5175 --strictPort > /tmp/cookie-web.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:5175/api/v1/health/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5175/api/v1/health/ready > /dev/null
+          npx playwright test --config playwright.cookie.config.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4

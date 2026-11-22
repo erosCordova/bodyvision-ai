@@ -2,7 +2,7 @@ import { z } from "zod";
 import { comparisonDownloadSchema } from "../../features/analytics/serverComparisonDownload";
 import { longitudinalDownloadSchema } from "../../features/analytics/serverLongitudinalExport";
 import { ApiError } from "./client";
-import { invalidatePrivateSession } from "./sessionInvalidation";
+import { invalidatePrivateSession, tryRefreshPrivateSession } from "./sessionInvalidation";
 
 export const profileSchema = z.object({
   id: z.string().uuid(),
@@ -127,19 +127,31 @@ export async function dataRequest<T>(
     import.meta.env.VITE_DEPLOYMENT_MODE === "demo" ? 90000 : 7000,
   );
   try {
-    const response = await fetch(`/api/v1${path}`, {
+    const send = (bearer?: string) => fetch(`/api/v1${path}`, {
       ...options,
       signal: controller.signal,
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         "X-Correlation-ID": correlationId,
-        ...(token ? { Authorization: `Bearer ${token}` } : { "X-Workspace-ID": workspace }),
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : { "X-Workspace-ID": workspace }),
         ...options.headers,
       },
     });
+    let currentToken = token;
+    let response = await send(currentToken);
+    if (response.status === 401 && token) {
+      // The backend denies expired access before processing the operation.
+      // A single transparent retry uses a new memory-only JWT and must never
+      // fall back to an untrusted organization selector.
+      const replacement = await tryRefreshPrivateSession(token);
+      if (replacement && replacement !== token) {
+        currentToken = replacement;
+        response = await send(replacement);
+      }
+    }
     if (!response.ok) {
-      if (response.status === 401 && token) invalidatePrivateSession(token);
+      if (response.status === 401 && currentToken) invalidatePrivateSession(currentToken);
       const body = await response.json().catch(() => ({}));
       throw new ApiError(
         response.headers.get("X-Correlation-ID") ?? correlationId,

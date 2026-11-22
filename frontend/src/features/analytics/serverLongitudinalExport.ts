@@ -11,6 +11,9 @@ export const longitudinalDownloadSchema = z.object({
   row_count: z.number().int().min(1).max(MAX_LONGITUDINAL_BYTES),
   csv_base64: z.string().min(1).max(4 * Math.ceil(MAX_LONGITUDINAL_BYTES / 3)),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
+}).refine((report) => report.filename === `bodyvision-historial-${report.export_id}.csv`, {
+  message: "El nombre del archivo no corresponde a la exportación.",
+  path: ["filename"],
 });
 export type LongitudinalDownload = z.infer<typeof longitudinalDownloadSchema>;
 

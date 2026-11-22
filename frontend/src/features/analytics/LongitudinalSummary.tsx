@@ -3,6 +3,7 @@ import { saveLongitudinalCsv, verifiedLongitudinalCsv, type LongitudinalDownload
 import type { Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { summarizeLongitudinal } from "./longitudinalSummary";
+import { verifySavedReportFile, type SavedReportReference } from "./savedReportVerification";
 
 const number = (value: number) => new Intl.NumberFormat("es-PE", {
   maximumFractionDigits: 2,
@@ -23,12 +24,19 @@ export function LongitudinalSummary({
   exportReport?: () => Promise<LongitudinalDownload>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [savedCopyStatus, setSavedCopyStatus] = useState("");
+  const [downloadProof, setDownloadProof] = useState<SavedReportReference | null>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
   const [exportError, setExportError] = useState("");
   const generation = useRef(0);
   useEffect(() => {
     generation.current += 1;
     setExportError("");
     setBusy(false);
+    setVerificationPending(false);
+    setSavedCopyStatus("");
+    setDownloadProof(null);
     return () => { generation.current += 1; };
   }, [profileId, metricCode, period]);
   const exportCsv = async () => {
@@ -39,12 +47,32 @@ export function LongitudinalSummary({
     try {
       const data = await exportReport();
       const blob = await verifiedLongitudinalCsv(data);
-      if (generation.current === token) saveLongitudinalCsv(blob, data.filename);
+      if (generation.current === token) {
+        saveLongitudinalCsv(blob, data.filename);
+        setDownloadProof({ filename: data.filename, sha256: data.sha256, format: "csv" });
+        setSavedCopyStatus("");
+      }
     } catch (error) {
       if (generation.current === token)
         setExportError(error instanceof Error ? error.message : "No se pudo descargar el CSV.");
     } finally {
       if (generation.current === token) setBusy(false);
+    }
+  };
+  const checkSavedFile = async (file?: File) => {
+    if (!file || !downloadProof || verificationPending) return;
+    const token = generation.current;
+    setVerificationPending(true);
+    setSavedCopyStatus("");
+    try {
+      await verifySavedReportFile(file, downloadProof);
+      if (token === generation.current)
+        setSavedCopyStatus("Copia CSV verificada desde el archivo guardado en este equipo.");
+    } catch (error) {
+      if (token === generation.current)
+        setSavedCopyStatus(error instanceof Error ? error.message : "No se pudo verificar la copia guardada.");
+    } finally {
+      if (token === generation.current) setVerificationPending(false);
     }
   };
   const summary = useMemo(() =>
@@ -116,6 +144,22 @@ export function LongitudinalSummary({
             <small className="muted">Historial completo del periodo, hasta 8 MiB por archivo,
               con auditoría y verificación de integridad. No es una firma digital
               ni acredita exactitud clínica.</small>
+            {downloadProof && <>
+              <input ref={filePicker} type="file" accept=".csv,text/csv" hidden
+                aria-label="Seleccionar CSV descargado para verificar"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void checkSavedFile(file);
+                }} />
+              <button type="button" disabled={verificationPending}
+                onClick={() => filePicker.current?.click()}>
+                {verificationPending ? "Verificando copia…" : "Verificar CSV guardado"}
+              </button>
+              <small className="muted">Selecciona el historial descargado para verificar sus bytes
+                en tu navegador, sin subirlo. No acredita firma digital ni validez clínica.</small>
+              {savedCopyStatus && <p role="status">{savedCopyStatus}</p>}
+            </>}
           </div>}
           {exportError && <p role="alert">{exportError}</p>}
         </>
