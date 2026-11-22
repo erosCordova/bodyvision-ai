@@ -72,7 +72,8 @@ def test_jwt_rejects_role_change_invalid_header_and_wrong_tenant(protected):
     jwt = client.post(EXCHANGE, headers=headers(original)).json()["access_token"]
     assert client.get(IDENTITY, headers=headers(jwt)).status_code == 200
     assert client.get(IDENTITY, headers=headers(jwt[:-1] + "=")).status_code == 401
-    assert client.get(IDENTITY, headers={**headers(jwt), "X-Workspace-ID": str(users[2][1])}).status_code == 400
+    spoofed = {**headers(jwt), "X-Workspace-ID": str(users[2][1])}
+    assert client.get(IDENTITY, headers=spoofed).status_code == 400
     with owner.begin() as connection:
         connection.execute(
             text(
