@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MIN_MIRROR_COMPARISONS, summarizeSyntheticPoseMirror,
+  MIN_MIRROR_COMPARISONS, summarizeSyntheticPoseMirror, summarizeSyntheticPoseRepeat,
   type SyntheticPosePoint,
 } from "../src/features/capture/poseMirrorAudit";
 
@@ -52,6 +52,24 @@ describe("real-output comparison under a synthetic horizontal reflection", () =>
     expect(JSON.stringify(report)).not.toContain("\"x\"");
     expect(JSON.stringify(report)).not.toContain("\"y\"");
     expect(JSON.stringify(report)).not.toContain("landmarks:");
+  });
+
+  it("compares repeated inference outputs without suggesting anatomical correctness", () => {
+    const same = summarizeSyntheticPoseRepeat(original, [...original].reverse());
+    expect(same).toEqual({
+      matchedLandmarks: 33, firstVisible: 33, secondVisible: 33,
+      medianNormalizedDifference: 0, p95NormalizedDifference: 0,
+      sufficientForDescriptiveSummary: true, clinicalAccuracyMeasured: false,
+    });
+    const shifted = summarizeSyntheticPoseRepeat(original, original.map(point => ({
+      ...point, x: point.x + 0.05,
+    })));
+    expect(shifted.medianNormalizedDifference).toBeGreaterThan(0);
+    expect(shifted.p95NormalizedDifference).toBeGreaterThan(0);
+    expect(JSON.stringify(shifted)).not.toContain("\"x\"");
+    const short = summarizeSyntheticPoseRepeat(original.slice(0, 3), original.slice(0, 3));
+    expect(short.p95NormalizedDifference).toBeNull();
+    expect(short.matchedLandmarks).toBe(3);
   });
 
   it("rejects duplicate, off-frame, non-finite and unknown-index landmarks", () => {
