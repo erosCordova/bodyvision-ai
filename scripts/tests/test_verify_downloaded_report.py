@@ -110,6 +110,48 @@ class SavedReportTests(unittest.TestCase):
         with self.assertRaises(reports.DownloadRejected):
             self.check_csv(expected_sha256=self.digest(bad_method))
 
+    def test_rejects_semantically_inconsistent_csv_even_with_matching_hash(self):
+        # A checksum proves byte equality, not that those bytes represent a
+        # coherent history. Validate the same constraints as the CSV writer.
+        variants = (
+            (b"2026-11-01T10:00:00Z", b"2026-13-01T10:00:00Z"),
+            (b"2026-11-01T10:00:00Z", b"not-a-date"),
+            (b",72,kg,", b",NaN,kg,"),
+            (b",weight,71,", b",height,71,"),
+            (b",71,kg,", b",71,cm,"),
+            (b"2026-11-02T10:00:00Z", b"2026-10-01T10:00:00Z"),
+            (b",manual,true", b",manual,TRUE"),
+            (SOURCE_1.encode(), SOURCE_1.upper().encode()),
+        )
+        for before, after in variants:
+            with self.subTest(before=before, after=after):
+                altered = self.csv_bytes.replace(before, after)
+                self.assertNotEqual(altered, self.csv_bytes)
+                self.csv.write_bytes(altered)
+                with self.assertRaises(reports.DownloadRejected):
+                    self.check_csv(expected_sha256=self.digest(altered))
+
+    def test_timestamp_ties_require_deterministic_source_id_order(self):
+        second_time = b"2026-11-02T10:00:00Z"
+        first_time = b"2026-11-01T10:00:00Z"
+        tied = self.csv_bytes.replace(second_time, first_time)
+        self.csv.write_bytes(tied)
+        self.assertEqual(self.check_csv(expected_sha256=self.digest(tied)), 2)
+        # The API orders ties by (measured_at, UUID); reversing IDs is invalid.
+        reversed_ids = tied.replace(SOURCE_1.encode(), b"TEMP").replace(
+            SOURCE_2.encode(), SOURCE_1.encode()
+        ).replace(b"TEMP", SOURCE_2.encode())
+        self.csv.write_bytes(reversed_ids)
+        with self.assertRaises(reports.DownloadRejected):
+            self.check_csv(expected_sha256=self.digest(reversed_ids))
+
+    def test_utc_microseconds_and_finite_decimals_are_accepted(self):
+        detailed = self.csv_bytes.replace(
+            b"2026-11-01T10:00:00Z", b"2026-11-01T10:00:00.123456Z"
+        ).replace(b",72,kg,", b",72.500,kg,")
+        self.csv.write_bytes(detailed)
+        self.assertEqual(self.check_csv(expected_sha256=self.digest(detailed)), 2)
+
     def test_rejects_symlinks_hardlinks_and_oversized_files(self):
         hardlink = self.folder / "hardlink.pdf"
         os.link(self.pdf, hardlink)
