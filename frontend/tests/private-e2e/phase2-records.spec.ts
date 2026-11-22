@@ -41,7 +41,13 @@ async function reloadAndReauthenticate(page: Page, profileId: string): Promise<v
   await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true }))
     .toBeVisible();
   await signIn(page);
-  await page.goto("/profiles/" + profileId);
+  // React keeps the legacy bearer in RAM. page.goto() would perform ANOTHER
+  // document navigation and erase that freshly authenticated session.
+  // Navigate through Router links so the memory-only token remains present.
+  await page.getByRole("link", { name: "Expedientes", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Expedientes", exact: true }))
+    .toBeVisible();
+  await page.locator(`a.profile-card[href="/profiles/${profileId}"]`).click();
 }
 
 test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, archive and isolate",
