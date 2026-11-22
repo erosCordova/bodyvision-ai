@@ -79,9 +79,12 @@ def test_privacy_request_cross_tenant_and_data_role_boundary(protected):
     client, owner, profile_id, users = protected
     outsider = login(client, users[2])
     root = f"/api/v1/profiles/{profile_id}/privacy-requests"
-    assert request_status(
-        client, root, outsider, {"request_type": "opposition", "synthetic_confirmed": True}
-    ) == 404
+    assert (
+        request_status(
+            client, root, outsider, {"request_type": "opposition", "synthetic_confirmed": True}
+        )
+        == 404
+    )
     with owner.connect() as conn:
         for privilege in ("UPDATE", "DELETE"):
             assert not conn.execute(
@@ -95,7 +98,10 @@ def test_privacy_request_cross_tenant_and_data_role_boundary(protected):
         ).scalar_one()
         signature = "public.start_synthetic_privacy_review(uuid,uuid,uuid)"
         for role, expected in (("bodyvision_app", True), ("bodyvision_auth_app", False)):
-            assert conn.execute(
-                text("SELECT has_function_privilege(:role,:signature,'EXECUTE')"),
-                {"role": role, "signature": signature},
-            ).scalar_one() is expected
+            assert (
+                conn.execute(
+                    text("SELECT has_function_privilege(:role,:signature,'EXECUTE')"),
+                    {"role": role, "signature": signature},
+                ).scalar_one()
+                is expected
+            )
