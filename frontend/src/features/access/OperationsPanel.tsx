@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { readOperations, type OperationsStatus } from "../../services/api/operations";
+import {
+  readOperations, readCaptureRetentionInventory,
+  type CaptureRetentionInventory, type OperationsStatus,
+} from "../../services/api/operations";
 
 const alerts: Record<OperationsStatus["alerts"][number], string> = {
   server_failures: "Se han detectado fallos recientes del servicio.",
@@ -23,9 +26,21 @@ export function OperationsPanel({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const request = useRef<AbortController | null>(null);
+  const inventoryRequest = useRef<AbortController | null>(null);
+  const [inventory, setInventory] = useState<CaptureRetentionInventory | null>(null);
+  const [inventoryBusy, setInventoryBusy] = useState(false);
+  const [inventoryError, setInventoryError] = useState("");
   useEffect(() => {
     setResult(null); setError(""); setBusy(false);
-    return () => { const previous = request.current; request.current = null; previous?.abort(); };
+    setInventory(null); setInventoryError(""); setInventoryBusy(false);
+    return () => {
+      const previous = request.current;
+      const previousInventory = inventoryRequest.current;
+      request.current = null;
+      inventoryRequest.current = null;
+      previous?.abort();
+      previousInventory?.abort();
+    };
   }, [token]);
   async function refresh() {
     if (busy) return;
@@ -44,6 +59,26 @@ export function OperationsPanel({ token }: { token: string }) {
     } finally {
       window.clearTimeout(timer);
       if (request.current === controller) setBusy(false);
+    }
+  }
+  async function refreshInventory() {
+    if (inventoryBusy) return;
+    const controller = new AbortController();
+    inventoryRequest.current?.abort(); inventoryRequest.current = controller;
+    setInventoryBusy(true); setInventoryError(""); setInventory(null);
+    const timer = window.setTimeout(() => controller.abort(), 7000);
+    try {
+      const result = await readCaptureRetentionInventory(token, controller.signal);
+      if (inventoryRequest.current === controller && !controller.signal.aborted)
+        setInventory(result);
+    } catch (cause) {
+      if (inventoryRequest.current === controller)
+        setInventoryError(controller.signal.aborted
+          ? "La consulta de retención no se completó. Vuelve a comprobarla."
+          : cause instanceof Error ? cause.message : "Inventario no disponible.");
+    } finally {
+      window.clearTimeout(timer);
+      if (inventoryRequest.current === controller) setInventoryBusy(false);
     }
   }
   return <section className="enterprise-panel operations-panel" aria-label="Estado del servicio">
@@ -85,5 +120,32 @@ export function OperationsPanel({ token }: { token: string }) {
           Estos avisos se consultan aquí y no se envían a servicios externos.</p>
       </details>
     </>}
+    <section className="operations-capture-inventory"
+      aria-label="Inventario de capturas ficticias vencidas">
+      <h3>Capturas ficticias pendientes de eliminación</h3>
+      <p>Comprobación de solo lectura. Muestra exclusivamente expedientes
+        con permiso de consulta vigente para este administrador;
+        no revisa toda la organización ni los respaldos.</p>
+      <button type="button" disabled={inventoryBusy}
+        onClick={() => void refreshInventory()}>
+        {inventoryBusy ? "Comprobando inventario…" : "Comprobar capturas vencidas"}
+      </button>
+      {inventoryError && <p role="alert" className="private-admin-error">{inventoryError}</p>}
+      {inventory && <div role="status" className={inventory.expired_count > 0
+        ? "private-admin-error" : "private-admin-success"}>
+        <strong>{inventory.count_capped
+          ? `Al menos ${inventory.display_limit} capturas vencidas visibles`
+          : `${inventory.expired_count} capturas vencidas visibles`}</strong>
+        <p>Consulta: {limaTime(inventory.checked_at)} (Lima).
+          {inventory.oldest_expired_at &&
+            ` La más antigua venció el ${limaTime(inventory.oldest_expired_at)}.`}
+        </p>
+        <small>{inventory.count_capped
+          ? "El límite del recuento se alcanzó; podrían existir más capturas pendientes."
+          : "Este recuento solo cubre los expedientes accesibles, no toda la organización."}
+          {" "}No se ha ejecutado ninguna purga mediante esta consulta.
+          No demuestra eliminación de copias, WAL ni archivos descargados.</small>
+      </div>}
+    </section>
   </section>;
 }

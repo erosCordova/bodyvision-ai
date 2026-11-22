@@ -68,4 +68,43 @@ describe("administrator service operations", () => {
     expect(screen.getByText("Sin muestras", { exact: true })).toBeVisible();
     expect(screen.queryByText("0 ms")).not.toBeInTheDocument();
   });
+  it("reveals only explicitly sampled, bounded expired synthetic captures", async () => {
+    const inventory = {
+      scope: "current_organization_accessible_profiles_only",
+      checked_at: "2026-11-21T15:00:00Z", expired_count: 1,
+      count_capped: false, display_limit: 1000,
+      oldest_expired_at: "2026-11-20T15:00:00Z", purge_executed: false,
+    };
+    const fetcher = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(json(url.endsWith("/captures/retention-inventory")
+        ? inventory : status)));
+    vi.stubGlobal("fetch", fetcher);
+    render(<OperationsPanel token={token}/>);
+    expect(fetcher).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Comprobar capturas vencidas" }));
+    await screen.findByText("1 capturas vencidas visibles");
+    expect(screen.getByText(/exclusivamente expedientes/)).toBeVisible();
+    expect(screen.getByText(/No se ha ejecutado ninguna purga/)).toBeVisible();
+    expect(screen.getByText(/no toda la organización/)).toBeVisible();
+    expect(fetcher.mock.calls[0][0]).toBe(
+      "/api/v1/auth/captures/retention-inventory",
+    );
+    expect((fetcher.mock.calls[0][1] as RequestInit).headers)
+      .toMatchObject({ Authorization: \`Bearer \${token}\` });
+    expect(document.body.textContent).not.toContain(token);
+  });
+  it("cannot present a capped inventory as a complete or global count", async () => {
+    const sample = {
+      scope: "current_organization_accessible_profiles_only",
+      checked_at: "2026-11-21T15:00:00Z", expired_count: 1000,
+      count_capped: true, display_limit: 1000,
+      oldest_expired_at: "2026-11-01T15:00:00Z", purge_executed: false,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(sample)));
+    render(<OperationsPanel token={token}/>);
+    fireEvent.click(screen.getByRole("button", { name: "Comprobar capturas vencidas" }));
+    await screen.findByText("Al menos 1000 capturas vencidas visibles");
+    expect(screen.getByText(/podrían existir más/)).toBeVisible();
+  });
+
 });
