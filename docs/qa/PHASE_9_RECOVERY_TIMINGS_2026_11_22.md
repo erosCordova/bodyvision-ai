@@ -80,3 +80,41 @@ evaluación de riesgo ni recepción de operación y privacidad.
 **Esta entrega no modifica el 92,5 % global (93 % visible).**
 El progreso es técnico y sintético; no toca Neon, main,
 despliegues o expedientes de personas.
+
+## Evidencia real de CI e integración (22-11-2026)
+
+El [PR #54](https://github.com/erosCordova/bodyvision-ai/pull/54)
+fue fusionado en la rama compartida con el commit
+6935310d32672e313ab2aaf4a552c2e36c6ac3a4, tras aprobar
+[CI #45066621056](https://github.com/erosCordova/bodyvision-ai/actions/runs/45066621056).
+Los tres jobs native-checks, windows-scripts y docker-smoke terminaron
+con success. La aplicación pasó 439 pruebas backend, 331 frontend,
+44 de navegador público, 12 privado y 4 de cookies:
+**830 pruebas de aplicación**, además de la batería de scripts
+estándares Linux/Windows, incluido el módulo de observación.
+
+En el runner de este ensayo, el registro sintético emitió:
+
+| Intervalo observado | Segundos |
+| --- | ---: |
+| Captura del respaldo a HTTP privado recuperado | 12,141 |
+| Base principal detenida a HTTP privado recuperado | 10,723 |
+| Base principal detenida a aceptación de navegador | 20,508 |
+| HTTP privado recuperado a aceptación de navegador | 9,785 |
+| Aceptación de navegador a pila original saludable | 16,106 |
+
+El paso completo preexistente imprimió 38 segundos como duración
+de la reposición en ese runner. Cada cifra corresponde únicamente
+a esta ejecución Linux y **no** es un objetivo ni una garantía.
+El respaldo ficticio y el estado temporal fueron eliminados por CI.
+No hubo ensayos con Neon ni datos reales.
+
+El mismo run aprobó la prueba de cookies estabilizada, incluida
+la anulación del JWT antiguo, una renovación y creación única de
+invitación. Esto documenta la corrección de la expectativa intermitente
+del issue #53; no demuestra fiabilidad estadística sostenida.
+
+F9 operación continúa estimada en 90 %, y el promedio global
+mantiene 92,5 % (93 % visible). Aún faltan custodia externa,
+restauración desde otro host, objetivos RPO/RTO aceptados,
+evaluación repetida y recepción operativa. No se modificó main.
