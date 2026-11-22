@@ -66,7 +66,7 @@ La fase 9 del tablero (operación) no corresponde directamente a F9 del
 contrato (privacidad), por lo que **no aumenta automáticamente la media manual
 de 92,5 % / 93 % redondeado**. No se fusionó `main`, ni se desplegó.
 
-## Ampliación de navegación y aceptación por navegador (PR pendiente)
+## Ampliación de navegación y aceptación por navegador — PR #51 integrado
 
 Se reemplaza el selector limitado a los primeros 12 expedientes por
 búsqueda por código o referencia y páginas de 12 elementos. La cola
@@ -81,3 +81,29 @@ revisión administrativa y comprobación del aislamiento de otra organización.
 
 La aprobación no implica atención ARCO legal ni la autorización de datos
 reales. El avance de las fases permanece estimado en 92,5 % / 93 % redondeado.
+
+### Evidencia de integración y aceptación (22-11-2026)
+
+El [PR #51](https://github.com/erosCordova/bodyvision-ai/pull/51)
+se fusionó en la rama compartida `feature/phase3-auth-security`
+con commit `cc8a39d9ac192eef1b7560ea1aca99d84a042960`.
+La [CI integral #45061725752](https://github.com/erosCordova/bodyvision-ai/actions/runs/45061725752)
+aprobó el commit `dbae9672bddf946eabe23f8dc9ce9114bccd8e7b`:
+**438 backend, 330 frontend, 44 navegador público, 12 navegador privado
+y 4 navegador con sesiones cookie = 828 pruebas de aplicación**.
+Windows, Docker, migraciones, compilación, controles de dependencias,
+restauración aislada y navegador concluyeron con éxito.
+La [retención independiente #45061725774](https://github.com/erosCordova/bodyvision-ai/actions/runs/45061725774)
+también aprobó.
+
+El caso de aceptación de navegador F9 crea un expediente ficticio
+con el servidor real, lo encuentra por su código en la pantalla,
+registra una solicitud, comprueba el rechazo del duplicado,
+inicia el triaje administrativo y verifica el aislamiento
+interorganizacional con credenciales privadas distintas.
+
+**Límites sin cambios:** recepción formal de producto y de derechos
+ARCO, representantes, seguridad externa, eliminación de backups/WAL
+y despliegue con datos reales siguen pendientes. Este avance no se
+extrapola a cumplimiento legal ni modifica la evaluación manual
+92,5 % / 93 % mostrada. `main` continúa sin fusionar ni desplegar.
