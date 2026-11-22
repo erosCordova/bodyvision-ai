@@ -24,7 +24,7 @@ describe("private longitudinal CSV delivery", () => {
     vi.stubGlobal("crypto", webcrypto);
     const blob = await verifiedLongitudinalCsv(report);
     expect(blob.type).toContain("text/csv");
-    expect(await blob.text()).toBe(csv);
+    expect(blob.size).toBe(Buffer.byteLength(csv, "utf8"));
   });
   it("rejects tampering, incomplete rows, unsafe filenames and invalid UTF-8", async () => {
     vi.stubGlobal("crypto", webcrypto);

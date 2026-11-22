@@ -152,7 +152,7 @@ def test_longitudinal_csv_scoped_audited_complete_and_hash_verified(comparison_d
         rows[0]["id"],
         rows[1]["id"],
     ]
-    assert [item["value"] for item in parsed] == ["70", "77"]
+    assert [item["value"] for item in parsed] == ["70.00", "77.00"]
     assert all(item["metric_code"] == "weight" for item in parsed)
     assert b"SIMULADO" not in csv_bytes
     assert body["filename"] == f"bodyvision-historial-{body['export_id']}.csv"
