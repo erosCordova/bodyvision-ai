@@ -94,10 +94,11 @@ def require_verification_environment(environment: Mapping[str, str]) -> str:
         parsed = make_url(url)
     except (ArgumentError, TypeError, ValueError):
         raise RecoveryVerificationDenied("Conexión de restauración inválida.") from None
-    if (
-        parsed.drivername != "postgresql+psycopg"
-        or parsed.host not in {"localhost", "127.0.0.1", "::1"}
-    ):
+    if parsed.drivername != "postgresql+psycopg" or parsed.host not in {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    }:
         # A test fixture must never query an external/production database.
         raise RecoveryVerificationDenied("La copia debe estar en PostgreSQL local de pruebas.")
     return url
@@ -106,11 +107,13 @@ def require_verification_environment(environment: Mapping[str, str]) -> str:
 def read_only_engine(url: str) -> Engine:
     """Read-only, bounded, no-pool engine: a restored copy is never mutated."""
     # Also fail closed for programmatic callers that bypass the CLI guard.
-    require_verification_environment({
-        "APP_ENV": "test",
-        "BODYVISION_ENABLE_CAPTURE_RETENTION": "synthetic-only",
-        "RESTORED_DATABASE_URL": url,
-    })
+    require_verification_environment(
+        {
+            "APP_ENV": "test",
+            "BODYVISION_ENABLE_CAPTURE_RETENTION": "synthetic-only",
+            "RESTORED_DATABASE_URL": url,
+        }
+    )
     return create_engine(
         url,
         poolclass=NullPool,

@@ -66,10 +66,15 @@ def test_manifest_rejects_malformed_entries(tmp_path, payload):
 def test_manifest_rejects_contradictory_digest_for_same_id(tmp_path):
     identifier = uuid4()
     path = tmp_path / "contradiction.json"
-    path.write_text(json.dumps([
-        {"id": str(identifier), "sha256_digest": "a" * 64},
-        {"id": str(identifier), "sha256_digest": "b" * 64},
-    ]), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            [
+                {"id": str(identifier), "sha256_digest": "a" * 64},
+                {"id": str(identifier), "sha256_digest": "b" * 64},
+            ]
+        ),
+        encoding="utf-8",
+    )
     with pytest.raises(RecoveryVerificationDenied, match="contradictorio"):
         load_manifest(path)
 
@@ -125,19 +130,24 @@ def test_verification_environment_denies_unsafe_configuration(environment):
         require_verification_environment(environment)
 
 
-@pytest.mark.parametrize("url", [
-    "postgresql+psycopg://postgres@prod.example.org/bodyvision_restored",
-    "postgresql+psycopg://postgres@db:5432/bodyvision_restored",
-    "postgresql+psycopg://postgres",
-    "postgresql+psycopg://invalid_host",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://postgres@prod.example.org/bodyvision_restored",
+        "postgresql+psycopg://postgres@db:5432/bodyvision_restored",
+        "postgresql+psycopg://postgres",
+        "postgresql+psycopg://invalid_host",
+    ],
+)
 def test_verification_environment_rejects_nonlocal_or_missing_db_hosts(url):
     with pytest.raises(RecoveryVerificationDenied):
-        require_verification_environment({
-            "APP_ENV": "test",
-            "BODYVISION_ENABLE_CAPTURE_RETENTION": "synthetic-only",
-            "RESTORED_DATABASE_URL": url,
-        })
+        require_verification_environment(
+            {
+                "APP_ENV": "test",
+                "BODYVISION_ENABLE_CAPTURE_RETENTION": "synthetic-only",
+                "RESTORED_DATABASE_URL": url,
+            }
+        )
     with pytest.raises(RecoveryVerificationDenied):
         read_only_engine(url)
 
