@@ -74,3 +74,9 @@
 @media (max-width:480px){
   .private-mfa-code-grid{grid-template-columns:1fr}
 }
+
+.private-invitation-acceptance{border-top:1px solid #35536a;padding-top:18px;margin-top:20px}
+.private-invitation-acceptance summary{cursor:pointer;font-weight:700}
+.private-invitation-acceptance form{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.private-invitation-acceptance input{width:100%}
+.private-invitation-acceptance p{font-size:12px;line-height:1.7}

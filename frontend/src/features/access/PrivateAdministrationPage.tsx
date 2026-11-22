@@ -12,6 +12,7 @@ import { UserDirectoryPanel } from "./UserDirectoryPanel";
 import { PasswordResetPanel } from "./PasswordResetPanel";
 import { OperationsPanel } from "./OperationsPanel";
 import { AuditIntegrityPanel } from "./AuditIntegrityPanel";
+import { PrivateInvitationPanel } from "./PrivateInvitationPanel";
 
 const eventNames: Record<string, string> = {
   "account.password_change": "Contraseña propia actualizada",
@@ -56,6 +57,7 @@ export function PrivateAdministrationPage() {
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showInvitations, setShowInvitations] = useState(false);
   const [permission, setPermission] = useState({
     profile_id: "",
     user_id: "",
@@ -215,6 +217,19 @@ export function PrivateAdministrationPage() {
         <span className="private-admin-phase">SOLO PRUEBAS</span>
       </div>
       {session && <OperationsPanel token={session.token} />}
+      <div className="enterprise-panel">
+        <h2>Invitar cuentas de prueba</h2>
+        <p>Los invitados eligen sus propias contraseñas, sin recibir permisos de expedientes automáticamente.</p>
+        <button type="button" aria-expanded={showInvitations}
+          onClick={() => setShowInvitations(value => !value)}>
+          {showInvitations ? "Cerrar invitaciones" : "Gestionar invitaciones ficticias"}
+        </button>
+      </div>
+      {showInvitations && session && <PrivateInvitationPanel key={session.token}
+        token={session.token} onChanged={() => {
+          setAuditRevision(value => value + 1);
+          setAuditStatus("loading");
+        }} />}
       {api && <UserDirectoryPanel api={api} revision={auditRevision} selected={selectedAccount}
         onSelect={selectAccount} onChanged={account => {
           setSelectedAccount(account); setAuditRevision(previous => previous + 1);

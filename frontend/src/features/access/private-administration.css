@@ -72,3 +72,18 @@
 .operations-panel li{font-size:12px;line-height:1.8}
 .operations-panel .private-admin-audit-head{flex-wrap:wrap}
 .operations-panel button:disabled{opacity:.65;cursor:wait}
+
+.private-admin-invitations .private-admin-form{max-width:620px}
+.private-admin-invitation-secret{margin:18px 0;padding:16px;border:1px solid #4d8b9b;border-radius:8px}
+.private-admin-invitation-secret input{display:block;width:100%;padding:11px;margin:10px 0;
+  border:1px solid #5d8097;border-radius:7px;background:#0d253a;color:#e9f7ff;font-family:monospace}
+.private-admin-invitation-secret button,.private-admin-invitation-list button{
+  padding:9px 12px;border:1px solid #537e97;border-radius:7px;background:#183e56;color:#e9f7ff;cursor:pointer
+}
+.private-admin-invitation-list{list-style:none;padding:0}
+.private-admin-invitation-list li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;
+  padding:12px 0;border-bottom:1px solid #35536a}
+.private-admin-invitation-list li div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.private-admin-invitation-list li span{overflow-wrap:anywhere;font-size:12px}
+.private-admin-invitation-list li small{color:#aac4d8}
+.private-admin-invitations button:disabled{opacity:.55;cursor:not-allowed}

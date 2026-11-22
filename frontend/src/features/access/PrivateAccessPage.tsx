@@ -8,6 +8,7 @@ import {
 import "./private-access.css";
 import { AccountSecurityPanel } from "./AccountSecurityPanel";
 import { invalidatePrivateSession } from "../../services/api/sessionInvalidation";
+import { PrivateInvitationAcceptance } from "./PrivateInvitationAcceptance";
 
 const roleLabel = {
   administrator: "Administrador",
@@ -302,6 +303,7 @@ export function PrivateAccessPage() {
               )}
             </form>
             )}
+            {!enrollmentUri && <PrivateInvitationAcceptance onAccepted={setOrganizationId} />}
           </>
         )}
         {(logoutWarning || new URLSearchParams(location.search).get("logout") === "unconfirmed") && (
