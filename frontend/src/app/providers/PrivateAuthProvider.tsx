@@ -4,12 +4,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { onPrivateSessionInvalidated } from "../../services/api/sessionInvalidation";
+import {
+  invalidatePrivateSession, onPrivateSessionInvalidated,
+  registerPrivateSessionRefresh, tryRefreshPrivateSession,
+} from "../../services/api/sessionInvalidation";
+import {
+  cookieAccessRequest, parseCookieAccess, privateCookieAuthEnabled, refreshCookieOnce,
+} from "../../services/api/cookieSession";
 import { discardStagedCapture } from "../../features/capture/captureHandoff";
 
 /**
@@ -26,6 +33,7 @@ const sessionSchema = z.object({
   user_id: z.string().uuid(),
   role: z.enum(["administrator", "specialist", "member"]),
   expires_at: z.string().datetime({ offset: true }),
+  kind: z.literal("cookie").optional(),
 });
 export type PrivateSession = z.infer<typeof sessionSchema>;
 export type LoginCredentials = {
@@ -47,6 +55,7 @@ export class PrivateAuthError extends Error {
 
 type AuthContextType = {
   session: PrivateSession | null;
+  restoring: boolean;
   login: (credentials: LoginCredentials) => Promise<PrivateSession>;
   beginMfaEnrollment: (credentials: LoginCredentials) => Promise<string>;
   confirmMfaEnrollment: (credentials: EnrollmentConfirmation) => Promise<string[]>;
@@ -82,56 +91,120 @@ function validateSession(body: unknown): PrivateSession {
   return parsed.data;
 }
 
-async function readSession(response: Response): Promise<PrivateSession> {
-  if (!response.ok) return authError(response);
-  return validateSession(await response.json());
-}
-
 export function PrivateAuthProvider({ children }: PropsWithChildren) {
   // The bearer token must only exist in React memory. Never use localStorage,
   // sessionStorage, cookies, URL parameters or a React Query cache for it.
   const [session, setSession] = useState<PrivateSession | null>(null);
+  const [restoring, setRestoring] = useState(() => privateCookieAuthEnabled());
+  const activeSession = useRef<PrivateSession | null>(null);
+  const epoch = useRef(0);
   const queryClient = useQueryClient();
+
+  const setActive = useCallback((value: PrivateSession | null) => {
+    activeSession.current = value;
+    setSession(value);
+  }, []);
+
+  // Reopen an HttpOnly cookie session only in explicitly opt-in local/test.
+  // Its access JWT is re-issued into RAM; none of it enters localStorage.
+  useEffect(() => {
+    if (!privateCookieAuthEnabled()) return;
+    const ticket = ++epoch.current;
+    void refreshCookieOnce().then(async response => {
+      if (!response.ok) return;
+      const verified = parseCookieAccess(await response.clone().json());
+      if (epoch.current === ticket) setActive(verified);
+    }).catch(() => {
+      // An absent, expired, or rejected refresh cookie simply leaves login visible.
+    }).finally(() => {
+      if (epoch.current === ticket) setRestoring(false);
+    });
+    return () => { epoch.current += 1; };
+  }, [setActive]);
+
+  const refreshSession = useCallback(async (token: string): Promise<string | null> => {
+    const prior = activeSession.current;
+    if (!privateCookieAuthEnabled() || prior?.kind !== "cookie" || prior.token !== token)
+      return null;
+    const ticket = epoch.current;
+    try {
+      const response = await refreshCookieOnce();
+      if (!response.ok) return null;
+      const replacement = parseCookieAccess(await response.clone().json());
+      // Do not silently switch users/roles/organizations in an existing cache.
+      if (
+        replacement.user_id !== prior.user_id
+        || replacement.organization_id !== prior.organization_id
+        || replacement.role !== prior.role
+      ) return null;
+      if (ticket !== epoch.current || activeSession.current?.token !== token) return null;
+      setActive(replacement);
+      return replacement.token;
+    } catch {
+      return null;
+    }
+  }, [setActive]);
+
+  useEffect(() => {
+    if (!privateCookieAuthEnabled()) return;
+    return registerPrivateSessionRefresh(refreshSession);
+  }, [refreshSession]);
 
   useEffect(() => {
     if (!session) return;
     const unsubscribe = onPrivateSessionInvalidated(token => {
-      // A late response from an older request must not discard a newer login.
-      if (token !== session.token) return;
+      // Responses from an old token must never destroy a newer session.
+      if (activeSession.current?.token !== token) return;
+      epoch.current += 1;
       discardStagedCapture();
-      setSession(null);
+      setActive(null);
+      setRestoring(false);
       void queryClient.cancelQueries();
       queryClient.clear();
     });
     const remaining = Date.parse(session.expires_at) - Date.now();
+    const cookieFlow = session.kind === "cookie" && privateCookieAuthEnabled();
     const timeout = window.setTimeout(() => {
-      discardStagedCapture();
-      setSession(null);
-      queryClient.clear();
-    }, Math.max(0, Math.min(remaining, 2147483647)));
+      if (cookieFlow) {
+        void tryRefreshPrivateSession(session.token).then(next => {
+          if (!next) invalidatePrivateSession(session.token);
+        });
+      } else {
+        invalidatePrivateSession(session.token);
+      }
+    }, Math.max(0, Math.min(remaining - (cookieFlow ? 30000 : 0), 2147483647)));
     return () => { window.clearTimeout(timeout); unsubscribe(); };
-  }, [session, queryClient]);
+  }, [session, queryClient, setActive]);
 
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<PrivateSession> => {
       if (!privateAuthEnabled()) {
         throw new Error("El acceso privado no está disponible en la demostración.");
       }
-      const response = await fetch("/api/v1/auth/login", {
-        method: "POST",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
-      });
-      const verified = await readSession(response);
+      const ticket = ++epoch.current;
+      const cookieFlow = privateCookieAuthEnabled();
+      const response = cookieFlow
+        ? await cookieAccessRequest("login", credentials)
+        : await fetch("/api/v1/auth/login", {
+            method: "POST",
+            cache: "no-store",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(credentials),
+          });
+      if (!response.ok) return authError(response);
+      const verified = cookieFlow
+        ? parseCookieAccess(await response.json())
+        : validateSession(await response.json());
+      if (ticket !== epoch.current) throw new Error("La solicitud de acceso quedó obsoleta.");
       discardStagedCapture();
       await queryClient.cancelQueries();
       queryClient.clear();
-      setSession(verified);
+      setActive(verified);
+      setRestoring(false);
       return verified;
     },
-    [queryClient],
+    [queryClient, setActive],
   );
 
   const beginMfaEnrollment = useCallback(async (credentials: LoginCredentials): Promise<string> => {
@@ -172,12 +245,16 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     }).safeParse(body);
     if (!parsed.success) throw new Error("No se recibieron los códigos de recuperación.");
     const verified = validateSession(body);
+    epoch.current += 1;
     discardStagedCapture();
     await queryClient.cancelQueries();
     queryClient.clear();
-    setSession(verified);
+    // MFA enrollment confirmation still produces a legacy opaque session.
+    // Do not pretend that this response sets a refresh cookie.
+    setActive(verified);
+    setRestoring(false);
     return parsed.data.recovery_codes;
-  }, [queryClient]);
+  }, [queryClient, setActive]);
 
   const recoverMfaFactor = useCallback(async (
     credentials: RecoveryCredentials,
@@ -199,30 +276,34 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const logout = useCallback(async (): Promise<boolean> => {
-    const prior = session;
+    const prior = activeSession.current;
+    epoch.current += 1;
     discardStagedCapture();
-    setSession(null);
+    setActive(null);
+    setRestoring(false);
     await queryClient.cancelQueries();
     queryClient.clear();
     if (!prior) return true;
     try {
-      const response = await fetch("/api/v1/auth/logout", {
-        method: "POST",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { Authorization: `Bearer ${prior.token}` },
-      });
+      const response = prior.kind === "cookie"
+        ? await cookieAccessRequest("logout")
+        : await fetch("/api/v1/auth/logout", {
+            method: "POST",
+            cache: "no-store",
+            credentials: "same-origin",
+            headers: { Authorization: `Bearer ${prior.token}` },
+          });
       return response.status === 204;
     } catch {
       // Local state is cleared even if the network is unavailable. The server
       // session may remain valid until expiration; caller must show a warning.
       return false;
     }
-  }, [queryClient, session]);
+  }, [queryClient, setActive]);
 
   const value = useMemo(
-    () => ({ session, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
-    [session, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
+    () => ({ session, restoring, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout }),
+    [session, restoring, login, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
