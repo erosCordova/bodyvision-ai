@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { comparisonDownloadSchema } from "../../features/analytics/serverComparisonDownload";
+import { longitudinalDownloadSchema } from "../../features/analytics/serverLongitudinalExport";
 import { ApiError } from "./client";
 import { invalidatePrivateSession } from "./sessionInvalidation";
 
@@ -176,6 +177,9 @@ export function recordsApi(workspace: string, token?: string) {
       headers: key ? { "Idempotency-Key": key } : {},
     }, token);
   return {
+    longitudinalReport: (id: string, metricCode: string, period: "30d" | "90d" | "1a" | "all") =>
+      write(`/profiles/${id}/reports/longitudinal`, "POST",
+        { metric_code: metricCode, period }, longitudinalDownloadSchema),
     comparisonReport: (id: string, initialId: string, finalId: string) =>
       write(`/profiles/${id}/reports/comparison`, "POST",
         { initial_id: initialId, final_id: finalId }, comparisonDownloadSchema),

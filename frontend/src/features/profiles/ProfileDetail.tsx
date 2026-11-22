@@ -309,6 +309,11 @@ export function ProfileDetail() {
                   profileId={profileId}
                   metricCode={metric}
                   unit={selectedMetric?.unit ?? ""}
+                  period={period as "30d" | "90d" | "1a" | "all"}
+                  exportReport={privateAuthEnabled() && current.synthetic
+                    ? () => api.longitudinalReport(profileId, metric,
+                        period as "30d" | "90d" | "1a" | "all")
+                    : undefined}
                 />
                 <MeasurementComparison
                   key={`${metric}-${period}`}

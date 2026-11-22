@@ -49,4 +49,28 @@ test("private comparison downloads a server PDF with source IDs and committed au
   const audit = await page.request.get("/api/v1/auth/audit?limit=50", { headers: auth });
   expect(audit.status()).toBe(200);
   expect(JSON.stringify(await audit.json())).toContain(report.report_id);
+  const csvEvent = page.waitForEvent("download");
+  const csvResponse = page.waitForResponse(response =>
+    response.url().endsWith("/reports/longitudinal"));
+  await page.getByRole("button", { name: "Descargar historial observado (CSV)" }).click();
+  const csvPayload = await csvResponse;
+  expect(csvPayload.status()).toBe(200);
+  const exported = await csvPayload.json() as {
+    export_id: string; filename: string; sha256: string; row_count: number;
+  };
+  const saved = await csvEvent;
+  expect(saved.suggestedFilename()).toBe(exported.filename);
+  const input = await saved.createReadStream();
+  if (!input) throw new Error("Missing longitudinal CSV download");
+  const buffers: Buffer[] = [];
+  for await (const chunk of input) buffers.push(Buffer.from(chunk));
+  const csvBytes = Buffer.concat(buffers);
+  expect(exported.row_count).toBe(2);
+  expect(createHash("sha256").update(csvBytes).digest("hex")).toBe(exported.sha256);
+  for (const source of sourceIds) expect(csvBytes.includes(Buffer.from(source))).toBe(true);
+  expect(csvBytes.toString("utf8")).toContain("source_measurement_id,measured_at_utc");
+  expect(csvBytes.toString("utf8")).not.toContain("SIMULADO");
+  const auditAfter = await page.request.get("/api/v1/auth/audit?limit=50", { headers: auth });
+  expect(auditAfter.status()).toBe(200);
+  expect(JSON.stringify(await auditAfter.json())).toContain(exported.export_id);
 });

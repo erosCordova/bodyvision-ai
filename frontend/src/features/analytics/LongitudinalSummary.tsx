@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { saveLongitudinalCsv, verifiedLongitudinalCsv, type LongitudinalDownload } from "./serverLongitudinalExport";
 import type { Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { summarizeLongitudinal } from "./longitudinalSummary";
@@ -12,13 +13,40 @@ const signed = (value: number) => new Intl.NumberFormat("es-PE", {
 }).format(value);
 
 export function LongitudinalSummary({
-  rows, profileId, metricCode, unit,
+  rows, profileId, metricCode, unit, period, exportReport,
 }: {
   rows: Measurement[];
   profileId: string;
   metricCode: string;
   unit: string;
+  period: "30d" | "90d" | "1a" | "all";
+  exportReport?: () => Promise<LongitudinalDownload>;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current += 1;
+    setExportError("");
+    setBusy(false);
+    return () => { generation.current += 1; };
+  }, [profileId, metricCode, period]);
+  const exportCsv = async () => {
+    if (!exportReport || busy) return;
+    const token = ++generation.current;
+    setBusy(true);
+    setExportError("");
+    try {
+      const data = await exportReport();
+      const blob = await verifiedLongitudinalCsv(data);
+      if (generation.current === token) saveLongitudinalCsv(blob, data.filename);
+    } catch (error) {
+      if (generation.current === token)
+        setExportError(error instanceof Error ? error.message : "No se pudo descargar el CSV.");
+    } finally {
+      if (generation.current === token) setBusy(false);
+    }
+  };
   const summary = useMemo(() =>
     summarizeLongitudinal(rows, { profileId, metricCode }),
   [rows, profileId, metricCode]);
@@ -81,6 +109,15 @@ export function LongitudinalSummary({
             {summary.count < 3 &&
               " Muestra pequeña: no se puede inferir una tendencia."}
           </p>
+          {exportReport && <div className="record-report-actions">
+            <button type="button" onClick={() => void exportCsv()} disabled={busy}>
+              {busy ? "Preparando historial…" : "Descargar historial observado (CSV)"}
+            </button>
+            <small className="muted">Fuentes vigentes del periodo desde el servidor
+              (máximo 500), con auditoría y SHA-256. No es una firma digital
+              ni acredita exactitud clínica.</small>
+          </div>}
+          {exportError && <p role="alert">{exportError}</p>}
         </>
       )}
     </section>
