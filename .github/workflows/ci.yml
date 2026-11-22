@@ -185,6 +185,10 @@ jobs:
           # All data is synthetic. The restore target is an ephemeral database
           # inside db-test, never the application db or a hosted Neon database.
           recovery_state="$(mktemp -d /tmp/bodyvision-recovery-state.XXXXXX)"
+          # Private runner-only monotonic observations; no tokens or identifiers.
+          timing_record() {
+            APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only python3 scripts/ci_recovery_timing.py mark --state "$recovery_state/recovery-timing.json" --stage "$1"
+          }
           recovery_image=bodyvision-recovery-acceptance-ci
           docker build --target test -t "$recovery_image" ./backend
           docker build --target recovery-web -t bodyvision-recovery-web-ci-image ./frontend
@@ -203,6 +207,7 @@ jobs:
           # Preserve ACLs: SECURITY DEFINER functions must keep their PUBLIC revokes.
           docker compose exec -T db sh -c 'pg_dump --format=custom --no-owner -U "$POSTGRES_USER" "$POSTGRES_DB"' > /tmp/bodyvision-backup-ci.dump
           test -s /tmp/bodyvision-backup-ci.dump
+          timing_record backup_captured
           # Reject damaged custom-format backups before invoking pg_restore.
           # Metadata stays on this disposable runner: no SQL/dump artifacts uploaded.
           APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
@@ -244,6 +249,7 @@ jobs:
           primary_db_container="$(docker compose ps -aq db)"
           test -n "$primary_db_container"
           test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
+          timing_record primary_stopped
           docker run -d --rm --name bodyvision-recovery-ci \
             --network none \
             --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=512m \
@@ -296,6 +302,7 @@ jobs:
           # and sequence values; never relax the strict in-place preservation test.
           python3 scripts/verify_restored_data.py \
             /tmp/bodyvision-before-recovery.sql /tmp/bodyvision-recovered-ci.sql
+          timing_record restored_rows_verified
           # The original DB remains stopped. This API connects only to the new
           # database via loopback inside its isolated network namespace.
           test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
@@ -330,6 +337,7 @@ jobs:
           done
           docker exec bodyvision-recovery-api-ci python -c \
             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5174/api/v1/health/ready', timeout=3)" > /dev/null
+          timing_record private_http_ready
           test "$(docker inspect --format '{{.State.Running}}' "$primary_db_container")" = false
           recovery_namespace_pid="$(docker inspect --format '{{.State.Pid}}' bodyvision-recovery-ci)"
           # Enter only the network namespace; retain the runner filesystem/UID.
@@ -344,12 +352,15 @@ jobs:
               "$(command -v node)" node_modules/@playwright/test/cli.js test \
               --config playwright.recovery.config.ts
           )
+          timing_record private_browser_verified
           docker rm -f bodyvision-recovery-web-ci bodyvision-recovery-api-ci > /dev/null
           # Restore the original disposable application only after comparing
           # the independent instance; no production database is touched.
           docker rm -f bodyvision-recovery-ci > /dev/null
           docker compose up -d --wait --wait-timeout 180
           python3 scripts/check_local_installation.py --json
+          timing_record primary_stack_recovered
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only python3 scripts/ci_recovery_timing.py report --state "$recovery_state/recovery-timing.json"
           recovery_elapsed=$((SECONDS - recovery_started))
           printf 'Synthetic replacement-DB recovery verified in %s seconds; this is not RTO.\n' "$recovery_elapsed"
           rm -f /tmp/bodyvision-backup-ci.dump /tmp/bodyvision-restored-ci.sql \
