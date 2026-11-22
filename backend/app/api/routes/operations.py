@@ -10,8 +10,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import workspace
 from app.core.errors import DomainError
-from app.models.context import Workspace
 from app.db.session import SCHEMA_REVISION
+from app.models.context import Workspace
 from app.services.auth_sessions import resolve_identity
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Private service operations"])
