@@ -749,3 +749,35 @@ No se eleva el porcentaje por resolver este pendiente parcial. Continúan
 firma/autenticidad externas, confirmación de recepción del archivo,
 historiales de más de 500 observaciones y revisión independiente.
 Evidencia ampliada: `PHASE_7_REPORT_FORMAT_AUDIT_2026_11_21.md`.
+
+
+## Fase 7 — historiales extensos completos en una instantánea (21-11-2026)
+
+La exportación CSV deja de limitarse a 500 observaciones. Un cursor real
+de PostgreSQL consume una única instantánea en lotes de 500, con fecha
+de corte fija y orden por fecha/ID. El archivo conserva todas las fuentes
+vigentes del periodo autorizado, hasta 8 MiB de UTF-8; el exceso exige
+reducir el periodo y no entrega una parte ni registra éxito. No se
+materializan todas las filas en una lista. La auditoría CSV debe confirmar
+antes de entregar los bytes y el navegador verifica integridad y recuento.
+
+La [CI integral 44978014105](https://github.com/erosCordova/bodyvision-ai/actions/runs/44978014105)
+aprobó `e74b15c7280240b0a67484de3f0a0438a71678c5`: **301 backend,
+274 frontend, 43 públicas y 9 privadas = 627 pruebas de aplicación**,
+además de Windows y Docker. Retención independiente 44978014126 aprobada.
+El navegador descargó 2.007 fuentes con permiso de lectura y verificó
+cada ID, orden, nombre y SHA-256 del archivo recibido. PostgreSQL comprobó
+1.207 fuentes con fechas coincidentes y una escritura concurrente excluida
+hasta la nueva solicitud (1.208); la fecha de corte es única en los lotes.
+Los límites exactos de bytes, recuentos parciales y rollback están probados.
+
+La Fase 7 aumenta de **90 % a 95 %** como evaluación manual de alcance.
+La suma de las diez fases pasa de **905 a 910** y el promedio exacto
+de **90,5 % a 91,0 %**. El tablero conserva **91 %** por redondeo.
+No cambia ninguna otra fase. El cierre es técnico y ficticio, no clínico:
+continúan firma/autenticidad externas, persistencia final en el equipo del
+usuario, reducción de periodos de más de 8 MiB, capacidad productiva,
+privacidad, aprobación de datos reales y aceptación independiente.
+
+Evidencia ampliada: `PHASE_7_COMPLETE_LONG_HISTORY_2026_11_21.md`.
+No se modifica main, Neon, la demo pública ni el modelo anatómico.
