@@ -1,6 +1,7 @@
 """Manifest and report rules for purge-versus-restore verification (no database)."""
 
 import json
+import os
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -231,7 +232,6 @@ def test_manifest_rejects_hard_links_and_symbolic_links(tmp_path):
     )
     hardlink = tmp_path / "hardlink.json"
     try:
-        import os
         os.link(path, hardlink)
     except (OSError, NotImplementedError):
         pytest.skip("Hard links unavailable on this filesystem")
@@ -258,3 +258,12 @@ def test_programmatic_verifier_rejects_unsafe_batch_before_connecting():
         with pytest.raises(RecoveryVerificationDenied):
             find_reappeared(engine, manifest)
     engine.connect.assert_not_called()
+
+
+def test_manifest_rejects_named_pipe_without_waiting_for_writer(tmp_path):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("Named pipes unavailable on this filesystem")
+    fifo = tmp_path / "fifo.json"
+    os.mkfifo(fifo)
+    with pytest.raises(RecoveryVerificationDenied):
+        load_manifest(fifo)
