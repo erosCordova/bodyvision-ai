@@ -43,3 +43,12 @@ La recuperación asistida ficticia de la fase 3 fue aceptada en
 con 647 pruebas de aplicación aprobadas. Seguridad se estima en 90 %;
 el promedio global es 91,5 % exacto, mostrado como 92 % redondeado.
 Esta entrega no equivale al cierre completo de todas las fases.
+
+## Preparación de cierre de fase 0
+
+La [propuesta de alcance, matriz de riesgos y responsables](PHASE_0_SCOPE_REVIEW.md)
+está preparada para revisión y pendiente de aceptación del producto. Conserva
+el objetivo de uso real del contrato y enumera las diferencias con el código
+actual: identidad, storage, cola de pose, privacidad y operación. Los porcentajes
+anteriores siguen siendo estimaciones técnicas del entorno ficticio, no cobertura
+porcentual del contrato completo. No se incrementan por elaborar esta propuesta.

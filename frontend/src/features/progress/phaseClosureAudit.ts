@@ -46,8 +46,8 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
       },
       {
         id: "F0-RISK", requirement: "Matriz de riesgos revisada, con responsables y medidas aprobadas.",
-        state: "pending", pendingReason: "Existe una matriz preliminar; falta asignar responsables y aceptarla.",
-        evidence: { label: "Registro preliminar de riesgos", url: doc("docs/qa/PHASE_0_2_ACCEPTANCE_AUDIT.md") },
+        state: "pending", pendingReason: "Propuesta revisable de alcance, diferencias, riesgos y responsables preparada; falta confirmar responsables y aceptación del producto.",
+        evidence: { label: "Propuesta de cierre y matriz de riesgos", url: doc("docs/qa/PHASE_0_SCOPE_REVIEW.md") },
       },
       {
         id: "F0-APPROVAL", requirement: "Aceptación explícita del alcance y criterios de salida por producto.",

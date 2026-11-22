@@ -1,15 +1,45 @@
-# Arquitectura — F2
+# Arquitectura de BodyVision — estado revisado
 
-Estado: base local; sin flujos sensibles. Navegador → nginx:8080 → FastAPI:8000 → PostgreSQL:5432. Solo nginx publica puerto, ligado a 127.0.0.1. En desarrollo Vite hace proxy a FastAPI.
+Revisión: 21 de noviembre de 2026. Esquema privado 0022_report_format_audit.
+La descripción inicial de F2 se conserva en Git; este documento distingue
+la implementación actual del objetivo todavía pendiente.
 
-Alembic es un proceso separado con credencial propietaria. La API recibe el rol `bodyvision_app`, con SELECT de metadatos y permisos mínimos sobre los recursos F2 protegidos por RLS. El pool comprueba conexiones; readiness abre una consulta real con timeout y valida revisión. Liveness no depende de PostgreSQL.
+## Flujos actuales
 
-La UI no consulta directamente SQL. El cliente común impone timeout de 7 s, correlation UUID, errores seguros y contratos Zod. React Query controla carga/error/éxito; el estado vacío de expedientes es un aviso de alcance, sin consultar una API aún inexistente.
+- React/TypeScript/Vite consume FastAPI mediante el cliente API. Nginx expone
+  loopback en local; Vite usa proxy durante desarrollo.
+- FastAPI usa SQLAlchemy y PostgreSQL; credenciales separadas de migración,
+  datos y autenticación, RLS y permisos por organización/expediente.
+- El modo privado local/test ofrece sesiones opacas, roles, MFA, consentimiento
+  ficticio, PNG sintéticos cifrados, resúmenes de pose, mediciones y escenarios
+  versionados, PDF/CSV y auditoría.
+- MediaPipe/WASM ejecuta la inferencia en el navegador. Los resúmenes declarados
+  por el cliente no son inferencia independiente del servidor. Los trabajadores
+  existentes cubren retención y vigilancia, no la cola de pose del contrato.
+- Three.js conserva el atlas anatómico único y aplica simulaciones sobre ese
+  mismo cuerpo. Recursos CPU y emulación no certifican GPU o teléfonos físicos.
+- Mantenimiento y recuperación MFA ficticios requieren rol migrador local;
+  el restablecimiento fuera de línea no es una ruta HTTP pública.
 
-F1 no incluía tablas de negocio. F2 añade las tablas y políticas RLS/ProfileAccess para datos ficticios; auditoría sensible, auth/MFA y consentimientos se requieren antes de usuarios reales. F2 sigue siendo exclusivamente sintética. Producción y staging rechazados en configuración.
+## Entornos y alojamiento
 
-Glosario: observado, derivado, estimación visual, reconstrucción aproximada y simulación serán categorías del dominio. No se muestran insignias sobre health checks porque no son datos corporales.
+El proveedor de base alojada acordado es **Neon**, nunca Render. PostgreSQL
+local/CI son instancias de prueba aisladas. El modo demo de solo lectura usa
+la revisión 0002_data_core; el modo privado usa la revisión de esquema vigente.
+Staging y producción continúan bloqueados por configuración.
 
-## Núcleo F2
+Readiness comprueba conexión y esquema; liveness no depende de PostgreSQL.
+Cada solicitud establece contexto SQL en su transacción; el cliente no ejecuta
+SQL y el selector ficticio de organización no constituye una credencial.
 
-React Query obtiene resumen, expedientes, catálogo, historial, series y derivadas por API. Formularios react-hook-form/zod; Recharts se carga bajo demanda. Repositorios SQLAlchemy con SQL parametrizado filtran tenant y acceso; servicios validan mediciones y calculan derivadas; PostgreSQL aplica RLS, referencias compuestas e inmutabilidad. Cada solicitud usa una transacción con contexto local y se limpia al terminar. El selector de organización es metadata sintética en sessionStorage, nunca credencial.
+## Diferencias respecto al objetivo
+
+El [contrato](../requirements/IMPLEMENTATION_SPEC.md) mantiene la plataforma
+para uso real como objetivo. Identidad objetivo/refresh, objetos privados,
+cola/worker de pose, solicitudes de privacidad, revisión independiente y
+operación productiva no se dan por resueltos mediante sus equivalentes de prueba.
+Los ADR iniciales describen objetivos; no prueban que estén implementados.
+
+La [propuesta de fase 0](../qa/PHASE_0_SCOPE_REVIEW.md) registra diferencias y
+riesgos para revisión. La [CI 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
+aprobó 647 pruebas del código revisado. No certifica el contrato completo.
