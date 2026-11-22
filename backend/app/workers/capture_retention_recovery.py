@@ -23,8 +23,8 @@ from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import bindparam, create_engine, text
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
 DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -75,7 +75,11 @@ def load_manifest(path: str | Path) -> tuple[PurgedCapture, ...]:
             identifier = UUID(str(raw_id))
         except (ValueError, TypeError, AttributeError) as exc:
             raise RecoveryVerificationDenied("Identificador de manifiesto no válido.") from exc
-        unique.setdefault(identifier, PurgedCapture(identifier, digest))
+        prior = unique.get(identifier)
+        if prior is not None and prior.sha256_digest != digest:
+            # A contradictory manifest must not silently hide a capture.
+            raise RecoveryVerificationDenied("Manifiesto con digest contradictorio.")
+        unique[identifier] = PurgedCapture(identifier, digest)
     return tuple(unique.values())
 
 
@@ -86,13 +90,27 @@ def require_verification_environment(environment: Mapping[str, str]) -> str:
     if environment.get("BODYVISION_ENABLE_CAPTURE_RETENTION") != "synthetic-only":
         raise RecoveryVerificationDenied("Se requiere activación sintética explícita.")
     url = environment.get("RESTORED_DATABASE_URL", "")
-    if not url.startswith("postgresql+psycopg://"):
-        raise RecoveryVerificationDenied("Usa solo PostgreSQL con psycopg.")
+    try:
+        parsed = make_url(url)
+    except (ArgumentError, TypeError, ValueError):
+        raise RecoveryVerificationDenied("Conexión de restauración inválida.") from None
+    if (
+        parsed.drivername != "postgresql+psycopg"
+        or parsed.host not in {"localhost", "127.0.0.1", "::1"}
+    ):
+        # A test fixture must never query an external/production database.
+        raise RecoveryVerificationDenied("La copia debe estar en PostgreSQL local de pruebas.")
     return url
 
 
 def read_only_engine(url: str) -> Engine:
     """Read-only, bounded, no-pool engine: a restored copy is never mutated."""
+    # Also fail closed for programmatic callers that bypass the CLI guard.
+    require_verification_environment({
+        "APP_ENV": "test",
+        "BODYVISION_ENABLE_CAPTURE_RETENTION": "synthetic-only",
+        "RESTORED_DATABASE_URL": url,
+    })
     return create_engine(
         url,
         poolclass=NullPool,
@@ -114,12 +132,19 @@ def find_reappeared(engine: Engine, manifest: Sequence[PurgedCapture]) -> list[d
     ).bindparams(bindparam("identifiers", expanding=True), bindparam("digests", expanding=True))
     try:
         with engine.connect() as connection:
-            role = connection.execute(text("SELECT current_user")).scalar_one()
-            if role in RLS_SCOPED_ROLES:
-                # Row level security hides rows without a tenant context, which
-                # would produce a false "no reappearance" verdict.
+            # A newly introduced tenant-scoped role may have a different name.
+            # row_security_active checks the effective session, not a static list.
+            role, scoped, can_read = connection.execute(
+                text(
+                    "SELECT current_user, "
+                    "row_security_active('public.synthetic_capture_objects'::regclass), "
+                    "has_table_privilege(current_user, "
+                    "'public.synthetic_capture_objects', 'SELECT')"
+                )
+            ).one()
+            if role in RLS_SCOPED_ROLES or scoped or not can_read:
                 raise RecoveryVerificationDenied(
-                    "Verifica la copia aislada con un rol sin RLS de aplicación."
+                    "Verifica la copia aislada con un rol autorizado sin RLS."
                 )
             rows = connection.execute(
                 statement,

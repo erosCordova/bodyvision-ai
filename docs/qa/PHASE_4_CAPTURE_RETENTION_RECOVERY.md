@@ -119,3 +119,24 @@ correspondientes. CI no equivale a aprobación clínica, legal ni de privacidad.
   sobre PostgreSQL 15 (pendiente de CI).
 - Sigue sin haber aprobación clínica, legal, de privacidad ni revisión externa;
   el porcentaje global del proyecto no cambia.
+
+## Endurecimiento posterior por ChatGPT (PR separado, CI pendiente)
+
+- El manifiesto solo deduplica entradas con **el mismo UUID y SHA-256**;
+  ahora **rechaza** dos digests distintos para un mismo UUID, evitando
+  ocultar discrepancias.
+- La conexión de restauración se limita a PostgreSQL por **loopback local**
+  (`localhost`, `127.0.0.1`, `::1`), también cuando se usa la API Python
+  directamente y no solo la CLI. Las copias remotas/productivas se rechazan.
+- Se inspecciona la RLS **efectiva** mediante `row_security_active` y el
+  privilegio `SELECT` antes de consultar capturas. Un rol nuevo con RLS
+  no debe producir un falso «no reaparece».
+- El manifiesto construido antes de purgar continúa siendo **evidencia
+  parcial**: no identifica atómicamente las filas efectivamente eliminadas
+  bajo concurrencia. Ningún resultado constituye certificado de borrado
+  global, limpieza de WAL, backups, objetos ni réplicas.
+- Se amplían las pruebas negativas de UUID/digest contradictorios, DSN
+  remoto, RLS activa en rol con nombre nuevo y falta de permisos.
+
+La CI de este endurecimiento se registra por separado; no reemplaza las
+limitaciones existentes ni concede aceptación legal o clínica.
