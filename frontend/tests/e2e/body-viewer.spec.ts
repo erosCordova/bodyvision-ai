@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { anatomySource } from "../../src/features/viewer/atlasSource";
 import { summarizeSyntheticPoseMatrix, type SyntheticPoseObservation } from "../../src/features/capture/poseRobustnessReport";
+import { summarizeSyntheticPoseMirror, type SyntheticPosePoint } from "../../src/features/capture/poseMirrorAudit";
 
 test.use({ launchOptions: {
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -833,6 +834,10 @@ test("real local pose matrix tests atlas variants and a well-lit no-person contr
   });
   await page.goto("/capture");
   const observations: SyntheticPoseObservation[] = [];
+  // Coordinates never leave this test's ephemeral browser-run memory.
+  // The CI JSON records only aggregate normalized differences.
+  let frontalPoints: SyntheticPosePoint[] = [];
+  let mirroredPoints: SyntheticPosePoint[] = [];
   const variants = [
     "frontal-control", "lateral-left", "low-light", "overexposed",
     "reduced-resolution", "lower-body-cropped", "horizontal-mirror", "central-occlusion",
@@ -928,6 +933,24 @@ test("real local pose matrix tests atlas variants and a well-lit no-person contr
       "Visible para revisión visual",
     ]).toContain(resultLabel);
     const quality = resultLabel as SyntheticPoseObservation["quality"];
+    if (condition === "frontal-control" || condition === "horizontal-mirror") {
+      const normalized = detected
+        ? await result.locator('svg[aria-label="Puntos corporales detectados por el modelo"] circle[data-pose-index]')
+          .evaluateAll(circles => circles.map(circle => {
+            const svg = (circle as SVGCircleElement).ownerSVGElement;
+            if (!svg || svg.viewBox.baseVal.width <= 0 || svg.viewBox.baseVal.height <= 0) {
+              throw new Error("La superposición sintética no tiene un viewBox válido.");
+            }
+            return {
+              index: Number(circle.getAttribute("data-pose-index")),
+              x: Number(circle.getAttribute("cx")) / svg.viewBox.baseVal.width,
+              y: Number(circle.getAttribute("cy")) / svg.viewBox.baseVal.height,
+            };
+          }))
+        : [];
+      if (condition === "frontal-control") frontalPoints = normalized;
+      else mirroredPoints = normalized;
+    }
     if (condition === "negative-no-person") {
       expect(detected, "Una imagen sintética sin cuerpo no debe mostrar pose").toBe(false);
       expect(quality).toBe("Sin detección");
@@ -947,6 +970,13 @@ test("real local pose matrix tests atlas variants and a well-lit no-person contr
     console.log("BODYVISION synthetic pose matrix " + JSON.stringify(observed));
   }
   const summary = summarizeSyntheticPoseMatrix(observations);
+  const mirrorAudit = summarizeSyntheticPoseMirror(frontalPoints, mirroredPoints);
+  expect(mirrorAudit.matchedLandmarks).toBeLessThanOrEqual(33);
+  expect(mirrorAudit.clinicalAccuracyMeasured).toBe(false);
+  if (frontalPoints.length >= 8 && mirroredPoints.length >= 8) {
+    expect(mirrorAudit.originalVisible).toBeGreaterThanOrEqual(8);
+    expect(mirrorAudit.mirroredVisible).toBeGreaterThanOrEqual(8);
+  }
   expect(summary.total).toBe(9);
   expect(summary.notDetected).toBeGreaterThanOrEqual(1);
   expect(summary.failedCapture).toBeLessThan(summary.total);
@@ -962,7 +992,8 @@ test("real local pose matrix tests atlas variants and a well-lit no-person contr
     modelProvenance: "same-origin verified MediaPipe Lite",
     observations,
     summary,
-    limitation: "descriptive gate checks on synthetic screenshots, not clinical precision or accuracy",
+    horizontalMirrorAudit: mirrorAudit,
+    limitation: "descriptive gate checks and mirrored landmark differences on synthetic screenshots; no clinical precision, anatomical correctness or ground-truth accuracy inferred",
   }, null, 2));
 });
 
