@@ -131,6 +131,7 @@ jobs:
         run: |
           # Generate an ephemeral CI-only signing key; never emit it in logs.
           export JWT_SIGNING_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          export CAPTURE_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
           cd backend
           uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8002 --no-access-log > /tmp/cookie-api.log 2>&1 &
           cd ../frontend

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { comparisonDownloadSchema } from "../../features/analytics/serverComparisonDownload";
 import { longitudinalDownloadSchema } from "../../features/analytics/serverLongitudinalExport";
 import { ApiError } from "./client";
-import { invalidatePrivateSession, tryRefreshPrivateSession } from "./sessionInvalidation";
+import { withPrivateSession } from "./privateSessionRequest";
 
 export const profileSchema = z.object({
   id: z.string().uuid(),
@@ -138,20 +138,10 @@ export async function dataRequest<T>(
         ...options.headers,
       },
     });
-    let currentToken = token;
-    let response = await send(currentToken);
-    if (response.status === 401 && token) {
-      // The backend denies expired access before processing the operation.
-      // A single transparent retry uses a new memory-only JWT and must never
-      // fall back to an untrusted organization selector.
-      const replacement = await tryRefreshPrivateSession(token);
-      if (replacement && replacement !== token) {
-        currentToken = replacement;
-        response = await send(replacement);
-      }
-    }
+    const response = token
+      ? await withPrivateSession(token, send, controller.signal)
+      : await send();
     if (!response.ok) {
-      if (response.status === 401 && currentToken) invalidatePrivateSession(currentToken);
       const body = await response.json().catch(() => ({}));
       throw new ApiError(
         response.headers.get("X-Correlation-ID") ?? correlationId,

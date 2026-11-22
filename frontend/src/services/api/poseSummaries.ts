@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { invalidatePrivateSession } from "./sessionInvalidation";
+import { withPrivateSession } from "./privateSessionRequest";
 
 export const poseSummarySchema = z.object({
   id: z.string().uuid(), profile_id: z.string().uuid(), created_by: z.string().uuid(),
@@ -27,9 +27,10 @@ export function poseSummariesApi(token: string, profile: string) {
     signal?.addEventListener("abort", cancel, { once: true });
     const timer = window.setTimeout(cancel, 7000);
     try {
-      const response = await fetch(root + suffix, { ...init, signal: controller.signal, cache: "no-store",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init.headers } });
-      if (response.status === 401) invalidatePrivateSession(token);
+      const response = await withPrivateSession(token, bearer => fetch(root + suffix, {
+        ...init, signal: controller.signal, cache: "no-store",
+        headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json", ...init.headers },
+      }), controller.signal);
       if (!response.ok) {
         const error = await response.json().catch(() => ({})) as { code?: string };
         const messages: Record<string, string> = {

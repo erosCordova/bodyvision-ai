@@ -1,6 +1,6 @@
 /** Private, optional local/test encrypted archive. No production uploads. */
 import { z } from "zod";
-import { invalidatePrivateSession } from "./sessionInvalidation";
+import { withPrivateSession } from "./privateSessionRequest";
 
 const storedCapture = z.object({
   id: z.string().uuid(), profile_id: z.string().uuid(),
@@ -17,14 +17,13 @@ export type StoredCapture = z.infer<typeof storedCapture>;
 
 async function scopedFetch(token: string, path: string, init: RequestInit = {}) {
   if (token.length < 40) throw new Error("Se requiere una sesión privada.");
-  const response = await fetch("/api/v1" + path, {
+  const response = await withPrivateSession(token, bearer => fetch("/api/v1" + path, {
     ...init,
     credentials: "same-origin",
     cache: "no-store",
-    headers: { Authorization: `Bearer ${token}`, ...init.headers },
-  });
+    headers: { Authorization: `Bearer ${bearer}`, ...init.headers },
+  }), init.signal);
   if (response.status === 401) {
-    invalidatePrivateSession(token);
     throw new Error("Tu sesión expiró. Ingresa de nuevo.");
   }
   if (!response.ok) {

@@ -4,18 +4,21 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PoseSummaryArchive } from "../src/features/capture/PoseSummaryArchive";
 import { poseSummariesApi, type PoseSummaryDraft } from "../src/services/api/poseSummaries";
+import { registerPrivateSessionRefresh } from "../src/services/api/sessionInvalidation";
 
 const profile = "11111111-1111-4111-8111-111111111111";
 const actor = "22222222-2222-4222-8222-222222222222";
 let role = "administrator";
 let accepted = true;
+let sessionToken = "s".repeat(48);
+let sessionUser = actor;
 const draft: PoseSummaryDraft = { model_revision: "pose_landmarker_lite/float16/1", detected: true,
   threshold: .5, visible_points: 25, core_visible: 8, quality_state: "reviewable", capture_passed: true };
 const row = { ...draft, id: "33333333-3333-4333-8333-333333333333", profile_id: profile,
   created_by: actor, created_at: "2026-11-20T12:00:00Z", algorithm_revision: "pose-review-summary-v1",
   summary_sha256: "0".repeat(64), origin: "client_reported_browser", data_type: "DERIVADO", synthetic: true };
 vi.mock("../src/app/providers/PrivateAuthProvider", () => ({ usePrivateAuth: () => ({ session: {
-  token: "s".repeat(48), organization_id: actor, user_id: actor, role,
+  token: sessionToken, organization_id: actor, user_id: sessionUser, role,
 } }) }));
 vi.mock("../src/app/providers/WorkspaceProvider", () => ({ useWorkspace: () => ({ api: {
   profiles: async () => ({ items: [{ id: profile, display_code: "POSE-01" }], total: 1 }),
@@ -31,7 +34,7 @@ function mount(summary: PoseSummaryDraft | null = draft, fixedProfileId?: string
 }
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200,
   headers: { "Content-Type": "application/json" } });
-beforeEach(() => { role = "administrator"; accepted = true; });
+beforeEach(() => { role = "administrator"; accepted = true; sessionToken = "s".repeat(48); sessionUser = actor; });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it("projects only minimal fields before sending and parses server provenance", async () => {
@@ -94,4 +97,55 @@ it("reads the fixed profile history without selecting an image or another profil
   await screen.findByText("Revisable de forma experimental");
   expect(screen.queryByLabelText("Expediente para resultados de pose")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Guardar resultado de pose" })).not.toBeInTheDocument();
+});
+
+it("keeps the pending save generation through token renewal and reports the saved result", async () => {
+  let stored: typeof row[] = [];
+  const posts: RequestInit[] = [];
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const tree = () => <QueryClientProvider client={client}><MemoryRouter>
+    <PoseSummaryArchive summary={draft} runSerial={1} fixedProfileId={profile} />
+  </MemoryRouter></QueryClientProvider>;
+  const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+    if (init.method === "POST") {
+      posts.push(init);
+      if (posts.length === 1) return new Response("{}", { status: 401 });
+      stored = [row]; return json(row);
+    }
+    return json({ items: stored, total: stored.length, limit: 20, offset: 0 });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const view = render(tree());
+  const stop = registerPrivateSessionRefresh(async () => {
+    sessionToken = "n".repeat(48);
+    view.rerender(tree());
+    return sessionToken;
+  });
+  try {
+    const confirmation = await screen.findByRole("checkbox", { name: /Confirmo que el resultado/ });
+    fireEvent.click(confirmation);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar resultado de pose" }));
+    await screen.findByText(/Resumen de pose guardado y auditado/);
+    await waitFor(() => expect(screen.getByRole("status", { name: "Página de resultados de pose" })).toHaveTextContent("1 resúmenes"));
+    expect(posts).toHaveLength(2);
+    expect(posts[0].body).toBe(posts[1].body);
+    expect((posts[0].headers as Record<string, string>)["Idempotency-Key"])
+      .toBe((posts[1].headers as Record<string, string>)["Idempotency-Key"]);
+    expect(confirmation).not.toBeChecked();
+  } finally { stop(); }
+});
+
+it("clears the fictional confirmation when the authenticated user changes", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ items: [], total: 0, limit: 20, offset: 0 })));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const tree = () => <QueryClientProvider client={client}><MemoryRouter>
+    <PoseSummaryArchive summary={draft} runSerial={1} fixedProfileId={profile} />
+  </MemoryRouter></QueryClientProvider>;
+  const view = render(tree());
+  const confirmation = await screen.findByRole("checkbox", { name: /Confirmo que el resultado/ });
+  fireEvent.click(confirmation); expect(confirmation).toBeChecked();
+  sessionUser = profile;
+  view.rerender(tree());
+  await waitFor(() => expect(screen.getByRole("checkbox", { name: /Confirmo que el resultado/ })).not.toBeChecked());
+  expect(screen.getByRole("button", { name: "Guardar resultado de pose" })).toBeDisabled();
 });

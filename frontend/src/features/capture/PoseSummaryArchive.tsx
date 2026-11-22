@@ -40,7 +40,7 @@ export function PoseSummaryArchive({ summary, runSerial, fixedProfileId }: {
     sequence.current += 1; requestKey.current = crypto.randomUUID();
     setConfirmed(false); setBusy(false); setError(""); setNotice("");
     return () => { sequence.current += 1; };
-  }, [profileId, session?.token, summaryStamp, runSerial]);
+  }, [profileId, session?.organization_id, session?.user_id, session?.role, summaryStamp, runSerial]);
   useEffect(() => { setOffset(0); }, [profileId]);
   const canWrite = (session?.role === "administrator" || session?.role === "specialist")
     && Boolean(consents.data?.can_record);

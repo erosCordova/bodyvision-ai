@@ -1,4 +1,4 @@
-import { invalidatePrivateSession, tryRefreshPrivateSession } from "./sessionInvalidation";
+import { withPrivateSession } from "./privateSessionRequest";
 
 export async function secureRequest(
   token: string,
@@ -15,17 +15,8 @@ export async function secureRequest(
       "Content-Type": "application/json",
     },
   });
-  let currentToken = token;
-  let response = await send(currentToken);
+  const response = await withPrivateSession(token, send, init.signal);
   if (response.status === 401) {
-    const replacement = await tryRefreshPrivateSession(token);
-    if (replacement && replacement !== token) {
-      currentToken = replacement;
-      response = await send(replacement);
-    }
-  }
-  if (response.status === 401) {
-    invalidatePrivateSession(currentToken);
     throw new Error("La sesión ha caducado. Inicia sesión de nuevo.");
   }
   if (response.status === 403 || response.status === 429) {
