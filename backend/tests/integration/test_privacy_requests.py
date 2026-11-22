@@ -224,7 +224,7 @@ def test_request_history_isolation_between_same_profile_grantees_and_admin_queue
     # Queue remains separate: administrator still needs a profile grant
     # and must not inherit another person's request history.
     assert client.get("/api/v1/privacy-requests", headers=administrator).json()["total"] == 0
-    assert history(administrator).json()["total"] == 0
+    assert history(administrator).status_code == 404
     with owner.begin() as conn:
         conn.execute(
             text("""INSERT INTO profile_access
