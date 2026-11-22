@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from app.core.config import Settings
 from app.core.logging import JsonFormatter
 from app.core.mfa import generate_mfa_encryption_key
+from app.db.session import SCHEMA_REVISION
 from app.main import create_app
 
 
@@ -19,7 +20,7 @@ from app.main import create_app
 def engine():
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
-    connection.execute.return_value.scalar_one.return_value = "0023_argon2_passwords"
+    connection.execute.return_value.scalar_one.return_value = SCHEMA_REVISION
     return engine
 
 
@@ -41,7 +42,7 @@ def test_live_does_not_require_database(client, engine):
 def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
-    assert response.json()["schema_revision"] == "0023_argon2_passwords"
+    assert response.json()["schema_revision"] == SCHEMA_REVISION
 
 
 def test_demo_ready_uses_data_core_revision(client, engine):
@@ -52,7 +53,7 @@ def test_demo_ready_uses_data_core_revision(client, engine):
         response = demo.get("/api/v1/health/ready")
         assert response.status_code == 200
         assert response.json()["schema_revision"] == "0002_data_core"
-        connection.execute.return_value.scalar_one.return_value = "0023_argon2_passwords"
+        connection.execute.return_value.scalar_one.return_value = SCHEMA_REVISION
         assert demo.get("/api/v1/health/ready").status_code == 503
 
 
