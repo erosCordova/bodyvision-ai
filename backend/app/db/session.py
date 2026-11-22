@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0027_private_idle_activity"
+SCHEMA_REVISION = "0028_synthetic_privacy_requests"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 
