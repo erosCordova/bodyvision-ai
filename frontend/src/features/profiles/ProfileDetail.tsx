@@ -186,7 +186,11 @@ export function ProfileDetail() {
           )}
           <section className="panel form-panel">
             <h2>Datos y estado del expediente</h2>
-            {editing ? (
+            {current.status === "restricted" && <p role="status">
+              Expediente restringido: las mediciones y la referencia son de solo lectura.
+              Reactiva el registro para volver a realizar cambios autorizados.
+            </p>}
+            {editing && current.status === "active" ? (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -210,7 +214,7 @@ export function ProfileDetail() {
               </form>
             ) : (
               <button
-                disabled={readOnly || current.status === "archived"}
+                disabled={readOnly || current.status !== "active" || update.isPending}
                 onClick={() => {
                   setName(current.display_name ?? "");
                   setEditing(true);
@@ -224,11 +228,14 @@ export function ProfileDetail() {
                 disabled={
                   readOnly || current.status === "archived" || update.isPending
                 }
-                onClick={() =>
-                  update.mutate({
-                    status:
-                      current.status === "restricted" ? "active" : "restricted",
-                  })
+                onClick={() => {
+                  const reactivate = current.status === "restricted";
+                  if (window.confirm(reactivate
+                    ? "¿Reactivar este expediente ficticio? Se permitirán nuevas mediciones autorizadas."
+                    : "¿Restringir este expediente ficticio? Su historial y referencia quedarán en modo de solo lectura.")) {
+                    setEditing(false);
+                    update.mutate({ status: reactivate ? "active" : "restricted" });
+                  }
                 }
               >
                 {current.status === "restricted"
