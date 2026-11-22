@@ -73,7 +73,10 @@ test("capture upload download deletion and pose save survive real JWT rotation",
   const file = await (await uploaded).json() as { sha256_digest: string };
   await expect(archive.getByRole("status", { name: "Página del archivo cifrado" })).toContainText("Capturas 1–1 de 1");
   expect(status).toEqual([401, 201]);
-  expect(await page.locator('input[type="file"]').evaluate((element: HTMLInputElement) => element.files?.length)).toBe(1);
+  // The file picker is cleared after reading so the same file can be selected
+  // again. The retained application file is represented by its live preview.
+  await expect(page.getByRole("img", { name: "Vista previa local de la imagen seleccionada" })).toBeVisible();
+  await expect(page.locator(".enterprise-file-detail").filter({ hasText: "renovacion-ficticia.png" })).toBeVisible();
 
   await rotateOutsideUi(page);
   const downloaded = page.waitForEvent("download");
