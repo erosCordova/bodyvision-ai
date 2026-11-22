@@ -22,8 +22,8 @@ from app.schemas.core import (
     ProfileRead,
     ProfileUpdate,
 )
-from app.services.measurements import derived, save
 from app.services.measurement_versions import correction_history
+from app.services.measurements import derived, save
 from app.services.profile_audit import record_profile_event
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
