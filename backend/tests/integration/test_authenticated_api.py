@@ -1696,8 +1696,6 @@ def test_expired_private_synthetic_capture_is_unreadable_and_purgeable(protected
     assert client.delete(f"{path}/{image_id}", headers=writer).status_code == 404
 
 
-
-
 def test_manual_capture_purge_is_bounded_scoped_and_audited(protected):
     """A private writer may purge <=100 expired records, never live or foreign ones."""
     import hashlib
