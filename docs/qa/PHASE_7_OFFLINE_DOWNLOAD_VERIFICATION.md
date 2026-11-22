@@ -54,6 +54,30 @@ rutas existentes. En Windows pueden utilizarse rutas locales entre comillas.
 - La comprobación del SHA-256 es **posterior a la descarga**; si el archivo se
   modifica después de comprobarlo, debe repetirse la verificación.
 
+## Comprobación desde la propia interfaz (sin terminal)
+
+Después de pulsar **Descargar informe PDF** o **Descargar historial observado
+(CSV)** en un expediente ficticio autorizado, la página ofrece **Verificar PDF
+guardado** o **Verificar CSV guardado**. Esa segunda acción abre el selector
+local de archivos: el usuario elige la copia que realmente aparece en su disco.
+La verificación comprueba que el nombre es el esperado, que la copia tiene un
+tamaño permitido y que su SHA-256 coincide exactamente con el hash de la
+respuesta autenticada que el navegador ya había validado al exportar.
+
+La comparación se hace únicamente en memoria del navegador con
+`File.arrayBuffer()` y `crypto.subtle.digest()`. **No envía el archivo de
+vuelta al servidor**, ni guarda el hash o contenido en almacenamiento local.
+La referencia se descarta al cambiar de expediente, métrica o periodo; para
+comprobar después de recargar la página hay que generar una nueva exportación.
+La comprobación certifica solo igualdad de bytes **en el momento de
+seleccionarlos**, no durabilidad posterior, autoría independiente, custodia,
+firma digital, validez médica ni aceptación productiva.
+
+El helper `frontend/src/features/analytics/savedReportVerification.ts` tiene
+tests de regresión en `frontend/tests/savedReportVerification.test.ts`, y las
+pantallas implicadas son `MeasurementComparison.tsx` y
+`LongitudinalSummary.tsx`.
+
 ## Límites explícitos
 
 **No es firma digital ni prueba de autenticidad del servidor.** El hash de la
