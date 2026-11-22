@@ -1150,7 +1150,7 @@ export function AnatomyAtlas() {
                             {allScenarioExportBusy && <button type="button" onClick={() => {
                               scenarioExportController.current?.abort();
                               setAllScenarioExportProgress("Exportación cancelada. No se generó archivo.");
-                            }}>Cancelar exportación</button>
+                            }}>Cancelar exportación</button>}
                           </div>
                         )}
                         {allScenarioExportProgress && <p role="status">{allScenarioExportProgress}</p>}
