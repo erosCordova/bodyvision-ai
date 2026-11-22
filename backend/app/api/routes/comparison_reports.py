@@ -145,13 +145,16 @@ def export_longitudinal(
     # One server cursor retains one SELECT snapshot across all fetch batches.
     # Rows are not materialized as a list; CSV bytes have a strict size budget.
     statement = text(
-        """SELECT m.id,m.metric_code,m.measured_at,m.value,m.unit,
-                  m.method,m.outlier_confirmed,statement_timestamp() AS snapshot_at
-           FROM measurements m
+        """WITH export_clock AS MATERIALIZED (
+               SELECT statement_timestamp() AS snapshot_at
+           )
+           SELECT m.id,m.metric_code,m.measured_at,m.value,m.unit,
+                  m.method,m.outlier_confirmed,export_clock.snapshot_at
+           FROM measurements m CROSS JOIN export_clock
            WHERE m.organization_id=:org AND m.profile_id=:profile
              AND m.metric_code=:metric AND m.is_current
              AND (CAST(:days AS integer) IS NULL OR
-                  m.measured_at >= statement_timestamp() -
+                  m.measured_at >= export_clock.snapshot_at -
                       make_interval(days => CAST(:days AS integer)))
            ORDER BY m.measured_at,m.id"""
     )

@@ -312,11 +312,13 @@ def test_format_audit_rejects_unverified_context_invalid_formats_and_legacy_runt
         )
 
 
-def test_long_history_uses_real_server_cursor_and_one_snapshot(comparison_data):
+def test_long_history_uses_real_server_cursor_and_one_snapshot(comparison_data, monkeypatch):
     import csv
     import io
 
     from sqlalchemy import event
+
+    from app.api.routes import comparison_reports
 
     client, owner, profile, users, _, reader, _ = comparison_data
     timestamp = datetime.now(UTC) - timedelta(days=5)
@@ -346,10 +348,22 @@ def test_long_history_uses_real_server_cursor_and_one_snapshot(comparison_data):
         )
     concurrent_id = uuid4()
     observed_cursor = False
+    timestamps = set()
+    build_csv = comparison_reports.build_longitudinal_csv
+
+    def observe_sources(sources, metric, unit):
+        def observed():
+            for row in sources:
+                timestamps.add(row["snapshot_at"])
+                yield row
+
+        return build_csv(observed(), metric, unit)
+
+    monkeypatch.setattr(comparison_reports, "build_longitudinal_csv", observe_sources)
 
     def concurrent_insert(conn, cursor, statement, parameters, context, executemany):
         nonlocal observed_cursor
-        if "m.outlier_confirmed,statement_timestamp()" not in statement or observed_cursor:
+        if "WITH export_clock AS MATERIALIZED" not in statement or observed_cursor:
             return
         assert context.execution_options.get("yield_per") == 500
         assert cursor.name  # psycopg's real server-side cursor, not client buffering.
@@ -369,7 +383,9 @@ def test_long_history_uses_real_server_cursor_and_one_snapshot(comparison_data):
     finally:
         event.remove(engine, "after_cursor_execute", concurrent_insert)
     assert observed_cursor
+    assert len(timestamps) == 1
     exported = response.json()
+    assert datetime.fromisoformat(exported["generated_at"]) == next(iter(timestamps))
     content = base64.b64decode(exported["csv_base64"], validate=True)
     parsed = list(csv.DictReader(io.StringIO(content.decode())))
     assert exported["row_count"] == 1207
