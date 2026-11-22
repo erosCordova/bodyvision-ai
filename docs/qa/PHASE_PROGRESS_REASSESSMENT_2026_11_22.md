@@ -56,3 +56,21 @@ No se desplegó, ni se fusionó con `main`, ni se utilizaron expedientes
 de personas reales. La decisión de ajustar F3 y F8 son **dos incrementos
 manuales de cinco puntos por fase** sustentados en evidencia técnica,
 no porcentaje de pruebas ni sustitución de revisiones externas.
+
+## Continuidad administrativa tras renovar la sesión
+
+Se corrige el cierre indebido de sesión en peticiones administrativas con
+JWT anterior: renovación compartida, un solo reintento, respuestas tardías
+acotadas a la misma autenticación y descarte de predecesores al salir o cambiar
+de autenticación. El panel de invitaciones conserva su código de única
+visualización durante la renovación y se desmonta al cambiar de identidad.
+
+La [CI 45036597574](https://github.com/erosCordova/bodyvision-ai/actions/runs/45036597574)
+aprobó `19131fe676c6e3ee003eaa88434e2b43ab59d6b0`: 430 pruebas backend,
+312 frontend, 44 de navegador público, 11 privado y 3 de cookie, **800 en
+total**, con Windows y Docker aprobados. La [retención 45036597674](https://github.com/erosCordova/bodyvision-ai/actions/runs/45036597674)
+también fue exitosa. El caso nuevo comprueba la invitación real sin interceptar
+HTTP: 401 anterior a la mutación, 201 tras renovación y un único registro.
+
+**Sin incremento de estimación:** F3 95 %, suma 925, promedio 92,5 % exacto y
+93 % mostrado. [Evidencia y límites](PHASE_3_ADMIN_SESSION_CONTINUITY.md).

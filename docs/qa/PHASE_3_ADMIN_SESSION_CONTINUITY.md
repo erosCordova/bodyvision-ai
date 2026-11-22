@@ -35,8 +35,22 @@ campos siguen limitados a memoria; cerrar el panel descarta el código.
   cookie contra PostgreSQL; el JWT anterior deja de funcionar, crear una
   invitación devuelve 401 y después 201, se conserva el código y se revoca
   desde la misma interfaz. No intercepta HTTP ni altera el reloj del servidor.
-- Las comprobaciones de TypeScript y ESLint pasan localmente. La aceptación
-  integral de GitHub Actions se registrará al concluir sobre el commit enviado.
+- Las 312 pruebas del frontend (63 archivos), TypeScript, ESLint y la
+  compilación de producción pasan localmente.
+
+### Aceptación integral confirmada
+
+La [CI 45036597574](https://github.com/erosCordova/bodyvision-ai/actions/runs/45036597574)
+aprobó el commit `19131fe676c6e3ee003eaa88434e2b43ab59d6b0`:
+**430 backend + 312 frontend + 44 navegador público + 11 privado + 3 de
+cookie = 800 pruebas de aplicación**, además de Windows y Docker.
+La [retención independiente 45036597674](https://github.com/erosCordova/bodyvision-ai/actions/runs/45036597674)
+también aprobó ese mismo commit.
+
+El recorrido nuevo `admin-after-refresh.spec.ts` pasó en 2,1 segundos:
+rotación real, rechazo del JWT previo, respuesta 401 seguida de 201,
+un solo registro de invitación, código conservado y revocación desde UI.
+Es tiempo observado en ese runner, no presupuesto de rendimiento productivo.
 
 El Chromium local no pudo iniciarse por la restricción de sockets del entorno;
 esa ejecución no acredita aceptación de navegador. El caso nuevo se ejecuta
