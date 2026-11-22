@@ -64,11 +64,14 @@ def bearer_token(request: Request) -> str:
     return token
 
 
-def resolve_identity(request: Request) -> Identity:
+def resolve_identity(request: Request, *, token_override: str | None = None) -> Identity:
     if not request.app.state.settings.identity_enabled:
         raise DomainError(404, "NOT_FOUND", "Recurso no disponible.")
-    token = bearer_token(request)
-    digest = hash_session_token(token)
+    token = bearer_token(request) if token_override is None else token_override
+    try:
+        digest = hash_session_token(token)
+    except (ValueError, UnicodeError):
+        raise DomainError(401, "AUTH_REQUIRED", "Se requiere una sesión válida.") from None
     with request.app.state.auth_engine.connect() as connection:
         row = (
             connection.execute(
@@ -217,9 +220,11 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
     )
 
 
-def logout(request: Request) -> None:
-    resolve_identity(request)
-    digest = hash_session_token(bearer_token(request))
+def logout(request: Request, *, token_override: str | None = None) -> None:
+    resolve_identity(request, token_override=token_override)
+    digest = hash_session_token(
+        bearer_token(request) if token_override is None else token_override
+    )
     with request.app.state.auth_engine.begin() as connection:
         # Audit the verified actor before revocation invalidates the token.
         connection.execute(
@@ -239,17 +244,19 @@ def logout(request: Request) -> None:
         ).scalar_one()
 
 
-def rotate_session(request: Request) -> SessionRead:
+def rotate_session(request: Request, *, token_override: str | None = None) -> SessionRead:
     """Consume one authenticated token and return its one-time replacement.
 
     The database serializes concurrent rotations, inherits MFA verification,
     and preserves the original session expiry. No token is returned until the
     revocation, insertion and audit event have committed.
     """
-    resolve_identity(request)
+    resolve_identity(request, token_override=token_override)
     if request.headers.get("X-Workspace-ID"):
         raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
-    old_digest = hash_session_token(bearer_token(request))
+    old_digest = hash_session_token(
+        bearer_token(request) if token_override is None else token_override
+    )
     replacement, replacement_digest = issue_session_token()
     with request.app.state.auth_engine.begin() as connection:
         result = connection.execute(
