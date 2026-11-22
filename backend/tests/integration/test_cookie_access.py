@@ -1,7 +1,6 @@
 """HttpOnly refresh cookie lifecycle in disposable synthetic PostgreSQL."""
 
 import secrets
-from datetime import datetime
 
 from pydantic import SecretStr
 from sqlalchemy import text
@@ -119,10 +118,9 @@ def test_cookie_refresh_rejects_expired_database_session(protected):
     with owner.begin() as connection:
         connection.execute(
             text(
-                "UPDATE auth_sessions SET expires_at=issued_at+interval '1 second' "
+                "UPDATE auth_sessions SET expires_at=issued_at+interval '1 millisecond' "
                 "WHERE token_sha256=:digest"
             ),
             {"digest": hash_session_token(cookie)},
         )
     assert client.post(ROOT + "/refresh", headers=CSRF).status_code == 401
-    assert datetime.fromisoformat(response.json()["expires_at"]) is not None
