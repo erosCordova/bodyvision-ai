@@ -17,8 +17,10 @@ export function usePrivateSessionIdle(
   const lastHeartbeat = useRef<number | null>(null);
   const expiring = useRef(false);
 
+  const token = session?.token ?? null;
+
   useEffect(() => {
-    if (!session) {
+    if (!token) {
       lastInteraction.current = null;
       lastHeartbeat.current = null;
       expiring.current = false;
@@ -66,7 +68,7 @@ export function usePrivateSessionIdle(
         method: "POST",
         cache: "no-store",
         credentials: "same-origin",
-        headers: { Authorization: `Bearer ${session.token}` },
+        headers: { Authorization: `Bearer ${token}` },
       }).then(response => {
         if (active && response.status === 401) expire();
       }).catch(() => {
@@ -90,5 +92,5 @@ export function usePrivateSessionIdle(
       window.removeEventListener("focus", resume);
       document.removeEventListener("visibilitychange", resume);
     };
-  }, [session?.token, onIdle]);
+  }, [token, onIdle]);
 }
