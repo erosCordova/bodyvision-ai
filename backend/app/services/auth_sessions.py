@@ -1,7 +1,7 @@
 """Private (local/test) session authentication using a distinct database role.
 
 Never trusts X-Workspace-ID, email, or user IDs for authorization. Only a
-server-verified opaque bearer token may select the active database tenant.
+verified bearer token (opaque or opt-in JWT) may select the database tenant.
 """
 
 from datetime import datetime
@@ -111,7 +111,17 @@ def resolve_identity(request: Request, *, token_override: str | None = None) -> 
     # Scope diagnostics only after successful session and MFA verification.
     # Never infer this value from the client workspace selector.
     request.state.operations_organization = row["org_id"]
+    request.state.verified_session_digest = digest
     return Identity(row["org_id"], row["actor_id"], row["assigned_role"], True)
+
+
+def verified_session_digest(request: Request) -> str:
+    """Return the digest bound to a verified live opaque or JWT session."""
+    digest = getattr(request.state, "verified_session_digest", None)
+    if digest is None:
+        resolve_identity(request)
+        digest = request.state.verified_session_digest
+    return digest
 
 
 def login(request: Request, credentials: LoginInput) -> SessionRead:
@@ -232,7 +242,11 @@ def login(request: Request, credentials: LoginInput) -> SessionRead:
 
 def logout(request: Request, *, token_override: str | None = None) -> None:
     resolve_identity(request, token_override=token_override)
-    digest = hash_session_token(bearer_token(request) if token_override is None else token_override)
+    digest = (
+        verified_session_digest(request)
+        if token_override is None
+        else hash_session_token(token_override)
+    )
     with request.app.state.auth_engine.begin() as connection:
         # Audit the verified actor before revocation invalidates the token.
         connection.execute(

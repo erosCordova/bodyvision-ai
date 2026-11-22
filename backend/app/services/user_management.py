@@ -9,9 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import text
 
 from app.core.errors import DomainError
-from app.core.identity import hash_session_token, login_bucket_digest
+from app.core.identity import login_bucket_digest
 from app.services.admin_confirmation import confirm_administrator
-from app.services.auth_sessions import bearer_token, resolve_identity
+from app.services.auth_sessions import resolve_identity, verified_session_digest
 
 
 class ManagedUser(BaseModel):
@@ -60,7 +60,7 @@ def private_request(request: Request):
     identity = resolve_identity(request)
     if request.headers.get("X-Workspace-ID"):
         raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
-    return identity, hash_session_token(bearer_token(request))
+    return identity, verified_session_digest(request)
 
 
 def directory(request: Request, search: str, limit: int, offset: int) -> UserDirectory:

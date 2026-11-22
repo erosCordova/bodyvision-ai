@@ -11,12 +11,11 @@ from sqlalchemy import text
 from app.core.errors import DomainError
 from app.core.identity import (
     hash_password,
-    hash_session_token,
     login_bucket_digest,
     verify_password,
 )
 from app.services.admin_security import record_session_event
-from app.services.auth_sessions import DUMMY_VERIFIER, bearer_token, resolve_identity
+from app.services.auth_sessions import DUMMY_VERIFIER, resolve_identity, verified_session_digest
 
 
 class AccountConfirmation(BaseModel):
@@ -77,7 +76,7 @@ def list_own_sessions(request: Request, limit: int, offset: int) -> OwnSessionsR
     with request.app.state.auth_engine.connect() as connection:
         result = connection.execute(
             text("SELECT private_own_sessions(CAST(:digest AS char(64)),:limit,:offset)"),
-            {"digest": hash_session_token(bearer_token(request)), "limit": limit, "offset": offset},
+            {"digest": verified_session_digest(request), "limit": limit, "offset": offset},
         ).scalar_one()
     if result.get("status") == "unauthorized":
         raise DomainError(401, "SESSION_EXPIRED", "La sesión ya no es válida.")
@@ -124,7 +123,7 @@ def change_own_security(
                 ":operation,:session,:verifier,:new_verifier,:event,:correlation)"
             ),
             {
-                "digest": hash_session_token(bearer_token(request)),
+                "digest": verified_session_digest(request),
                 "operation": operation,
                 "session": session_id,
                 "verifier": verifier if confirmed else None,
@@ -160,7 +159,7 @@ def verify_audit(request: Request) -> AuditIntegrityRead:
                 "SELECT verify_private_audit_chain(CAST(:digest AS char(64)),:event,:correlation)"
             ),
             {
-                "digest": hash_session_token(bearer_token(request)),
+                "digest": verified_session_digest(request),
                 "event": uuid4(),
                 "correlation": UUID(request.state.correlation_id),
             },

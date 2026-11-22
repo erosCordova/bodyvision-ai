@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict, StrictBool, field_validator
 from sqlalchemy import text
 
 from app.core.errors import DomainError
-from app.core.identity import Purpose, hash_session_token
-from app.services.auth_sessions import bearer_token, resolve_identity
+from app.core.identity import Purpose
+from app.services.auth_sessions import resolve_identity, verified_session_digest
 
 
 class ConsentAcceptance(BaseModel):
@@ -66,7 +66,7 @@ def consent_operation(
                 ":operation,:purpose,:consent,:new_id,:event,:correlation)"
             ),
             {
-                "token": hash_session_token(bearer_token(request)),
+                "token": verified_session_digest(request),
                 "profile": profile_id,
                 "operation": operation,
                 "purpose": purpose,

@@ -50,7 +50,7 @@ def test_jwt_is_opt_in_and_exchanges_only_authenticated_session(protected):
     }
     assert validated.headers["Cache-Control"] == "no-store"
     assert client.get(IDENTITY, headers=headers(opaque)).status_code == 401
-    assert client.get("/api/v1/auth/me", headers=headers(jwt)).status_code == 401
+    assert client.get("/api/v1/auth/me", headers=headers(jwt)).status_code == 200
 
 
 def test_jwt_respects_immediate_logout_revocation(protected):
@@ -98,8 +98,6 @@ def test_jwt_does_not_bypass_new_mfa_enforcement(protected):
     assert client.get(IDENTITY, headers=headers(professional_jwt)).status_code == 401
     assert client.get(IDENTITY, headers=headers(member_jwt)).status_code == 200
 
-
-
 def test_jwt_authorizes_private_workspace_with_existing_rls_and_revocation(protected):
     client, owner, profile, users = protected
     _enable(client)
@@ -122,8 +120,9 @@ def test_jwt_authorizes_private_workspace_with_existing_rls_and_revocation(prote
         {"id": str(editor[1]), "name": "Centro Horizonte (ficticio)"}
     ]
     assert (
-        client.patch(path, headers=headers(member_jwt), json={"display_name": "Forbidden"})
-        .status_code
+        client.patch(
+            path, headers=headers(member_jwt), json={"display_name": "Forbidden"}
+        ).status_code
         == 403
     )
     corrected = client.patch(
@@ -131,8 +130,9 @@ def test_jwt_authorizes_private_workspace_with_existing_rls_and_revocation(prote
     )
     assert corrected.status_code == 200, corrected.text
     assert (
-        client.get(path, headers={**headers(editor_jwt), "X-Workspace-ID": str(outsider[1])})
-        .status_code
+        client.get(
+            path, headers={**headers(editor_jwt), "X-Workspace-ID": str(outsider[1])}
+        ).status_code
         == 400
     )
 
@@ -144,3 +144,31 @@ def test_jwt_authorizes_private_workspace_with_existing_rls_and_revocation(prote
     assert client.get(path, headers=headers(editor_jwt)).status_code == 404
     assert client.post("/api/v1/auth/logout", headers=headers(editor_opaque)).status_code == 204
     assert client.get(path, headers=headers(editor_jwt)).status_code == 401
+
+
+def test_jwt_supports_tenant_scoped_admin_and_consent_endpoints(protected):
+    client, _, profile, users = protected
+    _enable(client)
+    admin = authenticate(client, *users[3][:2]).json()["token"]
+    specialist = authenticate(client, *users[0][:2]).json()["token"]
+    admin_jwt = client.post(EXCHANGE, headers=headers(admin)).json()["access_token"]
+    editor_jwt = client.post(EXCHANGE, headers=headers(specialist)).json()["access_token"]
+
+    own = client.get("/api/v1/auth/users", headers=headers(admin_jwt))
+    assert own.status_code == 200, own.text
+    assert own.json()["total"] >= 3
+    denied = client.get("/api/v1/auth/users", headers=headers(editor_jwt))
+    assert denied.status_code == 403
+    audit = client.get("/api/v1/auth/audit", headers=headers(admin_jwt))
+    assert audit.status_code == 200, audit.text
+
+    consent = client.get(
+        f"/api/v1/auth/profiles/{profile}/consents", headers=headers(editor_jwt)
+    )
+    assert consent.status_code == 200, consent.text
+    sessions = client.get("/api/v1/auth/sessions", headers=headers(editor_jwt))
+    assert sessions.status_code == 200, sessions.text
+    assert sessions.json()["total"] == 1
+
+    assert client.post("/api/v1/auth/logout", headers=headers(specialist)).status_code == 204
+    assert client.get("/api/v1/auth/sessions", headers=headers(editor_jwt)).status_code == 401

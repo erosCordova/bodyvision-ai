@@ -112,6 +112,7 @@ def resolve_access_identity(request: Request) -> Identity:
     ):
         raise DomainError(401, "ACCESS_TOKEN_REVOKED", "La sesión ya no es válida.")
     request.state.operations_organization = row["org_id"]
+    request.state.verified_session_digest = claims.session_digest
     return Identity(row["org_id"], row["actor_id"], row["assigned_role"], True)
 
 

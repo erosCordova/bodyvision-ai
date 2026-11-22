@@ -10,11 +10,10 @@ from sqlalchemy import text
 from app.core.errors import DomainError
 from app.core.identity import (
     hash_password,
-    hash_session_token,
     login_bucket_digest,
 )
 from app.services.admin_confirmation import confirm_administrator
-from app.services.auth_sessions import bearer_token, resolve_identity
+from app.services.auth_sessions import resolve_identity, verified_session_digest
 
 
 class PasswordResetInput(BaseModel):
@@ -46,7 +45,7 @@ def reset_password(request: Request, user_id: UUID, data: PasswordResetInput) ->
                 ":user,:administrator,:new_verifier,:event,:correlation)"
             ),
             {
-                "digest": hash_session_token(bearer_token(request)),
+                "digest": verified_session_digest(request),
                 "user": user_id,
                 "administrator": administrator_verifier,
                 "new_verifier": new_verifier,

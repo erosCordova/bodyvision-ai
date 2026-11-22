@@ -125,8 +125,6 @@ def test_cookie_refresh_rejects_expired_database_session(protected):
         )
     assert client.post(ROOT + "/refresh", headers=CSRF).status_code == 401
 
-
-
 def test_refresh_cookie_jwt_can_access_private_profile_then_revokes(protected):
     client, _, profile, users = protected
     _enable(client)

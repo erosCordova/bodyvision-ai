@@ -13,8 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from app.core.errors import DomainError
-from app.core.identity import hash_password, hash_session_token
-from app.services.auth_sessions import bearer_token, resolve_identity
+from app.core.identity import hash_password
+from app.services.auth_sessions import resolve_identity, verified_session_digest
 
 
 class NewSyntheticUser(BaseModel):
@@ -50,7 +50,7 @@ class AuditEventRead(BaseModel):
 def record_session_event(
     request: Request, connection, action: str, outcome: str = "allowed"
 ) -> None:
-    digest = hash_session_token(bearer_token(request))
+    digest = verified_session_digest(request)
     connection.execute(
         text(
             "SELECT record_authenticated_security_event("
@@ -83,7 +83,7 @@ def provision_user(request: Request, data: NewSyntheticUser) -> NewSyntheticUser
                 ":email,:name,:password_hash,:role,:event,:correlation)"
             ),
             {
-                "digest": hash_session_token(bearer_token(request)),
+                "digest": verified_session_digest(request),
                 "new_user": user_id,
                 "new_role_id": uuid4(),
                 "email": data.email,
@@ -113,7 +113,7 @@ def list_security_events(request: Request, limit: int) -> list[AuditEventRead]:
     with request.app.state.auth_engine.connect() as connection:
         rows = connection.execute(
             text("SELECT private_admin_audit(CAST(:digest AS char(64)),:limit)"),
-            {"digest": hash_session_token(bearer_token(request)), "limit": limit},
+            {"digest": verified_session_digest(request), "limit": limit},
         ).scalar_one()
     if isinstance(rows, dict):
         raise DomainError(403, "FORBIDDEN", "Acceso a auditoría no permitido.")
@@ -161,7 +161,7 @@ def update_profile_permission(
                 ":access_id,:event,:correlation)"
             ),
             {
-                "digest": hash_session_token(bearer_token(request)),
+                "digest": verified_session_digest(request),
                 "profile": profile_id,
                 "subject": user_id,
                 "level": level,
