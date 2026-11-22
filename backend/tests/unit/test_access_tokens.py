@@ -132,6 +132,10 @@ def test_invalid_token_issuance_and_external_key_configuration():
     with pytest.raises(ValueError):
         issue_access_token(KEY, _identity(), "not-a-digest", CLOCK + timedelta(hours=1))
     assert decode_signing_key(_encode(KEY)) == KEY
+    # A 32-byte key has 16 possible canonical final base64url characters.
+    for last_nibble in range(16):
+        candidate = bytes(31) + bytes([last_nibble])
+        assert decode_signing_key(_encode(candidate)) == candidate
     for invalid in ("short", _encode(KEY) + "=", _encode(KEY[:-1]), _encode(KEY) + "!", ""):
         with pytest.raises(ValueError):
             decode_signing_key(invalid)
