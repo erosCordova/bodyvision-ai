@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 
-SCHEMA_REVISION = "0021_pose_retention"
+SCHEMA_REVISION = "0022_report_format_audit"
 DEMO_SCHEMA_REVISION = "0002_data_core"
 
 

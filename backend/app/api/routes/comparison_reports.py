@@ -1,4 +1,4 @@
-"""Audited server PDF exports, restricted to authenticated fictional records."""
+"""Audited server PDF and CSV exports, restricted to authenticated fictional records."""
 
 import base64
 import hashlib
@@ -88,7 +88,7 @@ def export_comparison(
     )
     # The dependency commits before returning the response; audit failure blocks delivery.
     scope.connection.execute(
-        text("SELECT audit_private_comparison_export(:event,:correlation,:profile)"),
+        text("SELECT audit_private_comparison_export(:event,:correlation,:profile,'pdf')"),
         {"event": report_id, "correlation": scope.correlation_id, "profile": profile_id},
     ).scalar_one()
     return ComparisonDownload(
@@ -172,7 +172,7 @@ def export_longitudinal(
     # The audit must commit before the response is delivered. It contains
     # neither report bytes nor their hash, and is not an external signature.
     scope.connection.execute(
-        text("SELECT audit_private_comparison_export(:event,:correlation,:profile)"),
+        text("SELECT audit_private_comparison_export(:event,:correlation,:profile,'csv')"),
         {"event": report_id, "correlation": scope.correlation_id, "profile": profile_id},
     ).scalar_one()
     return LongitudinalDownload(
