@@ -2,9 +2,8 @@
 
 import base64
 import hashlib
-from typing import Literal
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -101,7 +100,6 @@ def export_comparison(
     )
 
 
-
 class LongitudinalSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metric_code: str
@@ -119,7 +117,9 @@ class LongitudinalDownload(BaseModel):
     sha256: str
 
 
-@router.post("/profiles/{profile_id}/reports/longitudinal", response_model=LongitudinalDownload)
+@router.post(
+    "/profiles/{profile_id}/reports/longitudinal", response_model=LongitudinalDownload
+)
 def export_longitudinal(
     profile_id: UUID, selection: LongitudinalSelection, scope: Scope, request: Request
 ):
@@ -139,43 +139,50 @@ def export_longitudinal(
     if metric is None:
         raise DomainError(422, "UNKNOWN_METRIC", "Selecciona una métrica autorizada.")
     days = {"30d": 30, "90d": 90, "1a": 365, "all": None}[selection.period]
-    # One bounded statement reads current observations from a single snapshot.
-    rows = [dict(row) for row in scope.connection.execute(
-        text("""SELECT m.id,m.metric_code,m.measured_at,m.value,m.unit,
-                    m.method,m.outlier_confirmed,
-                    statement_timestamp() AS snapshot_at
-            FROM measurements m
-            WHERE m.organization_id=:org AND m.profile_id=:profile
-              AND m.metric_code=:metric AND m.is_current
-              AND (CAST(:days AS integer) IS NULL OR
-                   m.measured_at >= statement_timestamp() -
-                       make_interval(days => CAST(:days AS integer)))
-            ORDER BY m.measured_at,m.id LIMIT :limit"""),
-        {"org": scope.organization_id, "profile": profile_id,
-         "metric": selection.metric_code, "days": days,
-         "limit": MAX_LONGITUDINAL_ROWS + 1},
-    ).mappings()]
+    # Single bounded SQL statement, with current rows from one DB snapshot.
+    statement = text(
+        """SELECT m.id,m.metric_code,m.measured_at,m.value,m.unit,
+                  m.method,m.outlier_confirmed,statement_timestamp() AS snapshot_at
+           FROM measurements m
+           WHERE m.organization_id=:org AND m.profile_id=:profile
+             AND m.metric_code=:metric AND m.is_current
+             AND (CAST(:days AS integer) IS NULL OR
+                  m.measured_at >= statement_timestamp() -
+                      make_interval(days => CAST(:days AS integer)))
+           ORDER BY m.measured_at,m.id LIMIT :limit"""
+    )
+    parameters = {
+        "org": scope.organization_id,
+        "profile": profile_id,
+        "metric": selection.metric_code,
+        "days": days,
+        "limit": MAX_LONGITUDINAL_ROWS + 1,
+    }
+    rows = [dict(row) for row in scope.connection.execute(statement, parameters).mappings()]
     if not rows:
         raise DomainError(422, "EMPTY_HISTORY", "No existen observaciones vigentes en el periodo.")
     if len(rows) > MAX_LONGITUDINAL_ROWS:
         raise DomainError(
-            422, "HISTORY_TOO_LARGE",
+            422,
+            "HISTORY_TOO_LARGE",
             "Hay más de 500 registros; no se exportará un historial incompleto.",
         )
     if any(row["unit"] != metric["unit"] for row in rows):
         raise DomainError(409, "INCONSISTENT_UNITS", "El historial contiene unidades distintas.")
     csv_bytes = render_longitudinal_csv(rows, selection.metric_code, metric["unit"])
     report_id = uuid4()
-    # Audit failure prevents delivery. The digest is integrity-only; it is
-    # not independently signed, nor does the audit retain CSV contents.
+    # The audit must commit before the response is delivered. It contains
+    # neither report bytes nor their hash, and is not an external signature.
     scope.connection.execute(
         text("SELECT audit_private_comparison_export(:event,:correlation,:profile)"),
         {"event": report_id, "correlation": scope.correlation_id, "profile": profile_id},
     ).scalar_one()
     return LongitudinalDownload(
-        export_id=report_id, generated_at=rows[0]["snapshot_at"],
+        export_id=report_id,
+        generated_at=rows[0]["snapshot_at"],
         filename=f"bodyvision-historial-{report_id}.csv",
-        metric_code=selection.metric_code, period=selection.period,
+        metric_code=selection.metric_code,
+        period=selection.period,
         row_count=len(rows),
         csv_base64=base64.b64encode(csv_bytes).decode("ascii"),
         sha256=hashlib.sha256(csv_bytes).hexdigest(),

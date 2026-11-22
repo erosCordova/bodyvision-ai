@@ -130,7 +130,6 @@ def test_pdf_is_not_delivered_if_audit_cannot_be_committed(comparison_data):
         event.remove(original, "before_cursor_execute", fail_audit)
 
 
-
 def test_longitudinal_csv_scoped_audited_complete_and_hash_verified(comparison_data):
     import csv
     import io
@@ -150,33 +149,39 @@ def test_longitudinal_csv_scoped_audited_complete_and_hash_verified(comparison_d
     parsed = list(csv.DictReader(io.StringIO(csv_bytes.decode("utf-8"))))
     assert body["row_count"] == 2
     assert [item["source_measurement_id"] for item in parsed] == [
-        rows[0]["id"], rows[1]["id"],
+        rows[0]["id"],
+        rows[1]["id"],
     ]
     assert [item["value"] for item in parsed] == ["70", "77"]
     assert all(item["metric_code"] == "weight" for item in parsed)
     assert b"SIMULADO" not in csv_bytes
     assert body["filename"] == f"bodyvision-historial-{body['export_id']}.csv"
     with owner.connect() as conn:
-        audit = conn.execute(
-            text("SELECT * FROM security_audit_events WHERE id=:id"),
-            {"id": body["export_id"]},
-        ).mappings().one()
+        audit = (
+            conn.execute(
+                text("SELECT * FROM security_audit_events WHERE id=:id"),
+                {"id": body["export_id"]},
+            )
+            .mappings()
+            .one()
+        )
         assert audit["action"] == "report.export"
         assert audit["resource_id"] == profile
         assert audit["actor_id"] == users[1][0]
         assert audit["chain_sequence"] > 0
-    assert client.post(endpoint, json={"metric_code": "missing", "period": "all"},
-                       headers=reader).status_code == 422
-    assert client.post(endpoint, json={"metric_code": "weight", "period": "bad"},
-                       headers=reader).status_code == 422
-    assert client.post(endpoint, json={**data, "extra": "forbidden"},
-                       headers=reader).status_code == 422
-    assert client.post(endpoint, json={"metric_code": "height", "period": "all"},
-                       headers=reader).status_code == 422
+    for invalid in (
+        {"metric_code": "missing", "period": "all"},
+        {"metric_code": "weight", "period": "bad"},
+        {**data, "extra": "forbidden"},
+        {"metric_code": "height", "period": "all"},
+    ):
+        assert client.post(endpoint, json=invalid, headers=reader).status_code == 422
     with owner.begin() as conn:
         conn.execute(text("ALTER TABLE measurements DISABLE TRIGGER immutable_measurements"))
-        conn.execute(text("UPDATE measurements SET is_current=false WHERE id=:id"),
-                     {"id": rows[0]["id"]})
+        conn.execute(
+            text("UPDATE measurements SET is_current=false WHERE id=:id"),
+            {"id": rows[0]["id"]},
+        )
         conn.execute(text("ALTER TABLE measurements ENABLE TRIGGER immutable_measurements"))
     updated = client.post(endpoint, json=data, headers=reader)
     assert updated.status_code == 200, updated.text
@@ -198,7 +203,8 @@ def test_longitudinal_csv_fails_closed_if_audit_cannot_commit(comparison_data):
     try:
         result = client.post(
             f"/api/v1/profiles/{profile}/reports/longitudinal",
-            headers=reader, json={"metric_code": "weight", "period": "all"},
+            headers=reader,
+            json={"metric_code": "weight", "period": "all"},
         )
         assert result.status_code == 500
         assert "csv_base64" not in result.text
