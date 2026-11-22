@@ -237,3 +237,44 @@ def logout(request: Request) -> None:
             text("SELECT revoke_authenticated_session(CAST(:digest AS char(64)))"),
             {"digest": digest},
         ).scalar_one()
+
+
+
+def rotate_session(request: Request) -> SessionRead:
+    """Consume one authenticated token and return its one-time replacement.
+
+    The database serializes concurrent rotations, inherits MFA verification,
+    and preserves the original session expiry. No token is returned until the
+    revocation, insertion and audit event have committed.
+    """
+    resolve_identity(request)
+    if request.headers.get("X-Workspace-ID"):
+        raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
+    old_digest = hash_session_token(bearer_token(request))
+    replacement, replacement_digest = issue_session_token()
+    with request.app.state.auth_engine.begin() as connection:
+        result = connection.execute(
+            text(
+                "SELECT public.private_rotate_session("
+                "CAST(:old AS char(64)),CAST(:new AS char(64)),"
+                ":session_id,:event_id,:correlation)"
+            ),
+            {
+                "old": old_digest,
+                "new": replacement_digest,
+                "session_id": uuid4(),
+                "event_id": uuid4(),
+                "correlation": UUID(request.state.correlation_id),
+            },
+        ).scalar_one()
+    if result["status"] == "relogin-required":
+        raise DomainError(401, "SESSION_RELOGIN_REQUIRED", "Inicia sesión nuevamente.")
+    if result["status"] != "rotated":
+        raise DomainError(401, "SESSION_EXPIRED", "La sesión ya no es válida.")
+    return SessionRead(
+        token=replacement,
+        expires_at=result["expires_at"],
+        organization_id=result["organization_id"],
+        user_id=result["user_id"],
+        role=result["role"],
+    )
