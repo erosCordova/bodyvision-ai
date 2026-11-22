@@ -99,3 +99,109 @@ def test_verified_request_timeout_is_observed_without_raw_sql(protected):
     assert "query_interrupted" in body["alerts"]
     assert "sensitive" not in json.dumps(body)
     assert "57014" not in json.dumps(body)
+
+
+
+def test_capture_inventory_is_admin_only_rls_scoped_and_read_only(protected):
+    import hashlib
+    from uuid import uuid4
+
+    from cryptography.fernet import Fernet
+    from sqlalchemy import text
+    from test_authenticated_api import _synthetic_png
+
+    client, owner, profile, users = protected
+    editor, member, outsider, administrator = users
+    endpoint = "/api/v1/auth/captures/retention-inventory"
+    assert client.get(endpoint).status_code == 401
+    for person in (editor, member, outsider):
+        bearer = headers(authenticate(client, person[0], person[1]).json()["token"])
+        assert client.get(endpoint, headers=bearer).status_code == 403
+    admin = headers(authenticate(client, administrator[0], administrator[1]).json()["token"])
+    image = _synthetic_png()
+    encrypted = Fernet(Fernet.generate_key()).encrypt(image)
+    expired, current = uuid4(), uuid4()
+    with owner.begin() as connection:
+        for identifier, is_expired in ((expired, True), (current, False)):
+            connection.execute(
+                text("""
+                    INSERT INTO synthetic_capture_objects(
+                      id,organization_id,profile_id,created_by,original_bytes,
+                      width,height,sha256_digest,ciphertext,created_at,expires_at
+                    ) VALUES(
+                      :id,:org,:profile,:actor,:bytes,32,64,:digest,:cipher,
+                      CASE WHEN :expired THEN now()-interval '8 days' ELSE now() END,
+                      CASE WHEN :expired THEN now()-interval '1 day'
+                           ELSE now()+interval '7 days' END
+                    )
+                """),
+                {
+                    "id": identifier, "org": FIRST_WORKSPACE, "profile": profile,
+                    "actor": editor[0], "bytes": len(image),
+                    "digest": hashlib.sha256(image).hexdigest(),
+                    "cipher": encrypted, "expired": is_expired,
+                },
+            )
+    # An administrator without a profile grant sees only their own empty
+    # RLS scope, not the expired record of another authorized user.
+    no_grant = client.get(endpoint, headers=admin)
+    assert no_grant.status_code == 200, no_grant.text
+    assert no_grant.json()["expired_count"] == 0
+    assert no_grant.json()["scope"] == "current_organization_accessible_profiles_only"
+    with owner.begin() as connection:
+        connection.execute(
+            text("""
+                INSERT INTO profile_access(id,organization_id,profile_id,user_id,access_level)
+                VALUES(:id,:org,:profile,:actor,'read')
+            """),
+            {"id": uuid4(), "org": FIRST_WORKSPACE,
+             "profile": profile, "actor": administrator[0]},
+        )
+    response = client.get(endpoint, headers=admin)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["expired_count"] == 1
+    assert body["count_capped"] is False
+    assert body["display_limit"] == 1000
+    assert body["oldest_expired_at"] is not None
+    assert body["purge_executed"] is False
+    assert "no-store" in response.headers["cache-control"]
+    assert client.get(
+        endpoint,
+        headers={**admin, "X-Workspace-ID": str(SECOND_WORKSPACE)},
+    ).status_code == 400
+    for sensitive in (
+        str(FIRST_WORKSPACE), str(SECOND_WORKSPACE), str(profile),
+        str(expired), str(current), str(editor[0]),
+        admin["Authorization"], "ciphertext", "password",
+    ):
+        assert sensitive not in response.text
+    with owner.connect() as connection:
+        assert connection.execute(
+            text("SELECT count(*) FROM synthetic_capture_objects WHERE profile_id=:id"),
+            {"id": profile},
+        ).scalar_one() == 2
+    # Losing the only grant immediately removes the observation.
+    with owner.begin() as connection:
+        connection.execute(
+            text("DELETE FROM profile_access WHERE profile_id=:profile AND user_id=:actor"),
+            {"profile": profile, "actor": administrator[0]},
+        )
+    assert client.get(endpoint, headers=admin).json()["expired_count"] == 0
+    assert client.post("/api/v1/auth/logout", headers=admin).status_code == 204
+    assert client.get(endpoint, headers=admin).status_code == 401
+
+
+def test_capture_inventory_cap_and_zero_do_not_claim_global_retention():
+    from datetime import UTC, datetime
+
+    from app.api.routes.operations import describe_capture_retention
+
+    now = datetime(2026, 11, 21, tzinfo=UTC)
+    full = describe_capture_retention(1001, now, now)
+    assert full.expired_count == 1000 and full.count_capped is True
+    assert full.purge_executed is False
+    assert full.scope == "current_organization_accessible_profiles_only"
+    empty = describe_capture_retention(0, now, now)
+    assert empty.expired_count == 0 and empty.oldest_expired_at is None
+    assert empty.count_capped is False

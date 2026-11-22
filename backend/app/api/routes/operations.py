@@ -1,18 +1,22 @@
 """Administrator-only diagnostics, scoped to the verified organization."""
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.deps import workspace
 from app.core.errors import DomainError
+from app.models.context import Workspace
 from app.db.session import SCHEMA_REVISION
 from app.services.auth_sessions import resolve_identity
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Private service operations"])
+Scope = Annotated[Workspace, Depends(workspace, scope="function")]
+CAPTURE_INVENTORY_LIMIT = 1000
 
 
 class RetentionStatus(BaseModel):
@@ -73,3 +77,66 @@ def operations(request: Request):
     if state == "unavailable":
         result["alerts"].append("database_unavailable")
     return result
+
+
+
+class CaptureRetentionInventory(BaseModel):
+    scope: Literal["current_organization_accessible_profiles_only"]
+    checked_at: datetime
+    expired_count: int
+    count_capped: bool
+    display_limit: int
+    oldest_expired_at: datetime | None
+    purge_executed: Literal[False] = False
+
+
+def describe_capture_retention(
+    observed: int, oldest: datetime | None, checked: datetime
+) -> CaptureRetentionInventory:
+    """No tenant/profile IDs, ciphertext or unbounded totals in diagnostics."""
+    if observed < 0 or observed > CAPTURE_INVENTORY_LIMIT + 1:
+        raise ValueError("Invalid synthetic inventory sample size")
+    return CaptureRetentionInventory(
+        scope="current_organization_accessible_profiles_only",
+        checked_at=checked,
+        expired_count=min(observed, CAPTURE_INVENTORY_LIMIT),
+        count_capped=observed > CAPTURE_INVENTORY_LIMIT,
+        display_limit=CAPTURE_INVENTORY_LIMIT,
+        oldest_expired_at=oldest if observed else None,
+        purge_executed=False,
+    )
+
+
+@router.get("/captures/retention-inventory", response_model=CaptureRetentionInventory)
+def capture_retention_inventory(request: Request, scope: Scope):
+    """Read-only, RLS-scoped sample: NOT a global cleanup or backup inspection."""
+    settings = request.app.state.settings
+    if (
+        not scope.authenticated
+        or settings.app_env not in {"local", "test"}
+        or settings.capture_encryption_key is None
+    ):
+        raise DomainError(403, "FORBIDDEN", "Archivo privado no habilitado.")
+    if scope.role != "administrator":
+        raise DomainError(403, "FORBIDDEN", "Solo un administrador de prueba.")
+    # The data role's RLS only sees profiles granted to this actor. In
+    # particular, zero does not mean that the entire organization is clean.
+    # No ciphertext or per-file metadata are ever returned.
+    statement = text(
+        """WITH visible AS MATERIALIZED (
+            SELECT expires_at,id FROM synthetic_capture_objects
+            WHERE organization_id=:org AND expires_at<=statement_timestamp()
+            ORDER BY expires_at,id LIMIT :limit
+           )
+           SELECT count(*)::integer AS observed,
+                  min(expires_at) AS oldest,
+                  statement_timestamp() AS checked
+             FROM visible"""
+    )
+    row = scope.connection.execute(
+        statement,
+        {"org": scope.organization_id, "limit": CAPTURE_INVENTORY_LIMIT + 1},
+    ).mappings().one()
+    return describe_capture_retention(
+        row["observed"], row["oldest"], row["checked"]
+    )
