@@ -86,7 +86,8 @@ test("private browser downloads all 2007 observed sources from a read-only long 
   const { token } = await (await signedIn).json() as { token: string };
   await expect(page.getByRole("heading", { name: "Dashboard general", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Expedientes", exact: true }).click();
-  await page.locator('a[href="/profiles/70000000-0000-4000-8000-000000000001"]').click();
+  await expect(page.getByRole("heading", { name: "Expedientes", exact: true })).toBeVisible();
+  await page.locator('a.profile-card[href="/profiles/70000000-0000-4000-8000-000000000001"]').click();
   await page.getByRole("button", { name: "Evolución", exact: true }).click();
   const csvResponse = page.waitForResponse(response => response.url().endsWith("/reports/longitudinal"));
   const downloadEvent = page.waitForEvent("download");
