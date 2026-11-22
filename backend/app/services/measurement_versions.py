@@ -3,6 +3,7 @@
 PostgreSQL walks only the selected immutable correction lineage instead
 of loading unrelated observations from the profile into Python memory.
 """
+
 from uuid import UUID
 
 from sqlalchemy import text
@@ -70,17 +71,21 @@ def correction_history(
     New UI callers use limit <= 50 and never receive unrelated metric rows.
     """
     anchor = records.measurement(scope, measurement_id)
-    result = scope.connection.execute(
-        _CHAIN_QUERY,
-        {
-            "measurement": measurement_id,
-            "org": scope.organization_id,
-            "profile": anchor["profile_id"],
-            "metric": anchor["metric_code"],
-            "limit": limit,
-            "offset": offset,
-        },
-    ).mappings().one()
+    result = (
+        scope.connection.execute(
+            _CHAIN_QUERY,
+            {
+                "measurement": measurement_id,
+                "org": scope.organization_id,
+                "profile": anchor["profile_id"],
+                "metric": anchor["metric_code"],
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        .mappings()
+        .one()
+    )
     return {
         "items": result["items"],
         "total": result["total"],
