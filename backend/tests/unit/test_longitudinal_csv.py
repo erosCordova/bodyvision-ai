@@ -6,7 +6,12 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.longitudinal_csv import MAX_LONGITUDINAL_ROWS, render_longitudinal_csv
+from app.services import longitudinal_csv
+from app.services.longitudinal_csv import (
+    CsvSizeLimitError,
+    build_longitudinal_csv,
+    render_longitudinal_csv,
+)
 
 
 def source(*, days: int, value: str = "70", unit: str = "kg", method: str = "manual"):
@@ -65,9 +70,34 @@ def test_duplicate_source_id_is_rejected_without_rejecting_distinct_same_time_so
     assert len(render_longitudinal_csv([first, second], "weight", "kg")) > 0
 
 
-def test_csv_does_not_silently_truncate_more_than_500_sources():
-    rows = [
-        source(days=MAX_LONGITUDINAL_ROWS + 1 - index) for index in range(MAX_LONGITUDINAL_ROWS + 1)
-    ]
-    with pytest.raises(ValueError):
-        render_longitudinal_csv(rows, "weight", "kg")
+def test_csv_consumes_one_pass_iterable_and_preserves_more_than_500_sources():
+    rows = (source(days=1201 - index) for index in range(1201))
+    exported = build_longitudinal_csv(rows, "weight", "kg")
+    assert exported.row_count == 1201
+    assert len(list(csv.DictReader(io.StringIO(exported.content.decode())))) == 1201
+    assert list(rows) == []
+
+
+def test_csv_byte_budget_accepts_exact_size_and_rejects_one_byte_more(monkeypatch):
+    row = source(days=1)
+    complete = render_longitudinal_csv([row], "weight", "kg")
+    monkeypatch.setattr(longitudinal_csv, "MAX_LONGITUDINAL_BYTES", len(complete))
+    assert render_longitudinal_csv([row], "weight", "kg") == complete
+    monkeypatch.setattr(longitudinal_csv, "MAX_LONGITUDINAL_BYTES", len(complete) - 1)
+    with pytest.raises(CsvSizeLimitError):
+        render_longitudinal_csv([row], "weight", "kg")
+
+
+def test_csv_stops_reading_when_byte_budget_is_exhausted(monkeypatch):
+    monkeypatch.setattr(longitudinal_csv, "MAX_LONGITUDINAL_BYTES", 300)
+    consumed = 0
+
+    def rows():
+        nonlocal consumed
+        for index in range(10000):
+            consumed += 1
+            yield source(days=10000 - index)
+
+    with pytest.raises(CsvSizeLimitError):
+        build_longitudinal_csv(rows(), "weight", "kg")
+    assert 1 < consumed < 10

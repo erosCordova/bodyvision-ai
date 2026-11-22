@@ -5,6 +5,7 @@ Run after migrations and app.seed; discard the database after the browser run.
 """
 
 import os
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import create_engine, text
@@ -72,10 +73,42 @@ def seed_private_browser_accounts() -> None:
                     """),
                     {"id": uuid4(), "org": organization, "user": identifier, "role": role},
                 )
+            # Dedicated, explicitly granted read-only fixture for full CSV delivery.
+            profile = UUID("70000000-0000-4000-8000-000000000001")
+            admin = UUID("30000000-0000-4000-8000-000000000001")
+            connection.execute(
+                text("""INSERT INTO profiles
+                    (id,organization_id,display_code,display_name,birth_year,created_by)
+                    VALUES (:id,:org,'CSV-LARGO-FICTICIO','Historial CSV ficticio',1997,:actor)"""),
+                {"id": profile, "org": FIRST_WORKSPACE, "actor": admin},
+            )
+            connection.execute(
+                text("""INSERT INTO profile_access
+                    (id,organization_id,profile_id,user_id,access_level)
+                    VALUES (:id,:org,:profile,:actor,'read')"""),
+                {"id": uuid4(), "org": FIRST_WORKSPACE, "profile": profile, "actor": admin},
+            )
+            start = datetime.now(UTC) - timedelta(days=10)
+            connection.execute(
+                text("""INSERT INTO measurements
+                    (id,organization_id,profile_id,metric_code,value,unit,method,
+                     measured_at,created_by)
+                    VALUES (:id,:org,:profile,'weight',70,'kg','manual',:at,:actor)"""),
+                [
+                    {
+                        "id": UUID(f"71000000-0000-4000-8000-{index:012d}"),
+                        "org": FIRST_WORKSPACE,
+                        "profile": profile,
+                        "actor": admin,
+                        "at": start + timedelta(seconds=index),
+                    }
+                    for index in range(2007)
+                ],
+            )
     finally:
         engine.dispose()
 
 
 if __name__ == "__main__":
     seed_private_browser_accounts()
-    print("Two synthetic browser accounts provisioned; no implicit profile grants.")
+    print("Two synthetic browser accounts and an explicitly granted CSV fixture provisioned.")

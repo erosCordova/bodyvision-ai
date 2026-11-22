@@ -1,7 +1,7 @@
 import { webcrypto, createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  longitudinalDownloadSchema, verifiedLongitudinalCsv,
+  MAX_LONGITUDINAL_BYTES, longitudinalDownloadSchema, verifiedLongitudinalCsv,
 } from "../src/features/analytics/serverLongitudinalExport";
 
 const csv = "source_measurement_id,measured_at_utc,metric_code,value,unit,method,outlier_confirmed\r\n"
@@ -38,7 +38,29 @@ describe("private longitudinal CSV delivery", () => {
       .rejects.toThrow();
     expect(longitudinalDownloadSchema.safeParse({ ...report, filename: "../../bad.csv" }).success)
       .toBe(false);
-    expect(longitudinalDownloadSchema.safeParse({ ...report, row_count: 501 }).success)
+    expect(longitudinalDownloadSchema.safeParse({ ...report, row_count: MAX_LONGITUDINAL_BYTES + 1 }).success)
       .toBe(false);
+  });
+  it("verifies a complete history beyond 500 rows and the old base64 size cap", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const header = csv.split("\r\n")[0] + "\r\n";
+    const lines = Array.from({ length: 5001 }, (_, index) =>
+      `11111111-1111-4111-8111-${String(index).padStart(12, "0")},2026-11-01T10:00:00Z,weight,70,kg,manual,false\r\n`);
+    const complete = header + lines.join("");
+    const exported = { ...report, row_count: 5001, csv_base64: btoa(complete),
+      sha256: createHash("sha256").update(complete).digest("hex") };
+    expect(exported.csv_base64.length).toBeGreaterThan(200000);
+    const blob = await verifiedLongitudinalCsv(exported);
+    expect(blob.size).toBe(Buffer.byteLength(complete));
+    await expect(verifiedLongitudinalCsv({ ...exported, row_count: 5000 }))
+      .rejects.toThrow(/número/);
+    await expect(verifiedLongitudinalCsv({ ...exported, csv_base64: btoa(header + lines.slice(0, 500).join("")) }))
+      .rejects.toThrow(/número/);
+  });
+  it("rejects a decoded file one byte beyond the byte budget", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const oversized = "a".repeat(MAX_LONGITUDINAL_BYTES + 1);
+    await expect(verifiedLongitudinalCsv({ ...report, csv_base64: btoa(oversized) }))
+      .rejects.toThrow(/tamaño máximo/);
   });
 });

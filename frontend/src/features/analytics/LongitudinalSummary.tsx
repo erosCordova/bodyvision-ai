@@ -113,8 +113,8 @@ export function LongitudinalSummary({
             <button type="button" onClick={() => void exportCsv()} disabled={busy}>
               {busy ? "Preparando historial…" : "Descargar historial observado (CSV)"}
             </button>
-            <small className="muted">Fuentes vigentes del periodo desde el servidor
-              (máximo 500), con auditoría y SHA-256. No es una firma digital
+            <small className="muted">Historial completo del periodo, hasta 8 MiB por archivo,
+              con auditoría y verificación de integridad. No es una firma digital
               ni acredita exactitud clínica.</small>
           </div>}
           {exportError && <p role="alert">{exportError}</p>}

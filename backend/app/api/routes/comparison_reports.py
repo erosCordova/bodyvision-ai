@@ -3,6 +3,7 @@
 import base64
 import hashlib
 from datetime import datetime
+from itertools import chain
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -15,7 +16,11 @@ from app.core.errors import DomainError
 from app.models.context import Workspace
 from app.repositories import records
 from app.services.comparison_pdf import comparison_pdf
-from app.services.longitudinal_csv import MAX_LONGITUDINAL_ROWS, render_longitudinal_csv
+from app.services.longitudinal_csv import (
+    CsvSizeLimitError,
+    CsvUnitMismatchError,
+    build_longitudinal_csv,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["Private fictional comparison reports"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
@@ -137,7 +142,8 @@ def export_longitudinal(
     if metric is None:
         raise DomainError(422, "UNKNOWN_METRIC", "Selecciona una métrica autorizada.")
     days = {"30d": 30, "90d": 90, "1a": 365, "all": None}[selection.period]
-    # Single bounded SQL statement, with current rows from one DB snapshot.
+    # One server cursor retains one SELECT snapshot across all fetch batches.
+    # Rows are not materialized as a list; CSV bytes have a strict size budget.
     statement = text(
         """SELECT m.id,m.metric_code,m.measured_at,m.value,m.unit,
                   m.method,m.outlier_confirmed,statement_timestamp() AS snapshot_at
@@ -147,27 +153,37 @@ def export_longitudinal(
              AND (CAST(:days AS integer) IS NULL OR
                   m.measured_at >= statement_timestamp() -
                       make_interval(days => CAST(:days AS integer)))
-           ORDER BY m.measured_at,m.id LIMIT :limit"""
+           ORDER BY m.measured_at,m.id"""
     )
     parameters = {
         "org": scope.organization_id,
         "profile": profile_id,
         "metric": selection.metric_code,
         "days": days,
-        "limit": MAX_LONGITUDINAL_ROWS + 1,
     }
-    rows = [dict(row) for row in scope.connection.execute(statement, parameters).mappings()]
-    if not rows:
-        raise DomainError(422, "EMPTY_HISTORY", "No existen observaciones vigentes en el periodo.")
-    if len(rows) > MAX_LONGITUDINAL_ROWS:
+    try:
+        with scope.connection.execute(
+            statement.execution_options(yield_per=500), parameters
+        ) as cursor:
+            rows = cursor.mappings()
+            first = next(rows, None)
+            if first is None:
+                raise DomainError(
+                    422, "EMPTY_HISTORY", "No existen observaciones vigentes en el periodo."
+                )
+            generated_at = first["snapshot_at"]
+            exported = build_longitudinal_csv(
+                chain((first,), rows), selection.metric_code, metric["unit"]
+            )
+    except CsvSizeLimitError as exc:
         raise DomainError(
-            422,
-            "HISTORY_TOO_LARGE",
-            "Hay más de 500 registros; no se exportará un historial incompleto.",
-        )
-    if any(row["unit"] != metric["unit"] for row in rows):
-        raise DomainError(409, "INCONSISTENT_UNITS", "El historial contiene unidades distintas.")
-    csv_bytes = render_longitudinal_csv(rows, selection.metric_code, metric["unit"])
+            422, "HISTORY_TOO_LARGE", "El CSV completo supera 8 MiB; selecciona un periodo menor."
+        ) from exc
+    except CsvUnitMismatchError as exc:
+        raise DomainError(
+            409, "INCONSISTENT_UNITS", "El historial contiene unidades distintas."
+        ) from exc
+    csv_bytes = exported.content
     report_id = uuid4()
     # The audit must commit before the response is delivered. It contains
     # neither report bytes nor their hash, and is not an external signature.
@@ -177,11 +193,11 @@ def export_longitudinal(
     ).scalar_one()
     return LongitudinalDownload(
         export_id=report_id,
-        generated_at=rows[0]["snapshot_at"],
+        generated_at=generated_at,
         filename=f"bodyvision-historial-{report_id}.csv",
         metric_code=selection.metric_code,
         period=selection.period,
-        row_count=len(rows),
+        row_count=exported.row_count,
         csv_base64=base64.b64encode(csv_bytes).decode("ascii"),
         sha256=hashlib.sha256(csv_bytes).hexdigest(),
     )

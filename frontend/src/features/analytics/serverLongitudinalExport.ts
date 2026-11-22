@@ -1,13 +1,15 @@
 import { z } from "zod";
 
+export const MAX_LONGITUDINAL_BYTES = 8 * 1024 * 1024;
+
 export const longitudinalDownloadSchema = z.object({
   export_id: z.string().uuid(),
   generated_at: z.string().datetime({ offset: true }),
   filename: z.string().regex(/^bodyvision-historial-[a-f0-9-]{36}\.csv$/),
   metric_code: z.string().min(1).max(40),
   period: z.enum(["30d", "90d", "1a", "all"]),
-  row_count: z.number().int().min(1).max(500),
-  csv_base64: z.string().min(1).max(200000),
+  row_count: z.number().int().min(1).max(MAX_LONGITUDINAL_BYTES),
+  csv_base64: z.string().min(1).max(4 * Math.ceil(MAX_LONGITUDINAL_BYTES / 3)),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export type LongitudinalDownload = z.infer<typeof longitudinalDownloadSchema>;
@@ -18,6 +20,8 @@ const header = "source_measurement_id,measured_at_utc,metric_code,value,unit,met
 export async function verifiedLongitudinalCsv(value: LongitudinalDownload): Promise<Blob> {
   const report = longitudinalDownloadSchema.parse(value);
   const bytes = Uint8Array.from(atob(report.csv_base64), char => char.charCodeAt(0));
+  if (bytes.byteLength > MAX_LONGITUDINAL_BYTES)
+    throw new Error("El historial excede el tamaño máximo de archivo.");
   const body = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   if (!body.startsWith(header + "\r\n") || body.includes("\u0000"))
     throw new Error("El servidor no devolvió un historial CSV válido.");

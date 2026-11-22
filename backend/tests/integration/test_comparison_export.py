@@ -310,3 +310,114 @@ def test_format_audit_rejects_unverified_context_invalid_formats_and_legacy_runt
             ).scalar_one()
             == 0
         )
+
+
+def test_long_history_uses_real_server_cursor_and_one_snapshot(comparison_data):
+    import csv
+    import io
+
+    from sqlalchemy import event
+
+    client, owner, profile, users, _, reader, _ = comparison_data
+    timestamp = datetime.now(UTC) - timedelta(days=5)
+    insert = text("""INSERT INTO measurements
+        (id,organization_id,profile_id,metric_code,value,unit,method,measured_at,created_by)
+        VALUES (:id,:org,:profile,'weight',70,'kg','manual',:at,:actor)""")
+    rows = [
+        {
+            "id": uuid4(),
+            "org": users[0][1],
+            "profile": profile,
+            "at": timestamp + timedelta(seconds=index // 3),
+            "actor": users[0][0],
+        }
+        for index in range(1205)
+    ]
+    with owner.begin() as conn:
+        conn.execute(insert, rows)
+        expected = (
+            conn.execute(
+                text("""SELECT id FROM measurements WHERE profile_id=:profile
+                AND is_current AND metric_code='weight' ORDER BY measured_at,id"""),
+                {"profile": profile},
+            )
+            .scalars()
+            .all()
+        )
+    concurrent_id = uuid4()
+    observed_cursor = False
+
+    def concurrent_insert(conn, cursor, statement, parameters, context, executemany):
+        nonlocal observed_cursor
+        if "m.outlier_confirmed,statement_timestamp()" not in statement or observed_cursor:
+            return
+        assert context.execution_options.get("yield_per") == 500
+        assert cursor.name  # psycopg's real server-side cursor, not client buffering.
+        observed_cursor = True
+        with owner.begin() as other:
+            other.execute(insert, {**rows[0], "id": concurrent_id})
+
+    engine = client.app.state.engine
+    event.listen(engine, "after_cursor_execute", concurrent_insert)
+    try:
+        response = client.post(
+            f"/api/v1/profiles/{profile}/reports/longitudinal",
+            headers=reader,
+            json={"metric_code": "weight", "period": "all"},
+        )
+        assert response.status_code == 200, response.text
+    finally:
+        event.remove(engine, "after_cursor_execute", concurrent_insert)
+    assert observed_cursor
+    exported = response.json()
+    content = base64.b64decode(exported["csv_base64"], validate=True)
+    parsed = list(csv.DictReader(io.StringIO(content.decode())))
+    assert exported["row_count"] == 1207
+    assert [row["source_measurement_id"] for row in parsed] == list(map(str, expected))
+    assert str(concurrent_id).encode() not in content
+    assert hashlib.sha256(content).hexdigest() == exported["sha256"]
+    with owner.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT action FROM security_audit_events WHERE id=:id"),
+                {"id": exported["export_id"]},
+            ).scalar_one()
+            == "report.export.csv"
+        )
+    # A new request sees the committed write; batches within the first do not.
+    next_response = client.post(
+        f"/api/v1/profiles/{profile}/reports/longitudinal",
+        headers=reader,
+        json={"metric_code": "weight", "period": "all"},
+    )
+    assert next_response.status_code == 200
+    assert next_response.json()["row_count"] == 1208
+    assert str(concurrent_id).encode() in base64.b64decode(next_response.json()["csv_base64"])
+
+
+def test_oversized_history_returns_no_partial_file_or_export_event(comparison_data, monkeypatch):
+    from app.services import longitudinal_csv
+
+    client, owner, profile, _, _, reader, _ = comparison_data
+    endpoint = f"/api/v1/profiles/{profile}/reports/longitudinal"
+    selection = {"metric_code": "weight", "period": "all"}
+    maximum = longitudinal_csv.MAX_LONGITUDINAL_BYTES
+    monkeypatch.setattr(longitudinal_csv, "MAX_LONGITUDINAL_BYTES", 200)
+    rejected = client.post(endpoint, headers=reader, json=selection)
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["code"] == "HISTORY_TOO_LARGE"
+    assert "csv_base64" not in rejected.text and "sha256" not in rejected.text
+    with owner.connect() as conn:
+        assert (
+            conn.execute(
+                text("""SELECT count(*) FROM security_audit_events
+                WHERE resource_id=:profile AND action LIKE 'report.export%'"""),
+                {"profile": profile},
+            ).scalar_one()
+            == 0
+        )
+    # The failed cursor is closed and the request transaction is rolled back.
+    monkeypatch.setattr(longitudinal_csv, "MAX_LONGITUDINAL_BYTES", maximum)
+    accepted = client.post(endpoint, headers=reader, json=selection)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["row_count"] == 2

@@ -6,10 +6,12 @@ The SHA-256 in the API response verifies only transfer integrity.
 
 import csv
 import io
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
-MAX_LONGITUDINAL_ROWS = 500
+MAX_LONGITUDINAL_BYTES = 8 * 1024 * 1024
 HEADER = (
     "source_measurement_id",
     "measured_at_utc",
@@ -27,25 +29,42 @@ def _text_cell(value: object) -> str:
     return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
 
 
-def render_longitudinal_csv(rows: list[dict], metric_code: str, unit: str) -> bytes:
-    if not 1 <= len(rows) <= MAX_LONGITUDINAL_ROWS:
-        raise ValueError("La exportación requiere de 1 a 500 observaciones.")
+class CsvSizeLimitError(ValueError):
+    """No partial CSV may be returned when the byte budget is exhausted."""
+
+
+class CsvUnitMismatchError(ValueError):
+    """Stored sources must match the catalog unit before export."""
+
+
+@dataclass(frozen=True)
+class LongitudinalCsv:
+    content: bytes
+    row_count: int
+
+
+def build_longitudinal_csv(rows: Iterable[Mapping], metric_code: str, unit: str) -> LongitudinalCsv:
     seen: set[str] = set()
     last_time: datetime | None = None
-    output = io.StringIO(newline="")
-    writer = csv.writer(output, lineterminator="\r\n")
+    row_buffer = io.StringIO(newline="")
+    writer = csv.writer(row_buffer, lineterminator="\r\n")
     writer.writerow(HEADER)
+    output = bytearray(row_buffer.getvalue().encode("utf-8"))
+    count = 0
     for row in rows:
+        row_buffer.seek(0)
+        row_buffer.truncate()
         source = str(row["id"])
         value = Decimal(str(row["value"]))
         measured_at = row["measured_at"]
+        if row["unit"] != unit:
+            raise CsvUnitMismatchError("El historial contiene unidades distintas.")
         if (
             not source
             or source in seen
             or not value.is_finite()
             or not isinstance(measured_at, datetime)
             or measured_at.tzinfo is None
-            or row["unit"] != unit
             or row["metric_code"] != metric_code
             or row["method"] not in {"manual", "device"}
             or not isinstance(row["outlier_confirmed"], bool)
@@ -67,4 +86,15 @@ def render_longitudinal_csv(rows: list[dict], metric_code: str, unit: str) -> by
                 "true" if row["outlier_confirmed"] else "false",
             )
         )
-    return output.getvalue().encode("utf-8")
+        encoded = row_buffer.getvalue().encode("utf-8")
+        if len(output) + len(encoded) > MAX_LONGITUDINAL_BYTES:
+            raise CsvSizeLimitError("El CSV completo supera 8 MiB; selecciona un periodo menor.")
+        output.extend(encoded)
+        count += 1
+    if not count:
+        raise ValueError("La exportación requiere al menos una observación.")
+    return LongitudinalCsv(bytes(output), count)
+
+
+def render_longitudinal_csv(rows: Iterable[Mapping], metric_code: str, unit: str) -> bytes:
+    return build_longitudinal_csv(rows, metric_code, unit).content
