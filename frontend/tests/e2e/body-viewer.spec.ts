@@ -532,6 +532,19 @@ test("synthetic history pages and CSV export never include observed records or a
   expect(csv).not.toContain(profileId);
   expect(csv).not.toContain("OBSERVADO");
   expect(csv.trim().split("\n")).toHaveLength(21);
+  const fullDownload = page.waitForEvent("download");
+  await history.getByRole("button", { name: "Exportar historial completo CSV" }).click();
+  const fullFile = await fullDownload;
+  expect(fullFile.suggestedFilename()).toBe("bodyvision-escenarios-simulados-completo.csv");
+  const fullCsv = readFileSync((await fullFile.path())!, "utf8");
+  expect(fullCsv.trim().split("\n")).toHaveLength(26);
+  expect(fullCsv).toContain("28912432581accd7a1c62129d55f0e9758221d48");
+  expect(fullCsv).toContain("0000000000000000000000000000000000000000");
+  expect(fullCsv).not.toContain("HYPERLINK");
+  expect(fullCsv).not.toContain(profileId);
+  expect(fullCsv).not.toContain("OBSERVADO");
+  await expect(history.getByRole("status").filter({ hasText: "Historial completo descargado" }))
+    .toBeVisible();
   await history.getByRole("button", { name: "Siguientes 20" }).click();
   await expect(history.getByRole("status", { name: "Página del historial simulado" }))
     .toContainText("Versiones 21–25 de 25");

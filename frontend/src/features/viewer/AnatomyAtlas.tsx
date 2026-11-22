@@ -20,6 +20,7 @@ import {
   FAVORITES_LIMIT, loadAtlasFavorites, saveAtlasFavorites, type FavoriteStructure,
 } from "./anatomyFavorites";
 import { buildSyntheticScenarioCsv } from "./scenarioCsv";
+import { collectSyntheticScenarioHistoryCsv } from "./scenarioHistoryExport";
 import { sampledMorphClamping } from "./morphLimits";
 import { regionalMorphAudit, regionalAuditBarWidth } from "./regionalMorphAudit";
 import { scenarioCompatibilityReason } from "./scenarioCompatibility";
@@ -160,6 +161,12 @@ export function AnatomyAtlas() {
   const [scenarioVersionId, setScenarioVersionId] = useState("");
   const [scenarioOffset, setScenarioOffset] = useState(0);
   const [scenarioExportError, setScenarioExportError] = useState("");
+  const [allScenarioExportBusy, setAllScenarioExportBusy] = useState(false);
+  const [allScenarioExportProgress, setAllScenarioExportProgress] = useState("");
+  const scenarioExportController = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    scenarioExportController.current?.abort();
+  }, [scenarioProfileId, workspaceId]);
   const [scenarioCompatibilityError, setScenarioCompatibilityError] = useState("");
   const [scenarioNotice, setScenarioNotice] = useState("");
   const syntheticProfiles = useQuery({
@@ -218,6 +225,52 @@ export function AnatomyAtlas() {
     } catch {
       if (url) URL.revokeObjectURL(url);
       setScenarioExportError("No se pudo generar el CSV de escenarios sintéticos.");
+    }
+  };
+  const downloadAllScenarioHistory = async () => {
+    if (!scenarioProfileId || allScenarioExportBusy || !linkedProfile.data) return;
+    const abort = new AbortController();
+    scenarioExportController.current = abort;
+    setAllScenarioExportBusy(true);
+    setAllScenarioExportProgress("Preparando historial completo…");
+    setScenarioExportError("");
+    try {
+      const csv = await collectSyntheticScenarioHistoryCsv(
+        offset => api.scenarios(scenarioProfileId, offset),
+        {
+          expectedProfileId: scenarioProfileId,
+          signal: abort.signal,
+          onProgress: (loaded, total) => {
+            if (!abort.signal.aborted) {
+              setAllScenarioExportProgress(`Exportando ${loaded} de ${total} escenarios…`);
+            }
+          },
+        },
+      );
+      if (abort.signal.aborted) return;
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "bodyvision-escenarios-simulados-completo.csv";
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      } catch {
+        URL.revokeObjectURL(url);
+        throw new Error("No se pudo iniciar la descarga del historial completo.");
+      }
+      setAllScenarioExportProgress("Historial completo descargado, solo datos SIMULADOS.");
+    } catch (cause) {
+      if (!abort.signal.aborted) {
+        setScenarioExportError(cause instanceof Error ? cause.message
+          : "No se pudo exportar el historial completo.");
+        setAllScenarioExportProgress("");
+      }
+    } finally {
+      if (scenarioExportController.current === abort) {
+        scenarioExportController.current = null;
+        setAllScenarioExportBusy(false);
+      }
     }
   };
   const simulatedWeight = bodyVolumeScenario(referenceKg, weightVariation).simulatedKg;
@@ -1027,6 +1080,9 @@ export function AnatomyAtlas() {
                     Expediente de prueba
                     <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
                       onChange={event => {
+                        scenarioExportController.current?.abort();
+                        setAllScenarioExportBusy(false);
+                        setAllScenarioExportProgress("");
                         setScenarioProfileId(event.target.value);
                         setScenarioCompatibilityError("");
                         setHistoricalBaseline(null);
@@ -1084,11 +1140,20 @@ export function AnatomyAtlas() {
                               {" de "}{scenarioHistory.data.total} · solo SIMULADO
                             </span>
                             <button type="button" onClick={downloadScenarioPage}
-                              disabled={scenarioHistory.isFetching || scenarioHistory.data.items.length === 0}>
+                              disabled={allScenarioExportBusy || scenarioHistory.isFetching || scenarioHistory.data.items.length === 0}>
                               Exportar página CSV
                             </button>
+                            <button type="button" onClick={() => { void downloadAllScenarioHistory(); }}
+                              disabled={allScenarioExportBusy || scenarioHistory.isFetching}>
+                              {allScenarioExportBusy ? "Exportando historial…" : "Exportar historial completo CSV"}
+                            </button>
+                            {allScenarioExportBusy && <button type="button" onClick={() => {
+                              scenarioExportController.current?.abort();
+                              setAllScenarioExportProgress("Exportación cancelada. No se generó archivo.");
+                            }}>Cancelar exportación</button>
                           </div>
                         )}
+                        {allScenarioExportProgress && <p role="status">{allScenarioExportProgress}</p>}
                         {scenarioExportError && <p role="alert">{scenarioExportError}</p>}
                         {scenarioCompatibilityError && <p role="alert">{scenarioCompatibilityError}</p>}
                         {scenarioHistory.isPending && <p>Cargando versiones…</p>}
@@ -1133,7 +1198,7 @@ export function AnatomyAtlas() {
                           </nav>
                         )}
                         {!!scenarioHistory.data && scenarioHistory.data.total > 0 &&
-                          <small>El CSV contiene únicamente la página visible; no incluye nombres, notas, identificadores de personas ni mediciones observadas.</small>}
+                          <small>Puedes exportar la página visible o el historial completo (máximo 2.000 escenarios). Solo contiene parámetros SIMULADOS, sin nombres, notas, identificadores personales ni mediciones observadas.</small>}
                       </div>
                       {!!scenarioVersionId && <div className="studio-sim-saved" aria-label="Cadena de versiones del escenario">
                         <strong>Cadena de versiones</strong>

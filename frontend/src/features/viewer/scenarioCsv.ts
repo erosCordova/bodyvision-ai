@@ -2,9 +2,12 @@
  * Narrow allowlist for exporting visible synthetic scenarios only.
  * Never serialize arbitrary notes, patient names, actor or profile IDs.
  * The API already enforces authorization; this local CSV is not an export
- * of observed measurements, and is intentionally limited to a single page.
+ * of observed measurements. The complete-history collector additionally
+ * checks authorization, page consistency, profile isolation and a hard cap.
  */
 import type { SimulationScenario } from "../../services/api/records";
+
+export const MAX_SCENARIO_CSV_ROWS = 2000;
 
 const csvColumns = [
   "tipo_dato", "version", "peso_referencia_kg", "variacion_porcentaje",
@@ -24,7 +27,7 @@ function revisionCell(value: string, pattern: RegExp): string {
   return value;
 }
 export function buildSyntheticScenarioCsv(rows: readonly SimulationScenario[]): string {
-  if (rows.length === 0 || rows.length > 100) {
+  if (rows.length === 0 || rows.length > MAX_SCENARIO_CSV_ROWS) {
     throw new Error("La exportación debe contener una página sintética no vacía.");
   }
   const records = rows.map(row => {
