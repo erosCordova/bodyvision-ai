@@ -239,3 +239,79 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
     expect(stillReadable.status()).toBe(200);
     expect((await stillReadable.json() as Measurement[]).length).toBe(2);
   });
+
+test("F2 restricted lifecycle: browser read-only, API denial, authorized reactivation",
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    const token = await signIn(page);
+    const headers = { Authorization: "Bearer " + token };
+    const created = await page.request.post("/api/v1/profiles", {
+      headers,
+      data: {
+        birth_year: 1996,
+        display_name: "Restricción ficticia " + crypto.randomUUID().slice(0, 8),
+      },
+    });
+    expect(created.status()).toBe(201);
+    const profile = await created.json() as { id: string; display_name: string };
+    await page.getByRole("link", { name: "Expedientes", exact: true }).click();
+    await page.locator('a.profile-card[href="/profiles/' + profile.id + '"]').click();
+    await expect(page.getByRole("heading", { name: profile.display_name })).toBeVisible();
+
+    page.once("dialog", dialog => { void dialog.accept(); });
+    await page.getByRole("button", { name: "Restringir registro" }).click();
+    await expect(page.getByText(/Expediente restringido: las mediciones/))
+      .toBeVisible();
+    await expect(page.getByRole("button", { name: "Editar referencia" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "+ Registrar medición" })).toBeDisabled();
+
+    const blockedRename = await page.request.patch("/api/v1/profiles/" + profile.id, {
+      headers,
+      data: { display_name: "Cambio que no debe persistir" },
+    });
+    expect(blockedRename.status()).toBe(409);
+    const bypass = await page.request.patch("/api/v1/profiles/" + profile.id, {
+      headers,
+      data: { status: "active", display_name: "Atajo prohibido" },
+    });
+    expect(bypass.status()).toBe(409);
+    const blockedMeasurement = await page.request.post(
+      "/api/v1/profiles/" + profile.id + "/measurements", {
+        headers: { ...headers, "Idempotency-Key": crypto.randomUUID() },
+        data: {
+          metric_code: "weight", value: 73, unit: "kg", method: "manual",
+          measured_at: "2026-11-05T13:24:35Z",
+        },
+      },
+    );
+    expect(blockedMeasurement.status()).toBe(409);
+    const stillRestricted = await page.request.get("/api/v1/profiles/" + profile.id, {
+      headers,
+    });
+    expect((await stillRestricted.json() as { status: string }).status).toBe("restricted");
+
+    page.once("dialog", dialog => { void dialog.accept(); });
+    await page.getByRole("button", { name: "Habilitar registro" }).click();
+    await expect(page.getByRole("button", { name: "Editar referencia" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "+ Registrar medición" })).toBeEnabled();
+
+    const allowed = await page.request.post(
+      "/api/v1/profiles/" + profile.id + "/measurements", {
+        headers: { ...headers, "Idempotency-Key": crypto.randomUUID() },
+        data: {
+          metric_code: "weight", value: 73, unit: "kg", method: "manual",
+          measured_at: "2026-11-05T13:24:35Z",
+        },
+      },
+    );
+    expect(allowed.status()).toBe(201);
+    // The write above bypassed React Query through the test API client.
+    // Reauthenticate to fetch a fresh server view rather than reading the
+    // previously cached empty table in the mounted page.
+    await reloadAndReauthenticate(page, profile.id);
+    await page.getByRole("button", { name: "Mediciones", exact: true }).click();
+    await expect(page.getByRole("table", {
+      name: /Mediciones observadas vigentes/,
+    })).toContainText("73 kg");
+  },
+);

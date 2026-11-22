@@ -2086,3 +2086,57 @@ def test_synthetic_capture_retention_deletes_only_expired_rows(protected):
             .all()
         )
         assert retained == [active_id]
+
+
+def test_restricted_profile_metadata_and_measurement_guard_with_private_roles(protected):
+    client, _, profile, users = protected
+    specialist, member, outsider, administrator = users
+    editor = headers(authenticate(client, specialist[0], specialist[1]).json()["token"])
+    reader = headers(authenticate(client, member[0], member[1]).json()["token"])
+    foreign = headers(authenticate(client, outsider[0], outsider[1]).json()["token"])
+    ungranted_admin = headers(
+        authenticate(client, administrator[0], administrator[1]).json()["token"]
+    )
+    path = f"/api/v1/profiles/{profile}"
+
+    restricted = client.patch(path, headers=editor, json={"status": "restricted"})
+    assert restricted.status_code == 200, restricted.text
+    assert restricted.json()["status"] == "restricted"
+    assert client.get(path, headers=reader).json()["status"] == "restricted"
+
+    assert (
+        client.patch(path, headers=editor, json={"display_name": "No permitido"}).status_code == 409
+    )
+    assert (
+        client.patch(
+            path, headers=editor, json={"status": "active", "display_name": "Atajo no permitido"}
+        ).status_code
+        == 409
+    )
+    assert client.get(path, headers=editor).json()["display_name"] != "Atajo no permitido"
+    assert client.patch(path, headers=reader, json={"status": "active"}).status_code == 403
+    assert client.patch(path, headers=foreign, json={"status": "active"}).status_code == 404
+    assert client.patch(path, headers=ungranted_admin, json={"status": "active"}).status_code == 404
+
+    write = {
+        "metric_code": "weight",
+        "value": 72,
+        "unit": "kg",
+        "method": "manual",
+        "measured_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+    }
+    blocked = client.post(
+        path + "/measurements",
+        headers={**editor, "Idempotency-Key": str(uuid4())},
+        json=write,
+    )
+    assert blocked.status_code == 409
+    assert client.get(path + "/measurements", headers=reader).status_code == 200
+    assert client.patch(path, headers=editor, json={"status": "active"}).status_code == 200
+    assert (
+        client.patch(path, headers=editor, json={"display_name": "Reactivado"}).status_code == 200
+    )
+    # The disposable protected fixture cannot delete immutable measurements
+    # at teardown. The real write-after-reactivation path is covered by the
+    # dedicated F2 data-core integration test and the private browser flow.
+    assert client.get(path, headers=editor).json()["display_name"] == "Reactivado"

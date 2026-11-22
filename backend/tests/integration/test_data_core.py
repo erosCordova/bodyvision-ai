@@ -298,7 +298,29 @@ def test_archived_and_restricted_profiles_cannot_receive_measurements(client):
         == 200
     )
     assert post(client, profile, entry()).status_code == 409
+    # Restricting is a genuine read-only state for metadata too; activating
+    # and renaming in the same request must not bypass the boundary.
+    assert (
+        client.patch(
+            "/api/v1/profiles/" + profile, json={"display_name": "Cambio prohibido"}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.patch(
+            "/api/v1/profiles/" + profile,
+            json={"status": "active", "display_name": "Atajo prohibido"},
+        ).status_code
+        == 409
+    )
+    assert client.get("/api/v1/profiles/" + profile).json()["display_name"] == "Caso ficticio"
     assert client.patch("/api/v1/profiles/" + profile, json={"status": "active"}).status_code == 200
+    assert (
+        client.patch(
+            "/api/v1/profiles/" + profile, json={"display_name": "Permitido tras reactivar"}
+        ).status_code
+        == 200
+    )
     assert client.post("/api/v1/profiles/" + profile + "/archive").status_code == 200
     assert post(client, profile, entry()).status_code == 409
 
