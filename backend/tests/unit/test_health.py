@@ -1,10 +1,13 @@
 import json
 import logging
 from io import StringIO
+from pathlib import Path
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
@@ -37,6 +40,12 @@ def test_live_does_not_require_database(client, engine):
     assert response.status_code == 200
     assert response.json()["environment"] == "test"
     engine.connect.assert_not_called()
+
+
+def test_application_schema_matches_alembic_head():
+    root = Path(__file__).resolve().parents[2]
+    migrations = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+    assert migrations.get_heads() == [SCHEMA_REVISION]
 
 
 def test_ready_requires_migration(client):
