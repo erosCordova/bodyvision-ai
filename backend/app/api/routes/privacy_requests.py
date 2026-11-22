@@ -20,7 +20,8 @@ router = APIRouter(prefix="/api/v1", tags=["Synthetic privacy requests"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 REQUEST_TYPES = ("access", "rectification", "cancellation", "opposition", "export")
 FIELDS = """r.id,r.profile_id,r.request_type,r.status,r.requested_by,r.received_at,
- r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code"""
+ r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code,
+ (r.status='received' AND r.review_target_at < clock_timestamp()) AS review_overdue"""
 TABLE = """synthetic_privacy_requests r JOIN profiles p
   ON p.organization_id=r.organization_id AND p.id=r.profile_id"""
 
@@ -43,6 +44,7 @@ class PrivacyRequestRead(BaseModel):
     review_started_at: datetime | None
     reviewed_by: UUID | None
     profile_code: str
+    review_overdue: bool
 
 
 class PrivacyRequestPage(BaseModel):
@@ -154,6 +156,8 @@ def review_queue(
     scope: Scope,
     limit: int = Query(20, ge=1, le=50),
     offset: int = Query(0, ge=0, le=10000),
+    status: Literal["received", "in_review"] | None = Query(None),
+    overdue_only: bool = Query(False),
 ):
     _require_administrator(scope)
     params = {
@@ -161,6 +165,8 @@ def review_queue(
         "actor": scope.actor_id,
         "limit": limit,
         "offset": offset,
+        "filter_status": status,
+        "overdue_only": overdue_only,
     }
     # Defense in depth: an administrator never inherits profile contents by role.
     # Apply the exact same explicit profile grant to both page and total.
@@ -170,7 +176,10 @@ def review_queue(
         AND a.profile_id=r.profile_id
         AND a.user_id=:actor
         AND (a.expires_at IS NULL OR a.expires_at>now())
-    )"""
+    )
+    AND (CAST(:filter_status AS text) IS NULL OR r.status=:filter_status)
+    AND (:overdue_only=false OR
+         (r.status='received' AND r.review_target_at<clock_timestamp()))"""
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM {TABLE} {where}

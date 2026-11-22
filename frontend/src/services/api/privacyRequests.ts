@@ -14,6 +14,7 @@ export const privacyRequestSchema = z.object({
   review_started_at: z.string().datetime({ offset: true }).nullable(),
   reviewed_by: z.string().uuid().nullable(),
   profile_code: z.string().min(1),
+  review_overdue: z.boolean(),
 }).strict();
 export type PrivacyRequest = z.infer<typeof privacyRequestSchema>;
 const page = z.object({
@@ -40,7 +41,16 @@ export function privacyRequestsApi(workspace: string, token: string) {
   return {
     listProfile: (profileId: string, offset = 0) =>
       get("/profiles/" + profileId + "/privacy-requests?limit=20&offset=" + offset),
-    listQueue: (offset = 0) => get("/privacy-requests?limit=20&offset=" + offset),
+    listQueue: (
+      offset = 0,
+      status: "all" | "received" | "in_review" = "all",
+      overdueOnly = false,
+    ) => {
+      const query = new URLSearchParams({ limit: "20", offset: String(offset) });
+      if (status !== "all") query.set("status", status);
+      if (overdueOnly) query.set("overdue_only", "true");
+      return get("/privacy-requests?" + query.toString());
+    },
     submit: (profileId: string, requestType: PrivacyKind) =>
       post("/profiles/" + profileId + "/privacy-requests", {
         request_type: requestType, synthetic_confirmed: true,

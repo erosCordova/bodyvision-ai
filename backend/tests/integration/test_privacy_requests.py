@@ -108,3 +108,60 @@ def test_privacy_request_cross_tenant_and_data_role_boundary(protected):
                 ).scalar_one()
                 is expected
             )
+
+
+def test_privacy_queue_filters_overdue_and_revoked_grants(protected):
+    client, owner, profile_id, users = protected
+    member = login(client, users[1])
+    administrator = login(client, users[3])
+    base = f"/api/v1/profiles/{profile_id}/privacy-requests"
+    access = client.post(
+        base, headers=member, json={"request_type": "access", "synthetic_confirmed": True}
+    )
+    assert access.status_code == 201, access.text
+    reference = access.json()["id"]
+    assert access.json()["review_overdue"] is False
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO profile_access
+              (id,organization_id,profile_id,user_id,access_level)
+              VALUES (:id,:org,:profile,:user,'manage')"""),
+            {"id": uuid4(), "org": users[3][1], "profile": profile_id, "user": users[3][0]},
+        )
+        conn.execute(
+            text("""UPDATE synthetic_privacy_requests
+              SET received_at=clock_timestamp()-interval '15 days',
+                  review_target_at=clock_timestamp()-interval '8 days'
+              WHERE id=:id"""),
+            {"id": reference},
+        )
+    queue = "/api/v1/privacy-requests"
+    assert client.get(queue + "?status=invalid", headers=administrator).status_code == 422
+    assert client.get(queue + "?overdue_only=invalid", headers=administrator).status_code == 422
+    assert client.get(queue + "?status=received", headers=member).status_code == 403
+    due = client.get(queue + "?overdue_only=true&status=received", headers=administrator)
+    assert due.status_code == 200, due.text
+    assert due.json()["total"] == 1 and due.json()["items"][0]["id"] == reference
+    assert due.json()["items"][0]["review_overdue"] is True
+    assert client.get(queue + "?status=in_review", headers=administrator).json()["total"] == 0
+
+    updated = client.post(f"/api/v1/privacy-requests/{reference}/review", headers=administrator)
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["review_overdue"] is False
+    assert client.get(queue + "?overdue_only=true", headers=administrator).json()["total"] == 0
+    in_review = client.get(queue + "?status=in_review", headers=administrator)
+    assert in_review.status_code == 200
+    assert in_review.json()["total"] == 1
+    assert in_review.json()["items"][0]["review_overdue"] is False
+    with owner.begin() as conn:
+        conn.execute(
+            text("DELETE FROM profile_access WHERE profile_id=:profile AND user_id=:actor"),
+            {"profile": profile_id, "actor": users[3][0]},
+        )
+    assert client.get(queue + "?status=in_review", headers=administrator).json()["total"] == 0
+    assert (
+        client.get(f"/api/v1/profiles/{profile_id}/privacy-requests", headers=member).json()[
+            "total"
+        ]
+        == 1
+    )

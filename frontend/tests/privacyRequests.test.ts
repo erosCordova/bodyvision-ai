@@ -12,6 +12,7 @@ const record = {
   review_started_at: null,
   reviewed_by: null,
   profile_code: "BV-FAKE123",
+  review_overdue: false,
 };
 
 describe("solicitudes ARCO ficticias", () => {
@@ -21,6 +22,12 @@ describe("solicitudes ARCO ficticias", () => {
       expect(privacyRequestSchema.parse({ ...record, request_type }).request_type)
         .toBe(request_type);
     }
+  });
+  it("tipa estrictamente las alertas internas, no un cumplimiento legal", () => {
+    expect(privacyRequestSchema.parse({ ...record, review_overdue: true }).review_overdue)
+      .toBe(true);
+    expect(privacyRequestSchema.safeParse({ ...record, review_overdue: "yes" }).success)
+      .toBe(false);
   });
   it("rechaza estados de cumplimiento no implementados y claves extra", () => {
     expect(privacyRequestSchema.safeParse({ ...record, status: "completed" }).success).toBe(false);
