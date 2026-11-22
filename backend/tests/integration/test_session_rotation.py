@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 from sqlalchemy import text
-
-from app.core.identity import hash_session_token, issue_session_token
 from test_authenticated_api import authenticate, headers
 from test_authenticated_api import protected as protected
+
+from app.core.identity import hash_session_token, issue_session_token
 
 PATH = "/api/v1/auth/sessions/rotate"
 
@@ -56,9 +56,7 @@ def test_rotation_rejects_unverified_and_untrusted_workspace(protected):
     token = authenticate(client, *users[1][:2]).json()["token"]
     assert client.post(PATH).status_code == 401
     assert client.post(PATH, headers=headers("A" * 43)).status_code == 401
-    bad_workspace = client.post(
-        PATH, headers={**headers(token), "X-Workspace-ID": str(uuid4())}
-    )
+    bad_workspace = client.post(PATH, headers={**headers(token), "X-Workspace-ID": str(uuid4())})
     assert bad_workspace.status_code == 400
     assert client.get("/api/v1/auth/me", headers=headers(token)).status_code == 200
 
