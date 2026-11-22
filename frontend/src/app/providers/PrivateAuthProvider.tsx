@@ -16,6 +16,7 @@ import {
 } from "../../services/api/sessionInvalidation";
 import {
   cookieAccessRequest, parseCookieAccess, privateCookieAuthEnabled, refreshCookieOnce,
+  waitForPendingCookieRefresh,
 } from "../../services/api/cookieSession";
 import { discardStagedCapture } from "../../features/capture/captureHandoff";
 
@@ -285,6 +286,9 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
     queryClient.clear();
     if (!prior) return true;
     try {
+      // A one-time refresh cookie may be rotating concurrently with logout.
+      // Let that response set the successor cookie BEFORE revoking it remotely.
+      if (prior.kind === "cookie") await waitForPendingCookieRefresh();
       const response = prior.kind === "cookie"
         ? await cookieAccessRequest("logout")
         : await fetch("/api/v1/auth/logout", {

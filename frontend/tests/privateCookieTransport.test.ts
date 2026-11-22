@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cookieAccessRequest, parseCookieAccess, privateCookieAuthEnabled, refreshCookieOnce,
+  waitForPendingCookieRefresh,
 } from "../src/services/api/cookieSession";
 import {
   registerPrivateSessionRefresh, tryRefreshPrivateSession,
@@ -43,6 +44,23 @@ describe("opt-in private cookie transport", () => {
     const decoded = parseCookieAccess(await a.json());
     expect(decoded).toMatchObject({ kind: "cookie", token, organization_id: org });
     expect((fetcher.mock.calls[0] as unknown[])[0]).toBe("/api/v1/auth/access/refresh");
+  });
+
+  it("does not let logout race an unfinished rotation response", async () => {
+    let release!: (response: Response) => void;
+    const fetcher = vi.fn(() => new Promise<Response>(done => { release = done; }));
+    vi.stubGlobal("fetch", fetcher);
+    const rotation = refreshCookieOnce();
+    const waitForRotation = waitForPendingCookieRefresh();
+    let finished = false;
+    void waitForRotation.then(() => { finished = true; });
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    release(new Response(null, { status: 401 }));
+    await rotation;
+    await waitForRotation;
+    expect(finished).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("rejects expired and malformed JWT responses", () => {

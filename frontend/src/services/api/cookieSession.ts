@@ -62,6 +62,17 @@ export async function cookieAccessRequest(
 // Reusing one refresh request avoids consuming the same one-time cookie twice
 // under React StrictMode, multiple protected queries or parallel 401 replies.
 let pendingRefresh: Promise<Response> | null = null;
+/** Wait for an in-flight cookie rotation before signing out remotely. */
+export async function waitForPendingCookieRefresh(): Promise<void> {
+  const inFlight = pendingRefresh;
+  if (!inFlight) return;
+  try {
+    await inFlight;
+  } catch {
+    // Logout still has to run so the browser can attempt to revoke its cookie.
+  }
+}
+
 export function refreshCookieOnce(): Promise<Response> {
   if (!pendingRefresh) {
     const task = cookieAccessRequest("refresh");

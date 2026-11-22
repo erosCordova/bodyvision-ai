@@ -150,6 +150,38 @@ describe("F3 private JWT access and rotating HttpOnly refresh", () => {
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
+  it("finishes a pending refresh before logout to revoke the latest cookie", async () => {
+    let resolveRefresh!: (response: Response) => void;
+    let refreshCount = 0;
+    const fetcher = vi.fn((url: string) => {
+      if (url === "/api/v1/auth/access/refresh") {
+        refreshCount += 1;
+        if (refreshCount === 1) return Promise.resolve(json({ code: "REFRESH_REQUIRED" }, 401));
+        return new Promise<Response>(done => { resolveRefresh = done; });
+      }
+      if (url === "/api/v1/auth/access/login") return Promise.resolve(json(access(JWT_A)));
+      if (url === "/api/v1/workspaces") return Promise.resolve(json({ code: "ACCESS_TOKEN_INVALID" }, 401));
+      if (url === "/api/v1/auth/access/logout") return Promise.resolve(new Response(null, { status: 204 }));
+      throw new Error("Unexpected synthetic endpoint");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    mount();
+    await screen.findByText("Sin sesión");
+    fireEvent.click(screen.getByText("Entrar"));
+    await screen.findByText("Autenticado");
+    fireEvent.click(screen.getByText("Consultar"));
+    await waitFor(() => expect(refreshCount).toBe(2));
+    fireEvent.click(screen.getByText("Salir"));
+    await screen.findByText("Sin sesión");
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/v1/auth/access/logout")).toBe(false);
+    resolveRefresh(json(access(JWT_B)));
+    await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === "/api/v1/auth/access/logout")).toBe(true));
+    const calls = fetcher.mock.calls.map(([url]) => url);
+    expect(calls.lastIndexOf("/api/v1/auth/access/logout"))
+      .toBeGreaterThan(calls.lastIndexOf("/api/v1/auth/access/refresh"));
+    expect(screen.getByText("Sin sesión")).toBeInTheDocument();
+  });
+
   it("does not accept a refresh that changes organization or role", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(json({ code: "REFRESH_REQUIRED" }, 401))

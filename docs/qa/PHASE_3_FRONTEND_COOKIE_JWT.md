@@ -44,7 +44,11 @@ por este PR. En builds de producción de Vite, `privateAuthEnabled()` y
    del JWT; si falla se borra sesión local y cachés, también la captura
    ficticia aún no procesada. Se valida que usuario, organización y rol
    no cambien durante una renovación de sesión.
-6. **Cierre:** `POST /api/v1/auth/access/logout` usa solo cookie protegida
+6. **Cierre y concurrencia:** si hay una rotación de cookie pendiente,
+   el cierre espera su respuesta antes de enviar logout, para no revocar el
+   token anterior mientras queda un sucesor válido. Se prueba la carrera
+   refresh/logout además de los reintentos 401.
+   **Cierre:** `POST /api/v1/auth/access/logout` usa solo cookie protegida
    y cabeceras anti-CSRF. La sesión, caché y captura en RAM se limpian
    antes de confirmar el cierre remoto. Si la red falla, se muestra la
    advertencia existente sobre posible sesión remota aún vigente.
