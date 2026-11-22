@@ -107,6 +107,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             "Idempotency-Key",
             "X-Synthetic-Only",
             *(["Authorization"] if settings.identity_enabled else []),
+            *(["X-Requested-With"] if settings.jwt_access_enabled else []),
         ],
         expose_headers=["X-Correlation-ID"],
     )
