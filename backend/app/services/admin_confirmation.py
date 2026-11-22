@@ -15,7 +15,7 @@ def confirm_administrator(
     request: Request,
     identity: Identity,
     password: SecretStr,
-    purpose: Literal["password-reset", "account-status"],
+    purpose: Literal["password-reset", "account-status", "user-invite"],
 ) -> tuple[str | None, str]:
     bucket = login_bucket_digest(identity.organization_id, f"{purpose}:{identity.user_id}")
     if identity.role != "administrator":
@@ -26,7 +26,11 @@ def confirm_administrator(
             {"org": identity.organization_id, "bucket": bucket},
         ).scalar_one()
     if not allowed:
-        code = "RESET_RATE_LIMITED" if purpose == "password-reset" else "ACCOUNT_RATE_LIMITED"
+        code = {
+            "password-reset": "RESET_RATE_LIMITED",
+            "account-status": "ACCOUNT_RATE_LIMITED",
+            "user-invite": "INVITE_RATE_LIMITED",
+        }[purpose]
         raise DomainError(429, code, "Demasiados intentos. Espera 15 minutos.")
     with request.app.state.auth_engine.begin() as connection:
         connection.execute(

@@ -53,6 +53,18 @@ from app.services.mfa_service import (
     confirm_enrollment,
 )
 from app.services.password_reset import PasswordResetInput, PasswordResetRead, reset_password
+from app.services.user_invitations import (
+    InvitationAcceptInput,
+    InvitationAcceptedRead,
+    InvitationCreateInput,
+    InvitationCreatedRead,
+    InvitationListRead,
+    InvitationRevokedRead,
+    accept_invitation,
+    create_invitation,
+    list_invitations,
+    revoke_invitation,
+)
 from app.services.user_management import (
     AccountStatusInput,
     AccountStatusRead,
@@ -160,6 +172,35 @@ def update_own_password(request: Request, data: OwnPasswordInput):
 @router.post("/audit/verify", response_model=AuditIntegrityRead)
 def verify_security_audit(request: Request):
     return verify_audit(request)
+
+
+@router.post("/invitations", response_model=InvitationCreatedRead, status_code=201)
+def issue_private_invitation(
+    request: Request, data: InvitationCreateInput
+) -> InvitationCreatedRead:
+    return create_invitation(request, data)
+
+
+@router.get("/invitations", response_model=InvitationListRead)
+def own_private_invitations(
+    request: Request, limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+) -> InvitationListRead:
+    return list_invitations(request, limit, offset)
+
+
+@router.post("/invitations/accept", response_model=InvitationAcceptedRead, status_code=201)
+def accept_private_invitation(
+    request: Request, data: InvitationAcceptInput
+) -> InvitationAcceptedRead:
+    return accept_invitation(request, data)
+
+
+@router.post("/invitations/{invitation_id}/revoke", response_model=InvitationRevokedRead)
+def revoke_private_invitation(
+    request: Request, invitation_id: UUID
+) -> InvitationRevokedRead:
+    return revoke_invitation(request, invitation_id)
 
 
 @router.post("/users", response_model=NewSyntheticUserRead, status_code=201)
