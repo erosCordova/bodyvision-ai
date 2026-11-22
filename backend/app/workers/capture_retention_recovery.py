@@ -86,15 +86,20 @@ def _read_bounded_manifest(path: str | Path) -> bytes:
                 raise RecoveryVerificationDenied("Tamaño o tipo de manifiesto no permitido.")
             data = source.read(MAX_MANIFEST_BYTES + 1)
             after = os.fstat(source.fileno())
-            fingerprint = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+            before_fingerprint = (
+                before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns
+            )
+            after_fingerprint = (
+                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns
+            )
             if (
                 len(data) != before.st_size
                 or len(data) > MAX_MANIFEST_BYTES
-                or fingerprint(before) != fingerprint(after)
+                or before_fingerprint != after_fingerprint
             ):
                 raise RecoveryVerificationDenied("Manifiesto modificado durante su lectura.")
             return data
-    except (OSError, UnicodeError) as exc:
+    except (OSError, UnicodeError):
         raise RecoveryVerificationDenied("Manifiesto de purga ilegible.") from None
 
 
