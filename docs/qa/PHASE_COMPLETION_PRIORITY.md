@@ -18,7 +18,7 @@ La evidencia técnica y las aceptaciones humanas se registran por separado.
 | 0 · Descubrimiento | Revisar matriz de riesgos, responsables y aceptación del alcance. |
 | 1 · Fundación | Cierre técnico local ficticio ya acreditado; conservar las regresiones. |
 | 2 · Expedientes | Recepción funcional independiente y aceptación de producto/QA. |
-| 3 · Seguridad | Recuperación asistida ficticia sin códigos; después custodia externa, auditoría y revisión independiente. |
+| 3 · Seguridad | Identidad real, custodia externa de claves, anclaje de auditoría y revisión independiente; recuperación ficticia sin códigos ya aceptada. |
 | 4 · Captura | Cierre de privacidad, inventario de copias/claves y retención fuera de la base activa. |
 | 5 · IA de pose | Corpus independiente autorizado, recursos y dispositivos objetivo. |
 | 6 · Visor 3D | GPU/dispositivos físicos y contraste con referencias morfológicas autorizadas. |
@@ -37,3 +37,9 @@ restringidas a datos ficticios y local/test hasta superar sus criterios.
 Después del cierre de las fases se trabajará el diseño editable en Figma,
 la coherencia visual, componentes y adaptación a pantallas. Esa etapa no
 sustituye las pruebas funcionales, la arquitectura ni los criterios de cierre.
+
+La recuperación asistida ficticia de la fase 3 fue aceptada en
+[CI 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
+con 647 pruebas de aplicación aprobadas. Seguridad se estima en 90 %;
+el promedio global es 91,5 % exacto, mostrado como 92 % redondeado.
+Esta entrega no equivale al cierre completo de todas las fases.

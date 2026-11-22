@@ -781,3 +781,40 @@ privacidad, aprobación de datos reales y aceptación independiente.
 
 Evidencia ampliada: `PHASE_7_COMPLETE_LONG_HISTORY_2026_11_21.md`.
 No se modifica main, Neon, la demo pública ni el modelo anatómico.
+
+
+## Fase 3 — recuperación asistida ficticia sin códigos (21-11-2026)
+
+Se acredita un procedimiento fuera de línea de recuperación de un factor
+MFA perdido, limitado al migrador superusuario y PostgreSQL por loopback,
+con opt-in ficticio, referencia UUID única y doble confirmación de cuenta.
+Solo admite cuentas ficticias activas con un único rol privilegiado.
+Rechaza conexiones de los LOGIN runtime estándar, serializa sobre el
+usuario, revoca todas las sesiones y elimina factor/códigos anteriores,
+con evento mínimo y rollback por savepoint si la auditoría falla.
+No revela ni cambia contraseñas, roles, concesiones, semillas o códigos.
+
+Se verificó para administrador y especialista que el token anterior deja
+de funcionar, la contraseña sola exige configuración MFA, una contraseña
+errónea no revela el nuevo factor, una nueva confirmación permite acceso
+y los códigos anteriores siguen rechazados. También se comprobaron
+referencias reutilizadas, roles SQL limitados, conexiones abiertas,
+confirmación errónea, cuenta/correo/organización/rol/factor no elegibles,
+transacción ausente y reversión de factor/códigos/sesiones con fallo de auditoría.
+
+La [CI integral 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
+aprobó `5cf834d0575fd9f3b4dfa9c64fafa372d82d4c85`:
+**321 backend, 274 frontend, 43 públicas y 9 privadas = 647 pruebas de
+aplicación**, más Windows y Docker. Retención independiente 44979515719
+aprobada. El módulo no está expuesto por HTTP y no se ejecutó contra Neon.
+
+La Fase 3 aumenta de **85 % a 90 %** como evaluación manual de alcance.
+La suma de diez fases pasa de **910 a 915**; el promedio exacto de
+**91,0 % a 91,5 %**, mostrado como **92 % redondeado**. Las otras fases
+no cambian. Siguen pendientes identidad/recuperación de personas reales,
+custodia externa, anclaje de auditoría, privacidad y evaluación independiente.
+Una referencia de revisión ficticia no prueba identidad ni aprobación humana.
+
+Procedimiento: `docs/operations/SYNTHETIC_OFFLINE_MFA_RECOVERY.md`.
+Orden decidido por el usuario: cerrar fases antes de Figma y mejora visual,
+registrado en `PHASE_COMPLETION_PRIORITY.md`; no se rediseña la interfaz.

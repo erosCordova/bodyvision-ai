@@ -67,6 +67,12 @@ transacción ausente, cuenta deshabilitada, correo excluido, organización
 ajena, rol no privilegiado y factor ausente.
 
 Los guardas de entorno y la confirmación interactiva tienen pruebas sin
-base de datos. La aceptación integral sobre PostgreSQL 15 queda pendiente
-de la ejecución de CI. Solo son pruebas ficticias, no un procedimiento
+base de datos. La [CI integral 44979515758](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515758)
+aprobó `5cf834d0575fd9f3b4dfa9c64fafa372d82d4c85` sobre PostgreSQL 15:
+**321 backend, 274 frontend, 43 públicas y 9 privadas = 647 pruebas de
+aplicación**, además de Windows y Docker. La [retención independiente
+44979515719](https://github.com/erosCordova/bodyvision-ai/actions/runs/44979515719)
+también aprobó. Los nuevos casos son 11 guardas y nueve integraciones;
+el control local suplementario pasó las nueve y 320 backend en PostgreSQL
+16, excluyendo solo la aserción de versión 15 que sí aprobó en CI. Solo son pruebas ficticias, no un procedimiento
 aprobado para recuperar personas reales ni custodiar claves productivas.
