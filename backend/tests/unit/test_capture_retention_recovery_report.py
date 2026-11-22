@@ -211,7 +211,10 @@ def test_manifest_rejects_duplicate_json_keys_and_large_batches(tmp_path):
     identifier = str(uuid4())
     path.write_text(
         '{"purged_captures": [], "purged_captures": [{"id": "'
-        + identifier + '", "sha256_digest": "' + _digest() + '"}]}',
+        + identifier
+        + '", "sha256_digest": "'
+        + _digest()
+        + '"}]}',
         encoding="utf-8",
     )
     with pytest.raises(RecoveryVerificationDenied):
