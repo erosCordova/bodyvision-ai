@@ -18,7 +18,7 @@ const roleLabel = {
 export function PrivateAccessPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, login, logout, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor } = usePrivateAuth();
+  const { session, restoring, login, logout, beginMfaEnrollment, confirmMfaEnrollment, recoverMfaFactor } = usePrivateAuth();
   const [organizationId, setOrganizationId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +37,9 @@ export function PrivateAccessPage() {
 
   if (!privateAuthEnabled()) {
     return <p role="alert">El acceso privado está deshabilitado en este entorno.</p>;
+  }
+  if (restoring) {
+    return <p role="status">Restaurando sesión privada de pruebas…</p>;
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
