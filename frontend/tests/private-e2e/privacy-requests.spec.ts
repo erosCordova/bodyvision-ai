@@ -55,7 +55,7 @@ test("F9 private ARCO intake UI: search expediente, submit, de-duplicate, triage
     expect(body.status).toBe("received");
     expect(body.request_type).toBe("access");
     const history = page.locator("section.enterprise-panel")
-      .filter({ has: page.getByRole("heading", { name: "Historial del expediente" }) });
+      .filter({ has: page.getByRole("heading", { name: "Mis solicitudes del expediente" }) });
     await expect(history).toContainText(profile.display_code);
     await expect(history).toContainText("Recibida");
 
