@@ -7,6 +7,7 @@ import { ProfilesPage } from "../../features/profiles/ProfilesPage";
 import { ProfileDetail } from "../../features/profiles/ProfileDetail";
 
 const BodyWorkspace = lazy(() => import("../../features/viewer/BodyWorkspace").then(m => ({ default: m.BodyWorkspace })));
+const PrivacyRequestsPage = lazy(() => import("../../features/privacy/PrivacyRequestsPage").then(m => ({ default: m.PrivacyRequestsPage })));
 const ProjectProgressPage = lazy(() => import("../../features/progress/ProjectProgress").then(m => ({ default: m.ProjectProgressPage })));
 const modules = () => import("../../features/foundation/ModulePages");
 const MeasurementsPage = lazy(() => modules().then(m => ({ default: m.MeasurementsPage })));
@@ -33,6 +34,7 @@ export function AppRouter() {
           <Route path="/capture" element={<Suspense fallback={loading}><CapturePage /></Suspense>} />
           <Route path="/analysis" element={<Suspense fallback={loading}><AnalysisPage /></Suspense>} />
           <Route path="/reports" element={<Suspense fallback={loading}><ReportsPage /></Suspense>} />
+          <Route path="/privacy" element={<Suspense fallback={loading}><PrivacyRequestsPage /></Suspense>} />
           <Route path="/administration" element={<Suspense fallback={loading}><AdministrationPage /></Suspense>} />
           <Route path="*" element={<><h1>Página no disponible</h1><Link to="/">Volver al dashboard</Link></>} />
         </Route>

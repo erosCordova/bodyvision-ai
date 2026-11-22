@@ -13,6 +13,7 @@ const sections = [
   { route: "/analysis", name: "Análisis IA", icon: "✧", short: "Análisis" },
   { route: "/body-3d", name: "Visión 3D", icon: "⬡", short: "Visión 3D" },
   { route: "/reports", name: "Reportes", icon: "▧", short: "Reportes" },
+  { route: "/privacy", name: "Privacidad", icon: "◇", short: "Privacidad" },
   { route: "/administration", name: "Administración", icon: "⚙", short: "Ajustes" },
 ];
 
@@ -41,7 +42,7 @@ export function DataLayout() {
         </Link>
         <p className="nav-label">ESPACIO DE TRABAJO</p>
         <nav aria-label="Navegación principal">
-          {sections.map(section => (
+          {sections.filter(section => section.route !== "/privacy" || protectedMode).map(section => (
             <NavLink to={section.route} key={section.route} end={section.route === "/"}
               className={({ isActive }) => isActive ? "active" : undefined} title={section.name}>
               <span className="enterprise-icon" aria-hidden="true">{section.icon}</span>

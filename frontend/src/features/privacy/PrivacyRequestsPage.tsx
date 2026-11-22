@@ -1,0 +1,159 @@
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { privateAuthEnabled, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
+import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import {
+  kindLabels, privacyRequestsApi, type PrivacyKind, type PrivacyRequest,
+} from "../../services/api/privacyRequests";
+
+const dateLabel = (value: string) => new Date(value).toLocaleString("es-PE", {
+  day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+});
+
+export function PrivacyRequestsPage() {
+  const { session } = usePrivateAuth();
+  const { id: workspaceId, api: records } = useWorkspace();
+  const [profileId, setProfileId] = useState("");
+  const [kind, setKind] = useState<PrivacyKind>("access");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [profileOffset, setProfileOffset] = useState(0);
+  const [queueOffset, setQueueOffset] = useState(0);
+  const privateClient = useMemo(
+    () => session ? privacyRequestsApi(workspaceId, session.token) : null,
+    [workspaceId, session],
+  );
+  const profiles = useQuery({
+    queryKey: ["privacy-profiles", session?.organization_id, session?.user_id],
+    queryFn: () => records.profiles(),
+    enabled: Boolean(session),
+  });
+  useEffect(() => {
+    const options = profiles.data?.items ?? [];
+    if (!profileId || !options.some(item => item.id === profileId)) {
+      setProfileId(options[0]?.id ?? "");
+    }
+  }, [profileId, profiles.data]);
+  const history = useQuery({
+    queryKey: ["privacy-history", session?.user_id, profileId, profileOffset],
+    queryFn: () => privateClient!.listProfile(profileId, profileOffset),
+    enabled: Boolean(privateClient && profileId),
+  });
+  const queue = useQuery({
+    queryKey: ["privacy-queue", session?.user_id, session?.role, queueOffset],
+    queryFn: () => privateClient!.listQueue(queueOffset),
+    enabled: Boolean(privateClient && session?.role === "administrator"),
+  });
+
+  if (!privateAuthEnabled() || !session) {
+    return <main className="enterprise-module">
+      <h1>Solicitudes de privacidad</h1>
+      <p>Disponible únicamente en el entorno local de pruebas con sesión privada.</p>
+    </main>;
+  }
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!privateClient || !profileId || pending) return;
+    setPending(true); setError(""); setNotice("");
+    try {
+      await privateClient.submit(profileId, kind);
+      setProfileOffset(0);
+      await history.refetch();
+      if (session.role === "administrator") await queue.refetch();
+      setNotice("Solicitud ficticia registrada para revisión. No implica ejercicio de derechos reales.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo registrar la solicitud.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const review = async (item: PrivacyRequest) => {
+    if (!privateClient || pending) return;
+    setPending(true); setError(""); setNotice("");
+    try {
+      await privateClient.startReview(item.id);
+      await Promise.all([queue.refetch(), history.refetch()]);
+      setNotice("Revisión administrativa ficticia iniciada. La solicitud no está resuelta.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo iniciar la revisión.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const rows = (items: PrivacyRequest[], canReview: boolean) => (
+    <ul>
+      {items.map(item => <li key={item.id}>
+        <strong>{kindLabels[item.request_type]}</strong>
+        {" · "}{item.status === "received" ? "Recibida" : "En revisión"}
+        <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de revisión: {dateLabel(item.review_target_at)}.</p>
+        {canReview && item.status === "received" && <button type="button"
+          disabled={pending} onClick={() => { void review(item); }}>Iniciar revisión</button>}
+      </li>)}
+    </ul>
+  );
+
+  return <div className="enterprise-module" aria-label="Solicitudes de privacidad ficticias">
+    <h1>Solicitudes de privacidad</h1>
+    <p>Solo datos ficticios. Este módulo registra solicitudes y permite iniciar una
+      revisión interna: no valida identidad legal, no exporta ni elimina información,
+      y no resuelve solicitudes reales.</p>
+    <section className="enterprise-panel">
+      <h2>Registrar solicitud ficticia</h2>
+      {profiles.isLoading && <p role="status">Consultando expedientes autorizados…</p>}
+      {profiles.isError && <p role="alert">No se pudieron cargar los expedientes.</p>}
+      <form onSubmit={event => { void submit(event); }}>
+        <label htmlFor="privacy-profile">Expediente autorizado</label>
+        <select id="privacy-profile" value={profileId}
+          onChange={event => { setProfileId(event.target.value); setProfileOffset(0); }}
+          disabled={!profiles.data?.items.length || pending}>
+          {(profiles.data?.items ?? []).map(item =>
+            <option key={item.id} value={item.id}>{item.display_code}</option>)}
+        </select>
+        <label htmlFor="privacy-kind">Tipo de solicitud</label>
+        <select id="privacy-kind" value={kind} disabled={pending}
+          onChange={event => setKind(event.target.value as PrivacyKind)}>
+          {(Object.keys(kindLabels) as PrivacyKind[]).map(key =>
+            <option key={key} value={key}>{kindLabels[key]}</option>)}
+        </select>
+        <button type="submit" disabled={!profileId || pending}>
+          {pending ? "Registrando…" : "Registrar solicitud ficticia"}
+        </button>
+      </form>
+      {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
+    </section>
+    <section className="enterprise-panel">
+      <h2>Historial del expediente</h2>
+      {history.isLoading && <p role="status">Consultando solicitudes…</p>}
+      {history.isError && <p role="alert">No se pudo cargar el historial.
+        <button type="button" onClick={() => { void history.refetch(); }}>Reintentar</button></p>}
+      {history.data && <>
+        <p>{history.data.total} solicitudes registradas.</p>
+        {rows(history.data.items, false)}
+        <button type="button" disabled={profileOffset === 0}
+          onClick={() => setProfileOffset(Math.max(0, profileOffset - 20))}>Anterior</button>
+        <button type="button" disabled={profileOffset + 20 >= history.data.total}
+          onClick={() => setProfileOffset(profileOffset + 20)}>Siguiente</button>
+      </>}
+    </section>
+    {session.role === "administrator" && <section className="enterprise-panel">
+      <h2>Cola de revisión administrativa</h2>
+      <p>Solo aparecen expedientes con permiso explícito. Iniciar revisión no significa atender ni cerrar la solicitud.</p>
+      {queue.isLoading && <p role="status">Consultando cola…</p>}
+      {queue.isError && <p role="alert">No se pudo consultar la cola.
+        <button type="button" onClick={() => { void queue.refetch(); }}>Reintentar</button></p>}
+      {queue.data && <>
+        <p>{queue.data.total} solicitudes accesibles.</p>
+        {rows(queue.data.items, true)}
+        <button type="button" disabled={queueOffset === 0}
+          onClick={() => setQueueOffset(Math.max(0, queueOffset - 20))}>Anterior</button>
+        <button type="button" disabled={queueOffset + 20 >= queue.data.total}
+          onClick={() => setQueueOffset(queueOffset + 20)}>Siguiente</button>
+      </>}
+    </section>}
+  </div>;
+}
