@@ -185,9 +185,7 @@ def test_request_history_isolation_between_same_profile_grantees_and_admin_queue
     other_id = other_request.json()["id"]
 
     def history(authorization, page=0):
-        return client.get(
-            root + f"?limit=1&offset={page}", headers=authorization
-        )
+        return client.get(root + f"?limit=1&offset={page}", headers=authorization)
 
     member_page = history(member)
     editor_page = history(editor)
@@ -212,13 +210,17 @@ def test_request_history_isolation_between_same_profile_grantees_and_admin_queue
             {"actor": str(users[1][0])},
         )
         conn.execute(text("SELECT set_config('app.identity_verified','yes',true)"))
-        visible_ids = conn.execute(
-            text(
-                "SELECT id FROM synthetic_privacy_requests "
-                "WHERE organization_id=:org ORDER BY id"
-            ),
-            {"org": users[1][1]},
-        ).scalars().all()
+        visible_ids = (
+            conn.execute(
+                text(
+                    "SELECT id FROM synthetic_privacy_requests "
+                    "WHERE organization_id=:org ORDER BY id"
+                ),
+                {"org": users[1][1]},
+            )
+            .scalars()
+            .all()
+        )
     assert visible_ids == [UUID(own_id)]
 
     # Queue remains separate: administrator still needs a profile grant
@@ -230,29 +232,24 @@ def test_request_history_isolation_between_same_profile_grantees_and_admin_queue
             text("""INSERT INTO profile_access
               (id,organization_id,profile_id,user_id,access_level)
               VALUES (:id,:org,:profile,:user,'manage')"""),
-            {"id": uuid4(), "org": users[3][1],
-             "profile": profile_id, "user": users[3][0]},
+            {"id": uuid4(), "org": users[3][1], "profile": profile_id, "user": users[3][0]},
         )
     queue = client.get("/api/v1/privacy-requests?limit=1", headers=administrator)
     assert queue.status_code == 200
     assert queue.json()["total"] == 2 and len(queue.json()["items"]) == 1
     assert history(administrator).json()["total"] == 0
 
-    review = client.post(
-        f"/api/v1/privacy-requests/{own_id}/review", headers=administrator
-    )
+    review = client.post(f"/api/v1/privacy-requests/{own_id}/review", headers=administrator)
     assert review.status_code == 200, review.text
     assert review.json()["status"] == "in_review"
     assert history(member).json()["items"][0]["status"] == "in_review"
     assert history(editor).json()["items"][0]["id"] == other_id
 
     with owner.connect() as conn:
-        privileges = (
-            conn.execute(
-                text(
-                    "SELECT has_function_privilege('bodyvision_auth_app',"
-                    "'public.can_view_synthetic_privacy_request(uuid)','EXECUTE')"
-                )
-            ).scalar_one()
-        )
+        privileges = conn.execute(
+            text(
+                "SELECT has_function_privilege('bodyvision_auth_app',"
+                "'public.can_view_synthetic_privacy_request(uuid)','EXECUTE')"
+            )
+        ).scalar_one()
         assert privileges is False
