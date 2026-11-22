@@ -305,6 +305,10 @@ test("F2 restricted lifecycle: browser read-only, API denial, authorized reactiv
       },
     );
     expect(allowed.status()).toBe(201);
+    // The write above bypassed React Query through the test API client.
+    // Reauthenticate to fetch a fresh server view rather than reading the
+    // previously cached empty table in the mounted page.
+    await reloadAndReauthenticate(page, profile.id);
     await page.getByRole("button", { name: "Mediciones", exact: true }).click();
     await expect(page.getByRole("table", {
       name: /Mediciones observadas vigentes/,
