@@ -1547,8 +1547,12 @@ test("F6 observes rAF intervals during actual synthetic 3D rotation without clai
   await expect(panel).toContainText("Sin muestra: activa Giro");
   const spin = page.getByRole("button", { name: "Giro", exact: true });
   await expect(spin).toBeEnabled();
+  // The diagnostic aside overlays the toolbar: close it before touching
+  // the underlying Giro control rather than force-clicking through it.
+  await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
   await spin.click();
   await expect(spin).toHaveAttribute("aria-pressed", "true");
+  await panelButton.click();
   await expect(panel).toContainText(/Giro 3D · intervalo rAF \(mediana \/ P95\): [0-9.]+ \/ [0-9.]+ ms/, {
     timeout: 15000,
   });
@@ -1561,8 +1565,10 @@ test("F6 observes rAF intervals during actual synthetic 3D rotation without clai
   expect(report.rafP95IntervalMs).toBeGreaterThanOrEqual(report.rafMedianIntervalMs);
   expect(report.timingScope).toContain("excludes GPU completion, display FPS");
   expect(Object.keys(report).some(key => key.toLowerCase() === "fps")).toBe(false);
+  await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
   await spin.click();
   await expect(spin).toHaveAttribute("aria-pressed", "false");
+  await panelButton.click();
   await expect(panel).toContainText("Sin muestra: activa Giro", { timeout: 5000 });
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
   expect(writes).toEqual([]);
