@@ -118,9 +118,7 @@ def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
     }
 
     def observed(payload):
-        return probe_readiness(
-            TARGET, opener=Opener(Response(json.dumps(payload).encode("utf-8")))
-        )
+        return probe_readiness(TARGET, opener=Opener(Response(json.dumps(payload).encode("utf-8"))))
 
     # A proper UTC/Z observation remains accepted without trusting uptime.
     assert observed({**valid, "checked_at": now.isoformat().replace("+00:00", "Z")}) == "ready"
@@ -139,8 +137,7 @@ def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
     # status field into a synthetic healthy observation.
     duplicate = (
         '{"status":"unreachable","status":"ready","database":"connected",'
-        '"schema_revision":"' + SCHEMA_REVISION + '","checked_at":"'
-        + now.isoformat() + '"}'
+        '"schema_revision":"' + SCHEMA_REVISION + '","checked_at":"' + now.isoformat() + '"}'
     ).encode("utf-8")
     assert probe_readiness(TARGET, opener=Opener(Response(duplicate))) == "degraded"
 
