@@ -39,12 +39,21 @@ No hay modificación de las rutas ni workers de ese bloque.
    corregir versiones: la cuenta externa del fixture tiene rol **member**,
    por lo que las cuatro escrituras se rechazan con **403** antes de buscar el
    expediente; las lecturas ajenas continúan en **404**. Estos rechazos
-   prueban prohibición de edición para el rol y aislamiento de lectura,
-   pero no sustituyen una prueba entre organizaciones con rol editor. El autor todavía puede consultar el
-   historial archivado con su sesión autorizada.
+   prueban prohibición de edición para el rol y aislamiento de lectura.
+   El autor todavía puede consultar el historial archivado con su sesión
+   autorizada.
+9. La prueba adicional usa un **specialist** de la segunda organización, que
+   primero demuestra permiso de escritura creando y consultando un expediente
+   propio con HTTP 201/200. A continuación intenta leer, renombrar, archivar,
+   registrar una medición y corregir una versión de un expediente **activo**
+   de la primera organización. Todos los accesos ajenos deben devolver 404.
+   La cuenta propietaria verifica que el expediente sigue activo, con su
+   referencia original, una única medición y una versión intacta. Se distinguen
+   así autorización por rol e aislamiento entre organizaciones.
 
 Se usan únicamente `browser.admin@example.invalid`,
-`browser.outsider@example.invalid` y contraseñas de **fixtures** definidas por
+`browser.outsider@example.invalid`, `browser.outsider.editor@example.invalid`
+y contraseñas de **fixtures** definidas por
 `backend/tests/browser/seed_private.py`. Los IDs creados se generan de forma
 única, nunca se utilizan expedientes reales ni dispositivos físicos.
 
