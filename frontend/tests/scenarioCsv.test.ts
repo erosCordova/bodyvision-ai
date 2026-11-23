@@ -29,6 +29,39 @@ describe("privacy-limited synthetic scenario CSV", () => {
     }
     expect(result.startsWith("\uFEFF")).toBe(true);
   });
+  it("normalizes only explicit timezones to the same UTC instant across browsers", () => {
+    const plus = buildSyntheticScenarioCsv([
+      { ...row, created_at: "2026-11-20T13:00:00+05:30" },
+    ]);
+    expect(plus).toContain("2026-11-20T07:30:00.000Z");
+    const minus = buildSyntheticScenarioCsv([
+      { ...row, created_at: "2026-11-20T13:00:00-05:00" },
+    ]);
+    expect(minus).toContain("2026-11-20T18:00:00.000Z");
+    const leapDay = buildSyntheticScenarioCsv([
+      { ...row, created_at: "2024-02-29T23:45:59.123456Z" },
+    ]);
+    expect(leapDay).toContain("2024-02-29T23:45:59.123Z");
+  });
+
+  it("rejects ambiguous or nonexistent timestamps rather than changing UTC provenance", () => {
+    for (const created_at of [
+      "2026-11-20",
+      "2026-11-20T13:00:00",
+      "2026-11-20T13:00",
+      "2026-02-29T13:00:00Z",
+      "2026-02-30T13:00:00Z",
+      "2026-04-31T00:00:00Z",
+      "2026-11-20T24:00:00Z",
+      "2026-11-20T13:00:60Z",
+      "2026-11-20T13:00:00+14:30",
+      "2026-11-20T13:00:00+15:00",
+      "2026-11-20T13:00:00+00:99",
+    ]) {
+      expect(() => buildSyntheticScenarioCsv([{ ...row, created_at }])).toThrow(/fecha|zona/i);
+    }
+  });
+
   it("fails closed when the source contains observed or unsafe numbers or text", () => {
     expect(() => buildSyntheticScenarioCsv([{ ...row, data_type: "OBSERVADO" as "SIMULADO" }]))
       .toThrow(/observados/);
