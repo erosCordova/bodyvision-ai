@@ -66,7 +66,7 @@ describe("full synthetic scenario history CSV", () => {
     expect(requests).toEqual([
       [0, undefined], [20, anchorTime], [40, anchorTime],
     ]);
-    expect(csv.split("\\r\\n").filter(Boolean)).toHaveLength(46);
+    expect(csv.split("\r\n").filter(Boolean)).toHaveLength(46);
   });
 
   it("rejects altered, missing or ambiguous high-watermarks on later pages", async () => {
