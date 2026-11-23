@@ -47,11 +47,9 @@ async function boundedBody(response: Response): Promise<Buffer> {
   } finally {
     reader.releaseLock();
   }
-  if (!size || (declared !== null && Number(declared) !== size)) {
-    // GitHub raw sometimes supplies a transfer-specific content-length;
-    // if it does, its advertised byte count must agree with the body.
-    throw new IntegrityFailure("Incomplete asset");
-  }
+  // Fetch may decompress gzip while leaving the wire Content-Length intact.
+  // The pinned SHA-1 below detects missing bytes without relying on that header.
+  if (!size) throw new IntegrityFailure("Empty asset body");
   return Buffer.concat(chunks, size);
 }
 
