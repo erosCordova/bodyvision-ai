@@ -44,6 +44,44 @@ describe("MediaPipe pose result parsing", () => {
     expect(incomplete.landmarks).toEqual([]);
   });
 
+  it("does not report a body when all 33 finite coordinates are off-screen", () => {
+    const offscreen = Array.from({ length: 33 }, () => ({
+      x: 1.5, y: -0.2, z: 0.1, visibility: 0.99,
+    }));
+    const summary = summarizePoseResult({ landmarks: [offscreen] });
+    expect(summary).toEqual({
+      found: false, landmarks: [], visiblePoints: 0,
+      fullBodyReview: false, model: POSE_MODEL_VERSION,
+    });
+  });
+
+  it("rejects malformed result containers instead of accessing non-array landmarks", () => {
+    for (const malformed of [
+      null,
+      { landmarks: "not-a-pose" },
+      { landmarks: [{ length: 33 }] },
+      { landmarks: ["x".repeat(33)] },
+    ]) {
+      const parsed = summarizePoseResult(
+        malformed as unknown as Parameters<typeof summarizePoseResult>[0],
+      );
+      expect(parsed.found).toBe(false);
+      expect(parsed.landmarks).toEqual([]);
+    }
+  });
+
+  it("keeps a legitimate single in-frame point but never claims full-body review", () => {
+    const mixed = Array.from({ length: 33 }, () => ({
+      x: -2, y: 3, z: 0, visibility: 0.98,
+    }));
+    mixed[23] = { x: 0.4, y: 0.6, z: 0, visibility: 0.85 };
+    const partial = summarizePoseResult({ landmarks: [mixed] });
+    expect(partial.found).toBe(true);
+    expect(partial.visiblePoints).toBe(1);
+    expect(partial.fullBodyReview).toBe(false);
+    expect(partial.landmarks).toHaveLength(33);
+  });
+
   it("retains partial-but-valid output for an explicit insufficient review", () => {
     const landmarks = Array.from({ length: 33 }, () => ({ x: NaN, y: Infinity, visibility: 1 }));
     landmarks[0] = { x: 0.5, y: 0.5, visibility: 0.85 };
