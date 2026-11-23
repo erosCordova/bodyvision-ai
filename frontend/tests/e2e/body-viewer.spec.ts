@@ -474,10 +474,15 @@ test("synthetic history pages and CSV export never include observed records or a
   const profileId = (await saved.json() as { id: string }).id;
   const scenarioUrl = `/api/v1/profiles/${profileId}/scenarios`;
   const pagesRequested: number[] = [];
+  const exportCutoffs: string[] = [];
+  const pinnedCutoff = "2026-11-20T13:00:05Z";
   await page.route(`**${scenarioUrl}?**`, async route => {
     const requestUrl = new URL(route.request().url());
     const offset = Number(requestUrl.searchParams.get("offset") ?? 0);
     pagesRequested.push(offset);
+    if (requestUrl.searchParams.has("snapshot_at")) {
+      exportCutoffs.push(requestUrl.searchParams.get("snapshot_at")!);
+    }
     const items = Array.from({ length: offset === 20 ? 5 : 20 }, (_, index) => ({
       id: crypto.randomUUID(),
       series_id: crypto.randomUUID(), profile_id: profileId,
@@ -488,7 +493,8 @@ test("synthetic history pages and CSV export never include observed records or a
       revision_note: "=HYPERLINK(\"danger\")", created_by: crypto.randomUUID(),
       created_at: "2026-11-20T13:00:00Z", data_type: "SIMULADO",
     }));
-    await route.fulfill({ json: { items, offset, total: 25, limit: 20 } });
+    await route.fulfill({ json: { items, offset, total: 25, limit: 20,
+      snapshot_at: pinnedCutoff } });
   });
   await sourceFixtures(page);
   await page.goto(`/body-3d?panel=simulacion&profile=${profileId}`);
@@ -529,6 +535,7 @@ test("synthetic history pages and CSV export never include observed records or a
   expect(fullFile.suggestedFilename()).toBe("bodyvision-escenarios-simulados-completo.csv");
   const fullCsv = readFileSync((await fullFile.path())!, "utf8");
   expect(fullCsv.trim().split("\n")).toHaveLength(26);
+  expect(exportCutoffs).toEqual([pinnedCutoff]);
   expect(fullCsv).toContain("28912432581accd7a1c62129d55f0e9758221d48");
   expect(fullCsv).toContain("0000000000000000000000000000000000000000");
   expect(fullCsv).not.toContain("HYPERLINK");

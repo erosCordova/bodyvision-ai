@@ -173,6 +173,60 @@ def test_append_only_chain_rejects_legacy_engine_without_modifying_history(
     assert client.get(f"/api/v1/profiles/{profile_id}/scenarios").json()["total"] == 3
 
 
+def test_paginated_history_uses_fixed_utc_high_watermark_across_new_version(client):
+    """A later committed insert must not shift the in-progress CSV pages."""
+    profile = new_profile(client)
+    created = [scenario(client, profile).json()["id"] for _ in range(3)]
+    url = f"/api/v1/profiles/{profile}/scenarios"
+    previous = client.get(url, params={"limit": 20})
+    assert previous.status_code == 200, previous.text
+    assert set(row["id"] for row in previous.json()["items"]) == set(created)
+
+    first = client.get(url, params={"limit": 2, "offset": 0})
+    assert first.status_code == 200, first.text
+    first_page = first.json()
+    assert first_page["total"] == 3
+    assert first_page["snapshot_at"] is not None
+    # Another request appends a fourth immutable synthetic version.
+    new_id = scenario(client, profile).json()["id"]
+    second = client.get(
+        url, params={"limit": 2, "offset": 2, "snapshot_at": first_page["snapshot_at"]}
+    )
+    assert second.status_code == 200, second.text
+    second_page = second.json()
+    assert second_page["snapshot_at"] == first_page["snapshot_at"]
+    assert second_page["total"] == 3
+    collected = [row["id"] for row in first_page["items"] + second_page["items"]]
+    assert len(collected) == 3
+    assert set(collected) == set(created)
+    assert new_id not in collected
+
+    # Ordinary browsing sees the new row. The snapshot is not persisted.
+    fresh = client.get(url, params={"limit": 20})
+    assert fresh.status_code == 200
+    assert fresh.json()["total"] == 4
+    assert new_id in {row["id"] for row in fresh.json()["items"]}
+
+
+@pytest.mark.parametrize(
+    "provided",
+    [
+        "2026-11-20T13:00:00",
+        "2099-01-01T00:00:00Z",
+        "2000-01-01T00:00:00Z",
+    ],
+)
+def test_paginated_history_rejects_unsafe_snapshot_without_data(client, provided):
+    profile = new_profile(client)
+    assert scenario(client, profile).status_code == 201
+    response = client.get(
+        f"/api/v1/profiles/{profile}/scenarios",
+        params={"limit": 20, "offset": 0, "snapshot_at": provided},
+    )
+    assert response.status_code == 422
+    assert "items" not in response.json()
+
+
 def test_exactly_once_save_and_reject_stale_chain(client):
     profile = new_profile(client)
     data = {"reference_kg": 70, "variation_percent": 20, "stature_cm": 180}
