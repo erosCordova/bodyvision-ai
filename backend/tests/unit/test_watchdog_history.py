@@ -70,6 +70,41 @@ def test_monitor_resumes_from_saved_state_across_restarts(tmp_path):
     assert [json.loads(event)["state"] for event in outputs] == ["unreachable", "ready"]
 
 
+def test_monitor_records_recovery_after_another_instance_writes_outage(tmp_path):
+    # Monitor A observes ready twice. Between observations, independent
+    # monitor B logs an outage in the SAME SQLite journal. The historical
+    # ready -> unreachable -> ready episode must be preserved, even though
+    # A's own cached previous state stayed "ready" throughout.
+    path = tmp_path / "events.sqlite3"
+    emitted = []
+    sleeps = 0
+
+    def interleave_other_process(_interval):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps == 1:
+            assert WatchdogHistory(path).append_transition("unreachable", datetime.now(UTC))
+        else:
+            raise KeyboardInterrupt
+
+    assert (
+        monitor(
+            TARGET,
+            30,
+            probe=lambda _target: "ready",
+            sleep=interleave_other_process,
+            emit=emitted.append,
+            journal=WatchdogHistory(path),
+        )
+        == 0
+    )
+    states = [event["state"] for event in WatchdogHistory(path).recent()]
+    assert states == ["ready", "unreachable", "ready"]
+    # The first and last "ready" are two genuine journal changes, while
+    # unrelated/patient data and the other monitor's event are not emitted.
+    assert [json.loads(event)["state"] for event in emitted] == ["ready", "ready"]
+
+
 def test_history_refuses_other_states_and_corrupted_database(tmp_path):
     journal = WatchdogHistory(tmp_path / "events.sqlite3")
     with pytest.raises(ValueError):

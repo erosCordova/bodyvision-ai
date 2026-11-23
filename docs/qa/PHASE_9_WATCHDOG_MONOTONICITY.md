@@ -29,6 +29,25 @@ Esto distorsionaba la frescura observada y podía invalidar el resumen de incide
   una observación tardía, una transición retroactiva y un valor persistido
   deliberadamente dañado.
 
+## Recuperación compartida entre instancias (23-11-2026)
+
+El sondeo de `independent_service_watchdog.monitor` también debe contrastar
+cada estado contra la última transición **persistida** cuando utiliza el
+diario compartido. El valor `previous` en memoria es insuficiente si otra
+instancia registra una caída durante el intervalo de sondeo.
+
+Con el diario presente, cada sondeo llama a `append_transition` bajo la
+transacción serializada de SQLite. La operación no duplica un estado ya
+registrado, pero sí reconoce `ready → unreachable → ready` aunque el
+primer proceso solo haya observado `ready` dos veces. Sin diario se
+conserva la deduplicación local previa. Las emisiones JSON siguen limitadas
+a cambios realmente inscritos, sin datos de usuarios o expedientes.
+
+La regresión `test_monitor_records_recovery_after_another_instance_writes_outage`
+intercala una escritura en una segunda instancia `WatchdogHistory`,
+comprueba los tres estados en el historial y las dos emisiones autorizadas.
+La ejecución de CI del nuevo PR debe ser confirmada antes de integrarlo.
+
 ## Qué no certifica
 
 Las transacciones serializadas garantizan consistencia del diario **dentro
