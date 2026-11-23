@@ -68,11 +68,11 @@ función y restaura el estado 0030 sin borrar registros de auditoría.
   ESLint y build aprobados tras la corrección de renovación. Las diecinueve
   nuevas verifican transporte acotado, alteración, cancelación
   y selección local de archivos sin llamadas de red.
-- Bundle y revisión de salud: treinta pruebas unitarias adicionales de
-  comprobación local, incluyendo las once del bundle ya contadas arriba.
+- Bundle y revisión de salud: treinta pruebas unitarias en otra ejecución
+  local, incluyendo las once del bundle ya contadas arriba.
   Ruff y `git diff --check` aprobados.
 - El Chromium local continúa bloqueado por la restricción de sockets del
-  entorno. La aceptación nueva de navegador se ejecutará en GitHub Actions
+  entorno. La aceptación nueva de navegador se ejecutó en GitHub Actions
   con descarga real, comprobación independiente Node y archivo modificado.
   Otro recorrido cookie fuerza una rotación real del JWT antes de exportar y
   exige una sola renovación y una sola descarga; el componente conserva la
@@ -84,3 +84,33 @@ Se mantiene **92,5 % / 93 % visible**. Este entregable no aprueba los gates
 externos de identidad, custodia de secretos, auditoría anclada, hardware,
 privacidad o recepción formal. No modifica `main` ni aplica una migración
 a una base alojada. El proveedor acordado para esa base sigue siendo Neon.
+
+
+## Aceptación e integración — 22-11-2026 (Lima)
+
+El [PR #60](https://github.com/erosCordova/bodyvision-ai/pull/60) se integró en
+`feature/phase3-auth-security`, commit
+`913b68dcd7656154cef19c330ecdce704bb64d35`.
+La [CI integral #45094577949](https://github.com/erosCordova/bodyvision-ai/actions/runs/45094577949)
+aprobó el head funcional `1e8bec7cf72a9eaf543af1a74270ea967a86338a`:
+**472 backend + 354 frontend + 44 navegador público + 14 privado + 5 cookie +
+1 privacidad/MFA = 890 pruebas de aplicación**. No se suman las repeticiones
+Docker ni las comprobaciones independientes de retención. `native-checks`,
+`windows-scripts` y `docker-smoke` terminaron en `success`. PostgreSQL 15,
+migraciones, compilación y controles de calidad aprobaron.
+La [retención independiente #45094577929](https://github.com/erosCordova/bodyvision-ai/actions/runs/45094577929)
+aprobó el mismo head.
+
+Chromium confirmó un archivo real con más de treinta eventos, cada hash y
+encadenamiento calculados independientemente con Node, digest de transporte,
+organización y ausencia de correos/contraseñas. La selección local comprobó
+la copia original y rechazó una copia con fecha modificada bajo su mismo
+nombre. El nuevo recorrido cookie rotó una sesión real antes de exportar y
+comprobó una sola renovación, una sola descarga y la referencia conservada.
+La revisión corrigió la cancelación indebida por rotación del token: el efecto
+ahora depende de identidad/organización. Salir o cambiar de identidad sigue
+cancelando la operación; las regresiones de componente cubren ambos casos.
+
+Queda cerrada esta aceptación técnica con datos ficticios. No se implementa
+anclaje externo ni se certifica autoría. La valoración global permanece en
+**92,5 % / 93 % mostrado** y no hubo despliegue ni migración alojada.
