@@ -175,6 +175,18 @@ class SavedReportTests(unittest.TestCase):
         with self.assertRaises(reports.DownloadRejected):
             self.check_csv()
 
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "FIFO regression requires POSIX nonblocking file descriptors",
+    )
+    def test_named_pipe_with_expected_report_filename_is_rejected(self):
+        # Previously os.open(O_RDONLY) could hang forever before the regular
+        # file check. Use the exact expected name, not a mismatched path.
+        self.pdf.unlink()
+        os.mkfifo(self.pdf)
+        with self.assertRaises(reports.DownloadRejected):
+            self.check_pdf()
+
     def test_cli_emits_only_generic_status_not_sensitive_bytes(self):
         args = [
             "--file", str(self.csv),

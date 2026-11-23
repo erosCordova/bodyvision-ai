@@ -78,6 +78,16 @@ tests de regresión en `frontend/tests/savedReportVerification.test.ts`, y las
 pantallas implicadas son `MeasurementComparison.tsx` y
 `LongitudinalSummary.tsx`.
 
+## Protección contra archivos especiales (22-11-2026)
+
+Al seleccionar una copia local, se abre con `O_NONBLOCK` cuando el sistema
+operativo lo admite, además de las restricciones existentes contra enlaces,
+archivos no regulares y tamaños fuera de límite. Así una tubería FIFO con un
+nombre de PDF aparentemente válido se rechaza por su tipo de descriptor sin
+bloquear la lectura esperando un escritor. Se añade una regresión específica
+para POSIX; en Windows se omite únicamente esa prueba dependiente del sistema.
+No se amplía el alcance a datos reales ni se considera firma digital.
+
 ## Límites explícitos
 
 **No es firma digital ni prueba de autenticidad del servidor.** El hash de la
@@ -89,8 +99,9 @@ o que un auditor independiente haya aprobado sus datos.
 
 No acredita custodia externa, persistencia en el equipo final del usuario,
 evaluación médica, uso de datos reales, almacenamiento en Neon, ni criterio
-de producción. Se preserva el **95 % estimado manualmente de fase 7 y el 92 %
-global mostrado** sin atribuir nuevos cierres formales.
+de producción. Se preserva el **95 % estimado manualmente de fase 7 y el 93 %
+global mostrado tras la reevaluación del 22-11-2026** sin atribuir nuevos
+cierres formales.
 
 ## Evidencia automatizada
 
