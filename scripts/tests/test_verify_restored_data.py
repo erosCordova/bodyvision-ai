@@ -113,6 +113,30 @@ class RestoredDataTests(unittest.TestCase):
             with self.assertRaises(restored.RestoredDataRejected):
                 restored.fingerprint(self.original)
 
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "POSIX FIFO and nonblocking file open required",
+    )
+    def test_swapped_sql_dump_fifo_is_rejected_without_waiting_for_writer(self):
+        # Observe a normal file during stat(), then replace the pathname
+        # just before open(). A blocking read would hang indefinitely.
+        self.original.write_bytes(self.sample([b"1\\tA"]))
+        original_open = os.open
+        swapped = False
+
+        def swap_after_preflight(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if not swapped and Path(path) == self.original:
+                swapped = True
+                self.original.rename(self.original.with_name("quarantined.sql"))
+                os.mkfifo(self.original)
+            return original_open(path, flags, *args, **kwargs)
+
+        with patch.object(restored.os, "open", side_effect=swap_after_preflight):
+            with self.assertRaises(restored.RestoredDataRejected):
+                restored.fingerprint(self.original)
+        self.assertTrue(swapped)
+
     def test_cli_never_prints_records_or_file_paths_on_failure(self):
         self.original.write_bytes(self.sample([b"secret_fake_value"]))
         self.rebuilt.write_bytes(self.sample([b"another_fake_value"]))
