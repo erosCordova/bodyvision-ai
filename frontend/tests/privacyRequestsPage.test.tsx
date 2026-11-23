@@ -23,6 +23,35 @@ afterEach(() => { vi.unstubAllGlobals(); });
 beforeEach(() => { fixture.role = "administrator"; fixture.profiles.mockClear(); });
 
 describe("cola de atención de privacidad", () => {
+  it("muestra la confirmación del responsable sin consultar un historial clínico oculto", async () => {
+    fixture.role = "privacy_officer";
+    const row = {
+      id: "11111111-1111-4111-8111-111111111111", profile_id: fixture.profileId,
+      request_type: "access", status: "received",
+      requested_by: "33333333-3333-4333-8333-333333333333",
+      received_at: "2026-11-22T13:00:00Z", review_target_at: "2026-11-29T13:00:00Z",
+      review_started_at: null as string | null, reviewed_by: null as string | null,
+      profile_code: "BV-FAKE123", review_overdue: false, can_review: true,
+    };
+    const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith("/review") && options?.method === "POST") {
+        row.status = "in_review";
+        row.review_started_at = "2026-11-22T13:30:00Z";
+        row.reviewed_by = "44444444-4444-4444-8444-444444444444";
+        return Response.json(row);
+      }
+      return Response.json({ items: [row], total: 1, limit: 20, offset: 0 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(<QueryClientProvider client={client}><PrivacyRequestsPage /></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar revisión" }));
+    expect(await screen.findByText("Revisión administrativa ficticia iniciada. La solicitud no está resuelta."))
+      .toBeVisible();
+    expect(fixture.profiles).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls.every(([url]) => !url.includes("/profiles/"))).toBe(true);
+    view.unmount(); client.clear();
+  });
   it("el responsable solo consulta la cola y los consentimientos sin pedir expedientes clínicos", async () => {
     fixture.role = "privacy_officer";
     const fetcher = vi.fn(async (url: string) => {

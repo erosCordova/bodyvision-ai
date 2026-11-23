@@ -97,7 +97,11 @@ test("MFA privacy officer: create, grant, triage, revoke consent, refresh and de
   await expect(nav.getByRole("link", { name: "Privacidad", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Registrar solicitud ficticia" })).toHaveCount(0);
   await expect(page.getByText(profile.display_code + " · Cancelación", { exact: true })).toBeVisible();
+  const pendingReview = page.waitForResponse(r => /\/api\/v1\/privacy-requests\/[^/]+\/review$/.test(r.url()));
   await page.getByRole("button", { name: "Iniciar revisión", exact: true }).click();
+  const review = await pendingReview;
+  expect(review.status()).toBe(200);
+  expect((await review.json() as { status: string }).status).toBe("in_review");
   await expect(page.getByText("Revisión administrativa ficticia iniciada. La solicitud no está resuelta.")).toBeVisible();
   await page.getByRole("button", { name: "Consultar consentimientos de " + profile.display_code }).click();
   await expect(page.getByRole("button", { name: "Registrar aceptación ficticia" })).toHaveCount(0);

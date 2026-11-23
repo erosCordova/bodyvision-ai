@@ -91,7 +91,10 @@ export function PrivacyRequestsPage() {
     setPending(true); setError(""); setNotice("");
     try {
       await privateClient.startReview(item.id);
-      await Promise.all([queue.refetch(), history.refetch()]);
+      await Promise.all([
+        queue.refetch(),
+        ...(!privacyOnly && profileId ? [history.refetch()] : []),
+      ]);
       setNotice("Revisión administrativa ficticia iniciada. La solicitud no está resuelta.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo iniciar la revisión.");
@@ -124,6 +127,8 @@ export function PrivacyRequestsPage() {
       y no resuelve solicitudes reales.</p>
     {privacyOnly && <p>Responsable de privacidad: solo solicitudes y consentimientos de expedientes autorizados.
       No puedes aceptar consentimientos en nombre del titular ni abrir los datos corporales.</p>}
+    {error && <p role="alert">{error}</p>}
+    {notice && <p role="status">{notice}</p>}
     {!privacyOnly && <section className="enterprise-panel">
       <h2>Registrar solicitud ficticia</h2>
       {profiles.isLoading && <p role="status">Consultando expedientes autorizados…</p>}
@@ -171,8 +176,6 @@ export function PrivacyRequestsPage() {
           {pending ? "Registrando…" : "Registrar solicitud ficticia"}
         </button>
       </form>
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
     </section>}
     {!privacyOnly && <section className="enterprise-panel">
       <h2>Mis solicitudes del expediente</h2>
