@@ -119,7 +119,15 @@ def verify_saved_report(
         limit = CSV_MAX_BYTES
     if path.name != expected_filename or path.is_symlink():
         raise DownloadRejected("Unexpected report name or symbolic link")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # A user-selected path can be a FIFO even with the expected file name.
+    # Opening a FIFO for reading without O_NONBLOCK may hang before fstat
+    # rejects the non-regular descriptor. This flag is harmless for files.
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     descriptor = os.open(path, flags)
     with os.fdopen(descriptor, "rb") as stream:
         before = os.fstat(stream.fileno())
