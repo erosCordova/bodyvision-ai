@@ -6,6 +6,7 @@ export const MAX_POSE_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_POSE_DIMENSION = 16000;
 export const MAX_POSE_PIXELS = 32_000_000;
 export const MAX_JPEG_HEADER_SCAN_BYTES = 128 * 1024;
+export const MAX_PNG_PRE_IDAT_CHUNKS = 512;
 
 /**
  * Read JPEG frame dimensions without decoding its compressed image.
@@ -92,6 +93,46 @@ export function readWebpFrameDimensions(bytes: Uint8Array): { width: number; hei
   throw invalid();
 }
 
+/**
+ * APNG requires an acTL chunk before the first IDAT. Inspect only small
+ * chunk headers (8 bytes each), skipping payloads by length; never decode
+ * image pixels or read a potentially large metadata payload here.
+ *
+ * Tests may use a 24-byte IHDR-only synthetic header. Such incomplete
+ * input is not a decodable image; createImageBitmap rejects it later.
+ */
+async function rejectAnimatedPng(file: File): Promise<void> {
+  if (file.size < 33) return;
+  let offset = 8;
+  for (let examined = 0; examined < MAX_PNG_PRE_IDAT_CHUNKS; examined++) {
+    if (offset + 12 > file.size) {
+      throw new Error("Los chunks de la fotografía PNG están incompletos.");
+    }
+    const header = new Uint8Array(await file.slice(offset, offset + 8).arrayBuffer());
+    if (header.byteLength !== 8) {
+      throw new Error("No se pudo leer la cabecera de los chunks PNG.");
+    }
+    const chunkSize = new DataView(header.buffer, header.byteOffset, 8).getUint32(0);
+    const tag = String.fromCharCode(...header.subarray(4, 8));
+    if (examined === 0 && (tag !== "IHDR" || chunkSize !== 13)) {
+      throw new Error("La estructura inicial PNG no es válida.");
+    }
+    const next = offset + 12 + chunkSize;
+    if (next > file.size) {
+      throw new Error("El tamaño declarado del chunk PNG no coincide con el archivo.");
+    }
+    if (tag === "acTL" || tag === "fcTL" || tag === "fdAT") {
+      throw new Error("Los PNG animados no se admiten como fotografía estática para análisis.");
+    }
+    if (tag === "IDAT") return;
+    if (tag === "IEND") {
+      throw new Error("La fotografía PNG no contiene datos de imagen.");
+    }
+    offset = next;
+  }
+  throw new Error("La fotografía PNG supera el límite de cabeceras previas a la imagen.");
+}
+
 export async function validatePoseImageFile(file: File): Promise<void> {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
       file.size === 0 || file.size > MAX_POSE_FILE_BYTES) {
@@ -134,6 +175,8 @@ export async function validatePoseImageFile(file: File): Promise<void> {
     }
     const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     validatePoseImageDimensions(header.getUint32(16), header.getUint32(20));
+    // PNG animation chunks precede IDAT: never feed an APNG to a still-image model.
+    await rejectAnimatedPng(file);
   }
 }
 
