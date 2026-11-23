@@ -232,6 +232,42 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
       "/api/v1/profiles/" + profileId + "/measurements",
       { headers: foreign })).status()).toBe(404);
 
+    // Tenant isolation protects mutations as well as reads. Attempting to
+    // modify an archived foreign profile must produce NOT_FOUND (not a
+    // cross-tenant status leak such as CONFLICT), with no persisted mutation.
+    const foreignRename = await page.request.patch(
+      "/api/v1/profiles/" + profileId,
+      { headers: foreign, data: { display_name: "Nombre ajeno prohibido" } },
+    );
+    expect(foreignRename.status()).toBe(404);
+    const foreignArchive = await page.request.post(
+      "/api/v1/profiles/" + profileId + "/archive", { headers: foreign },
+    );
+    expect(foreignArchive.status()).toBe(404);
+    const foreignMeasurement = await page.request.post(
+      "/api/v1/profiles/" + profileId + "/measurements",
+      {
+        headers: { ...foreign, "Idempotency-Key": crypto.randomUUID() },
+        data: {
+          metric_code: "weight", value: 81, unit: "kg", method: "manual",
+          measured_at: EXACT_TIME,
+        },
+      },
+    );
+    expect(foreignMeasurement.status()).toBe(404);
+    const foreignCorrection = await page.request.patch(
+      "/api/v1/measurements/" + corrected.id,
+      {
+        headers: { ...foreign, "Idempotency-Key": crypto.randomUUID() },
+        data: {
+          metric_code: "weight", value: 82, unit: "kg", method: "manual",
+          measured_at: EXACT_TIME,
+          correction_reason: "Intento de corrección ajeno prohibido",
+        },
+      },
+    );
+    expect(foreignCorrection.status()).toBe(404);
+
     // The original authenticated author retains read access to the history.
     const stillReadable = await page.request.get(
       "/api/v1/measurements/" + corrected.id + "/versions", { headers },
