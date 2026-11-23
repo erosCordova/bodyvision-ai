@@ -73,13 +73,17 @@ def list_scenarios(
             or snapshot_at < database_now - timedelta(minutes=30)
         ):
             raise DomainError(
-                422, "INVALID_SCENARIO_SNAPSHOT",
+                422,
+                "INVALID_SCENARIO_SNAPSHOT",
                 "El punto de corte del historial es inválido o ha caducado.",
             )
         cutoff = snapshot_at
     params = {
-        "org": scope.organization_id, "profile": profile_id,
-        "limit": limit, "offset": offset, "cutoff": cutoff,
+        "org": scope.organization_id,
+        "profile": profile_id,
+        "limit": limit,
+        "offset": offset,
+        "cutoff": cutoff,
     }
     rows = (
         scope.connection.execute(
@@ -101,7 +105,9 @@ def list_scenarios(
     record_simulation_event(scope, "simulation.list", profile_id)
     return {
         "items": [dict(row) for row in rows],
-        "total": total, "limit": limit, "offset": offset,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
         "snapshot_at": cutoff,
     }
 
