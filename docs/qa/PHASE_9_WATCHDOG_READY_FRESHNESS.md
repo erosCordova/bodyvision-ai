@@ -30,7 +30,7 @@ URL allowlist, la desactivación de redirecciones ni el máximo de 4096 bytes.
 
 Las pruebas en `backend/tests/unit/test_independent_service_watchdog.py`
 cubren un documento vigente con sufijo `Z`, omisión/alteración de fecha,
-fecha sin zona, obsoleta, futura, con campo extra y claves duplicadas.
+fecha sin zona, obsoleta, futura, con campo extra, claves duplicadas y fechas ISO extremas\nque desbordan al convertirlas a UTC.
 La CI de GitHub debe comprobar calidad Python y los recorridos Windows,
 Docker y navegador antes de integrar el PR.
 
