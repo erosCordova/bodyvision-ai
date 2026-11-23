@@ -59,10 +59,9 @@ class WatchdogHistory:
                         saved_at = datetime.fromisoformat(existing[0])
                     except (TypeError, ValueError) as exc:
                         raise ValueError("Invalid saved probe timestamp") from exc
-                    if (
-                        saved_at.tzinfo is None
-                        or checked_at.astimezone(UTC) < saved_at.astimezone(UTC)
-                    ):
+                    if saved_at.tzinfo is None:
+                        raise ValueError("Invalid saved probe timestamp")
+                    if checked_at.astimezone(UTC) < saved_at.astimezone(UTC):
                         raise ValueError("Out-of-order synthetic watchdog probe")
                 connection.execute(
                     """
@@ -158,10 +157,9 @@ class WatchdogHistory:
                         saved_at = datetime.fromisoformat(previous[1])
                     except (TypeError, ValueError) as exc:
                         raise ValueError("Invalid saved transition timestamp") from exc
-                    if (
-                        saved_at.tzinfo is None
-                        or checked_at.astimezone(UTC) < saved_at.astimezone(UTC)
-                    ):
+                    if saved_at.tzinfo is None:
+                        raise ValueError("Invalid saved transition timestamp")
+                    if checked_at.astimezone(UTC) < saved_at.astimezone(UTC):
                         raise ValueError("Out-of-order synthetic watchdog transition")
                     if previous[0] == state:
                         return False
