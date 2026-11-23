@@ -99,8 +99,9 @@ o que un auditor independiente haya aprobado sus datos.
 
 No acredita custodia externa, persistencia en el equipo final del usuario,
 evaluación médica, uso de datos reales, almacenamiento en Neon, ni criterio
-de producción. Se preserva el **95 % estimado manualmente de fase 7 y el 92 %
-global mostrado** sin atribuir nuevos cierres formales.
+de producción. Se preserva el **95 % estimado manualmente de fase 7 y el 93 %
+global mostrado tras la reevaluación del 22-11-2026** sin atribuir nuevos
+cierres formales.
 
 ## Evidencia automatizada
 
