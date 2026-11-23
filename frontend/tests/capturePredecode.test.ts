@@ -54,6 +54,16 @@ describe("capture/pose shared pre-decode budget (synthetic images)", () => {
     expect(decode).not.toHaveBeenCalled();
   });
 
+  it("rejects animated WebP before preview sampling or MediaPipe can decode it", async () => {
+    const animated = webp(960, 1280);
+    animated[20] = 0x02;
+    const decode = vi.fn();
+    vi.stubGlobal("createImageBitmap", decode);
+    await expect(reviewLocalCapture(syntheticFile(animated, "image/webp")))
+      .rejects.toThrow(/WebP animados/);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it("rejects a truncated file with matching MIME before decoding", async () => {
     const decode = vi.fn();
     vi.stubGlobal("createImageBitmap", decode);
