@@ -128,6 +128,8 @@ def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
         {**valid, "checked_at": (now + timedelta(minutes=5)).isoformat()},
         {**valid, "checked_at": now.replace(tzinfo=None).isoformat()},
         {**valid, "checked_at": "not-a-timestamp"},
+        {**valid, "checked_at": "9999-12-31T23:59:59-23:59"},
+        {**valid, "checked_at": "0001-01-01T00:00:00+23:59"},
         {**valid, "checked_at": None},
         {**valid, "unrecognized": "value"},
     ):
