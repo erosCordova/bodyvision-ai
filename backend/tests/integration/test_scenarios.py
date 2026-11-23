@@ -173,7 +173,6 @@ def test_append_only_chain_rejects_legacy_engine_without_modifying_history(
     assert client.get(f"/api/v1/profiles/{profile_id}/scenarios").json()["total"] == 3
 
 
-
 def test_paginated_history_uses_fixed_utc_high_watermark_across_new_version(client):
     """A later committed insert must not shift the in-progress CSV pages."""
     profile = new_profile(client)
@@ -226,7 +225,6 @@ def test_paginated_history_rejects_unsafe_snapshot_without_data(client, provided
     )
     assert response.status_code == 422
     assert "items" not in response.json()
-
 
 
 def test_exactly_once_save_and_reject_stale_chain(client):
