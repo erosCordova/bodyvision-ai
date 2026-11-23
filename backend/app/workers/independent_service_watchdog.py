@@ -98,11 +98,13 @@ def probe_readiness(target: str, opener=None) -> str:
         return "degraded"
     try:
         observed_at = datetime.fromisoformat(payload["checked_at"].replace("Z", "+00:00"))
-    except ValueError:
+        if observed_at.tzinfo is None:
+            return "degraded"
+        age = (datetime.now(UTC) - observed_at.astimezone(UTC)).total_seconds()
+    except (ValueError, OverflowError):
+        # An extreme valid ISO date with a large offset can overflow when
+        # normalized to UTC; it must not terminate the watchdog process.
         return "degraded"
-    if observed_at.tzinfo is None:
-        return "degraded"
-    age = (datetime.now(UTC) - observed_at.astimezone(UTC)).total_seconds()
     # The response is an observation, not proof of current uptime. Ignore
     # stale/future-dated replies, including accidentally cached responses.
     if not -MAX_READY_FUTURE_SKEW_SECONDS <= age <= MAX_READY_AGE_SECONDS:
