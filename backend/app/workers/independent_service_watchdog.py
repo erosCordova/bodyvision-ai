@@ -26,6 +26,18 @@ ALLOWED_TARGETS = frozenset(
     }
 )
 MAX_RESPONSE_BYTES = 4096
+MAX_READY_AGE_SECONDS = 120
+MAX_READY_FUTURE_SKEW_SECONDS = 30
+READY_FIELDS = frozenset({"status", "database", "schema_revision", "checked_at"})
+
+
+def _unique_json_fields(pairs):
+    fields = {}
+    for key, value in pairs:
+        if key in fields:
+            raise ValueError("Ambiguous readiness fields")
+        fields[key] = value
+    return fields
 
 
 class WatchdogDenied(ValueError):
@@ -72,17 +84,32 @@ def probe_readiness(target: str, opener=None) -> str:
     if len(body) > MAX_RESPONSE_BYTES:
         return "degraded"
     try:
-        payload = json.loads(body)
+        payload = json.loads(body, object_pairs_hook=_unique_json_fields)
     except (UnicodeError, ValueError, TypeError):
         return "degraded"
     if (
-        isinstance(payload, dict)
-        and payload.get("status") == "ready"
-        and payload.get("database") == "connected"
-        and payload.get("schema_revision") == SCHEMA_REVISION
+        not isinstance(payload, dict)
+        or payload.keys() != READY_FIELDS
+        or payload.get("status") != "ready"
+        or payload.get("database") != "connected"
+        or payload.get("schema_revision") != SCHEMA_REVISION
+        or not isinstance(payload.get("checked_at"), str)
     ):
-        return "ready"
-    return "degraded"
+        return "degraded"
+    try:
+        observed_at = datetime.fromisoformat(payload["checked_at"].replace("Z", "+00:00"))
+        if observed_at.tzinfo is None:
+            return "degraded"
+        age = (datetime.now(UTC) - observed_at.astimezone(UTC)).total_seconds()
+    except (ValueError, OverflowError):
+        # An extreme valid ISO date with a large offset can overflow when
+        # normalized to UTC; it must not terminate the watchdog process.
+        return "degraded"
+    # The response is an observation, not proof of current uptime. Ignore
+    # stale/future-dated replies, including accidentally cached responses.
+    if not -MAX_READY_FUTURE_SKEW_SECONDS <= age <= MAX_READY_AGE_SECONDS:
+        return "degraded"
+    return "ready"
 
 
 def monitor(

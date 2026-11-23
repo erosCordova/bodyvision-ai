@@ -2,6 +2,7 @@
 
 import io
 import json
+from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -72,7 +73,12 @@ def test_requires_explicit_synthetic_opt_in_bounded_interval_and_internal_target
 
 def test_probe_requires_ready_database_and_current_revision_without_redirects():
     healthy = json.dumps(
-        {"status": "ready", "database": "connected", "schema_revision": SCHEMA_REVISION}
+        {
+            "status": "ready",
+            "database": "connected",
+            "schema_revision": SCHEMA_REVISION,
+            "checked_at": datetime.now(UTC).isoformat(),
+        }
     ).encode()
     opener = Opener(Response(healthy))
     assert probe_readiness(TARGET, opener=opener) == "ready"
@@ -100,6 +106,42 @@ def test_probe_requires_ready_database_and_current_revision_without_redirects():
         probe_readiness(TARGET, opener=Opener(URLError("connection refused private host")))
         == "unreachable"
     )
+
+
+def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
+    now = datetime.now(UTC)
+    valid = {
+        "status": "ready",
+        "database": "connected",
+        "schema_revision": SCHEMA_REVISION,
+        "checked_at": now.isoformat(),
+    }
+
+    def observed(payload):
+        return probe_readiness(TARGET, opener=Opener(Response(json.dumps(payload).encode("utf-8"))))
+
+    # A proper UTC/Z observation remains accepted without trusting uptime.
+    assert observed({**valid, "checked_at": now.isoformat().replace("+00:00", "Z")}) == "ready"
+    for broken in (
+        {key: value for key, value in valid.items() if key != "checked_at"},
+        {**valid, "checked_at": (now - timedelta(minutes=5)).isoformat()},
+        {**valid, "checked_at": (now + timedelta(minutes=5)).isoformat()},
+        {**valid, "checked_at": now.replace(tzinfo=None).isoformat()},
+        {**valid, "checked_at": "not-a-timestamp"},
+        {**valid, "checked_at": "9999-12-31T23:59:59-23:59"},
+        {**valid, "checked_at": "0001-01-01T00:00:00+23:59"},
+        {**valid, "checked_at": None},
+        {**valid, "unrecognized": "value"},
+    ):
+        assert observed(broken) == "degraded"
+
+    # The default JSON last-key-wins behavior must not turn a duplicated
+    # status field into a synthetic healthy observation.
+    duplicate = (
+        '{"status":"unreachable","status":"ready","database":"connected",'
+        '"schema_revision":"' + SCHEMA_REVISION + '","checked_at":"' + now.isoformat() + '"}'
+    ).encode("utf-8")
+    assert probe_readiness(TARGET, opener=Opener(Response(duplicate))) == "degraded"
 
 
 def test_outage_recovery_emits_only_transition_states_without_private_details():
