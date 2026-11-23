@@ -47,6 +47,10 @@ test("expired administrative JWT renews once and preserves the created invitatio
   // sequences must have exactly one renewal and one successful creation.
   // The invalidated old JWT has already been rejected above by the API.
   expect([[401, 201], [201]]).toContainEqual(statuses);
+  // Both permitted interleavings must authorize exactly one successful
+  // mutation. In particular, never tolerate a second 201 or a 403 bypass.
+  expect(statuses.filter(status => status === 201)).toHaveLength(1);
+  expect(statuses.every(status => status === 401 || status === 201)).toBe(true);
   expect(refreshes).toBe(1);
   const record = panel.getByRole("listitem").filter({ hasText: email });
   await expect(record).toHaveCount(1);
