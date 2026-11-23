@@ -54,6 +54,26 @@ describe("capture/pose shared pre-decode budget (synthetic images)", () => {
     expect(decode).not.toHaveBeenCalled();
   });
 
+  it("rejects APNG animation chunks before creating an image bitmap", async () => {
+    const ihdr = Uint8Array.from([...png(900, 1200), 8, 2, 0, 0, 0, 0, 0, 0, 0]);
+    const animationChunk = new Uint8Array(20);
+    new DataView(animationChunk.buffer).setUint32(0, 8);
+    animationChunk.set([0x61, 0x63, 0x54, 0x4c], 4); // acTL, before IDAT.
+    const imageDataChunk = Uint8Array.from([
+      0, 0, 0, 0, 0x49, 0x44, 0x41, 0x54, 0, 0, 0, 0,
+    ]);
+    const apng = new Uint8Array(ihdr.length + animationChunk.length + imageDataChunk.length);
+    apng.set(ihdr);
+    apng.set(animationChunk, ihdr.length);
+    apng.set(imageDataChunk, ihdr.length + animationChunk.length);
+
+    const decode = vi.fn();
+    vi.stubGlobal("createImageBitmap", decode);
+    await expect(reviewLocalCapture(syntheticFile(apng, "image/png")))
+      .rejects.toThrow(/PNG animados/);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it("rejects animated WebP before preview sampling or MediaPipe can decode it", async () => {
     const animated = webp(960, 1280);
     animated[20] = 0x02;
