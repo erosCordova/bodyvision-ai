@@ -139,6 +139,51 @@ class SyntheticRestoreManifestTests(unittest.TestCase):
             with self.assertRaises(restore.RestoreManifestRejected):
                 restore.fingerprint(self.backup)
 
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "POSIX FIFO and nonblocking file open required",
+    )
+    def test_replaced_regular_backup_cannot_block_on_fifo_open(self):
+        # The initial stat sees a regular file. Swap the path immediately
+        # before os.open: the open must not wait for a FIFO writer.
+        original_open = os.open
+        swapped = False
+
+        def swap_after_preflight(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if not swapped and Path(path) == self.backup:
+                swapped = True
+                self.backup.rename(self.folder / "quarantined.dump")
+                os.mkfifo(self.backup)
+            return original_open(path, flags, *args, **kwargs)
+
+        with patch.object(restore.os, "open", side_effect=swap_after_preflight):
+            with self.assertRaises(restore.RestoreManifestRejected):
+                restore.fingerprint(self.backup)
+        self.assertTrue(swapped)
+
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "POSIX FIFO and nonblocking file open required",
+    )
+    def test_replaced_regular_manifest_cannot_block_on_fifo_open(self):
+        restore.create_manifest(self.backup, self.manifest)
+        original_open = os.open
+        swapped = False
+
+        def swap_after_preflight(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if not swapped and Path(path) == self.manifest:
+                swapped = True
+                self.manifest.rename(self.folder / "quarantined.json")
+                os.mkfifo(self.manifest)
+            return original_open(path, flags, *args, **kwargs)
+
+        with patch.object(restore.os, "open", side_effect=swap_after_preflight):
+            with self.assertRaises(restore.RestoreManifestRejected):
+                restore.verify_manifest(self.backup, self.manifest)
+        self.assertTrue(swapped)
+
     def test_requires_explicit_disposable_ci_opt_in(self):
         restore.require_ci_synthetic(SAFE_ENV)
         for change in (

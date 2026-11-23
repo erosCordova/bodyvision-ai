@@ -35,7 +35,15 @@ def _sections(path: Path) -> tuple[dict[bytes, list[bytes]], list[bytes]]:
     rows = 0
     bytes_read = 0
 
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # Path preflight alone is not enough: an attacker can swap a dump for
+    # a FIFO before os.open(). Never block waiting for a writer; fstat
+    # rejects every non-regular descriptor before data is processed.
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     descriptor = os.open(path, flags)
     with os.fdopen(descriptor, "rb") as source:
         before = os.fstat(source.fileno())

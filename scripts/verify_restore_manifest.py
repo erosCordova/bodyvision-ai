@@ -50,6 +50,9 @@ def fingerprint(backup: Path) -> tuple[int, str]:
     _read_regular_file(backup, MAX_DUMP_BYTES)
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
+    # A regular file can be replaced by a FIFO after stat() and before open().
+    # Never wait for a writer: fstat() below rejects non-regular descriptors.
+    flags |= getattr(os, "O_NONBLOCK", 0)
     descriptor = os.open(backup, flags)
     with os.fdopen(descriptor, "rb") as content:
         metadata = os.fstat(content.fileno())
@@ -125,6 +128,9 @@ def verify_manifest(backup: Path, manifest: Path) -> None:
     _read_regular_file(manifest, MAX_MANIFEST_BYTES)
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
+    # A regular file can be replaced by a FIFO after stat() and before open().
+    # Never wait for a writer: fstat() below rejects non-regular descriptors.
+    flags |= getattr(os, "O_NONBLOCK", 0)
     descriptor = os.open(manifest, flags)
     with os.fdopen(descriptor, "rb") as stream:
         info = os.fstat(stream.fileno())
