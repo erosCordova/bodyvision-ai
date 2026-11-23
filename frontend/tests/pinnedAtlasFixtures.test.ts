@@ -13,7 +13,7 @@ const original = Buffer.from("synthetic atlas test bytes only");
 const digest = gitBlobSha1(original);
 
 function goodResponse(body = original): Response {
-  return new Response(body, {
+  return new Response(body.toString("utf8"), {
     status: 200,
     headers: { "content-length": String(body.length) },
   });
@@ -31,7 +31,7 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
   });
 
   it("accepts verified bytes and never retries an intact first response", async () => {
-    const request = vi.fn(async () => goodResponse());
+    const request = vi.fn(async (_url: string) => goodResponse());
     const delay = vi.fn(async () => undefined);
     await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request, delay }))
       .resolves.toEqual(original);
@@ -65,6 +65,15 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
     expect(delay).toHaveBeenCalledTimes(3);
   });
 
+  it("accepts verified bytes after transparent transport decompression", async () => {
+    const request = vi.fn(async () => new Response(original.toString("utf8"), {
+      status: 200,
+      headers: { "content-length": "5", "content-encoding": "gzip" },
+    }));
+    await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request }))
+      .resolves.toEqual(original);
+  });
+
   it("rejects tampered bytes immediately, with no retry or content in the error", async () => {
     const request = vi.fn(async () => goodResponse(Buffer.from("altered synthetic bytes")));
     const delay = vi.fn(async () => undefined);
@@ -76,10 +85,10 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
 
   it("rejects declared huge files, truncated bodies and missing response bytes", async () => {
     const responses = [
-      new Response(original, { status: 200, headers: {
+      new Response(original.toString("utf8"), { status: 200, headers: {
         "content-length": String(MAX_FIXTURE_BYTES + 1),
       } }),
-      new Response(original, { status: 200, headers: { "content-length": "999" } }),
+      new Response("truncated synthetic bytes", { status: 200, headers: { "content-length": "999" } }),
       new Response(null, { status: 200 }),
     ];
     for (const response of responses) {
