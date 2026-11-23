@@ -70,7 +70,6 @@ def test_monitor_resumes_from_saved_state_across_restarts(tmp_path):
     assert [json.loads(event)["state"] for event in outputs] == ["unreachable", "ready"]
 
 
-
 def test_monitor_records_recovery_after_another_instance_writes_outage(tmp_path):
     # Monitor A observes ready twice. Between observations, independent
     # monitor B logs an outage in the SAME SQLite journal. The historical
@@ -106,7 +105,6 @@ def test_monitor_records_recovery_after_another_instance_writes_outage(tmp_path)
     # The first and last "ready" are two genuine journal changes, while
     # unrelated/patient data and the other monitor's event are not emitted.
     assert [json.loads(event)["state"] for event in emitted] == ["ready", "ready"]
-
 
 
 def test_history_refuses_other_states_and_corrupted_database(tmp_path):
