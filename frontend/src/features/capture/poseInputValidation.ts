@@ -63,6 +63,11 @@ export function readWebpFrameDimensions(bytes: Uint8Array): { width: number; hei
   const chunk = String.fromCharCode(...bytes.subarray(12, 16));
   if (chunk === "VP8X") {
     if (chunkSize < 10 || bytes.length < 30) throw invalid();
+    // WebP VP8X Animation flag, RFC 9649: animated previews may display
+    // frames other than the single still analyzed by MediaPipe.
+    if ((bytes[20] & 0x02) !== 0) {
+      throw new Error("Los WebP animados no se admiten como fotografía estática para análisis.");
+    }
     return {
       width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
       height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16),
