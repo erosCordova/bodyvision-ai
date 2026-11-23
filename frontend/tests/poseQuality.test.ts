@@ -39,6 +39,19 @@ describe("pose visibility review is not a clinical accuracy score", () => {
     expect(review.warnings).toEqual([]);
     expect(review.groups.find(g => g.id === "ankles")?.visible).toBe(2);
   });
+  it("never labels entirely off-frame model output as a reviewable pose", () => {
+    const raw = Array.from({ length: 33 }, () => ({
+      x: -0.5, y: 1.6, z: 0, visibility: 0.99,
+    }));
+    const estimate = summarizePoseResult({ landmarks: [raw] });
+    expect(estimate.found).toBe(false);
+    const quality = assessPoseQuality(estimate, goodReview);
+    expect(quality.state).toBe("not-detected");
+    expect(quality.visiblePoints).toBe(0);
+    expect(quality.coreVisible).toBe(0);
+    expect(quality.warnings).toContain("No se ha detectado una pose humana en esta imagen.");
+  });
+
   it("prevents a collapsed 33-point output from being marked reviewable", () => {
     const degenerate = summarizePoseResult({
       landmarks: [Array.from({ length: 33 }, () => ({
