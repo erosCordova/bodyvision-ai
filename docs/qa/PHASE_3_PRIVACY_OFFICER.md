@@ -97,7 +97,7 @@ descartable revierte a `0029` y aplica `0030` otra vez tras limpiar sus fixtures
   ficticias separadas y trazas, vídeo y capturas desactivados.
 
 CI integral PostgreSQL **15**, Windows/Docker, navegador y retención
-independiente deben aprobar antes de integrar. El recorrido nuevo crea la
+independiente aprobaron antes de integrar; la evidencia se registra a continuación. El recorrido nuevo crea la
 cuenta y concede gestión desde la UI, inscribe MFA, inicia revisión, revoca un
 consentimiento, renueva la cookie HttpOnly y verifica la denegación clínica.
 
@@ -109,3 +109,38 @@ de seguridad o autorización médica. La valoración manual global permanece en
 **92,5 % / 93 % mostrado** hasta reevaluar los criterios de cierre de fase.
 No hay cambios de `main`, despliegue ni migración de una base alojada; el
 proveedor acordado para la base alojada sigue siendo Neon.
+
+## Aceptación e integración — 22-11-2026 (Lima)
+
+El [PR #59](https://github.com/erosCordova/bodyvision-ai/pull/59) se integró en
+`feature/phase3-auth-security`, commit
+`fc3d0a8a034e3d6705fccd8cb401e164aaf2ca2c`.
+La [CI integral #45089842097](https://github.com/erosCordova/bodyvision-ai/actions/runs/45089842097)
+aprobó el commit funcional
+`ab3a2edb9ded27cd387390edd1d9703d2f716f71`:
+**453 backend + 335 frontend + 44 navegador público + 13 navegador privado +
+4 cookie + 1 privacidad/MFA = 850 pruebas de aplicación**. No se suman las
+repeticiones de Docker ni retención al total. `native-checks`, `windows-scripts`
+y `docker-smoke` terminaron en `success`; PostgreSQL 15, migraciones
+reversibles, dependencias, compilación y controles de calidad aprobaron.
+La [retención independiente #45089842176](https://github.com/erosCordova/bodyvision-ai/actions/runs/45089842176)
+aprobó el mismo commit.
+
+El Chromium real confirmó creación y concesión administrativa desde UI,
+inscripción TOTP del responsable desde UI, ingreso con segundo factor,
+navegación limitada, inicio de revisión con respuesta 200/estado `in_review`,
+revocación efectiva de consentimiento, cookie HttpOnly y renovación del rol.
+Los endpoints clínicos y de administración devolvieron 403; acceder a las
+rutas de expedientes o visor condujo a Privacidad.
+
+La aceptación detectó que los avisos del revisor estaban dentro del formulario
+oculto de solicitudes personales. La corrección los sitúa en la zona común y
+actualiza solo la cola para este rol; no consulta un historial personal vacío.
+La nueva regresión de componente verifica la confirmación visible y ausencia
+de peticiones a `/profiles/`; forma parte de las 335 pruebas frontend finales.
+Las pruebas SQL verificaron exclusividad de roles en ambos sentidos y
+conservación de la denegación clínica con concesiones amplias.
+
+Esto cierra la implementación y aceptación técnica sintética de este rol.
+No certifica identidad real, cumplimiento ARCO, seguridad productiva o
+recepción formal. El avance global permanece en **92,5 % / 93 % visible**.
