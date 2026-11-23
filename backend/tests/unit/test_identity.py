@@ -70,6 +70,21 @@ def test_session_tokens_are_random_and_only_digest_is_persisted():
             hash_session_token(malformed)
 
 
+def test_privacy_officer_never_inherits_generic_clinical_or_admin_actions():
+    organization = uuid4()
+    officer = Identity(organization, uuid4(), "privacy_officer", True)
+    for action in (
+        "admin:manage",
+        "profile:read",
+        "profile:write",
+        "capture:create",
+        "pose:run",
+        "report:read",
+    ):
+        for level in (None, "read", "write", "manage"):
+            assert not authorized(officer, organization, action, access_level=level)
+
+
 def test_tenant_and_role_boundaries_are_default_deny():
     organization = uuid4()
     wrong_organization = uuid4()

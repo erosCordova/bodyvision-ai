@@ -26,7 +26,11 @@ export async function secureRequest(
     if (["RESET_RATE_LIMITED", "ACCOUNT_RATE_LIMITED", "SELF_RATE_LIMITED"].includes(body.code ?? "")) throw new Error("Demasiados intentos. Espera 15 minutos.");
   }
   if (response.status === 403) throw new Error("No tienes permisos para esta operación.");
-  if (response.status === 409) throw new Error("Ya existe una cuenta con ese correo.");
+  if (response.status === 409) {
+    const body = await response.clone().json().catch(() => ({})) as { code?: string };
+    if (body.code === "MFA_REQUIRED") throw new Error("Activa la verificación en dos pasos antes de crear un responsable de privacidad.");
+    throw new Error("Ya existe una cuenta con ese correo.");
+  }
   if (response.status === 404) throw new Error("El destino no está disponible para esta operación.");
   if (!response.ok) {
     throw new Error("No se pudo completar la operación. Comprueba el servidor de pruebas.");

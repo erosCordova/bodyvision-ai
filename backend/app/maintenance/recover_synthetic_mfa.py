@@ -91,7 +91,11 @@ def recover_synthetic_mfa(
             .scalars()
             .all()
         )
-        if target is None or len(roles) != 1 or roles[0] not in {"administrator", "specialist"}:
+        if (
+            target is None
+            or len(roles) != 1
+            or roles[0] not in {"administrator", "specialist", "privacy_officer"}
+        ):
             raise RecoveryDenied("Cuenta ficticia privilegiada activa no disponible.")
         confirmed = connection.execute(
             text("""SELECT confirmed_at FROM public.private_mfa_credentials

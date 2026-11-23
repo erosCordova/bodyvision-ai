@@ -255,6 +255,7 @@ export function PrivateAdministrationPage() {
               onChange={event => updateAccount("role", event.target.value as NewTestAccount["role"])}>
               <option value="member">Usuario de consulta</option>
               <option value="specialist">Especialista</option>
+              <option value="privacy_officer">Responsable de privacidad (requiere MFA)</option>
             </select>
             <label htmlFor="admin-user-password">Contraseña de pruebas</label>
             <input id="admin-user-password" type="password" required
@@ -353,11 +354,13 @@ export function PrivateAdministrationPage() {
             onChange={event => setPermission(old => ({
               ...old, access_level: event.target.value as typeof old.access_level,
             }))}>
-            <option value="read">Lectura</option>
-            <option value="write" disabled={selectedAccount?.role === "member"}>Lectura y edición</option>
-            <option value="manage" disabled={selectedAccount?.role === "member"}>Gestión del expediente</option>
+            <option value="read">{selectedAccount?.role === "privacy_officer" ? "Consultar solicitudes y consentimientos" : "Lectura"}</option>
+            <option value="write" disabled={selectedAccount?.role === "member" || selectedAccount?.role === "privacy_officer"}>Lectura y edición</option>
+            <option value="manage" disabled={selectedAccount?.role === "member"}>{selectedAccount?.role === "privacy_officer" ? "Revisar solicitudes y revocar consentimientos" : "Gestión del expediente"}</option>
           </select>
           <small>Los usuarios de consulta únicamente pueden recibir acceso de lectura.</small>
+          {selectedAccount?.role === "privacy_officer" && <p>Este permiso no abre mediciones, imágenes ni reportes.
+            El responsable puede consultar privacidad y, con gestión, iniciar revisiones o revocar consentimientos.</p>}
           {permissionError && <p className="private-admin-error" role="alert">{permissionError}</p>}
           {permissionSuccess && <p className="private-admin-success" role="status">{permissionSuccess}</p>}
           <div className="private-admin-permission-actions">

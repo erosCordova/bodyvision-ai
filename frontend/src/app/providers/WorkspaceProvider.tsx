@@ -45,7 +45,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     sessionStorage.setItem("bodyvision.workspace", next);
     setDemoId(next);
   }, [protectedMode]);
-  const readOnly = (environment.data?.read_only ?? true) || (protectedMode && session?.role === "member");
+  const readOnly = (environment.data?.read_only ?? true) ||
+    (protectedMode && (session?.role === "member" || session?.role === "privacy_officer"));
 
   const value = useMemo(
     () => ({

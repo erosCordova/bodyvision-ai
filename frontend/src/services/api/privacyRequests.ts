@@ -15,6 +15,7 @@ export const privacyRequestSchema = z.object({
   reviewed_by: z.string().uuid().nullable(),
   profile_code: z.string().min(1),
   review_overdue: z.boolean(),
+  can_review: z.boolean(),
 }).strict();
 export type PrivacyRequest = z.infer<typeof privacyRequestSchema>;
 const page = z.object({

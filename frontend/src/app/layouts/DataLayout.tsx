@@ -32,17 +32,20 @@ export function DataLayout() {
     (location.pathname.startsWith("/profiles/") ? sections[2] : sections[0]);
   if (protectedMode && restoring) return <p role="status">Restaurando sesión privada de pruebas…</p>;
   if (protectedMode && !session) return <Navigate to="/access" replace />;
+  const privacyOnly = protectedMode && session?.role === "privacy_officer";
+  if (privacyOnly && location.pathname !== "/privacy") return <Navigate to="/privacy" replace />;
   return (
     <div className="data-shell enterprise-shell">
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
       <aside className="data-sidebar enterprise-sidebar">
-        <Link to="/" className="brand enterprise-brand">
+        <Link to={privacyOnly ? "/privacy" : "/"} className="brand enterprise-brand">
           <span className="brand-mark" aria-hidden="true">⌘</span>
           <span>BODYVISION <strong>AI</strong><small>Plataforma de análisis corporal</small></span>
         </Link>
         <p className="nav-label">ESPACIO DE TRABAJO</p>
         <nav aria-label="Navegación principal">
-          {sections.filter(section => section.route !== "/privacy" || protectedMode).map(section => (
+          {sections.filter(section => privacyOnly ? section.route === "/privacy" :
+            section.route !== "/privacy" || protectedMode).map(section => (
             <NavLink to={section.route} key={section.route} end={section.route === "/"}
               className={({ isActive }) => isActive ? "active" : undefined} title={section.name}>
               <span className="enterprise-icon" aria-hidden="true">{section.icon}</span>

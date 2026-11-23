@@ -5,6 +5,7 @@ import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import {
   kindLabels, privacyRequestsApi, type PrivacyKind, type PrivacyRequest,
 } from "../../services/api/privacyRequests";
+import { ConsentPanel } from "../profiles/ConsentPanel";
 
 const dateLabel = (value: string) => new Date(value).toLocaleString("es-PE", {
   timeZone: "America/Lima",
@@ -25,6 +26,9 @@ export function PrivacyRequestsPage() {
   const [queueOffset, setQueueOffset] = useState(0);
   const [queueStatus, setQueueStatus] = useState<"all" | "received" | "in_review">("all");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [consentProfile, setConsentProfile] = useState("");
+  const privacyOnly = session?.role === "privacy_officer";
+  const canReview = session?.role === "administrator" || privacyOnly;
   const privateClient = useMemo(
     () => session ? privacyRequestsApi(workspaceId, session.token) : null,
     [workspaceId, session],
@@ -35,7 +39,7 @@ export function PrivacyRequestsPage() {
       profileSearch, profileListOffset,
     ],
     queryFn: () => records.profiles(profileSearch, profileListOffset),
-    enabled: Boolean(session),
+    enabled: Boolean(session && !privacyOnly),
   });
   useEffect(() => {
     if (!profiles.data) return;
@@ -47,7 +51,7 @@ export function PrivacyRequestsPage() {
   const history = useQuery({
     queryKey: ["privacy-history", session?.user_id, profileId, profileOffset],
     queryFn: () => privateClient!.listProfile(profileId, profileOffset),
-    enabled: Boolean(privateClient && profileId),
+    enabled: Boolean(privateClient && profileId && !privacyOnly),
   });
   const queue = useQuery({
     queryKey: [
@@ -55,7 +59,7 @@ export function PrivacyRequestsPage() {
       queueOffset, queueStatus, overdueOnly,
     ],
     queryFn: () => privateClient!.listQueue(queueOffset, queueStatus, overdueOnly),
-    enabled: Boolean(privateClient && session?.role === "administrator"),
+    enabled: Boolean(privateClient && canReview),
   });
 
   if (!privateAuthEnabled() || !session) {
@@ -104,7 +108,11 @@ export function PrivacyRequestsPage() {
         <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de atención (hora de Lima): {dateLabel(item.review_target_at)}.</p>
         {item.review_overdue && <p role="status">Atención interna atrasada (no es un plazo legal).</p>}
         {canReview && item.status === "received" && <button type="button"
-          disabled={pending} onClick={() => { void review(item); }}>Iniciar revisión</button>}
+          disabled={pending || !item.can_review} onClick={() => { void review(item); }}>Iniciar revisión</button>}
+        {canReview && !item.can_review && <p>Permiso de consulta: iniciar revisión requiere gestión.</p>}
+        {privacyOnly && <button type="button" onClick={() => setConsentProfile(item.profile_id)}>
+          Consultar consentimientos de {item.profile_code}
+        </button>}
       </li>)}
     </ul>
   );
@@ -114,7 +122,9 @@ export function PrivacyRequestsPage() {
     <p>Solo datos ficticios. Este módulo registra solicitudes y permite iniciar una
       revisión interna: no valida identidad legal, no exporta ni elimina información,
       y no resuelve solicitudes reales.</p>
-    <section className="enterprise-panel">
+    {privacyOnly && <p>Responsable de privacidad: solo solicitudes y consentimientos de expedientes autorizados.
+      No puedes aceptar consentimientos en nombre del titular ni abrir los datos corporales.</p>}
+    {!privacyOnly && <section className="enterprise-panel">
       <h2>Registrar solicitud ficticia</h2>
       {profiles.isLoading && <p role="status">Consultando expedientes autorizados…</p>}
       {profiles.isError && <p role="alert">No se pudieron cargar los expedientes.</p>}
@@ -163,8 +173,8 @@ export function PrivacyRequestsPage() {
       </form>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-    </section>
-    <section className="enterprise-panel">
+    </section>}
+    {!privacyOnly && <section className="enterprise-panel">
       <h2>Mis solicitudes del expediente</h2>
       <p>Este historial solo muestra las solicitudes que registraste con tu propia sesión.</p>
       {history.isLoading && <p role="status">Consultando solicitudes…</p>}
@@ -178,8 +188,8 @@ export function PrivacyRequestsPage() {
         <button type="button" disabled={profileOffset + 20 >= history.data.total}
           onClick={() => setProfileOffset(profileOffset + 20)}>Siguiente</button>
       </>}
-    </section>
-    {session.role === "administrator" && <section className="enterprise-panel">
+    </section>}
+    {canReview && <section className="enterprise-panel">
       <h2>Cola de revisión administrativa</h2>
       <p>Solo aparecen expedientes con permiso explícito. Iniciar revisión no significa atender ni cerrar la solicitud;
         conserva el objetivo original y cualquier aviso de atraso.</p>
@@ -209,6 +219,10 @@ export function PrivacyRequestsPage() {
         <button type="button" disabled={queueOffset + 20 >= queue.data.total}
           onClick={() => setQueueOffset(queueOffset + 20)}>Siguiente</button>
       </>}
+    </section>}
+    {privacyOnly && consentProfile && <section className="enterprise-panel" key={consentProfile}>
+      <button type="button" onClick={() => setConsentProfile("")}>Cerrar consentimientos</button>
+      <ConsentPanel profileId={consentProfile} />
     </section>}
   </div>;
 }

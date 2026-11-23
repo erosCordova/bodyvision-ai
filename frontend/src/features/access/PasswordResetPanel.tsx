@@ -43,9 +43,9 @@ export function PasswordResetPanel({ api, onChanged, account }: Props) {
 
   return <section className="enterprise-panel private-admin-reset" aria-label="Restablecer acceso de prueba">
     <h2>Restablecer acceso</h2>
-    <p>Permite cambiar la contraseña de una cuenta ficticia de consulta o especialista de tu organización. Sus sesiones anteriores quedarán revocadas y sus permisos se conservarán.</p>
+    <p>Permite cambiar la contraseña de una cuenta ficticia de consulta, especialista o privacidad de tu organización. Sus sesiones anteriores quedarán revocadas y sus permisos se conservarán.</p>
     <p>Confirma tu identidad como administrador. Este procedimiento no permite restablecer tu propia cuenta ni otras cuentas administradoras.</p>
-    {!account?.manageable || account.status !== "active" ? <p>Selecciona una cuenta activa de consulta o especialista en el directorio.</p> : <form className="private-admin-form" onSubmit={event => { void submit(event); }}>
+    {!account?.manageable || account.status !== "active" ? <p>Selecciona una cuenta activa de consulta, especialista o privacidad en el directorio.</p> : <form className="private-admin-form" onSubmit={event => { void submit(event); }}>
       <p><strong>Usuario seleccionado:</strong> {account.display_name} · {account.email}</p>
       <label htmlFor="reset-administrator-password">Tu contraseña de administrador</label>
       <input id="reset-administrator-password" type="password" autoComplete="off"

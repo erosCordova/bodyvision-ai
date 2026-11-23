@@ -142,6 +142,30 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5175/api/v1/health/ready > /dev/null
           npx playwright test --config playwright.cookie.config.ts
+      - name: Accept minimum-data privacy officer with MFA and rotating cookies
+        timeout-minutes: 4
+        env:
+          IDENTITY_ENABLED: 'true'
+          MFA_ENABLED: 'true'
+          JWT_ACCESS_ENABLED: 'true'
+          PRIVATE_PRIVACY_BROWSER_FIXTURES: 'true'
+          VITE_ENABLE_PRIVATE_AUTH: 'true'
+          VITE_PRIVATE_COOKIE_AUTH: 'true'
+          API_PROXY_TARGET: http://127.0.0.1:8003
+        run: |
+          export JWT_SIGNING_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          export MFA_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          cd backend
+          PYTHONPATH=. python tests/browser/seed_privacy_officer.py
+          uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8003 --no-access-log > /tmp/privacy-api.log 2>&1 &
+          cd ../frontend
+          npm run dev -- --port 5176 --strictPort > /tmp/privacy-web.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:5176/api/v1/health/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5176/api/v1/health/ready > /dev/null
+          npx playwright test --config playwright.privacy.config.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4

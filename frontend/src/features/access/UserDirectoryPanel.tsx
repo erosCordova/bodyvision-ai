@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { privateAdminApi, type ManagedUser } from "../../services/api/privateAdmin";
 
-export const roleNames = { administrator: "Administrador", specialist: "Especialista", member: "Consulta", unassigned: "Sin rol vigente" };
+export const roleNames = { administrator: "Administrador", specialist: "Especialista", member: "Consulta", privacy_officer: "Responsable de privacidad", unassigned: "Sin rol vigente" };
 export const accountNames = { active: "Activa", disabled: "Suspendida", locked: "Bloqueada" };
 
 type Props = {

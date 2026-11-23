@@ -14,6 +14,7 @@ const roleLabel = {
   administrator: "Administrador",
   specialist: "Especialista",
   member: "Usuario de consulta",
+  privacy_officer: "Responsable de privacidad",
 } as const;
 
 export function PrivateAccessPage() {
@@ -188,7 +189,7 @@ export function PrivateAccessPage() {
               <div><dt>Organización</dt><dd>{session.organization_id}</dd></div>
               <div><dt>Caducidad</dt><dd>{new Date(session.expires_at).toLocaleString("es-PE")}</dd></div>
             </dl>
-            <Link className="private-access-link" to="/">Ir al espacio autorizado</Link>
+            <Link className="private-access-link" to={session.role === "privacy_officer" ? "/privacy" : "/"}>Ir al espacio autorizado</Link>
             <button className="private-access-secondary" onClick={() => void signOut()} disabled={busy}>
               {busy ? "Cerrando…" : "Cerrar sesión"}
             </button>

@@ -69,7 +69,12 @@ def issue_access_token(
         raise ValueError("Invalid JWT signing key")
     if _SESSION_DIGEST.fullmatch(session_digest) is None:
         raise ValueError("Invalid authenticated session digest")
-    if not identity.active or identity.role not in {"administrator", "specialist", "member"}:
+    if not identity.active or identity.role not in {
+        "administrator",
+        "specialist",
+        "member",
+        "privacy_officer",
+    }:
         raise ValueError("Inactive identity")
     timestamp = now or datetime.now(UTC)
     if timestamp.tzinfo is None or session_expires_at.tzinfo is None:
@@ -130,7 +135,7 @@ def verify_access_token(
             raise ValueError("Invalid access claims")
         if payload["iss"] != ACCESS_ISSUER or payload["aud"] != ACCESS_AUDIENCE:
             raise ValueError("Invalid JWT issuer or audience")
-        if payload["role"] not in {"administrator", "specialist", "member"}:
+        if payload["role"] not in {"administrator", "specialist", "member", "privacy_officer"}:
             raise ValueError("Invalid JWT role")
         sid = payload["sid"]
         if not isinstance(sid, str) or _SESSION_DIGEST.fullmatch(sid) is None:

@@ -33,7 +33,7 @@ from app.core.mfa import (
 from app.services.auth_sessions import DUMMY_VERIFIER, SessionRead
 from app.services.password_hashes import upgrade_authenticated_password
 
-PRIVILEGED_ROLES = {"administrator", "specialist"}
+PRIVILEGED_ROLES = {"administrator", "specialist", "privacy_officer"}
 MFA_MISSING = "Debes configurar la verificación de dos factores antes de ingresar."
 MFA_INVALID = "Código de verificación inválido, reutilizado o caducado."
 
@@ -333,6 +333,8 @@ def require_login_mfa(
     role: str,
     submitted: SecretStr | None,
 ) -> bool:
+    if role == "privacy_officer" and not request.app.state.settings.mfa_enabled:
+        raise DomainError(403, "MFA_REQUIRED", "El responsable de privacidad requiere MFA activo.")
     if not request.app.state.settings.mfa_enabled or role not in PRIVILEGED_ROLES:
         return False
     key = require_mfa_enabled(request)

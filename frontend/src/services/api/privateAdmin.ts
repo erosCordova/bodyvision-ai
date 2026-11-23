@@ -18,7 +18,7 @@ const createdUserSchema = z.object({
   organization_id: z.string().uuid(),
   display_name: z.string(),
   email: z.string(),
-  role: z.enum(["specialist", "member"]),
+  role: z.enum(["specialist", "member", "privacy_officer"]),
   status: z.literal("active"),
 });
 
@@ -40,13 +40,13 @@ export type NewTestAccount = {
   display_name: string;
   email: string;
   password: string;
-  role: "specialist" | "member";
+  role: "specialist" | "member" | "privacy_officer";
 };
 export type CreatedTestAccount = z.infer<typeof createdUserSchema>;
 
 const managedUserSchema = z.object({
   id: z.string().uuid(), display_name: z.string(), email: z.string(),
-  role: z.enum(["administrator", "specialist", "member", "unassigned"]),
+  role: z.enum(["administrator", "specialist", "member", "privacy_officer", "unassigned"]),
   status: z.enum(["active", "disabled", "locked"]), manageable: z.boolean(),
 });
 export type ManagedUser = z.infer<typeof managedUserSchema>;

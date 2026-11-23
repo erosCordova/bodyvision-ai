@@ -1,10 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type PropsWithChildren } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { FoundationPage } from "../../features/foundation/FoundationPage";
 import { DataLayout } from "../layouts/DataLayout";
 import { Dashboard } from "../../features/dashboard/Dashboard";
 import { ProfilesPage } from "../../features/profiles/ProfilesPage";
 import { ProfileDetail } from "../../features/profiles/ProfileDetail";
+import { privateAuthEnabled, usePrivateAuth } from "../providers/PrivateAuthProvider";
 
 const BodyWorkspace = lazy(() => import("../../features/viewer/BodyWorkspace").then(m => ({ default: m.BodyWorkspace })));
 const PrivacyRequestsPage = lazy(() => import("../../features/privacy/PrivacyRequestsPage").then(m => ({ default: m.PrivacyRequestsPage })));
@@ -17,13 +18,18 @@ const ReportsPage = lazy(() => modules().then(m => ({ default: m.ReportsPage }))
 const AdministrationPage = lazy(() => modules().then(m => ({ default: m.AdministrationPage })));
 const AccessPage = lazy(() => modules().then(m => ({ default: m.AccessPage })));
 const loading = <p role="status">Preparando módulo BODYVISION…</p>;
+function VisualAccess({ children }: PropsWithChildren) {
+  const { session, restoring } = usePrivateAuth();
+  if (privateAuthEnabled() && restoring) return loading;
+  return session?.role === "privacy_officer" ? <Navigate to="/privacy" replace /> : children;
+}
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/system" element={<FoundationPage />} />
         <Route path="/access" element={<Suspense fallback={loading}><AccessPage /></Suspense>} />
-        <Route path="/body-3d" element={<Suspense fallback={loading}><BodyWorkspace /></Suspense>} />
+        <Route path="/body-3d" element={<VisualAccess><Suspense fallback={loading}><BodyWorkspace /></Suspense></VisualAccess>} />
         <Route path="/simulation" element={<Navigate to="/body-3d?panel=simulacion" replace />} />
         <Route element={<DataLayout />}>
           <Route path="/" element={<Dashboard />} />

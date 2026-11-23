@@ -15,7 +15,7 @@ const accessSchema = z.object({
   expires_at: z.string().datetime({ offset: true }),
   organization_id: z.string().uuid(),
   user_id: z.string().uuid(),
-  role: z.enum(["administrator", "specialist", "member"]),
+  role: z.enum(["administrator", "specialist", "member", "privacy_officer"]),
 });
 
 export function parseCookieAccess(body: unknown) {

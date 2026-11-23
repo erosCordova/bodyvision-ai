@@ -92,7 +92,9 @@ export function ConsentPanel({ profileId }: { profileId: string }) {
           <button type="submit" className="primary-button" disabled={!confirmed || selectedActive || mutation.isPending}>
             {mutation.isPending ? "Guardando…" : selectedActive ? "Aceptación ya vigente" : "Registrar aceptación ficticia"}
           </button>
-        </form> : <p className="muted">Consulta de consentimientos. Registrar aceptaciones requiere un expediente activo y permiso de edición.</p>}
+        </form> : <p className="muted">{session.role === "privacy_officer"
+          ? "Este rol consulta consentimientos y puede revocarlos con permiso de gestión. No registra aceptaciones."
+          : "Consulta de consentimientos. Registrar aceptaciones requiere un expediente activo y permiso de edición."}</p>}
         <details><summary>Historial de aceptaciones y revocaciones</summary>
           {current.items.length === 0 ? <p>Aún no hay aceptaciones registradas.</p> :
             <ol className="consent-history">{current.items.map(item => <li key={item.id}>
