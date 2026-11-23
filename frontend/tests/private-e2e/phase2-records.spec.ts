@@ -232,6 +232,43 @@ test("F2 real UI and PostgreSQL: create, correct, preserve UTC microseconds, arc
       "/api/v1/profiles/" + profileId + "/measurements",
       { headers: foreign })).status()).toBe(404);
 
+    // This other-tenant fixture is a member, not a writer. Permission
+    // checking intentionally rejects mutation before fetching the foreign
+    // object (403); authorized reads above still conceal foreign IDs (404).
+    // Both defenses must stay intact, with no persisted mutation.
+    const foreignRename = await page.request.patch(
+      "/api/v1/profiles/" + profileId,
+      { headers: foreign, data: { display_name: "Nombre ajeno prohibido" } },
+    );
+    expect(foreignRename.status()).toBe(403);
+    const foreignArchive = await page.request.post(
+      "/api/v1/profiles/" + profileId + "/archive", { headers: foreign },
+    );
+    expect(foreignArchive.status()).toBe(403);
+    const foreignMeasurement = await page.request.post(
+      "/api/v1/profiles/" + profileId + "/measurements",
+      {
+        headers: { ...foreign, "Idempotency-Key": crypto.randomUUID() },
+        data: {
+          metric_code: "weight", value: 81, unit: "kg", method: "manual",
+          measured_at: EXACT_TIME,
+        },
+      },
+    );
+    expect(foreignMeasurement.status()).toBe(403);
+    const foreignCorrection = await page.request.patch(
+      "/api/v1/measurements/" + corrected.id,
+      {
+        headers: { ...foreign, "Idempotency-Key": crypto.randomUUID() },
+        data: {
+          metric_code: "weight", value: 82, unit: "kg", method: "manual",
+          measured_at: EXACT_TIME,
+          correction_reason: "Intento de corrección ajeno prohibido",
+        },
+      },
+    );
+    expect(foreignCorrection.status()).toBe(403);
+
     // The original authenticated author retains read access to the history.
     const stillReadable = await page.request.get(
       "/api/v1/measurements/" + corrected.id + "/versions", { headers },
@@ -315,3 +352,101 @@ test("F2 restricted lifecycle: browser read-only, API denial, authorized reactiv
     })).toContainText("73 kg");
   },
 );
+
+
+test("F2 cross-tenant specialist cannot mutate an active foreign expediente", async ({ page }) => {
+  test.setTimeout(90_000);
+  const ownerToken = await signIn(page);
+  const ownerHeaders = { Authorization: "Bearer " + ownerToken };
+  const reference = "Aislamiento activo ficticio " + crypto.randomUUID().slice(0, 8);
+  const created = await page.request.post("/api/v1/profiles", {
+    headers: ownerHeaders,
+    data: { birth_year: 1998, display_name: reference },
+  });
+  expect(created.status()).toBe(201);
+  const profile = await created.json() as { id: string; display_name: string; status: string };
+  expect(profile.status).toBe("active");
+
+  const sample = {
+    metric_code: "weight", value: 72, unit: "kg", method: "manual",
+    measured_at: EXACT_TIME,
+  };
+  const measured = await page.request.post(
+    "/api/v1/profiles/" + profile.id + "/measurements",
+    {
+      headers: { ...ownerHeaders, "Idempotency-Key": crypto.randomUUID() },
+      data: sample,
+    },
+  );
+  expect(measured.status()).toBe(201);
+  const measurement = await measured.json() as Measurement;
+
+  // Unlike the separate member fixture (403), this other-tenant account has
+  // a valid specialist role. An independent creation in its OWN organization
+  // proves writer permission; cross-tenant denial must not be due to role.
+  const outsiderLogin = await page.request.post("/api/v1/auth/login", {
+    data: {
+      organization_id: OUTSIDER_ORGANIZATION,
+      email: "browser.outsider.editor@example.invalid",
+      password: PASSWORD,
+    },
+  });
+  expect(outsiderLogin.status()).toBe(200);
+  const specialist = await outsiderLogin.json() as { token: string; role: string };
+  expect(specialist.role).toBe("specialist");
+  const foreign = { Authorization: "Bearer " + specialist.token };
+  const own = await page.request.post("/api/v1/profiles", {
+    headers: foreign,
+    data: {
+      birth_year: 1998,
+      display_name: "Control positivo " + crypto.randomUUID().slice(0, 8),
+    },
+  });
+  expect(own.status()).toBe(201);
+  const ownId = (await own.json() as { id: string }).id;
+  expect((await page.request.get("/api/v1/profiles/" + ownId,
+    { headers: foreign })).status()).toBe(200);
+
+  const foreignPath = "/api/v1/profiles/" + profile.id;
+  expect((await page.request.get(foreignPath, { headers: foreign })).status()).toBe(404);
+  expect((await page.request.patch(foreignPath, {
+    headers: foreign, data: { display_name: "Modificación entre organizaciones" },
+  })).status()).toBe(404);
+  expect((await page.request.post(foreignPath + "/archive",
+    { headers: foreign })).status()).toBe(404);
+  expect((await page.request.post(foreignPath + "/measurements", {
+    headers: { ...foreign, "Idempotency-Key": crypto.randomUUID() },
+    data: { ...sample, value: 80 },
+  })).status()).toBe(404);
+  expect((await page.request.patch("/api/v1/measurements/" + measurement.id, {
+    headers: { ...foreign, "Idempotency-Key": crypto.randomUUID() },
+    data: {
+      ...sample, value: 81,
+      correction_reason: "Corrección entre organizaciones prohibida",
+    },
+  })).status()).toBe(404);
+
+  // The owner can still read the exact original active record and its
+  // unmodified single measurement/version, ruling out silent mutations.
+  const unchanged = await page.request.get(foreignPath, { headers: ownerHeaders });
+  expect(unchanged.status()).toBe(200);
+  const preserved = await unchanged.json() as { display_name: string; status: string };
+  expect(preserved.display_name).toBe(reference);
+  expect(preserved.status).toBe("active");
+  const measurements = await page.request.get(foreignPath + "/measurements",
+    { headers: ownerHeaders });
+  expect(measurements.status()).toBe(200);
+  const current = await measurements.json() as { items: Measurement[]; total: number };
+  expect(current.total).toBe(1);
+  expect(current.items.map(item => item.id)).toEqual([measurement.id]);
+  expect(current.items[0].value).toBe(72);
+  const history = await page.request.get(
+    "/api/v1/measurements/" + measurement.id + "/versions",
+    { headers: ownerHeaders },
+  );
+  expect(history.status()).toBe(200);
+  const versions = await history.json() as Measurement[];
+  expect(versions).toHaveLength(1);
+  expect(versions[0].is_current).toBe(true);
+  expect(versions[0].id).toBe(measurement.id);
+});

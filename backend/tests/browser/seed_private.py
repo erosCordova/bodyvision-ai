@@ -51,6 +51,12 @@ def seed_private_browser_accounts() -> None:
                     "member",
                     "browser.outsider@example.invalid",
                 ),
+                (
+                    UUID("30000000-0000-4000-8000-000000000003"),
+                    SECOND_WORKSPACE,
+                    "specialist",
+                    "browser.outsider.editor@example.invalid",
+                ),
             ]:
                 # Fail on repeated setup instead of resetting active accounts.
                 connection.execute(
@@ -111,4 +117,4 @@ def seed_private_browser_accounts() -> None:
 
 if __name__ == "__main__":
     seed_private_browser_accounts()
-    print("Two synthetic browser accounts and an explicitly granted CSV fixture provisioned.")
+    print("Three synthetic browser accounts and an explicitly granted CSV fixture provisioned.")
