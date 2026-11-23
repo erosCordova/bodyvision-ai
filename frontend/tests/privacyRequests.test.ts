@@ -13,6 +13,7 @@ const record = {
   reviewed_by: null,
   profile_code: "BV-FAKE123",
   review_overdue: false,
+  can_review: false,
 };
 
 describe("solicitudes ARCO ficticias", () => {

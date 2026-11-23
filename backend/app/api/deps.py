@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.core.errors import DomainError
 from app.models.context import FIRST_WORKSPACE, Workspace
-from app.services.auth_sessions import resolve_identity
+from app.services.auth_sessions import resolve_identity, verified_session_digest
 
 
 def workspace(
@@ -19,6 +19,14 @@ def workspace(
         identity = resolve_identity(request)
         if request.headers.get("X-Workspace-ID"):
             raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
+        if identity.role == "privacy_officer" and request.scope["route"].path not in {
+            "/api/v1/workspaces",
+            "/api/v1/privacy-requests",
+            "/api/v1/privacy-requests/{request_id}/review",
+        }:
+            raise DomainError(
+                403, "FORBIDDEN", "Tu acceso está limitado a la gestión de privacidad."
+            )
         with request.app.state.engine.begin() as connection:
             connection.execute(
                 text("SELECT set_config('app.organization_id',:org,true)"),
@@ -29,6 +37,10 @@ def workspace(
                 {"actor": str(identity.user_id)},
             )
             connection.execute(text("SELECT set_config('app.identity_verified','yes',true)"))
+            connection.execute(
+                text("SELECT set_config('app.session_digest',:digest,true)"),
+                {"digest": verified_session_digest(request)},
+            )
             yield Workspace(
                 connection,
                 identity.organization_id,

@@ -18,7 +18,7 @@ class ManagedUser(BaseModel):
     id: UUID
     display_name: str
     email: str
-    role: Literal["administrator", "specialist", "member", "unassigned"]
+    role: Literal["administrator", "specialist", "member", "privacy_officer", "unassigned"]
     status: Literal["active", "disabled", "locked"]
     manageable: bool
 

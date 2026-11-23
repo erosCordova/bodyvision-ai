@@ -4,7 +4,10 @@ La rama de identidad añade administración de cuentas, consentimientos, permiso
 cambio de contraseña propia, cierre de sesiones y auditoría encadenada verificable.
 Es una modalidad optativa de desarrollo/CI, distinta de la demostración pública.
 Su configuración y límites están en [fundación de identidad F3](docs/phase3_identity_foundation.md).
-No hay cuentas públicas ni habilitación de datos reales. MFA TOTP y recuperación
+No hay cuentas públicas ni habilitación de datos reales. El responsable ficticio
+de privacidad gestiona solicitudes y revocación de consentimientos con MFA y
+permisos explícitos, sin acceso clínico. Su alcance está en
+[privacidad y mínimo dato](docs/qa/PHASE_3_PRIVACY_OFFICER.md). MFA TOTP y recuperación
 existen bajo activación privada local/test; no están habilitados por la receta
 Docker de abajo.
 
@@ -60,7 +63,7 @@ python scripts/check_local_installation.py
 
 En sistemas donde el comando sea `python3`, úsalo en lugar de `python`. La primera orden genera `.env` con dos contraseñas aleatorias sin mostrarlas. La segunda inicia PostgreSQL, ejecuta Alembic como servicio de una sola ejecución, espera readiness de la API y publica la interfaz únicamente en loopback. La tercera verifica por HTTP la API, conexión/esquema SQL e interfaz; devuelve un código distinto de cero si falta un servicio. No modifica datos ni muestra respuestas o credenciales. Puede usarse `--json` para automatización. Consulta el [alcance del comprobador](docs/operations/LOCAL_STARTUP_VERIFICATION.md).
 
-Abre http://localhost:8080. El resumen debe cargar desde la base. Las comprobaciones de salud están en /system. `http://localhost:8080/api/v1/health/live` comprueba el proceso; `/api/v1/health/ready` consulta PostgreSQL y exige la revisión declarada en `backend/app/db/session.py` para este checkout (actualmente `0021_pose_retention` en local/test; `0002_data_core` solo en demo). Swagger local: http://localhost:8080/api/v1/docs. La CSP local de nginx impide recursos externos de Swagger; para documentación interactiva usa el acceso nativo de desarrollo indicado abajo o el OpenAPI JSON `/api/v1/openapi.json`.
+Abre http://localhost:8080. El resumen debe cargar desde la base. Las comprobaciones de salud están en /system. `http://localhost:8080/api/v1/health/live` comprueba el proceso; `/api/v1/health/ready` consulta PostgreSQL y exige la revisión declarada en `backend/app/db/session.py` para este checkout (actualmente `0030_private_privacy_officer` en local/test; `0002_data_core` solo en demo). Swagger local: http://localhost:8080/api/v1/docs. La CSP local de nginx impide recursos externos de Swagger; para documentación interactiva usa el acceso nativo de desarrollo indicado abajo o el OpenAPI JSON `/api/v1/openapi.json`.
 
 ```bash
 docker compose ps

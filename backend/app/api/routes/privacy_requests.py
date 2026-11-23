@@ -25,12 +25,12 @@ REQUEST_TYPES = ("access", "rectification", "cancellation", "opposition", "expor
 OVERDUE = "(r.status IN ('received','in_review') AND r.review_target_at <= now())"
 FIELDS = (
     """r.id,r.profile_id,r.request_type,r.status,r.requested_by,r.received_at,
- r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code,
+ r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code,p.can_review,
  """
     + OVERDUE
     + " AS review_overdue"
 )
-TABLE = """synthetic_privacy_requests r JOIN profiles p
+TABLE = """synthetic_privacy_requests r JOIN private_privacy_profile_labels() p
   ON p.organization_id=r.organization_id AND p.id=r.profile_id"""
 
 
@@ -53,6 +53,7 @@ class PrivacyRequestRead(BaseModel):
     reviewed_by: UUID | None
     profile_code: str
     review_overdue: bool
+    can_review: bool
 
 
 class PrivacyRequestPage(BaseModel):
@@ -71,10 +72,8 @@ def _require_private(scope: Workspace) -> None:
 
 def _require_administrator(scope: Workspace) -> None:
     _require_private(scope)
-    if scope.role != "administrator":
-        raise DomainError(
-            403, "FORBIDDEN", "Solo el administrador ficticio puede iniciar la revisión."
-        )
+    if scope.role not in {"administrator", "privacy_officer"}:
+        raise DomainError(403, "FORBIDDEN", "Se requiere un responsable autorizado de privacidad.")
 
 
 def _audit(scope: Workspace, profile_id: UUID | None, event: str) -> None:
@@ -225,7 +224,10 @@ def review_queue(
 def start_review(request_id: UUID, scope: Scope):
     _require_administrator(scope)
     row = _read(scope, request_id)
-    records.profile(scope, row["profile_id"])
+    if not row["can_review"]:
+        raise DomainError(404, "NOT_FOUND", "Solicitud no disponible.")
+    # _read returns only request metadata and a minimal code. Privacy officers
+    # deliberately cannot SELECT the underlying clinical expediente.
     if not scope.connection.execute(
         text("SELECT has_profile_access(:profile,true)"),
         {"profile": row["profile_id"]},

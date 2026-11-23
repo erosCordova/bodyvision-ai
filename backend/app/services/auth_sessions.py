@@ -93,8 +93,10 @@ def resolve_identity(request: Request, *, token_override: str | None = None) -> 
         )
         if (
             row is not None
-            and request.app.state.settings.mfa_enabled
-            and row["assigned_role"] in {"administrator", "specialist"}
+            and (
+                request.app.state.settings.mfa_enabled or row["assigned_role"] == "privacy_officer"
+            )
+            and row["assigned_role"] in {"administrator", "specialist", "privacy_officer"}
         ):
             verified = connection.execute(
                 text("SELECT private_mfa_session_verified(CAST(:digest AS char(64)))"),
@@ -106,6 +108,7 @@ def resolve_identity(request: Request, *, token_override: str | None = None) -> 
         "administrator",
         "specialist",
         "member",
+        "privacy_officer",
     }:
         raise DomainError(401, "SESSION_EXPIRED", "La sesión ya no es válida.")
     # Scope diagnostics only after successful session and MFA verification.
@@ -312,8 +315,8 @@ def rotate_session(request: Request, *, token_override: str | None = None) -> Se
         ).scalar_one()
         if (
             result["status"] == "rotated"
-            and settings.mfa_enabled
-            and result["role"] in {"administrator", "specialist"}
+            and (settings.mfa_enabled or result["role"] == "privacy_officer")
+            and result["role"] in {"administrator", "specialist", "privacy_officer"}
         ):
             verified = connection.execute(
                 text("SELECT private_mfa_session_verified(CAST(:digest AS char(64)))"),

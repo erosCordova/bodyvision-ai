@@ -95,8 +95,10 @@ def resolve_access_identity(request: Request) -> Identity:
         )
         if (
             row is not None
-            and request.app.state.settings.mfa_enabled
-            and row["assigned_role"] in {"administrator", "specialist"}
+            and (
+                request.app.state.settings.mfa_enabled or row["assigned_role"] == "privacy_officer"
+            )
+            and row["assigned_role"] in {"administrator", "specialist", "privacy_officer"}
         ):
             verified = connection.execute(
                 text("SELECT private_mfa_session_verified(CAST(:digest AS char(64)))"),

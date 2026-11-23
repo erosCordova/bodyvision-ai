@@ -29,7 +29,7 @@ _ARGON2_FORMAT = re.compile(
     r"\$argon2id\$v=19\$m=65536,t=3,p=4\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}"
 )
 _LEGACY_FORMAT = re.compile(r"pbkdf2_sha256\$600000\$[0-9a-f]{32}\$[0-9a-f]{64}")
-Role = Literal["administrator", "specialist", "member"]
+Role = Literal["administrator", "specialist", "member", "privacy_officer"]
 Purpose = Literal["capture", "pose", "report", "storage"]
 Action = Literal[
     "admin:manage",
@@ -182,7 +182,11 @@ def authorized(
     """
     if identity is None or not identity.active or identity.organization_id != organization_id:
         return False
-    if identity.role not in {"administrator", "specialist", "member"}:
+    if identity.role not in {"administrator", "specialist", "member", "privacy_officer"}:
+        return False
+    # Privacy access is mediated by scoped queue/consent operations, never by
+    # the generic clinical action matrix, even with a stale management grant.
+    if identity.role == "privacy_officer":
         return False
     if action == "admin:manage":
         return identity.role == "administrator"
