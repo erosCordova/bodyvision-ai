@@ -83,9 +83,7 @@ def test_monitor_records_recovery_after_another_instance_writes_outage(tmp_path)
         nonlocal sleeps
         sleeps += 1
         if sleeps == 1:
-            assert WatchdogHistory(path).append_transition(
-                "unreachable", datetime.now(UTC)
-            )
+            assert WatchdogHistory(path).append_transition("unreachable", datetime.now(UTC))
         else:
             raise KeyboardInterrupt
 
