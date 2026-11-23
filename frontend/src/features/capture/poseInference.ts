@@ -52,18 +52,20 @@ function finiteCoordinate(value: number | undefined, fallback = 0): number {
 
 /** Parse actual MediaPipe results, never synthesize missing landmarks. */
 export function summarizePoseResult(result: RawPoseResult): PoseEstimate {
-  const first = result.landmarks?.[0];
-  if (!first || first.length !== 33) {
+  const first = Array.isArray(result?.landmarks) ? result.landmarks[0] : undefined;
+  if (!Array.isArray(first) || first.length !== 33) {
     return { found: false, landmarks: [], visiblePoints: 0, fullBodyReview: false,
       model: POSE_MODEL_VERSION };
   }
-  // MediaPipe may return a 33-element result whose coordinates are all absent
-  // or non-finite. Those are not evidence that a body was detected.
-  const hasAnyFinitePosition = first.some(point =>
+  // A third-party model may return 33 finite but entirely off-screen points.
+  // At least one REAL normalized x/y pair must lie inside the image;
+  // otherwise never present the data as a detected body.
+  const hasAnyInFramePosition = first.some(point =>
     typeof point?.x === "number" && Number.isFinite(point.x) &&
-    typeof point?.y === "number" && Number.isFinite(point.y),
+    typeof point?.y === "number" && Number.isFinite(point.y) &&
+    point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1,
   );
-  if (!hasAnyFinitePosition) {
+  if (!hasAnyInFramePosition) {
     return { found: false, landmarks: [], visiblePoints: 0, fullBodyReview: false,
       model: POSE_MODEL_VERSION };
   }
