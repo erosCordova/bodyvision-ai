@@ -22,6 +22,21 @@ describe("BODYVISION project progress assessment", () => {
     expect(production.pending).toContain("respaldos productivos/PITR");
     expect(production.pending).toContain("RPO/RTO");
     expect(reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Fresh evidence is visible, but independently requested approvals are not fabricated.
+    expect(reviewedAt).toBe("2026-11-23");
+    const pose = phaseAssessment.find(phase => phase.id === 5)!;
+    expect(pose.progress).toBe(90);
+    for (const pr of ["#75", "#77", "#79"]) {
+      expect(pose.completed).toContain(pr);
+    }
+    expect(pose.pending).toContain("corpus independiente autorizado");
+    expect(production.progress).toBe(90);
+    for (const pr of ["#65", "#67", "#69", "#71", "#73"]) {
+      expect(production.completed).toContain(pr);
+    }
+    expect(overallProgress).toBe(93);
+    expect(production.pending).toContain("respaldos productivos/PITR");
+
   });
 });
 
