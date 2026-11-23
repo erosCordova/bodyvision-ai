@@ -236,7 +236,7 @@ export function AnatomyAtlas() {
     setScenarioExportError("");
     try {
       const csv = await collectSyntheticScenarioHistoryCsv(
-        offset => api.scenarios(scenarioProfileId, offset),
+        (offset, snapshotAt) => api.scenarios(scenarioProfileId, offset, snapshotAt),
         {
           expectedProfileId: scenarioProfileId,
           signal: abort.signal,
