@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { anatomySource } from "../../src/features/viewer/atlasSource";
+import { loadPinnedAtlasFixture, PINNED_ATLAS_FIXTURES } from "../helpers/pinnedAtlasFixtures";
 import { summarizeSyntheticPoseMatrix, type SyntheticPoseObservation } from "../../src/features/capture/poseRobustnessReport";
 import { summarizeSyntheticPoseMirror, summarizeSyntheticPoseRepeat, type SyntheticPosePoint } from "../../src/features/capture/poseMirrorAudit";
 
@@ -12,25 +12,16 @@ test.use({ launchOptions: {
 } });
 test.setTimeout(90000);
 const assets = new Map<string, Buffer>();
-const hashes: Record<string, string> = {
-  skin: "1000d249050112ea014651647d3145e0bde127f8",
-  skeleton: "89c8d305f3727f31688abcfda2860d2b6d628832",
-};
+// All four assets are pinned to reviewed Git blob hashes. Bounded retries
+// avoid aborting the entire viewer suite on a transient upstream CDN failure.
 test.beforeAll(async () => {
-  test.setTimeout(90000);
-  await Promise.all(["skin", "skeleton"].flatMap(layer =>
-    [`web/public/models/${layer}.glb`, `content/${layer}.json`].map(async path => {
-      const response = await fetch(anatomySource + path, { signal: AbortSignal.timeout(30000) });
-      if (!response.ok) throw new Error(`Could not download pinned test asset: ${path}`);
-      const body = Buffer.from(await response.arrayBuffer());
-      if (path.endsWith(".glb")) {
-        const hash = createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
-        expect(hash).toBe(hashes[layer]);
-      }
-      assets.set(path, body);
-    })
-  ));
+  test.setTimeout(120000);
+  await Promise.all(Object.keys(PINNED_ATLAS_FIXTURES).map(async path => {
+    const body = await loadPinnedAtlasFixture(path as keyof typeof PINNED_ATLAS_FIXTURES);
+    assets.set(path, body);
+  }));
 });
+
 async function sourceFixtures(page: Page) {
   await page.route(anatomySource + "**", async route => {
     const path = route.request().url().slice(anatomySource.length);
