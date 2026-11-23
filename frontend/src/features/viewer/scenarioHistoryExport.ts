@@ -11,6 +11,7 @@ export type ScenarioHistoryPage = {
   total: number;
   limit: number;
   offset: number;
+  snapshot_at?: string | null;
 };
 
 type ExportOptions = {
@@ -31,7 +32,7 @@ function assertCount(value: number, name: string) {
 
 /** All-or-nothing export: never download a partial or inconsistent history. */
 export async function collectSyntheticScenarioHistoryCsv(
-  readPage: (offset: number) => Promise<ScenarioHistoryPage>,
+  readPage: (offset: number, snapshotAt?: string) => Promise<ScenarioHistoryPage>,
   { expectedProfileId, signal, onProgress }: ExportOptions,
 ): Promise<string> {
   if (!/^[a-f0-9-]{36}$/i.test(expectedProfileId)) {
@@ -41,12 +42,28 @@ export async function collectSyntheticScenarioHistoryCsv(
   const seen = new Set<string>();
   let total: number | null = null;
   let pageSize: number | null = null;
+  let snapshotAt: string | undefined;
+  let snapshotEstablished = false;
 
   while (total === null || rows.length < total) {
     assertActive(signal);
     const offset = rows.length;
-    const page = await readPage(offset);
+    const page = await readPage(offset, snapshotAt);
     assertActive(signal);
+
+    const reportedSnapshot = page.snapshot_at ?? undefined;
+    if (reportedSnapshot !== undefined && (
+      !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(reportedSnapshot)
+      || !Number.isFinite(Date.parse(reportedSnapshot))
+    )) {
+      throw new Error("La API devolvió un punto de corte temporal inválido.");
+    }
+    if (!snapshotEstablished) {
+      snapshotAt = reportedSnapshot;
+      snapshotEstablished = true;
+    } else if (reportedSnapshot !== snapshotAt) {
+      throw new Error("La API modificó el punto de corte del historial durante la exportación.");
+    }
 
     assertCount(page.total, "total");
     assertCount(page.offset, "offset");
