@@ -261,8 +261,20 @@ jobs:
           test "$integrity_status" -eq 2
           grep -q '"synthetic_restore_integrity_rejected"' /tmp/bodyvision-restore-corruption-check.json
           rm -f /tmp/bodyvision-corrupt-ci.dump /tmp/bodyvision-restore-corruption-check.json
+          # Pin the checked bytes in this private, owner-only recovery directory.
+          # Both pg_restore commands below must consume the SAME verified copy.
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+            python3 scripts/stage_verified_restore.py \
+            --source /tmp/bodyvision-backup-ci.dump \
+            --manifest /tmp/bodyvision-backup-ci.manifest.json \
+            --output "$recovery_state/verified.dump"
+          rm -f /tmp/bodyvision-backup-ci.dump
+          APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
+            python3 scripts/verify_restore_manifest.py verify \
+            --backup "$recovery_state/verified.dump" \
+            --manifest /tmp/bodyvision-backup-ci.manifest.json
           docker compose exec -T db-test sh -c 'createdb -U "$POSTGRES_USER" bodyvision_restored_ci'
-          docker compose exec -T db-test sh -c 'pg_restore --exit-on-error --no-owner -U "$POSTGRES_USER" -d bodyvision_restored_ci' < /tmp/bodyvision-backup-ci.dump
+          docker compose exec -T db-test sh -c 'pg_restore --exit-on-error --no-owner -U "$POSTGRES_USER" -d bodyvision_restored_ci' < "$recovery_state/verified.dump"
           docker compose exec -T db-test sh -c 'pg_dump --data-only --no-owner --no-privileges -U "$POSTGRES_USER" bodyvision_restored_ci' > /tmp/bodyvision-restored-ci.sql
           python3 scripts/verify_test_isolation.py /tmp/bodyvision-before-recovery.sql /tmp/bodyvision-restored-ci.sql
           docker compose exec -T db-test sh -c 'dropdb -U "$POSTGRES_USER" bodyvision_restored_ci'
@@ -316,12 +328,12 @@ jobs:
             "SELECT count(*) FROM pg_roles WHERE rolname IN ('bodyvision_app','bodyvision_auth_app') AND NOT rolcanlogin AND NOT rolsuper")" = 2
           APP_ENV=test CI=true BODYVISION_RESTORE_DRILL=synthetic-only \
             python3 scripts/verify_restore_manifest.py verify \
-            --backup /tmp/bodyvision-backup-ci.dump \
+            --backup "$recovery_state/verified.dump" \
             --manifest /tmp/bodyvision-backup-ci.manifest.json
           docker exec -i bodyvision-recovery-ci \
             pg_restore --exit-on-error --no-owner \
             -U postgres -d bodyvision_recovered_ci \
-            < /tmp/bodyvision-backup-ci.dump
+            < "$recovery_state/verified.dump"
           docker exec bodyvision-recovery-ci \
             pg_dump --data-only --no-owner --no-privileges \
             -U postgres bodyvision_recovered_ci \
