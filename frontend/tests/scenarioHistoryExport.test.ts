@@ -52,6 +52,36 @@ describe("full synthetic scenario history CSV", () => {
     expect(csv.startsWith("\uFEFF")).toBe(true);
   });
 
+  it("keeps the initial UTC high-watermark while another synthetic row is inserted", async () => {
+    const anchorTime = "2026-11-20T13:00:05.000000+00:00";
+    const baseline = rows.slice(0, 45);
+    const requests: Array<[number, string | undefined]> = [];
+    const load = vi.fn(async (offset: number, snapshotAt?: string) => {
+      requests.push([offset, snapshotAt]);
+      // Simulate a newly created server row after the first page was read.
+      const response = page(offset, baseline);
+      return { ...response, snapshot_at: anchorTime };
+    });
+    const csv = await collectSyntheticScenarioHistoryCsv(load, { expectedProfileId: PROFILE });
+    expect(requests).toEqual([
+      [0, undefined], [20, anchorTime], [40, anchorTime],
+    ]);
+    expect(csv.split("\\r\\n").filter(Boolean)).toHaveLength(46);
+  });
+
+  it("rejects altered, missing or ambiguous high-watermarks on later pages", async () => {
+    const anchorTime = "2026-11-20T13:00:05Z";
+    for (const later of [undefined, "2026-11-20T13:00:06Z", "2026-11-20T13:00:05"]) {
+      const load = vi.fn(async (offset: number) => ({
+        ...page(offset), snapshot_at: offset === 0 ? anchorTime : later,
+      }));
+      await expect(collectSyntheticScenarioHistoryCsv(load, {
+        expectedProfileId: PROFILE,
+      })).rejects.toThrow(/punto de corte/);
+      expect(load).toHaveBeenCalledTimes(2);
+    }
+  });
+
   it("rejects a count change without returning a partial CSV", async () => {
     const load = vi.fn(async (offset: number) => ({
       ...page(offset), total: offset === 0 ? 45 : 46,
