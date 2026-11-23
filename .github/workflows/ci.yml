@@ -142,6 +142,11 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5175/api/v1/health/ready > /dev/null
           npx playwright test --config playwright.cookie.config.ts
+          # Repeat the previously intermittent 401/201 administrative
+          # interleaving with fresh browser contexts and disposable DB data.
+          # A passing single run is insufficient evidence against the race.
+          npx playwright test --config playwright.cookie.config.ts \
+            tests/cookie-e2e/admin-after-refresh.spec.ts --repeat-each=3
       - name: Accept minimum-data privacy officer with MFA and rotating cookies
         timeout-minutes: 4
         env:
