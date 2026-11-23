@@ -104,20 +104,26 @@ def monitor(
         checked_at = datetime.now(UTC)
         if journal is not None:
             journal.record_probe(state, checked_at, interval)
-        if state != previous:
-            saved = journal is None or journal.append_transition(state, checked_at)
-            if saved:
-                emit(
-                    json.dumps(
-                        {
-                            "event": "synthetic_watchdog_transition",
-                            "state": state,
-                            "checked_at": checked_at.isoformat(),
-                        },
-                        sort_keys=True,
-                    )
+        # With a persistent journal, deduplicate against the latest
+        # *transactional* SQLite state on every probe. Another process may
+        # have recorded an outage since this monitor last changed state.
+        # Comparing only with a cached previous value would hide recovery.
+        if journal is not None:
+            saved = journal.append_transition(state, checked_at)
+        else:
+            saved = state != previous
+        if saved:
+            emit(
+                json.dumps(
+                    {
+                        "event": "synthetic_watchdog_transition",
+                        "state": state,
+                        "checked_at": checked_at.isoformat(),
+                    },
+                    sort_keys=True,
                 )
-            previous = state
+            )
+        previous = state
         if once:
             return 0 if state == "ready" else 1
         try:
