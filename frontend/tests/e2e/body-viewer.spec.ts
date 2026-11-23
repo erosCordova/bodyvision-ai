@@ -1349,6 +1349,7 @@ test("live diagnostics count both comparison passes without drawing idle frames 
     "schemaVersion", "anatomyRevision", "capturedAt", "mode", "interacting", "pixelRatio",
     "bufferWidth", "bufferHeight", "drawCalls", "triangles", "renderPasses",
     "renderedFrames", "cpuSubmissionMs", "cpuSampleCount", "cpuMedianMs", "cpuP95Ms",
+    "rafIntervalCount", "rafMedianIntervalMs", "rafP95IntervalMs",
     "contextAvailable", "geometryBuffers",
     "textures", "meshes", "overlays", "lodMeshes", "lodTrianglesSaved", "layerReadyMs",
     "retainedGeometryCount", "cpuGeometryBytes", "layerGeometry", "timingScope",
@@ -1528,4 +1529,47 @@ test.describe("mobile touch emulation (not real phone hardware)", () => {
     expect(scriptErrors).toEqual([]);
   });
 
+});
+
+test("F6 observes rAF intervals during actual synthetic 3D rotation without claiming FPS", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await sourceFixtures(page);
+  await page.goto("/body-3d");
+  await expect(viewport(page)).toHaveAttribute("data-loaded", "true", { timeout: 60000 });
+  const panelButton = page.getByRole("button", { name: "Detalles", exact: true });
+  await panelButton.click();
+  const panel = page.getByLabel("Diagnóstico de renderizado");
+  await expect(panel).toContainText("Giro 3D · intervalo rAF (mediana / P95)");
+  await expect(panel).toContainText("Sin muestra: activa Giro");
+  const spin = page.getByRole("button", { name: "Giro", exact: true });
+  await expect(spin).toBeEnabled();
+  // The diagnostic aside overlays the toolbar: close it before touching
+  // the underlying Giro control rather than force-clicking through it.
+  await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+  await spin.click();
+  await expect(spin).toHaveAttribute("aria-pressed", "true");
+  await panelButton.click();
+  await expect(panel).toContainText(/Giro 3D · intervalo rAF \(mediana \/ P95\): [0-9.]+ \/ [0-9.]+ ms/, {
+    timeout: 15000,
+  });
+  const pending = page.waitForEvent("download");
+  await panel.getByRole("button", { name: "Descargar diagnóstico" }).click();
+  const report = JSON.parse(readFileSync((await (await pending).path())!, "utf8"));
+  expect(report.rafIntervalCount).toBeGreaterThan(0);
+  expect(report.rafIntervalCount).toBeLessThanOrEqual(120);
+  expect(report.rafMedianIntervalMs).toBeGreaterThan(0);
+  expect(report.rafP95IntervalMs).toBeGreaterThanOrEqual(report.rafMedianIntervalMs);
+  expect(report.timingScope).toContain("excludes GPU completion, display FPS");
+  expect(Object.keys(report).some(key => key.toLowerCase() === "fps")).toBe(false);
+  await panel.getByRole("button", { name: "Cerrar diagnóstico" }).click();
+  await spin.click();
+  await expect(spin).toHaveAttribute("aria-pressed", "false");
+  await panelButton.click();
+  await expect(panel).toContainText("Sin muestra: activa Giro", { timeout: 5000 });
+  await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
+  expect(writes).toEqual([]);
 });

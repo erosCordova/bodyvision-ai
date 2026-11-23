@@ -422,7 +422,7 @@ export function AnatomyAtlas() {
       anatomyRevision,
       capturedAt: new Date().toISOString(),
       ...stats,
-      timingScope: "CPU command submission only; excludes GPU completion, FPS and clinical assessment",
+      timingScope: "CPU submission plus visible rotating rAF callback intervals; excludes GPU completion, display FPS and clinical assessment",
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
@@ -804,6 +804,13 @@ export function AnatomyAtlas() {
             <span>Envío CPU (mediana / P95): {renderStats.cpuMedianMs === null || renderStats.cpuP95Ms === null
               ? "Sin muestra" : renderStats.cpuMedianMs.toFixed(2) + " / " + renderStats.cpuP95Ms.toFixed(2) + " ms"}</span>
             <span>Muestras de render: {renderStats.cpuSampleCount} (máximo 120, ventana móvil)</span>
+            <span>Giro 3D · intervalo rAF (mediana / P95): {
+              renderStats.rafMedianIntervalMs === null || renderStats.rafP95IntervalMs === null
+                ? "Sin muestra: activa Giro"
+                : renderStats.rafMedianIntervalMs.toFixed(2) + " / " +
+                  renderStats.rafP95IntervalMs.toFixed(2) + " ms"
+            }</span>
+            <span>Intervalos de giro registrados: {renderStats.rafIntervalCount} (máximo 120)</span>
             <span>Recursos gráficos: {renderStats.geometryBuffers} geometrías · {renderStats.textures} texturas</span>
             <span>Geometría retenida (CPU): {(renderStats.cpuGeometryBytes / 1024 / 1024).toFixed(2)} MiB · {renderStats.retainedGeometryCount} conjuntos únicos</span>
             <div className="studio-render-layers" role="group" aria-label="Memoria geométrica por capa">
@@ -820,7 +827,7 @@ export function AnatomyAtlas() {
             </div>
 
             <span>Conexión gráfica: {renderStats.contextAvailable ? "Disponible" : "Interrumpida"}</span>
-            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Memoria de geometría = tamaño de buffers de CPU, no VRAM ni consumo total. La preparación incluye descarga y procesamiento CPU; no mide la finalización de GPU; el envío CPU tampoco equivale a FPS.</small>
+            <small>Estadísticas medidas en esta pestaña y sin datos de pacientes. Memoria de geometría = tamaño de buffers de CPU, no VRAM ni consumo total. La preparación incluye descarga y procesamiento CPU; no mide la finalización de GPU; el envío CPU tampoco equivale a FPS. El intervalo rAF observa únicamente la cadencia del navegador durante el giro automático visible y no mide tiempos GPU, FPS mostrados, VRAM o temperatura.</small>
             <button onClick={downloadRenderStats}>Descargar diagnóstico</button>
             <button onClick={() => setRenderStats(null)} aria-label="Cerrar diagnóstico">Cerrar</button>
           </aside>}

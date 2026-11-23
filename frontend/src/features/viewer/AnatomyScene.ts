@@ -13,6 +13,7 @@ import { SOFT_TISSUE_PROFILE_GLSL, SOFT_TISSUE_PROFILE_VERSION } from "./softTis
 import { heightScale } from "./bodyStature";
 import { atlasPixelRatio } from "./renderBudget";
 import { recordRenderCpuSample, summarizeRenderCpuSamples } from "./renderCpuTiming";
+import { recordVisibleRafInterval, summarizeRafFrameIntervals } from "./renderFramePacing";
 import { eligibleForGeometryLod, isUsefulLod, lodVerticesToRemove, triangleCount, shouldPrepareGeometryLod } from "./geometryLod";
 import { estimateRetainedGeometryMemory } from "./geometryMemory";
 import { anatomyMeshName, anatomyNameKey } from "./anatomyNames";
@@ -229,6 +230,8 @@ export function createAnatomyScene(
   let renderPasses = 0;
   let cpuSubmissionMs: number | null = null;
   const cpuSubmissionSamples: number[] = [];
+  const visibleRafIntervals: number[] = [];
+  let previousVisibleRafTimestamp: number | null = null;
 
   const render = () => {
     if (disposed || contextUnavailable) return;
@@ -377,21 +380,32 @@ export function createAnatomyScene(
   const resizeObserver = new ResizeObserver(() => resize());
   resizeObserver.observe(host);
 
-  const tick = () => {
+  const tick = (timestamp: number) => {
     raf = 0;
     if (disposed || contextUnavailable || !autoRotate || document.hidden) return;
+    // Count callback spacing only when this rotation actually submits WebGL.
+    // Never mistake idle requestAnimationFrame callbacks for rendered frames.
+    const before = renderedFrames;
     // OrbitControls emits "change" and renders through its registered listener.
     // A second synchronous render per animation frame would double GPU work.
     controls.update();
+    previousVisibleRafTimestamp = renderedFrames > before
+      ? recordVisibleRafInterval(visibleRafIntervals, previousVisibleRafTimestamp, timestamp)
+      : null;
     raf = requestAnimationFrame(tick);
   };
   const updateAnimation = () => {
     cancelAnimationFrame(raf);
     raf = 0;
+    // A hidden tab, paused rotation or WebGL context loss starts a new
+    // observational interval rather than manufacturing a huge frame delay.
+    previousVisibleRafTimestamp = null;
     if (autoRotate && !document.hidden && !disposed && !contextUnavailable) raf = requestAnimationFrame(tick);
   };
   const setAutoRotate = (enabled: boolean) => {
-    autoRotate = enabled && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const next = enabled && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (next !== autoRotate) visibleRafIntervals.length = 0;
+    autoRotate = next;
     controls.autoRotate = autoRotate;
     controls.autoRotateSpeed = 0.9;
     updateAnimation();
@@ -913,6 +927,7 @@ export function createAnatomyScene(
       renderedFrames,
       cpuSubmissionMs,
       ...summarizeRenderCpuSamples(cpuSubmissionSamples),
+      ...summarizeRafFrameIntervals(visibleRafIntervals),
       contextAvailable: !contextUnavailable,
       geometryBuffers: renderer.info.memory.geometries,
       ...geometryMemory,
