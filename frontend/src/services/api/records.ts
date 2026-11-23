@@ -73,6 +73,10 @@ const pageOf = <T extends z.ZodType>(schema: T) =>
     limit: z.number(),
     offset: z.number(),
   });
+const scenarioPageSchema = pageOf(scenarioSchema).extend({
+  // The demo has no PostgreSQL table; older mocks may omit the field.
+  snapshot_at: z.string().datetime({ offset: true }).nullable().optional(),
+});
 const derivedSchema = z.object({
   metric_code: z.string(),
   label: z.string(),
@@ -227,9 +231,10 @@ export function recordsApi(workspace: string, token?: string) {
         `/profiles/${id}/analytics/series?metric_code=${metric}&period=${period}`,
         z.array(measurementSchema),
       ),
-    scenarios: (profileId: string, offset = 0) =>
-      get(`/profiles/${profileId}/scenarios?limit=20&offset=${offset}`,
-        pageOf(scenarioSchema)),
+    scenarios: (profileId: string, offset = 0, snapshotAt?: string) =>
+      get(`/profiles/${profileId}/scenarios?limit=20&offset=${offset}${snapshotAt
+        ? `&snapshot_at=${encodeURIComponent(snapshotAt)}` : ""}`,
+        scenarioPageSchema),
     scenarioVersions: (profileId: string, scenarioId: string) =>
       get(`/profiles/${profileId}/scenarios/${scenarioId}/versions`,
         z.array(scenarioSchema)),
