@@ -211,7 +211,7 @@ def test_officer_scoped_queue_consents_and_sql_clinical_denial(protected, monkey
 
 
 def test_officer_provisioning_and_management_require_admin_mfa(protected, monkeypatch):
-    client, _, profile, users = protected
+    client, owner, profile, users = protected
     admin = headers(authenticate(client, *users[3][:2]).json()["token"])
     body = {
         "display_name": "Privacidad ficticia",
@@ -227,6 +227,15 @@ def test_officer_provisioning_and_management_require_admin_mfa(protected, monkey
     assert created.status_code == 201, created.text
     officer = created.json()
     users.append((UUID(officer["id"]), users[3][1], "privacy_officer", None))
+    with owner.begin() as conn:
+        for subject, role in ((UUID(officer["id"]), "member"), (users[3][0], "privacy_officer")):
+            with pytest.raises(DBAPIError) as denied, conn.begin_nested():
+                conn.execute(
+                    text("""INSERT INTO user_role_assignments
+                  (id,organization_id,user_id,role) VALUES (:id,:org,:user,:role)"""),
+                    {"id": uuid4(), "org": users[3][1], "user": subject, "role": role},
+                )
+            assert denied.value.orig.sqlstate == "23514"
     credentials = {
         "organization_id": str(users[3][1]),
         "email": body["email"],

@@ -131,6 +131,29 @@ def upgrade() -> None:
         ALTER TABLE public.user_role_assignments ADD CONSTRAINT user_role_assignments_role_check
           CHECK (role IN ('administrator','specialist','member','privacy_officer'));
 
+        -- Existing identities may carry several roles. A privacy account is
+        -- deliberately exclusive: another role must not select a weaker MFA
+        -- path or grant an administrative capability. Serialize per account.
+        CREATE FUNCTION public.guard_private_privacy_assignment() RETURNS trigger
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+        BEGIN
+          PERFORM 1 FROM public.users u
+            WHERE u.id=NEW.user_id AND u.organization_id=NEW.organization_id FOR UPDATE;
+          IF EXISTS(SELECT 1 FROM public.user_role_assignments r
+            WHERE r.user_id=NEW.user_id AND r.organization_id=NEW.organization_id
+              AND r.id<>NEW.id
+              AND (NEW.role='privacy_officer' OR r.role='privacy_officer')) THEN
+            RAISE EXCEPTION 'Privacy role cannot be combined with another role'
+              USING ERRCODE='23514';
+          END IF;
+          RETURN NEW;
+        END $$;
+        REVOKE ALL ON FUNCTION public.guard_private_privacy_assignment()
+          FROM PUBLIC,bodyvision_app,bodyvision_auth_app;
+        CREATE TRIGGER privacy_role_exclusive BEFORE INSERT OR UPDATE
+          ON public.user_role_assignments FOR EACH ROW
+          EXECUTE FUNCTION public.guard_private_privacy_assignment();
+
         -- Classify stale assignments too: an expired privacy role and an old
         -- broad grant must never turn into clinical-data access via SQL.
         CREATE FUNCTION public.is_private_privacy_actor() RETURNS boolean
@@ -216,6 +239,8 @@ def downgrade() -> None:
         DROP FUNCTION public.private_privacy_profile_labels();
         DROP FUNCTION public.private_privacy_session_verified();
         DROP FUNCTION public.is_private_privacy_actor();
+        DROP TRIGGER privacy_role_exclusive ON public.user_role_assignments;
+        DROP FUNCTION public.guard_private_privacy_assignment();
         ALTER TABLE public.user_role_assignments DROP CONSTRAINT user_role_assignments_role_check;
         ALTER TABLE public.user_role_assignments ADD CONSTRAINT user_role_assignments_role_check
           CHECK (role IN ('administrator','specialist','member'));

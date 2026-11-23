@@ -10,6 +10,9 @@ auditoría cuando MFA está activado. La cuenta debe inscribir y confirmar su
 propio TOTP antes de recibir una sesión utilizable. Contraseña sola, un bearer
 antiguo sin MFA o un token con otra asignación de rol no conceden acceso.
 Las invitaciones actuales continúan limitadas a especialista y consulta.
+PostgreSQL impide combinar este rol con otro, incluso al insertar asignaciones
+directamente. El control bloquea la fila del usuario para serializar cambios:
+no depende del orden del selector de roles ni de una validación de interfaz.
 
 | Rol del contrato | Nombre en la implementación |
 | --- | --- |
