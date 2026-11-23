@@ -52,7 +52,7 @@ def list_scenarios(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    snapshot_at: datetime | None = Query(default=None),
+    snapshot_at: datetime | None = None,
 ):
     records.profile(scope, profile_id)
     # Public Neon is still at revision 0002 and has no scenario table.
