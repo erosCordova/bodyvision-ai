@@ -321,7 +321,8 @@ export function PrivateAdministrationPage() {
           )}
           {session && <AuditIntegrityPanel token={session.token} onVerified={() => setAuditRevision(value => value + 1)} />}
           {session && <AuditExportPanel key={`${session.organization_id}:${session.user_id}`}
-            token={session.token} organizationId={session.organization_id} />}
+            token={session.token} organizationId={session.organization_id}
+            identityKey={`${session.organization_id}:${session.user_id}:${session.role}`} />}
         </section>
       </div>
       <section className="enterprise-panel private-admin-permissions" aria-label="Permisos por expediente">

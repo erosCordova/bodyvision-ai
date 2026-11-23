@@ -64,8 +64,9 @@ función y restaura el estado 0030 sin borrar registros de auditoría.
   y catorce regresiones previas de privacidad. Se probaron ambos límites con
   volúmenes reales, daño de bytes/cabecera, concurrencia, aislamiento,
   privilegios y reversión a 0029/reaplicación al head.
-- **352 pruebas frontend aprobadas**; TypeScript, ESLint y build aprobados.
-  Las diecisiete nuevas verifican transporte acotado, alteración, cancelación
+- **354 pruebas frontend aprobadas** en la revisión final; TypeScript,
+  ESLint y build aprobados tras la corrección de renovación. Las diecinueve
+  nuevas verifican transporte acotado, alteración, cancelación
   y selección local de archivos sin llamadas de red.
 - Bundle y revisión de salud: treinta pruebas unitarias adicionales de
   comprobación local, incluyendo las once del bundle ya contadas arriba.
@@ -73,6 +74,9 @@ función y restaura el estado 0030 sin borrar registros de auditoría.
 - El Chromium local continúa bloqueado por la restricción de sockets del
   entorno. La aceptación nueva de navegador se ejecutará en GitHub Actions
   con descarga real, comprobación independiente Node y archivo modificado.
+  Otro recorrido cookie fuerza una rotación real del JWT antes de exportar y
+  exige una sola renovación y una sola descarga; el componente conserva la
+  operación al rotar el token de la misma identidad y la cancela al cambiarla.
 
 ## Estimación global
 

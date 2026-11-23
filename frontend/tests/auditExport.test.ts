@@ -2,6 +2,7 @@ import { createHash, webcrypto } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_AUDIT_BYTES, verifyAuditBytes } from "../src/features/access/auditBundle";
 import { downloadAudit } from "../src/services/api/auditExport";
+import { registerPrivateSessionRefresh } from "../src/services/api/sessionInvalidation";
 import { AUDIT_EXPORT, AUDIT_ORG, auditBytes, auditFixture } from "./fixtures/auditBundle";
 
 beforeEach(() => { vi.stubGlobal("crypto", webcrypto); });
@@ -41,6 +42,21 @@ function response(bytes = auditBytes(), headers: Record<string, string> = {}) {
 }
 const token = "t".repeat(43);
 describe("entrega de auditoría", () => {
+  it("renueva una sola vez antes de reintentar una exportación rechazada por sesión", async () => {
+    const replacement = "n".repeat(43);
+    const renew = vi.fn(async () => replacement);
+    const unregister = registerPrivateSessionRefresh(renew);
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(response());
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      expect((await downloadAudit(token, AUDIT_ORG, new AbortController().signal)).summary.sequence).toBe(2);
+      expect(renew).toHaveBeenCalledExactlyOnceWith(token);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher.mock.calls.map(call => call[1].headers.Authorization))
+        .toEqual([`Bearer ${token}`, `Bearer ${replacement}`]);
+    } finally { unregister(); }
+  });
   it("exige el hash de entrega y la organización actual antes de producir el Blob", async () => {
     const fetcher = vi.fn(async () => response()); vi.stubGlobal("fetch", fetcher);
     const downloaded = await downloadAudit(token, AUDIT_ORG, new AbortController().signal);

@@ -4,7 +4,9 @@ import { MAX_AUDIT_BYTES, verifyAuditBytes } from "./auditBundle";
 
 type Receipt = { filename: string; sha256: string; sequence: number; checkpointHash: string };
 
-export function AuditExportPanel({ token, organizationId }: { token: string; organizationId: string }) {
+export function AuditExportPanel({ token, organizationId, identityKey }: {
+  token: string; organizationId: string; identityKey: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -14,7 +16,8 @@ export function AuditExportPanel({ token, organizationId }: { token: string; org
   useEffect(() => {
     setBusy(false); setError(""); setNotice(""); setReceipt(null);
     return () => { generation.current += 1; controller.current?.abort(); };
-  }, [token, organizationId]);
+  // A JWT rotation belongs to the same identity and must not cancel its retry.
+  }, [identityKey, organizationId]);
 
   async function exportFile() {
     const epoch = ++generation.current;
