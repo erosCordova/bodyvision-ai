@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -51,17 +52,40 @@ def list_scenarios(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    snapshot_at: datetime | None = Query(default=None),
 ):
     records.profile(scope, profile_id)
     # Public Neon is still at revision 0002 and has no scenario table.
     # Show a truthful empty synthetic archive rather than querying a missing table.
     if request.app.state.settings.app_env == "demo":
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
-    params = {"org": scope.organization_id, "profile": profile_id, "limit": limit, "offset": offset}
+    # A point-in-time upper bound shared across HTTP pages. This protects
+    # append-only history from ordinary new inserts shifting OFFSET positions;
+    # it does not hold a PostgreSQL MVCC snapshot across requests.
+    database_now = scope.connection.execute(text("SELECT clock_timestamp()")).scalar_one()
+    if snapshot_at is None:
+        cutoff = database_now
+    else:
+        if (
+            snapshot_at.tzinfo is None
+            or snapshot_at.utcoffset() is None
+            or snapshot_at > database_now
+            or snapshot_at < database_now - timedelta(minutes=30)
+        ):
+            raise DomainError(
+                422, "INVALID_SCENARIO_SNAPSHOT",
+                "El punto de corte del historial es inválido o ha caducado.",
+            )
+        cutoff = snapshot_at
+    params = {
+        "org": scope.organization_id, "profile": profile_id,
+        "limit": limit, "offset": offset, "cutoff": cutoff,
+    }
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM simulation_scenarios
           WHERE organization_id=:org AND profile_id=:profile
+            AND created_at <= :cutoff
           ORDER BY created_at DESC,id DESC LIMIT :limit OFFSET :offset"""),
             params,
         )
@@ -70,11 +94,16 @@ def list_scenarios(
     )
     total = scope.connection.execute(
         text("""SELECT count(*) FROM simulation_scenarios
-          WHERE organization_id=:org AND profile_id=:profile"""),
+          WHERE organization_id=:org AND profile_id=:profile
+            AND created_at <= :cutoff"""),
         params,
     ).scalar_one()
     record_simulation_event(scope, "simulation.list", profile_id)
-    return {"items": [dict(row) for row in rows], "total": total, "limit": limit, "offset": offset}
+    return {
+        "items": [dict(row) for row in rows],
+        "total": total, "limit": limit, "offset": offset,
+        "snapshot_at": cutoff,
+    }
 
 
 @router.get(
