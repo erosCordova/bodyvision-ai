@@ -26,7 +26,7 @@ function revisionCell(value: string, pattern: RegExp): string {
   if (!pattern.test(value)) throw new Error("La versión del escenario no es válida.");
   return value;
 }
-const zonedScenarioDateTime = /^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:[0-5]\\d)$/;
+const zonedScenarioDateTime = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-]\d{2}:[0-5]\d)$/;
 
 /**
  * A local-time string may yield different "fecha_utc" values in different
@@ -42,7 +42,7 @@ function scenarioUtcDateTime(raw: string): string {
   // Date.parse may silently roll invalid days (e.g. February 30) into March.
   if (!Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== calendarDay)
     throw new Error("La fecha del escenario no existe en el calendario.");
-  const zone = /([+-])(\\d{2}):(\\d{2})$/.exec(raw);
+  const zone = /([+-])(\d{2}):(\d{2})$/.exec(raw);
   if (zone) {
     const hours = Number(zone[2]);
     const minutes = Number(zone[3]);
