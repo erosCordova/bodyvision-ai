@@ -53,7 +53,7 @@ export async function collectSyntheticScenarioHistoryCsv(
 
     const reportedSnapshot = page.snapshot_at ?? undefined;
     if (reportedSnapshot !== undefined && (
-      !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(reportedSnapshot)
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(reportedSnapshot)
       || !Number.isFinite(Date.parse(reportedSnapshot))
     )) {
       throw new Error("La API devolvió un punto de corte temporal inválido.");
