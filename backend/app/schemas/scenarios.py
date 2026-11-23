@@ -51,3 +51,6 @@ class ScenarioList(BaseModel):
     total: int
     limit: int
     offset: int
+    # Consistent high-watermark for paginated fictitious-history exports.
+    # Demo remains empty and does not advertise a PostgreSQL snapshot.
+    snapshot_at: datetime | None = None
