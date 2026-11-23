@@ -108,7 +108,6 @@ def test_probe_requires_ready_database_and_current_revision_without_redirects():
     )
 
 
-
 def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
     now = datetime.now(UTC)
     valid = {
@@ -144,7 +143,6 @@ def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
         + now.isoformat() + '"}'
     ).encode("utf-8")
     assert probe_readiness(TARGET, opener=Opener(Response(duplicate))) == "degraded"
-
 
 
 def test_outage_recovery_emits_only_transition_states_without_private_details():
