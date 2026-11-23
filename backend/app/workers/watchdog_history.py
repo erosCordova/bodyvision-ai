@@ -48,6 +48,21 @@ class WatchdogHistory:
             raise ValueError("Invalid synthetic watchdog interval")
         with closing(self._connect()) as connection:
             with connection:
+                # Serialize the read and UPSERT across watchdog processes.
+                # Otherwise a delayed older probe could replace a newer one.
+                connection.execute("BEGIN IMMEDIATE")
+                existing = connection.execute(
+                    "SELECT checked_at FROM watchdog_latest_probe WHERE id = 1"
+                ).fetchone()
+                if existing is not None:
+                    try:
+                        saved_at = datetime.fromisoformat(existing[0])
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError("Invalid saved probe timestamp") from exc
+                    if saved_at.tzinfo is None:
+                        raise ValueError("Invalid saved probe timestamp")
+                    if checked_at.astimezone(UTC) < saved_at.astimezone(UTC):
+                        raise ValueError("Out-of-order synthetic watchdog probe")
                 connection.execute(
                     """
                     INSERT INTO watchdog_latest_probe(id,state,checked_at,interval_seconds)
@@ -130,12 +145,24 @@ class WatchdogHistory:
             raise ValueError("Invalid synthetic watchdog event")
         with closing(self._connect()) as connection:
             with connection:
+                # Lock before reading the previous transition: separate
+                # watchdog instances must not append retroactive episodes.
+                connection.execute("BEGIN IMMEDIATE")
                 self._prune(connection, checked_at)
                 previous = connection.execute(
-                    "SELECT state FROM watchdog_events ORDER BY id DESC LIMIT 1"
+                    "SELECT state, checked_at FROM watchdog_events ORDER BY id DESC LIMIT 1"
                 ).fetchone()
-                if previous and previous[0] == state:
-                    return False
+                if previous:
+                    try:
+                        saved_at = datetime.fromisoformat(previous[1])
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError("Invalid saved transition timestamp") from exc
+                    if saved_at.tzinfo is None:
+                        raise ValueError("Invalid saved transition timestamp")
+                    if checked_at.astimezone(UTC) < saved_at.astimezone(UTC):
+                        raise ValueError("Out-of-order synthetic watchdog transition")
+                    if previous[0] == state:
+                        return False
                 connection.execute(
                     "INSERT INTO watchdog_events(state, checked_at) VALUES (?, ?)",
                     (state, checked_at.astimezone(UTC).isoformat()),

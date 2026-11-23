@@ -153,6 +153,69 @@ def test_probe_rejects_other_states_intervals_and_naive_timestamps(tmp_path):
     assert journal.probe_status()["freshness"] == "never_observed"
 
 
+def test_older_probe_cannot_overwrite_newer_observation_from_another_instance(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    observed = datetime.now(UTC)
+    latest = WatchdogHistory(path)
+    delayed = WatchdogHistory(path)
+    latest.record_probe("ready", observed, 30)
+
+    # A delayed writer must not report stale/unreachable data as newest.
+    with pytest.raises(ValueError, match="Out-of-order"):
+        delayed.record_probe("unreachable", observed - timedelta(seconds=60), 30)
+    result = WatchdogHistory(path).probe_status(observed + timedelta(seconds=1))
+    assert result["last_observed_state"] == "ready"
+    assert result["last_checked_at"] == observed.isoformat()
+    assert result["freshness"] == "recent"
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM watchdog_latest_probe").fetchone()[0] == 1
+
+    # A valid later probe from the delayed process is still accepted.
+    delayed.record_probe("degraded", observed + timedelta(seconds=2), 30)
+    assert (
+        WatchdogHistory(path).probe_status(observed + timedelta(seconds=3))["last_observed_state"]
+        == "degraded"
+    )
+
+
+def test_older_transition_does_not_rewrite_observed_incident_order(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    observed = datetime.now(UTC)
+    first = WatchdogHistory(path)
+    delayed = WatchdogHistory(path)
+    assert first.append_transition("unreachable", observed) is True
+    assert first.append_transition("ready", observed + timedelta(seconds=10)) is True
+    with pytest.raises(ValueError, match="Out-of-order"):
+        delayed.append_transition("degraded", observed + timedelta(seconds=5))
+    assert [event["state"] for event in WatchdogHistory(path).recent()] == [
+        "unreachable",
+        "ready",
+    ]
+    assert delayed.append_transition("degraded", observed + timedelta(seconds=11)) is True
+    assert [event["state"] for event in WatchdogHistory(path).recent()] == [
+        "unreachable",
+        "ready",
+        "degraded",
+    ]
+
+
+def test_corrupt_saved_probe_timestamp_fails_closed_without_overwrite(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    journal = WatchdogHistory(path)
+    moment = datetime.now(UTC)
+    journal.record_probe("ready", moment, 30)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "UPDATE watchdog_latest_probe SET checked_at = 'not-a-timestamp' WHERE id = 1"
+        )
+    with pytest.raises(ValueError, match="Invalid saved probe timestamp"):
+        journal.record_probe("degraded", moment + timedelta(seconds=1), 30)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute(
+            "SELECT state, checked_at FROM watchdog_latest_probe WHERE id = 1"
+        ).fetchone() == ("ready", "not-a-timestamp")
+
+
 def test_monitor_keeps_freshness_current_with_no_new_transition(tmp_path):
     path = tmp_path / "events.sqlite3"
     observed = []
