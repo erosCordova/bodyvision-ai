@@ -16,6 +16,23 @@ function pngDimensions(width: number, height: number): Uint8Array {
   view.setUint32(20, height);
   return header;
 }
+// Container-only PNG fixtures: chunk CRCs/pixels are irrelevant to predecode
+// validation and are never submitted to createImageBitmap in these tests.
+function pngChunk(type: string, payload = new Uint8Array()): Uint8Array {
+  const bytes = new Uint8Array(12 + payload.length);
+  new DataView(bytes.buffer).setUint32(0, payload.length);
+  bytes.set(Array.from(type, char => char.charCodeAt(0)), 4);
+  bytes.set(payload, 8);
+  return bytes;
+}
+function pngBeforeIdat(...chunks: Uint8Array[]): Uint8Array {
+  const ihdr = new Uint8Array([...pngDimensions(960, 1280), 8, 2, 0, 0, 0, 0, 0, 0, 0]);
+  const pieces = [ihdr, ...chunks, pngChunk("IDAT")];
+  const combined = new Uint8Array(pieces.reduce((n, part) => n + part.length, 0));
+  let index = 0;
+  for (const piece of pieces) { combined.set(piece, index); index += piece.length; }
+  return combined;
+}
 function jpegDimensions(width: number, height: number): Uint8Array {
   // SOI, APP1 metadata segment, baseline SOF0, EOI.
   return new Uint8Array([
@@ -178,6 +195,40 @@ describe("pose input gates (synthetic local analysis only)", () => {
       ...metadata, 0xff, 0xe2, 0xff, 0xff, ...metadata, ...jpeg.slice(2)]);
     await expect(validatePoseImageFile(file(oversized, "image/jpeg")))
       .rejects.toThrow(/JPEG/);
+  });
+
+  it("rejects APNG animation control before decoding while allowing static PNG metadata", async () => {
+    const animated = pngBeforeIdat(
+      pngChunk("tEXt", Uint8Array.from([70, 53, 0])),
+      pngChunk("acTL", new Uint8Array(8)),
+      pngChunk("fcTL", new Uint8Array(26)),
+    );
+    await expect(validatePoseImageFile(file(animated, "image/png")))
+      .rejects.toThrow(/PNG animados/);
+
+    const unexpectedFrame = pngBeforeIdat(pngChunk("fcTL", new Uint8Array(26)));
+    await expect(validatePoseImageFile(file(unexpectedFrame, "image/png")))
+      .rejects.toThrow(/PNG animados/);
+
+    const staticPng = pngBeforeIdat(pngChunk("tEXt", Uint8Array.from([70, 53, 0])));
+    await expect(validatePoseImageFile(file(staticPng, "image/png")))
+      .resolves.toBeUndefined();
+  });
+
+  it("bounds PNG header traversal and rejects incomplete or oversized chunks", async () => {
+    const manyChunks = Array.from({ length: 520 }, () => pngChunk("tEXt"));
+    await expect(validatePoseImageFile(file(pngBeforeIdat(...manyChunks), "image/png")))
+      .rejects.toThrow(/límite/);
+
+    const corruptLength = pngBeforeIdat(pngChunk("tEXt"));
+    // The ancillary chunk begins immediately after 33 bytes of IHDR.
+    new DataView(corruptLength.buffer).setUint32(33, 0xffff_ffff);
+    await expect(validatePoseImageFile(file(corruptLength, "image/png")))
+      .rejects.toThrow(/tamaño declarado/);
+
+    const noImageData = pngBeforeIdat().slice(0, 33);
+    await expect(validatePoseImageFile(file(noImageData, "image/png")))
+      .rejects.toThrow(/incompletos/);
   });
 
   it("rejects oversized PNG IHDR before any browser image decoding", async () => {

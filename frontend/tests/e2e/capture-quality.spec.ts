@@ -79,6 +79,41 @@ test("capture rejects a disguised image without uploading it", async ({ page }) 
   })).toHaveCount(0);
 });
 
+test("capture rejects animated PNG before decoding without any API writes", async ({ page }) => {
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto("/capture");
+  await page.getByRole("checkbox", {
+    name: /Confirmo que utilizaré exclusivamente imágenes ficticias/,
+  }).check();
+
+  // Synthetic PNG container: IHDR 900x1200, APNG acTL, then IDAT. Its
+  // payload is intentionally not a photograph; the guard must run first.
+  const ihdr = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+    0, 0, 3, 132, 0, 0, 4, 176,
+    8, 2, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+  const animation = Buffer.from([
+    0, 0, 0, 8, 0x61, 0x63, 0x54, 0x4c,
+    0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+  const imageData = Buffer.from([0, 0, 0, 0, 0x49, 0x44, 0x41, 0x54, 0, 0, 0, 0]);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "animacion-ficticia.png",
+    mimeType: "image/png",
+    buffer: Buffer.concat([ihdr, animation, imageData]),
+  });
+  await expect(page.getByRole("alert")).toContainText("Los PNG animados no se admiten");
+  await expect(page.getByRole("link", {
+    name: "Ver control de calidad en el módulo de análisis",
+  })).toHaveCount(0);
+  expect(writes).toEqual([]);
+});
+
 test("capture refuses a compressed 64 MP PNG before decoding or transferring", async ({ page }) => {
   const writes: string[] = [];
   page.on("request", request => {
