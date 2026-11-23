@@ -32,7 +32,7 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
 
   it("accepts verified bytes and never retries an intact first response", async () => {
     const request = vi.fn(async (_url: string) => goodResponse());
-    const delay = vi.fn(async () => undefined);
+    const delay = vi.fn(async (_ms: number) => undefined);
     await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request, delay }))
       .resolves.toEqual(original);
     expect(request).toHaveBeenCalledTimes(1);
@@ -49,7 +49,7 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
       if (attempts === 3) throw new TypeError("fictional network failure");
       return goodResponse();
     });
-    const delay = vi.fn(async () => undefined);
+    const delay = vi.fn(async (_ms: number) => undefined);
     await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request, delay }))
       .resolves.toEqual(original);
     expect(request).toHaveBeenCalledTimes(4);
@@ -58,7 +58,7 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
 
   it("fails after four responses without downloading or logging the HTML error page", async () => {
     const request = vi.fn(async () => new Response("private error text", { status: 404 }));
-    const delay = vi.fn(async () => undefined);
+    const delay = vi.fn(async (_ms: number) => undefined);
     await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request, delay }))
       .rejects.toThrow(/reintentos limitados/);
     expect(request).toHaveBeenCalledTimes(4);
@@ -76,7 +76,7 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
 
   it("rejects tampered bytes immediately, with no retry or content in the error", async () => {
     const request = vi.fn(async () => goodResponse(Buffer.from("altered synthetic bytes")));
-    const delay = vi.fn(async () => undefined);
+    const delay = vi.fn(async (_ms: number) => undefined);
     await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request, delay }))
       .rejects.toThrow(/integridad/);
     expect(request).toHaveBeenCalledTimes(1);
@@ -93,7 +93,7 @@ describe("F6 immutable GLB and catalogue fixture acquisition", () => {
     ];
     for (const response of responses) {
       const request = vi.fn(async () => response);
-      const delay = vi.fn(async () => undefined);
+      const delay = vi.fn(async (_ms: number) => undefined);
       await expect(fetchVerifiedGitBlob(TEST_URL, digest, { request, delay }))
         .rejects.toThrow(/integridad/);
       expect(request).toHaveBeenCalledTimes(1);
