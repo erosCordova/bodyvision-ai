@@ -88,6 +88,19 @@ describe("full synthetic scenario history CSV", () => {
     )).rejects.toThrow(/ajeno/);
   });
 
+  it("rejects ambiguous UTC provenance in the last page with no partial CSV", async () => {
+    const altered = rows.map((item, i) => i === 44
+      ? { ...item, created_at: "2026-11-20T13:00:00" }
+      : item);
+    const load = vi.fn(async (offset: number) => page(offset, altered));
+    const progress = vi.fn();
+    await expect(collectSyntheticScenarioHistoryCsv(load, {
+      expectedProfileId: PROFILE, onProgress: progress,
+    })).rejects.toThrow(/zona horaria/);
+    expect(load.mock.calls.map(([offset]) => offset)).toEqual([0, 20, 40]);
+    expect(progress).toHaveBeenCalledTimes(3);
+  });
+
   it("stops when cancelled and never requests the next page", async () => {
     const controller = new AbortController();
     const load = vi.fn(async (offset: number) => page(offset));
