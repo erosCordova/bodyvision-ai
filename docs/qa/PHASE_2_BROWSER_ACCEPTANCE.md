@@ -36,8 +36,11 @@ No hay modificación de las rutas ni workers de ese bloque.
 8. Una cuenta de otra organización ficticia recibe **404** al intentar leer el
    expediente, sus mediciones o su cadena de versiones. También se ensayan
    intentos ajenos de renombrar/archivar el expediente, crear mediciones o
-   corregir versiones: cada uno debe devolver **404**, sin revelar el estado
-   archivado ni autorizar mutaciones. El autor todavía puede consultar el
+   corregir versiones: la cuenta externa del fixture tiene rol **member**,
+   por lo que las cuatro escrituras se rechazan con **403** antes de buscar el
+   expediente; las lecturas ajenas continúan en **404**. Estos rechazos
+   prueban prohibición de edición para el rol y aislamiento de lectura,
+   pero no sustituyen una prueba entre organizaciones con rol editor. El autor todavía puede consultar el
    historial archivado con su sesión autorizada.
 
 Se usan únicamente `browser.admin@example.invalid`,
