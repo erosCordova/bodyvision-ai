@@ -34,8 +34,11 @@ No hay modificación de las rutas ni workers de ese bloque.
    consultables pero los controles de escritura quedan desactivados y la API
    rechaza escrituras aunque se intente evitarlos.
 8. Una cuenta de otra organización ficticia recibe **404** al intentar leer el
-   expediente, sus mediciones o su cadena de versiones. El autor todavía
-   puede consultar el historial archivado con su sesión autorizada.
+   expediente, sus mediciones o su cadena de versiones. También se ensayan
+   intentos ajenos de renombrar/archivar el expediente, crear mediciones o
+   corregir versiones: cada uno debe devolver **404**, sin revelar el estado
+   archivado ni autorizar mutaciones. El autor todavía puede consultar el
+   historial archivado con su sesión autorizada.
 
 Se usan únicamente `browser.admin@example.invalid`,
 `browser.outsider@example.invalid` y contraseñas de **fixtures** definidas por
