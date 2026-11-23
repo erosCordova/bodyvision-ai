@@ -25,6 +25,7 @@ from app.services.admin_security import (
     provision_user,
     update_profile_permission,
 )
+from app.services.audit_export import export_audit
 from app.services.auth_sessions import (
     IdentityRead,
     LoginInput,
@@ -77,6 +78,11 @@ from app.services.user_management import (
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authenticated identity"])
+
+
+@router.post("/audit/export", response_class=Response)
+def download_audit(request: Request) -> Response:
+    return export_audit(request)
 
 
 @router.post("/login", response_model=SessionRead)

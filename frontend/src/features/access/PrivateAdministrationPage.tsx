@@ -12,6 +12,7 @@ import { UserDirectoryPanel } from "./UserDirectoryPanel";
 import { PasswordResetPanel } from "./PasswordResetPanel";
 import { OperationsPanel } from "./OperationsPanel";
 import { AuditIntegrityPanel } from "./AuditIntegrityPanel";
+import { AuditExportPanel } from "./AuditExportPanel";
 import { PrivateInvitationPanel } from "./PrivateInvitationPanel";
 
 const eventNames: Record<string, string> = {
@@ -319,6 +320,8 @@ export function PrivateAdministrationPage() {
             </div>
           )}
           {session && <AuditIntegrityPanel token={session.token} onVerified={() => setAuditRevision(value => value + 1)} />}
+          {session && <AuditExportPanel key={`${session.organization_id}:${session.user_id}`}
+            token={session.token} organizationId={session.organization_id} />}
         </section>
       </div>
       <section className="enterprise-panel private-admin-permissions" aria-label="Permisos por expediente">
