@@ -102,6 +102,23 @@ describe("pose input gates (synthetic local analysis only)", () => {
     await expect(validatePoseImageFile(file(frame, "image/webp"))).resolves.toBeUndefined();
   });
 
+  it("rejects animated VP8X WebP while allowing static alpha and metadata flags", async () => {
+    const animated = webpExtended(1200, 900);
+    animated[20] = 0x02; // VP8X Animation flag, regardless of still-frame dimensions.
+    await expect(validatePoseImageFile(file(animated, "image/webp")))
+      .rejects.toThrow(/WebP animados/);
+
+    const staticWithAlpha = webpExtended(1200, 900);
+    staticWithAlpha[20] = 0x10;
+    await expect(validatePoseImageFile(file(staticWithAlpha, "image/webp")))
+      .resolves.toBeUndefined();
+
+    const staticWithMetadata = webpExtended(1200, 900);
+    staticWithMetadata[20] = 0x28; // ICC profile + EXIF; no animation bit.
+    await expect(validatePoseImageFile(file(staticWithMetadata, "image/webp")))
+      .resolves.toBeUndefined();
+  });
+
   it("rejects excessive WebP dimensions across all three codecs", async () => {
     for (const frame of [
       webpExtended(8000, 8000), webpLossless(16001, 2000), webpLossy(8000, 8000),
