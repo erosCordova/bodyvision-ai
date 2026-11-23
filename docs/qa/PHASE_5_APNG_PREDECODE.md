@@ -38,6 +38,9 @@ el bitmap. No se anuncian como ejemplos válidos de imágenes completas.
   manipulada, chunk list muy larga y archivo truncado sin IDAT.
 - `frontend/tests/capturePredecode.test.ts`: captura APNG se rechaza
   **antes** de `createImageBitmap`.
+- `frontend/tests/e2e/capture-quality.spec.ts`: Chromium carga un
+  contenedor APNG sintético; la UI rechaza el formato sin efectuar
+  escrituras HTTP ni transferirlo a análisis.
 
 Este trabajo usa imágenes fabricadas, no conserva fotografías ni
 modifica modelos, atlas o infraestructura.
