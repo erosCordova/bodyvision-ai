@@ -341,6 +341,7 @@ export function ProfileDetail() {
                   metricCode={metric}
                   unit={selectedMetric?.unit ?? ""}
                   period={period as "30d" | "90d" | "1a" | "all" | "custom"}
+                  selectedRange={period === "custom" ? customRange : undefined}
                   exportReport={privateAuthEnabled() && current.synthetic
                     ? (range) => api.longitudinalReport(profileId, metric,
                         period === "custom" ? "all" : period as "30d" | "90d" | "1a" | "all",
