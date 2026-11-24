@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { sandboxAuthEnabled } from "../../app/providers/PrivateAuthProvider";
 import { SandboxCaptureLibrary } from "../capture/SandboxCaptureLibrary";
+import { MeasurementForm } from "../measurements/MeasurementForm";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { dateTime, ErrorState, LoadingState } from "../../components/ui/States";
 import { ProfilePicker } from "../foundation/ModuleControls";
@@ -150,6 +151,8 @@ export function AnatomyAtlas() {
   const [meshOverlay, setMeshOverlay] = useState(false);
   const [fatProfileId,setFatProfileId] = useState(() => new URLSearchParams(window.location.search).get("profile") ?? "");
   const [fatHeat,setFatHeat] = useState(true);
+  const [fatEntryOpen,setFatEntryOpen] = useState(false);
+  const fatCatalog=useQuery({queryKey:["catalog",workspaceId],queryFn:api.catalog,enabled:panel==="grasa"&&!readOnly});
   const [fatSimulation,setFatSimulation] = useState<number|null>(null);
   const fatProfile = useQuery({
     queryKey:["profile",workspaceId,fatProfileId],
@@ -954,9 +957,8 @@ export function AnatomyAtlas() {
           <div className="studio-right-content">
             {panel === "grasa" && <section ref={fatPanelRef} className="studio-fat-panel" aria-label="Grasa corporal">
               <h2>Grasa corporal</h2>
-              {sandboxAuthEnabled() && fatProfileId && fatProfile.isSuccess && <details><summary>Imágenes de referencia del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId}/></details>}
               <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId}
-                onChange={next=>{setFatProfileId(next);setFatSimulation(null);}}/>
+                onChange={next=>{setFatProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>
               {fatProfileId && (fatProfile.isPending ? <LoadingState/> : fatProfile.isError ?
                 <ErrorState error={fatProfile.error} retry={()=>void fatProfile.refetch()}/> :
                 fatMeasurements.isPending ? <LoadingState/> : fatMeasurements.isError ?
@@ -971,7 +973,9 @@ export function AnatomyAtlas() {
                 </div>
                 {latestFat ? <dl><dt>Fecha</dt><dd>{dateTime(latestFat.measured_at)}</dd>
                   <dt>Instrumento</dt><dd>{latestFat.instrument}</dd><dt>Responsable</dt><dd>{latestFat.responsible}</dd></dl> :
-                  <p>Selecciona un expediente con una medición instrumental de grasa corporal.</p>}
+                  <p>{!fatProfileId?"Selecciona un expediente.":fatMeasurements.isPending?"Consultando mediciones…":fatMeasurements.isError?"No se pudo consultar la grasa corporal.": "Este expediente no tiene un porcentaje de grasa corporal instrumental registrado. Las imágenes y el peso no sustituyen esa medición."}</p>}
+                {!readOnly && fatProfile.data?.status==="active" && fatCatalog.data?.some(m=>m.code==="body_fat_pct") && <button type="button" className="primary-button" onClick={()=>setFatEntryOpen(true)}>{latestFat?"Registrar nueva medición de grasa":"Registrar grasa corporal (%)"}</button>}
+                {fatEntryOpen && fatProfile.data?.status==="active" && fatCatalog.data && <MeasurementForm key={fatProfileId} profileId={fatProfileId} metrics={fatCatalog.data.filter(m=>m.code==="body_fat_pct")} initialMetricCode="body_fat_pct" onClose={()=>setFatEntryOpen(false)} onSaved={()=>{setFatEntryOpen(false);setFatSimulation(null);void fatMeasurements.refetch();}}/>}
                 {fatProfileId && fatProfile.isSuccess && <Link to={"/profiles/"+fatProfileId+"?tab=measurements"}>Ver mediciones y fuentes →</Link>}
                 {composition ? <div className="studio-fat-composition"><DataTypeBadge type="DERIVADO"/><dl><dt>Peso registrado</dt><dd>{composition.weight.value} kg</dd><dt>Masa grasa</dt><dd>{composition.fatKg.toLocaleString("es-PE",{maximumFractionDigits:2})} kg</dd><dt>Masa libre de grasa</dt><dd>{composition.leanKg.toLocaleString("es-PE",{maximumFractionDigits:2})} kg</dd></dl><small>Peso × porcentaje / 100. Peso registrado: {dateTime(composition.weight.measured_at)}. Ambos registros corresponden al mismo día en Lima; no es medición directa de masas.</small></div> : latestFat && <small>{weightMeasurements.isPending?"Consultando peso registrado…":weightMeasurements.isError?"No se pudo consultar el peso.": "Sin peso compatible del mismo día entre los registros recientes; no se calculan masas."}</small>}
               </div>
@@ -985,6 +989,7 @@ export function AnatomyAtlas() {
                   <small>Valor elegido por el usuario. No predice cambios de grasa por peso o estatura ni modifica mediciones.</small>
                 </>}
               </div>
+              {sandboxAuthEnabled() && fatProfileId && fatProfile.isSuccess && <details><summary>Imágenes de referencia del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId}/></details>}
               <label className="studio-fat-toggle"><input type="checkbox" checked={fatHeat} onChange={event=>setFatHeat(event.target.checked)}/> Mostrar vista de calor</label>
               <div className="studio-fat-legend" aria-label={illustrativeFat?"Paleta térmica ilustrativa, sin valores regionales":"Escala global del porcentaje registrado"}>
                 <div className={illustrativeFat?"":"studio-fat-global-ramp"}/><span>{illustrativeFat?"Menor intensidad":"0 %"}</span><span>{illustrativeFat?"Mayor intensidad":"100 %"}</span>

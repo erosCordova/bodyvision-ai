@@ -52,12 +52,14 @@ export function MeasurementForm({
   profileId,
   metrics,
   correction,
+  initialMetricCode,
   onClose,
   onSaved,
 }: {
   profileId: string;
   metrics: Metric[];
   correction?: Measurement;
+  initialMetricCode?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -66,13 +68,14 @@ export function MeasurementForm({
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [confirmed, setConfirmed] = useState(false);
   const originalLocalTime = correction ? limaInput(new Date(correction.measured_at)) : undefined;
+  const initialMetric = metrics.find(m=>m.code===(correction?.metric_code??initialMetricCode))??metrics[0];
   const form = useForm<Inputs>({
     resolver: zodResolver(schema),
     defaultValues: {
-      metric_code: correction?.metric_code ?? metrics[0]?.code ?? "weight",
+      metric_code: correction?.metric_code ?? initialMetric?.code ?? "weight",
       value: correction?.value ?? undefined,
       measured_at: originalLocalTime ?? limaInput(),
-      method: correction?.method ?? "manual",
+      method: correction?.method ?? (initialMetric?.allowed_methods.includes("manual") ? "manual" : "device"),
       instrument: correction?.instrument ?? "",
       notes: correction?.notes ?? "",
       correction_reason: "",
