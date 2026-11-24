@@ -75,7 +75,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
   }
   if(!session)return null;
   return <section className="enterprise-panel bv-capture-library" aria-label="Imágenes del expediente">
-    <div className="enterprise-panel-title"><h2>Imágenes del expediente</h2><span>ARCHIVO FICTICIO</span></div>
+    <div className="enterprise-panel-title"><h2>Imágenes del expediente</h2><span>FICTICIO</span></div>
     {!fixedProfileId&&<fieldset disabled={busy}><ProfilePicker selected={profile.data??null} selectedId={profileId} onChange={setChosen}/></fieldset>}
     {profile.isError&&profileId&&<p role="alert">No se pudo acceder al expediente.</p>}
     {profileId&&profile.isSuccess&&profile.data.status!=="active"&&<p>Expediente restringido o archivado.</p>}
@@ -84,10 +84,10 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
     {fixedProfileId&&local&&attest&&<AutomaticPosePreview file={local}/>}
     {archive.isPending&&writable&&<p role="status">Consultando imágenes…</p>}
     {archive.isError&&<p role="alert">{archive.error.message}</p>}
-    {archive.data&&<><p>{archive.data.total} imágenes guardadas</p>{archive.data.items.length===0&&<p>Este expediente todavía no contiene imágenes.</p>}<div className="bv-capture-list">{archive.data.items.map((item,index)=><article key={item.id}><strong>Captura {archive.data!.total-index}</strong><small>{item.width} × {item.height} px · {dateTime(item.created_at)}</small><div><button type="button" disabled={busy} onClick={()=>void open(item,false)}>Ver imagen</button><button type="button" disabled={busy} onClick={()=>void open(item,true)}>Usar en análisis IA</button>{writable&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm("¿Eliminar esta imagen del expediente?"))void run(async()=>{await syntheticCapturesApi(session.token,profileId).remove(item.id);setPreview(null);await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});setNotice("Imagen eliminada.");});}}>Eliminar</button>}</div></article>)}</div></>}
+    {archive.data&&<><p>{archive.data.total} imágenes guardadas</p><div className="bv-capture-list">{archive.data.items.map((item,index)=><article key={item.id}><strong>Captura {archive.data!.total-index}</strong><small>{item.width} × {item.height} px · {dateTime(item.created_at)}</small><div><button type="button" disabled={busy} onClick={()=>void open(item,false)}>Ver imagen</button><button type="button" disabled={busy} onClick={()=>void open(item,true)}>Usar en análisis IA</button>{writable&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm("¿Eliminar esta imagen del expediente?"))void run(async()=>{await syntheticCapturesApi(session.token,profileId).remove(item.id);setPreview(null);await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});setNotice("Imagen eliminada.");});}}>Eliminar</button>}</div></article>)}</div></>}
     {preview&&<div className="bv-capture-preview"><img src={preview.url} alt="Imagen ficticia guardada en el expediente"/><button type="button" onClick={()=>setPreview(null)}>Cerrar vista previa</button></div>}
     {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     {profileId&&profile.isSuccess&&<div className="bv-capture-links"><Link to={"/profiles/"+profileId+"?tab=measurements"}>Mediciones</Link><Link to={"/body-3d?panel=grasa&profile="+profileId}>Visor 3D</Link><Link to={"/profiles/"+profileId+"?tab=analytics"}>Evolución</Link><Link to={"/reports?profile="+profileId}>Reportes</Link></div>}
-    <small>Solo imágenes ficticias. Hasta 20 por cuenta, cifradas y disponibles durante 7 días. Las copias se redimensionan para el archivo; comprueba su calidad al volver a analizarlas. El atlas utiliza mediciones, no reconstruye el cuerpo a partir de fotografías.</small>
+    <small>Solo imágenes ficticias · 7 días de conservación · Máximo 20.</small>
   </section>;
 }

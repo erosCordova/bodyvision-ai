@@ -311,7 +311,7 @@ export function AnalysisPage() {
     { name:"Revisión humana", detail:"Revisión de resultados", status:"Pendiente para uso real" },
   ];
   return <div className="enterprise-module">
-    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="Evalúa la postura y los puntos corporales de una imagen ficticia."/>
+    <PageTitle eyebrow="" title="Análisis corporal" description="Selecciona una imagen ficticia."/>
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>{localCapture ? "CAPTURA SELECCIONADA" : "REFERENCIA VISUAL"}</span></div>
@@ -321,7 +321,7 @@ export function AnalysisPage() {
           <ul>{localReview.checks.map(check => <li key={check.id}>
             <strong>{check.passed ? "✓" : "!"} {check.label}</strong><span>{check.detail}</span>
           </li>)}</ul>
-          <p className="enterprise-hint">La imagen permanece únicamente en la memoria de esta pestaña, sin subirse a la API ni guardarse en el historial del navegador. El control de calidad no confirma consentimiento clínico.</p>
+          <p className="enterprise-hint">Análisis local. Guarda solo imágenes ficticias autorizadas.</p>
         </div>}
         {localCapture && <>
           <PoseReview file={localCapture.file} review={localCapture.review} autoRun={sandboxAuthEnabled()} />
@@ -358,9 +358,9 @@ export function AnalysisPage() {
         </div>}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
-        <h2>Etapas del análisis</h2>
+        <details><summary>Etapas del análisis</summary>
         <div className="enterprise-stage-list">{stages.map((stage,index)=><div key={stage.name}><span>{String(index+1).padStart(2,"0")}</span><div><strong>{stage.name}</strong><p>{stage.detail}</p><small>{stage.status}</small></div></div>)}</div>
-        <Limitation>La detección de pose no mide composición corporal ni realiza diagnósticos.</Limitation>
+        </details><Limitation>La IA detecta pose, no grasa corporal.</Limitation>
       </aside>
     </div>
   </div>;

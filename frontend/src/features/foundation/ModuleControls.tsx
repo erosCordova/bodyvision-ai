@@ -23,14 +23,14 @@ function Picker({ selected, selectedId, onChange }: { selected: Profile|null; se
   const profiles = useQuery({queryKey:["module-profile-picker",id,search,offset],queryFn:()=>api.profiles(search,offset)});
   const items=profiles.data?.items ?? [];
   return <div className="module-profile-picker">
-    <label>Buscar expediente<input value={search} maxLength={100} onChange={e=>{setSearch(e.target.value);setOffset(0);}} /></label>
+    {(search||!profiles.data||profiles.data.total>profiles.data.limit)&&<label>Buscar<input placeholder="Nombre o código" value={search} maxLength={100} onChange={e=>{setSearch(e.target.value);setOffset(0);}} /></label>}
     {profiles.isError ? <ErrorState error={profiles.error} retry={()=>void profiles.refetch()}/> : profiles.isPending ? <LoadingState/> : null}
-    <label>Expediente ficticio<select value={selectedId} onChange={e=>onChange(e.target.value)}>
+    <label>Expediente<select value={selectedId} onChange={e=>onChange(e.target.value)}>
       <option value="">Seleccionar expediente</option>
       {selectedId && !items.some(p=>p.id===selectedId) && <option value={selectedId}>{selected?.display_name||selected?.display_code||"Expediente seleccionado"}</option>}
       {items.map(p=><option key={p.id} value={p.id}>{p.display_name||p.display_code} · {p.display_code}</option>)}
     </select></label>
-    {profiles.data && <><Pagination page={profiles.data} onChange={setOffset} label="Páginas de expedientes del informe"/>
+    {profiles.data && <>{(profiles.data.total>profiles.data.limit||offset>0)&&<Pagination page={profiles.data} onChange={setOffset} label="Páginas de expedientes del informe"/>}
       {items.length===0 && <p className="enterprise-hint">No hay expedientes para esta búsqueda.</p>}</>}
   </div>;
 }

@@ -19,7 +19,7 @@ export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: 
   const { id, api } = useWorkspace();
   const [open, setOpen] = useState(initiallyOpen);
   const [profileId, setProfileId] = useState("");
-  const [metric, setMetric] = useState("weight");
+  const [metric, setMetric] = useState("body_fat_pct");
   const [period, setPeriod] = useState("90d");
   const profile = useQuery({
     queryKey: ["dashboard-profile", id, profileId],
@@ -72,7 +72,7 @@ export function Dashboard() {
   return (
     <div className="enterprise-dashboard product-dashboard">
       <header className="enterprise-page-head product-heading">
-        <div><p className="eyebrow">TU ESPACIO DE TRABAJO</p><h1>Dashboard general</h1><p>Exploración anatómica y seguimiento corporal.</p></div>
+        <div><h1>Resumen</h1><p>Seguimiento de la composición corporal</p></div>
         <Link className="primary-button" to="/profiles">Ver expedientes <span aria-hidden="true">↗</span></Link>
       </header>
       <div className="product-dashboard-grid">

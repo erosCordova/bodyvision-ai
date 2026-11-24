@@ -143,7 +143,7 @@ export function AnatomyAtlas() {
   const controller = useRef<AtlasController | null>(null);
   const [panel, setPanel] = useState<Panel>(() => {
     const p = new URLSearchParams(window.location.search).get("panel");
-    return p === "simulacion" || p === "grasa" ? p : "informacion";
+    return p === "simulacion" || p === "grasa" ? p : sandboxAuthEnabled() ? "grasa" : "informacion";
   });
   const [visible, setVisible] = useState<AnatomicalLayer[]>(["skin"]);
   const [opacity, setOpacity] = useState<LayerOpacity>({ ...initialOpacity });
@@ -722,7 +722,7 @@ export function AnatomyAtlas() {
         <div className="studio-brand">
           <Link to="/" className="studio-back" title="Volver al resumen">←</Link>
           <span className="studio-brand-mark">B</span>
-          <div><strong>BODYVISION <em>AI</em></strong><small>ATLAS ANATÓMICO INTERACTIVO</small></div>
+          <div><strong>BODYVISION <em>AI</em></strong><small>COMPOSICIÓN CORPORAL</small></div>
         </div>
         <div className="studio-search-wrap">
           <span aria-hidden="true">⌕</span>
@@ -769,9 +769,7 @@ export function AnatomyAtlas() {
       <div className="studio-main">
         <aside className="studio-left" aria-label="Controles del atlas anatómico">
           <div className="studio-left-title">
-            <p>EXPLORADOR CORPORAL</p>
             <h1>Capas del cuerpo</h1>
-            <span>Activa los sistemas que deseas explorar.</span>
           </div>
           <div className="studio-layer-list">
             <div className={"studio-layer-card"+(adipose?" is-active":"")}><label><span className="studio-layer-dot" style={{background:"#e9b74b"}}/><span className="studio-layer-label"><strong>Grasa corporal</strong><small>Tejido adiposo 3D ilustrativo</small></span><input type="checkbox" checked={adipose} onChange={()=>{if(adipose){setAdipose(false);setVisible(["skin"]);}else showAdipose();}}/></label>{adipose&&<div className="studio-slider"><span>Opacidad</span><input aria-label="Opacidad de grasa corporal" type="range" min="10" max="100" step="5" value={Math.round(adiposeOpacity*100)} onChange={e=>setAdiposeOpacity(Number(e.target.value)/100)}/><output>{Math.round(adiposeOpacity*100)}%</output></div>}</div>
@@ -779,7 +777,7 @@ export function AnatomyAtlas() {
               <div className={"studio-layer-card" + (visible.includes(layer.id) ? " is-active" : "")} key={layer.id}>
                 <label>
                   <span className="studio-layer-dot" style={{ background: layer.color }} />
-                  <span className="studio-layer-label"><strong>{layer.label}</strong><small>{layer.detail}</small></span>
+                  <span className="studio-layer-label"><strong>{layer.label}</strong></span>
                   <input type="checkbox" checked={visible.includes(layer.id)} onChange={() => toggleLayer(layer.id)} />
                 </label>
                 {visible.includes(layer.id) && layerStates[layer.id] === "loading" && <p className="studio-layer-status" role="status">Cargando {layer.label.toLowerCase()}…</p>}
@@ -797,12 +795,12 @@ export function AnatomyAtlas() {
             ))}
           </div>
           <div className="studio-left-section">
-            <div className="studio-section-title"><strong>VISTAS RÁPIDAS</strong><span>07</span></div>
+            <div className="studio-section-title"><strong>Vistas rápidas</strong></div>
             <div className="studio-preset-grid">
               {quickViews.map(preset => <button key={preset.name} onClick={() => applyPreset(preset)}>{preset.name}</button>)}
             </div>
           </div>
-          <section className="studio-left-section studio-favorites" aria-label="Estructuras favoritas">
+          <details className="studio-left-section studio-favorites" aria-label="Estructuras favoritas"><summary>Favoritos</summary>
             <div className="studio-section-title"><strong>MIS ESTRUCTURAS</strong><span>{favoriteEntries.length}/{FAVORITES_LIMIT}</span></div>
             {favoriteEntries.length ? (
               <ol className="studio-favorites-list">
@@ -830,10 +828,9 @@ export function AnatomyAtlas() {
                 Vaciar favoritos
               </button>
             )}
-            <small className="studio-favorites-note">Favoritos guardados en este navegador.</small>
-          </section>
+            </details>
           <div className="studio-left-section studio-left-footer">
-            <p>Atlas de referencia · No clínico.</p>
+            
             <button onClick={() => { applyPreset(quickViews[0]); setMode("realista"); setSpin(false); resetSimulation(); setMeshOverlay(false); }}>↺ Restaurar visualización</button>
           </div>
         </aside>
@@ -940,13 +937,13 @@ export function AnatomyAtlas() {
               ))}
             </div>
             <div className="studio-dock-group">
-              <span>RENDIMIENTO</span>
+              <span>Calidad</span>
               <button className={qualityPreference === "auto" ? "active" : ""} aria-pressed={qualityPreference === "auto"}
                 title="Adaptar la calidad a la pantalla y al dispositivo" onClick={() => { setQualityPreference("auto"); setRenderStats(null); }}>Auto</button>
               <button className={qualityPreference === "alta" ? "active" : ""} aria-pressed={qualityPreference === "alta"} onClick={() => { setQualityPreference("alta"); setRenderStats(null); }}>Alta</button>
               <button className={qualityPreference === "fluida" ? "active" : ""} aria-pressed={qualityPreference === "fluida"} onClick={() => { setQualityPreference("fluida"); setRenderStats(null); }}>Fluida</button>
               <button aria-pressed={!!renderStats} onClick={() => setRenderStats(current =>
-                current ? null : controller.current?.getPerformanceStats() ?? null)}>Detalles</button>
+                current ? null : controller.current?.getPerformanceStats() ?? null)}>Diagnóstico</button>
             </div>
             <div className="studio-dock-group">
               <span>HERRAMIENTAS</span>
@@ -961,66 +958,56 @@ export function AnatomyAtlas() {
         </section>
 
         <aside className="studio-right" aria-label="Información y guía anatómica">
-          <div className="studio-right-head"><span>LABORATORIO DE ANATOMÍA</span><strong>Explora y aprende</strong>
-            <button type="button" className="studio-fat-feature" aria-pressed={panel==="grasa"} onClick={openFat}><span>◉</span><strong>Grasa corporal y mapa de calor</strong><span aria-hidden="true">↗</span></button>
-          </div>
+          <div className="studio-right-head"><strong>Evaluación corporal</strong></div>
           <div className="studio-tabs" role="tablist" aria-label="Panel de exploración">
+            <button role="tab" aria-selected={panel === "grasa"} className={panel === "grasa" ? "active" : ""} onClick={openFat}>Grasa</button>
+            <button role="tab" aria-selected={panel === "simulacion"} className={panel === "simulacion" ? "active" : ""} onClick={openSimulation}>Simulación</button>
             <button role="tab" aria-selected={panel === "informacion"} className={panel === "informacion" ? "active" : ""} onClick={() => setPanel("informacion")}>Información</button>
             <button role="tab" aria-selected={panel === "recorridos"} className={panel === "recorridos" ? "active" : ""} onClick={() => setPanel("recorridos")}>Recorridos</button>
             <button role="tab" aria-selected={panel === "guia"} className={panel === "guia" ? "active" : ""} onClick={() => setPanel("guia")}>Guía</button>
-            <button role="tab" aria-selected={panel === "grasa"} className={panel === "grasa" ? "active" : ""} onClick={openFat}>Grasa</button>
-            <button role="tab" aria-selected={panel === "simulacion"} className={panel === "simulacion" ? "active" : ""} onClick={openSimulation}>Simulación</button>
           </div>
           <div className="studio-right-content">
             {panel === "grasa" && <section ref={fatPanelRef} className="studio-fat-panel" aria-label="Grasa corporal">
-              <h2>Grasa corporal</h2>
-              <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId}
-                onChange={next=>{setFatProfileId(next);setScenarioProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>
+              <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId} onChange={next=>{setFatProfileId(next);setScenarioProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>
               {fatProfileId && (fatProfile.isPending ? <LoadingState/> : fatProfile.isError ?
                 <ErrorState error={fatProfile.error} retry={()=>void fatProfile.refetch()}/> :
                 fatMeasurements.isPending ? <LoadingState/> : fatMeasurements.isError ?
                 <ErrorState error={fatMeasurements.error} retry={()=>void fatMeasurements.refetch()}/> : null)}
-              <div className="studio-fat-reading"><strong>Mediciones del expediente</strong><dl><dt>Peso</dt><dd>{latestWeight?latestWeight.value+" kg":"Sin registro"}</dd><dt>Estatura</dt><dd>{latestHeight?latestHeight.value+" cm":"Sin registro"}</dd></dl><small>{latestWeight||latestHeight?"El atlas ajusta su forma ilustrativa a las últimas medidas disponibles.":"Se conserva la figura de referencia hasta registrar mediciones."} Rango gráfico: 40–200 kg y 145–205 cm; fuera del rango se limita la deformación.</small></div>
-              <div className="studio-fat-reading">
-                <DataTypeBadge type="OBSERVADO"/>
-                <strong>{latestFat ? latestFat.value.toLocaleString("es-PE",{maximumFractionDigits:2})+" %" : "Sin registro"}</strong>
-                <div className="studio-fat-meter" role={latestFat?"meter":undefined} aria-label={latestFat?"Porcentaje de grasa corporal observado":undefined}
-                  aria-valuemin={latestFat?0:undefined} aria-valuemax={latestFat?100:undefined} aria-valuenow={latestFat?.value}
-                  aria-valuetext={latestFat ? latestFat.value+" %" : undefined}>
-                  {latestFat && <span style={{width:latestFat.value+"%",background:fatScaleColor(latestFat.value)}}/>}
-                </div>
-                {latestFat ? <dl><dt>Fecha</dt><dd>{dateTime(latestFat.measured_at)}</dd>
-                  <dt>Instrumento</dt><dd>{latestFat.instrument}</dd><dt>Responsable</dt><dd>{latestFat.responsible}</dd></dl> :
-                  <p>{!fatProfileId?"Selecciona un expediente.":fatMeasurements.isPending?"Consultando mediciones…":fatMeasurements.isError?"No se pudo consultar la grasa corporal.": "Este expediente no tiene un porcentaje de grasa corporal instrumental registrado. Las imágenes y el peso no sustituyen esa medición."}</p>}
-                {!readOnly && fatProfile.data?.status==="active" && fatCatalog.data?.some(m=>m.code==="body_fat_pct") && <button type="button" className="primary-button" onClick={()=>setFatEntryOpen(true)}>{latestFat?"Registrar nueva medición de grasa":"Registrar grasa corporal (%)"}</button>}
-                {fatEntryOpen && fatProfile.data?.status==="active" && fatCatalog.data && <MeasurementForm key={fatProfileId} profileId={fatProfileId} metrics={fatCatalog.data.filter(m=>m.code==="body_fat_pct")} initialMetricCode="body_fat_pct" onClose={()=>setFatEntryOpen(false)} onSaved={()=>{setFatEntryOpen(false);setFatSimulation(null);void fatMeasurements.refetch();}}/>}
-                {fatProfileId && fatProfile.isSuccess && <Link to={"/profiles/"+fatProfileId+"?tab=measurements"}>Ver mediciones y fuentes →</Link>}
-                {composition ? <div className="studio-fat-composition"><DataTypeBadge type="DERIVADO"/><dl><dt>Peso registrado</dt><dd>{composition.weight.value} kg</dd><dt>Masa grasa</dt><dd>{composition.fatKg.toLocaleString("es-PE",{maximumFractionDigits:2})} kg</dd><dt>Masa libre de grasa</dt><dd>{composition.leanKg.toLocaleString("es-PE",{maximumFractionDigits:2})} kg</dd></dl><small>Peso × porcentaje / 100. Peso registrado: {dateTime(composition.weight.measured_at)}. Ambos registros corresponden al mismo día en Lima; no es medición directa de masas.</small></div> : latestFat && <small>{weightMeasurements.isPending?"Consultando peso registrado…":weightMeasurements.isError?"No se pudo consultar el peso.": "Sin peso compatible del mismo día entre los registros recientes; no se calculan masas."}</small>}
+              {!fatProfileId&&<Link className="studio-inline-link" to="/profiles">+ Crear expediente</Link>}
+              <div className="studio-composition-grid">
+                <div><span>Peso</span><strong>{latestWeight?latestWeight.value:"—"} <small>kg</small></strong></div>
+                <div><span>Estatura</span><strong>{latestHeight?latestHeight.value:"—"} <small>cm</small></strong></div>
+                {composition&&<><div><span>Masa grasa · calculada</span><strong>{composition.fatKg.toLocaleString("es-PE",{maximumFractionDigits:1})} <small>kg</small></strong></div><div><span>Masa libre de grasa</span><strong>{composition.leanKg.toLocaleString("es-PE",{maximumFractionDigits:1})} <small>kg</small></strong></div></>}
               </div>
               <div className="studio-fat-reading">
-                <DataTypeBadge type="SIMULADO"/>
-                {fatSimulation===null ? <button type="button" onClick={()=>{setFatSimulation(latestFat?.value??25);setFatHeat(true);}}>Crear escenario ilustrativo</button> : <>
-                  <label>Porcentaje hipotético <strong>{fatSimulation.toLocaleString("es-PE")} %</strong>
-                    <input type="range" min={2} max={70} step={0.1} value={fatSimulation}
-                      onChange={event=>setFatSimulation(Number(event.target.value))}/></label>
-                  <button type="button" onClick={()=>setFatSimulation(null)}>Volver al dato observado</button>
-                  <small>Valor elegido por el usuario. No predice cambios de grasa por peso o estatura ni modifica mediciones.</small>
-                </>}
+                <div className="studio-reading-label"><span>Grasa corporal</span><DataTypeBadge type="OBSERVADO"/></div>
+                <strong>{latestFat?latestFat.value.toLocaleString("es-PE",{maximumFractionDigits:2})+" %":"—"}</strong>
+                <div className="studio-fat-meter" role={latestFat?"meter":undefined} aria-label={latestFat?"Porcentaje de grasa corporal observado":undefined} aria-valuemin={latestFat?0:undefined} aria-valuemax={latestFat?100:undefined} aria-valuenow={latestFat?.value}>{latestFat&&<span style={{width:latestFat.value+"%",background:fatScaleColor(latestFat.value)}}/>}</div>
+                {latestFat?<small>{dateTime(latestFat.measured_at)}</small>:<small>{fatProfileId?"Sin medición instrumental":"Selecciona un expediente"}</small>}
+                {!readOnly&&fatProfile.data?.status==="active"&&fatCatalog.data?.some(m=>m.code==="body_fat_pct")&&<button type="button" className="primary-button" onClick={()=>setFatEntryOpen(true)}>+ Registrar grasa corporal</button>}
+                {fatEntryOpen&&fatProfile.data?.status==="active"&&fatCatalog.data&&<MeasurementForm key={fatProfileId} profileId={fatProfileId} metrics={fatCatalog.data.filter(m=>m.code==="body_fat_pct")} initialMetricCode="body_fat_pct" onClose={()=>setFatEntryOpen(false)} onSaved={()=>{setFatEntryOpen(false);setFatSimulation(null);void fatMeasurements.refetch();}}/>}
+                {latestFat&&<details className="studio-compact-details"><summary>Fuentes de medición</summary><dl><dt>Instrumento</dt><dd>{latestFat.instrument}</dd><dt>Responsable</dt><dd>{latestFat.responsible}</dd></dl>{composition&&<small>Masa grasa = peso × porcentaje / 100 (registros del mismo día).</small>}{!composition&&<small>Falta un peso compatible del mismo día para calcular las masas.</small>}</details>}
               </div>
-              {sandboxAuthEnabled() && fatProfileId && fatProfile.isSuccess && <details><summary>Imágenes de referencia del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId}/></details>}
-              <div className="studio-fat-reading"><strong>Visualización del tejido adiposo</strong><button type="button" className="primary-button" aria-pressed={adipose} onClick={showAdipose}>Mostrar grasa corporal 3D</button><button type="button" aria-pressed={fatHeat&&!adipose} onClick={openFat}>Mostrar mapa de calor</button><small>Depósitos adiposos ilustrativos sobre músculos y huesos. Bordes suaves, relieve fino y cobertura variable según el porcentaje de referencia. No son una segmentación anatómica medida. {displayedFat===null?"Sin porcentaje registrado: referencia visual sin valor clínico.":`Porcentaje de referencia: ${displayedFat}% (${fatSimulation!==null?"simulado":"registrado"}).`}</small></div>
-              <div className="studio-fat-legend" aria-label={illustrativeFat?"Paleta térmica ilustrativa, sin valores regionales":"Escala global del porcentaje registrado"}>
-                <div className={illustrativeFat?"":"studio-fat-global-ramp"}/><span>{illustrativeFat?"Menor intensidad":"0 %"}</span><span>{illustrativeFat?"Mayor intensidad":"100 %"}</span>
+              <div className="studio-fat-views" role="group" aria-label="Tipo de visualización">
+                <button type="button" aria-pressed={adipose} onClick={showAdipose}>Tejido adiposo</button>
+                <button type="button" aria-pressed={fatHeat&&!adipose} onClick={()=>{setComparison(false);openFat();}}>Mapa de calor</button>
               </div>
-              <p>{illustrativeFat?"Vista ilustrativa: el porcentaje hipotético cambia la intensidad de todo el patrón. Los colores no indican grasa localizada ni temperatura.":"Vista observada: un único color representa el porcentaje total del expediente. No hay mediciones regionales para construir un mapa de grasa localizado."}</p>
-              {fatHeat && !fatHeatActive && <p role="status">Para ver el mapa térmico, activa únicamente la piel sin comparación.</p>}
-              {fatHeat && !fatHeatActive && <button type="button" onClick={()=>{setComparison(false);openFat();}}>Restaurar superficie para mapa</button>}
+              <small>Representación ilustrativa. La foto no mide grasa localizada.</small>
+              {fatHeat&&!adipose&&<div className="studio-fat-legend" aria-label={illustrativeFat?"Paleta ilustrativa":"Escala del porcentaje total"}><div className={illustrativeFat?"":"studio-fat-global-ramp"}/><span>{illustrativeFat?"Menor intensidad":"0 %"}</span><span>{illustrativeFat?"Mayor intensidad":"100 %"}</span></div>}
+              {fatHeat&&!fatHeatActive&&!adipose&&<button type="button" onClick={()=>{setComparison(false);openFat();}}>Activar mapa de calor</button>}
+              <details className="studio-compact-details"><summary>Simular porcentaje de grasa</summary>
+                {fatSimulation===null?<button type="button" onClick={()=>{setFatSimulation(latestFat?.value??25);}}>Iniciar simulación</button>:<>
+                  <DataTypeBadge type="SIMULADO"/><label>Porcentaje <strong>{fatSimulation.toLocaleString("es-PE")} %</strong><input type="range" min={2} max={70} step={0.1} value={fatSimulation} onChange={event=>setFatSimulation(Number(event.target.value))}/></label>
+                  <button type="button" onClick={()=>setFatSimulation(null)}>Restaurar</button>
+                  <small>No modifica las mediciones.</small></>}
+              </details>
+              {fatProfileId&&fatProfile.isSuccess&&<div className="studio-profile-actions"><Link to={"/profiles/"+fatProfileId+"?tab=measurements"}>Mediciones</Link><Link to={"/profiles/"+fatProfileId+"?tab=analytics&metric=body_fat_pct"}>Evolución</Link>{sandboxAuthEnabled()&&<Link to={"/profiles/"+fatProfileId+"?tab=images"}>Imágenes</Link>}</div>}
+              {sandboxAuthEnabled()&&fatProfileId&&fatProfile.isSuccess&&<details className="studio-compact-details"><summary>Imágenes del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId} allowUpload={fatProfile.data?.status==="active"}/></details>}
+              <details className="studio-compact-details"><summary>Acerca de esta vista</summary><small>El atlas se ajusta a las últimas medidas disponibles; su rango gráfico es 40–200 kg y 145–205 cm. No es una reconstrucción clínica. La vista térmica observada representa el porcentaje total.</small></details>
             </section>}
             {panel === "simulacion" && (
               <div className="studio-simulation">
-                <p className="studio-eyebrow">SIMULACIÓN · SOBRE EL MODELO 3D</p>
-                <h2>Simulador de peso y estatura</h2>
-                <p className="studio-sim-lead">Ajusta el peso y la estatura del modelo.</p>
+                <h2>Simulación corporal</h2>
                 <div className="studio-sim-values">
                   <div><span>REFERENCIA ILUSTRATIVA</span><strong>{referenceKg} <small>kg</small></strong></div>
                   <div><span>PESO HIPOTÉTICO</span><strong>{simulatedWeight} <small>kg</small></strong></div>
@@ -1100,7 +1087,7 @@ export function AnatomyAtlas() {
                      <small>Solo visualización ficticia; estas cifras no representan una predicción de salud.</small>
                    </div>
                  </div>
-                 <section className="studio-sim-regional" aria-label="Respuesta visual regional del cuerpo">
+                 <details className="studio-sim-regional" aria-label="Respuesta visual regional del cuerpo"><summary>Detalles de la simulación</summary>
                   <div className="studio-sim-regional-head">
                     <strong>Respuesta regional del modelo 3D</strong>
                     <small>{baselinePreview ? "Vista del atlas original" : "Cambio de silueta frente a la referencia ilustrativa"}</small>
@@ -1123,7 +1110,7 @@ export function AnatomyAtlas() {
                     ))}
                   </div>
                   <small>Factores visuales calculados con las mismas zonas y límites del shader de piel, en puntos representativos; no son cambios reales de contorno, grasa ni masa muscular. Los huesos y nervios no se deforman con el peso.</small>
-                </section>
+                </details>
                 {visible.includes("skin") && morphClamping.regions.length > 0 && (
                    <p className="studio-sim-warning" role="status"
                      aria-label="Límite gráfico de deformación">

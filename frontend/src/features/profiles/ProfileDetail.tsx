@@ -33,7 +33,7 @@ export function ProfileDetail() {
     const requested = new URLSearchParams(window.location.search).get("tab");
     return requested === "measurements" || requested === "analytics" || (requested==="images" && sandboxAuthEnabled()) ? requested : "summary";
   });
-  const [metric, setMetric] = useState("weight");
+  const [metric, setMetric] = useState(()=>new URLSearchParams(window.location.search).get("metric")==="body_fat_pct"?"body_fat_pct":"weight");
   const [period, setPeriod] = useState("90d");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -123,7 +123,7 @@ export function ProfileDetail() {
           {privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
           {sandboxAuthEnabled() && <Link className="back-link" to={`/analysis?profile=${profileId}`}>Analizar imágenes →</Link>}
           <Link className="back-link" to={`/body-3d?panel=grasa&profile=${profileId}`}>
-            Abrir visor 3D de este expediente →
+            Visor 3D →
           </Link>
           <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
             Abrir simulador →
@@ -163,12 +163,11 @@ export function ProfileDetail() {
       {tab === "summary" && (
         <>
           <div className="section-title">
-            <h2>Cálculos desde mediciones observadas</h2>
+            <h2>Composición corporal</h2>
             <DataTypeBadge type="DERIVADO" />
           </div>
           <p className="muted">
-            Son relaciones matemáticas descriptivas; no son una evaluación
-            clínica.
+            Valores calculados; no constituyen diagnóstico.
           </p>
           {derived.isPending ? (
             <LoadingState />

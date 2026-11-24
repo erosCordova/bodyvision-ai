@@ -170,10 +170,7 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
     <section className="enterprise-pose-review" aria-label="Estimación local de pose con IA">
       <div className="enterprise-pose-review-head">
         <div>
-          <span className="eyebrow">IA REAL · INFERENCIA EN EL NAVEGADOR</span>
-          <h3>MediaPipe Pose Landmarker</h3>
-          <p>Detecta hasta 33 puntos de una persona sobre la fotografía cargada, sin enviar
-            sus píxeles al servidor. Este resultado no es una medición ni un diagnóstico.</p>
+          <h3>Detección corporal</h3><p>Pose y puntos corporales. No mide grasa.</p>
         </div>
         <button type="button" className="primary-button"
           disabled={state === "running" || benchmarkRunning || diagnosticRunning} onClick={() => void run()}>
@@ -181,11 +178,11 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
             state === "ready" ? "Repetir detección" : "Detectar pose con IA"}
         </button>
       </div>
-      <p className="enterprise-pose-privacy">
+      <details className="enterprise-pose-privacy"><summary>Detalles técnicos</summary><p>
         Motor y modelo incluidos en esta versión de BODYVISION. SDK {POSE_SDK_VERSION},
         modelo {POSE_MODEL_VERSION}; ejecución local con CPU, sin guardar imágenes ni coordenadas.
         Utiliza únicamente fotografías ficticias para esta demostración.
-      </p>
+      </p></details>
       {state === "running" && <p role="status">Cargando el modelo y procesando la fotografía localmente…</p>}
       {state === "ready" && elapsedMs !== null && <div className="enterprise-pose-privacy"
         role="status" aria-label="Duración de inferencia local">
@@ -193,9 +190,9 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
         {localPoseLatencyGuidance(elapsedMs)} La medición incluye lectura, decodificación,
         carga del modelo si es la primera ejecución e inferencia; no se guarda ni se envía.
       </div>}
-      {state === "ready" && <section className="enterprise-pose-benchmark"
+      {state === "ready" && <details className="enterprise-pose-benchmark"
         aria-label="Evaluación repetible de rendimiento de pose">
-        <h4>Evaluación de rendimiento en este dispositivo</h4>
+        <summary>Rendimiento y diagnóstico</summary>
         <p>Prepara una sola vez la imagen sintética y repite {POSE_BENCHMARK_RUNS}
           veces la inferencia local con el mismo lienzo. No vuelve a decodificar
           la fotografía en cada repetición. Solo mide este navegador;
@@ -278,7 +275,7 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
             Con cinco muestras, el P95 es el tiempo más alto; no representa
             un valor garantizado ni precisión clínica. No se mide memoria ni temperatura.</small>
         </div>}
-      </section>}
+      </details>}
       {state === "failed" && <p role="alert" className="enterprise-pose-error">{failure}</p>}
       {state === "ready" && estimate && quality && (
         <div className="enterprise-pose-result" aria-live="polite">
