@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     capture_decryption_keys: list[SecretStr] = []
     capture_retention_interval_seconds: int = 900
     capture_retention_enabled: bool = True
+    server_pose_queue_enabled: bool = False
     # Internal elapsed-day target for new synthetic requests, never a legal deadline.
     privacy_review_target_days: int = Field(default=7, ge=1, le=30)
 
@@ -114,6 +115,10 @@ class Settings(BaseSettings):
                 raise ValueError("Invalid MFA encryption key") from exc
         if not 60 <= self.capture_retention_interval_seconds <= 86400:
             raise ValueError("Capture retention interval must be between 60 and 86400 seconds")
+        if self.server_pose_queue_enabled and (
+            not self.identity_enabled or self.capture_encryption_key is None
+        ):
+            raise ValueError("Server pose queue requires private encrypted synthetic captures")
         if self.capture_decryption_keys and self.capture_encryption_key is None:
             raise ValueError("Previous capture keys require an active encryption key")
         if self.capture_encryption_key is not None:

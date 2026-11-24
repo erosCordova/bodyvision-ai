@@ -29,6 +29,8 @@ async function scopedFetch(token: string, path: string, init: RequestInit = {}) 
   if (!response.ok) {
     const body = await response.clone().json().catch(() => null) as { code?: string } | null;
     const messages: Record<string, string> = {
+      POSE_QUEUE_DISABLED: "El análisis en servidor requiere un trabajador privado configurado.",
+      POSE_CONSENT_REQUIRED: "Registra el consentimiento ficticio vigente de pose.",
       CAPTURE_CONSENT_REQUIRED: "Registra aceptaciones ficticias de captura y conservación en el expediente.",
       CAPTURE_STORAGE_DISABLED: "El almacenamiento de prueba necesita una clave privada configurada en el servidor.",
       SYNTHETIC_CONFIRMATION_REQUIRED: "Debes confirmar que el archivo es ficticio.",
@@ -40,6 +42,35 @@ async function scopedFetch(token: string, path: string, init: RequestInit = {}) 
     throw new Error(messages[body?.code ?? ""] ?? "No se pudo procesar la captura ficticia.");
   }
   return response;
+}
+
+const serverPoseJob = z.object({
+  id: z.string().uuid(), profile_id: z.string().uuid(), capture_id: z.string().uuid(),
+  status: z.enum(["queued", "processing", "needs_review", "failed", "accepted", "rejected"]),
+  attempts: z.number().int().min(0).max(3),
+  result: z.object({
+    detected: z.boolean(), visible_points: z.number().int().min(0).max(33),
+    model_sha256: z.literal("59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"),
+    model_revision: z.literal("pose_landmarker_lite/float16/1"),
+  }).strict().nullable(),
+  error_code: z.string().nullable(),
+  origin: z.literal("server_model"), synthetic: z.literal(true),
+});
+export type ServerPoseJob = z.infer<typeof serverPoseJob>;
+
+export function serverPoseApi(token: string, profileId: string, captureId: string) {
+  const root = `/profiles/${profileId}/captures/${captureId}/server-pose`;
+  const post = async (path: string, body: object) => serverPoseJob.parse(
+    await (await scopedFetch(token, path, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, synthetic_confirmed: true }),
+    })).json(),
+  );
+  return {
+    get: async () => serverPoseJob.parse(await (await scopedFetch(token, root)).json()),
+    enqueue: () => post(root, {}),
+    review: (decision: "accepted" | "rejected") => post(root + "/review", { decision }),
+  };
 }
 
 export const CAPTURE_ARCHIVE_PAGE_SIZE = 20;
