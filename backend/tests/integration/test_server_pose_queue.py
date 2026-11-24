@@ -45,7 +45,8 @@ def test_queue_worker_review_and_revocation(protected, monkeypatch):
         for role in ("bodyvision_app", "bodyvision_auth_app"):
             assert not connection.execute(
                 text(
-                    "SELECT has_function_privilege(:role,'public.claim_server_pose(uuid)','EXECUTE')"
+                    "SELECT has_function_privilege(:role,"
+                    "'public.claim_server_pose(uuid)','EXECUTE')"
                 ),
                 {"role": role},
             ).scalar_one()
