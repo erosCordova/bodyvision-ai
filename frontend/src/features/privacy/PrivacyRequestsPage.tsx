@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { privateAuthEnabled, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import {
-  kindLabels, privacyRequestsApi, type PrivacyKind, type PrivacyRequest,
+  kindLabels, privacyRequestsApi, rejectionLabels, type PrivacyKind, type PrivacyRequest, type RejectionReason,
 } from "../../services/api/privacyRequests";
 import { ConsentPanel } from "../profiles/ConsentPanel";
 
@@ -24,9 +24,10 @@ export function PrivacyRequestsPage() {
   const [notice, setNotice] = useState("");
   const [profileOffset, setProfileOffset] = useState(0);
   const [queueOffset, setQueueOffset] = useState(0);
-  const [queueStatus, setQueueStatus] = useState<"all" | "received" | "in_review">("all");
+  const [queueStatus, setQueueStatus] = useState<"all" | "received" | "in_review" | "rejected">("all");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [consentProfile, setConsentProfile] = useState("");
+  const [rejection, setRejection] = useState<{ id: string; reason: RejectionReason } | null>(null);
   const privacyOnly = session?.role === "privacy_officer";
   const canReview = session?.role === "administrator" || privacyOnly;
   const privateClient = useMemo(
@@ -103,15 +104,50 @@ export function PrivacyRequestsPage() {
     }
   };
 
+  const reject = async (item: PrivacyRequest, reason: RejectionReason) => {
+    if (!privateClient || pending || !item.can_review || item.status !== "in_review") return;
+    setPending(true); setError(""); setNotice("");
+    try {
+      await privateClient.reject(item.id, reason);
+      setRejection(null);
+      await Promise.all([
+        queue.refetch(),
+        ...(!privacyOnly && profileId ? [history.refetch()] : []),
+      ]);
+      setNotice("Rechazo administrativo ficticio registrado. No constituye una resolución legal.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo registrar el rechazo.");
+    } finally {
+      setPending(false);
+    }
+  };
+
   const rows = (items: PrivacyRequest[], canReview: boolean) => (
     <ul>
       {items.map(item => <li key={item.id}>
         <strong>{item.profile_code} · {kindLabels[item.request_type]}</strong>
-        {" · "}{item.status === "received" ? "Recibida" : "En revisión"}
+        {" · "}{item.status === "received" ? "Recibida" : item.status === "in_review" ? "En revisión" : "Rechazada"}
         <p>Recibida: {dateLabel(item.received_at)}. Objetivo interno de atención (hora de Lima): {dateLabel(item.review_target_at)}.</p>
         {item.review_overdue && <p role="status">Atención interna atrasada (no es un plazo legal).</p>}
         {canReview && item.status === "received" && <button type="button"
           disabled={pending || !item.can_review} onClick={() => { void review(item); }}>Iniciar revisión</button>}
+        {item.status === "rejected" && item.rejected_at && item.rejection_reason && <p>
+          Rechazo ficticio: {dateLabel(item.rejected_at)} · {rejectionLabels[item.rejection_reason]}.
+        </p>}
+        {canReview && item.can_review && item.status === "in_review" && <>
+          {rejection?.id === item.id ? <div>
+            <label>Motivo del rechazo ficticio
+              <select value={rejection.reason} disabled={pending}
+                onChange={event => setRejection({ id: item.id, reason: event.currentTarget.value as RejectionReason })}>
+                {Object.entries(rejectionLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </label>
+            <p>No se eliminará ni exportará información. Esta decisión es solo de pruebas.</p>
+            <button type="button" disabled={pending} onClick={() => { void reject(item, rejection.reason); }}>Confirmar rechazo ficticio</button>
+            <button type="button" disabled={pending} onClick={() => setRejection(null)}>Cancelar rechazo</button>
+          </div> : <button type="button" disabled={pending}
+            onClick={() => setRejection({ id: item.id, reason: "invalid_synthetic_request" })}>Rechazar solicitud ficticia</button>}
+        </>}
         {canReview && !item.can_review && <p>Permiso de consulta: iniciar revisión requiere gestión.</p>}
         {privacyOnly && <button type="button" onClick={() => setConsentProfile(item.profile_id)}>
           Consultar consentimientos de {item.profile_code}
@@ -199,12 +235,13 @@ export function PrivacyRequestsPage() {
       <label htmlFor="privacy-queue-status">Filtrar solicitudes por estado</label>
       <select id="privacy-queue-status" value={queueStatus}
         onChange={event => {
-          setQueueStatus(event.target.value as "all" | "received" | "in_review");
+          setQueueStatus(event.target.value as "all" | "received" | "in_review" | "rejected");
           setQueueOffset(0);
         }}>
         <option value="all">Todos los estados</option>
         <option value="received">Recibidas</option>
         <option value="in_review">En revisión</option>
+        <option value="rejected">Rechazadas</option>
       </select>
       <label htmlFor="privacy-queue-overdue">
         <input id="privacy-queue-overdue" type="checkbox" checked={overdueOnly}
