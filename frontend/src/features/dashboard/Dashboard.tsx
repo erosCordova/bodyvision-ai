@@ -81,7 +81,7 @@ export function Dashboard() {
           <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
             <DashboardBodyPreview />
           </Suspense>
-          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link></div>
+          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link><Link className="secondary-button dashboard-fat-link" to="/body-3d?panel=grasa">Grasa corporal y mapa de calor ↗</Link></div>
         </section>
         <div className="product-dashboard-side">
           <section className="product-metrics" aria-label="Indicadores reales de la organización ficticia">

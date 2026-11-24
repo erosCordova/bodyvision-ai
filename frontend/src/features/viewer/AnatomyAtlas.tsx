@@ -136,6 +136,7 @@ export function AnatomyAtlas() {
   const queryClient = useQueryClient();
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
+  const fatPanelRef = useRef<HTMLElement>(null);
   const controller = useRef<AtlasController | null>(null);
   const [panel, setPanel] = useState<Panel>(() => {
     const p = new URLSearchParams(window.location.search).get("panel");
@@ -559,6 +560,11 @@ export function AnatomyAtlas() {
     setMode("realista");setIsolated(false);setMeshOverlay(false);setFatHeat(true);
     controller.current?.clearSelection();
   };
+  useEffect(() => {
+    if (panel === "grasa" && window.matchMedia("(max-width: 1050px)").matches) {
+      fatPanelRef.current?.scrollIntoView({block:"start",behavior:"instant"});
+    }
+  }, [panel]);
   const toggleMesh = () => {
     if (mode === "holograma") setMode("realista");
     setMeshOverlay(value => !value);
@@ -871,6 +877,7 @@ export function AnatomyAtlas() {
             <button onClick={() => controller.current?.view("back")}>Espalda</button>
             <button onClick={() => controller.current?.view("left")}>Izquierda</button>
             <button onClick={() => controller.current?.view("right")}>Derecha</button>
+            <button type="button" className="studio-fat-entry" aria-pressed={panel==="grasa"} onClick={openFat}>Grasa corporal</button>
           </div>
           {error && <div className="studio-overlay-error" role="alert"><p>{error}</p><button onClick={() => setRestart(value => value + 1)}>Recargar visor</button></div>}
           {showMarker && selected && (
@@ -923,7 +930,9 @@ export function AnatomyAtlas() {
         </section>
 
         <aside className="studio-right" aria-label="Información y guía anatómica">
-          <div className="studio-right-head"><span>LABORATORIO DE ANATOMÍA</span><strong>Explora y aprende</strong></div>
+          <div className="studio-right-head"><span>LABORATORIO DE ANATOMÍA</span><strong>Explora y aprende</strong>
+            <button type="button" className="studio-fat-feature" aria-pressed={panel==="grasa"} onClick={openFat}><span>◉</span><strong>Grasa corporal y mapa de calor</strong><span aria-hidden="true">↗</span></button>
+          </div>
           <div className="studio-tabs" role="tablist" aria-label="Panel de exploración">
             <button role="tab" aria-selected={panel === "informacion"} className={panel === "informacion" ? "active" : ""} onClick={() => setPanel("informacion")}>Información</button>
             <button role="tab" aria-selected={panel === "recorridos"} className={panel === "recorridos" ? "active" : ""} onClick={() => setPanel("recorridos")}>Recorridos</button>
@@ -932,7 +941,7 @@ export function AnatomyAtlas() {
             <button role="tab" aria-selected={panel === "simulacion"} className={panel === "simulacion" ? "active" : ""} onClick={openSimulation}>Simulación</button>
           </div>
           <div className="studio-right-content">
-            {panel === "grasa" && <section className="studio-fat-panel" aria-label="Grasa corporal">
+            {panel === "grasa" && <section ref={fatPanelRef} className="studio-fat-panel" aria-label="Grasa corporal">
               <h2>Grasa corporal</h2>
               <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId}
                 onChange={next=>{setFatProfileId(next);setFatSimulation(null);}}/>
@@ -943,9 +952,9 @@ export function AnatomyAtlas() {
               <div className="studio-fat-reading">
                 <DataTypeBadge type="OBSERVADO"/>
                 <strong>{latestFat ? latestFat.value.toLocaleString("es-PE",{maximumFractionDigits:2})+" %" : "Sin registro"}</strong>
-                <div className="studio-fat-meter" role="meter" aria-label="Porcentaje de grasa corporal observado"
-                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={latestFat?.value}
-                  aria-valuetext={latestFat ? latestFat.value+" %" : "Sin medición disponible"}>
+                <div className="studio-fat-meter" role={latestFat?"meter":undefined} aria-label={latestFat?"Porcentaje de grasa corporal observado":undefined}
+                  aria-valuemin={latestFat?0:undefined} aria-valuemax={latestFat?100:undefined} aria-valuenow={latestFat?.value}
+                  aria-valuetext={latestFat ? latestFat.value+" %" : undefined}>
                   {latestFat && <span style={{width:latestFat.value+"%",background:fatScaleColor(latestFat.value)}}/>}
                 </div>
                 {latestFat ? <dl><dt>Fecha</dt><dd>{dateTime(latestFat.measured_at)}</dd>

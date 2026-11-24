@@ -1590,3 +1590,15 @@ test("fat heat view uses an observed instrument reading and keeps hypothetical v
   await page.getByRole("checkbox",{name:"Mostrar vista de calor"}).uncheck();
   await expect(viewport(page)).toHaveAttribute("data-fat-heat","inactive");
 });
+
+
+test("fat panel is discoverable without horizontal toolbar scrolling",async({page})=>{
+  await sourceFixtures(page);
+  await page.setViewportSize({width:1280,height:800});
+  await page.goto("/body-3d");
+  const entry=page.getByRole("button",{name:"Grasa corporal",exact:true});
+  await expect(entry).toBeInViewport();
+  await entry.click();
+  await expect(page.getByRole("heading",{name:"Grasa corporal",exact:true})).toBeVisible();
+  await expect(page.getByText("Sin registro",{exact:true})).toBeVisible();
+});
