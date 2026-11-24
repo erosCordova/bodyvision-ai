@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,7 @@ def run_inference(payload: bytes, model_path: Path) -> PoseResult:
     result = subprocess.run(
         [sys.executable, "-m", "app.services.server_pose_inference", str(model_path)],
         input=payload,
+        env={key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "WINDIR") if key in os.environ},
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         timeout=45,
