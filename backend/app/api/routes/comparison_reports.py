@@ -2,11 +2,10 @@
 
 import base64
 import hashlib
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from itertools import chain
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -138,11 +137,10 @@ class LongitudinalSelection(BaseModel):
         if self.start_date is None or self.end_date is None:
             raise ValueError("Selecciona las dos fechas del periodo.")
         start, end = date.fromisoformat(self.start_date), date.fromisoformat(self.end_date)
-        today = datetime.now(ZoneInfo("America/Lima")).date()
         if (
             start.isoformat() != self.start_date
             or end.isoformat() != self.end_date
-            or not date(1900, 1, 1) <= start <= end <= today
+            or not date(1900, 1, 1) <= start <= end
         ):
             raise ValueError("El intervalo de fechas no es válido.")
         return self
@@ -182,12 +180,12 @@ def export_longitudinal(
     if metric is None:
         raise DomainError(422, "UNKNOWN_METRIC", "Selecciona una métrica autorizada.")
     days = {"30d": 30, "90d": 90, "1a": 365, "all": None, "custom": None}[selection.period]
-    start_at = end_at = None
-    if selection.start_date is not None and selection.end_date is not None:
-        lima = ZoneInfo("America/Lima")
-        start_at = datetime.combine(date.fromisoformat(selection.start_date), time.min, lima)
-        end_day = date.fromisoformat(selection.end_date) + timedelta(days=1)
-        end_at = datetime.combine(end_day, time.min, lima)
+    if selection.end_date is not None:
+        today = scope.connection.execute(
+            text("SELECT (statement_timestamp() AT TIME ZONE 'America/Lima')::date")
+        ).scalar_one()
+        if date.fromisoformat(selection.end_date) > today:
+            raise DomainError(422, "INVALID_PERIOD", "La fecha final no puede ser futura.")
     # One server cursor retains one SELECT snapshot across all fetch batches.
     # Rows are not materialized as a list; CSV bytes have a strict size budget.
     statement = text(
@@ -202,10 +200,10 @@ def export_longitudinal(
              AND (CAST(:days AS integer) IS NULL OR
                   m.measured_at >= export_clock.snapshot_at -
                       make_interval(days => CAST(:days AS integer)))
-             AND (CAST(:start_at AS timestamptz) IS NULL OR
-                  m.measured_at >= CAST(:start_at AS timestamptz))
-             AND (CAST(:end_at AS timestamptz) IS NULL OR
-                  m.measured_at < CAST(:end_at AS timestamptz))
+             AND (CAST(:start_date AS date) IS NULL OR m.measured_at >=
+                  (CAST(CAST(:start_date AS date) AS timestamp) AT TIME ZONE 'America/Lima'))
+             AND (CAST(:end_date AS date) IS NULL OR m.measured_at <
+                  (CAST(CAST(:end_date AS date) + 1 AS timestamp) AT TIME ZONE 'America/Lima'))
            ORDER BY m.measured_at,m.id"""
     )
     parameters = {
@@ -213,8 +211,8 @@ def export_longitudinal(
         "profile": profile_id,
         "metric": selection.metric_code,
         "days": days,
-        "start_at": start_at,
-        "end_at": end_at,
+        "start_date": selection.start_date,
+        "end_date": selection.end_date,
     }
     try:
         with scope.connection.execute(
