@@ -7,11 +7,12 @@ const labels: Record<ServerPoseJob["status"], string> = {
   rejected: "Rechazado",
 };
 
-export function ServerPosePanel({ token, profileId, captureId, canWrite }: {
-  token: string; profileId: string; captureId: string; canWrite: boolean;
+export function ServerPosePanel({ token, organizationId, actorId, profileId, captureId, canWrite }: {
+  token: string; organizationId: string; actorId: string;
+  profileId: string; captureId: string; canWrite: boolean;
 }) {
   const cache = useQueryClient();
-  const key = ["server-pose-job", profileId, captureId, token];
+  const key = ["server-pose-job", organizationId, actorId, profileId, captureId];
   const api = serverPoseApi(token, profileId, captureId);
   const query = useQuery({
     queryKey: key, queryFn: api.get, retry: false,
