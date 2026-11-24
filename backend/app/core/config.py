@@ -1,3 +1,4 @@
+import base64
 import os
 import re
 from typing import Literal
@@ -87,7 +88,21 @@ class Settings(BaseSettings):
         if self.report_signing_key is not None:
             if not self.identity_enabled or self.app_env not in {"local", "test"}:
                 raise ValueError("Report signatures require private local/test identity")
-            decode_report_signing_key(self.report_signing_key.get_secret_value())
+            report_secret = self.report_signing_key.get_secret_value()
+            decode_report_signing_key(report_secret)
+            report_seed = bytes.fromhex(report_secret)
+            if self.jwt_signing_key is not None and (
+                report_seed == decode_signing_key(self.jwt_signing_key.get_secret_value())
+            ):
+                raise ValueError("Report and JWT signing secrets must be distinct")
+            encoded_seed = base64.urlsafe_b64encode(report_seed).decode("ascii")
+            for encryption_key in [
+                self.mfa_encryption_key,
+                self.capture_encryption_key,
+                *self.capture_decryption_keys,
+            ]:
+                if encryption_key is not None and encoded_seed == encryption_key.get_secret_value():
+                    raise ValueError("Report signing and encryption secrets must be distinct")
         if self.mfa_enabled:
             if not self.identity_enabled or self.mfa_encryption_key is None:
                 raise ValueError(
