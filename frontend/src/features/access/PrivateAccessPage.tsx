@@ -46,6 +46,7 @@ export function PrivateAccessPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     if (recovering) {
       await startRecovery();
       return;
@@ -88,6 +89,7 @@ export function PrivateAccessPage() {
   }
 
   async function startEnrollment() {
+    if (busy) return;
     setError("");
     setBusy(true);
     try {
@@ -102,6 +104,7 @@ export function PrivateAccessPage() {
   }
 
   async function startRecovery() {
+    if (busy) return;
     setError("");
     setBusy(true);
     try {
@@ -123,6 +126,7 @@ export function PrivateAccessPage() {
 
   async function finishEnrollment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setError("");
     setBusy(true);
     try {
@@ -141,6 +145,7 @@ export function PrivateAccessPage() {
   }
 
   async function signOut() {
+    if (busy) return;
     setBusy(true);
     const revoked = await logout();
     if (!revoked) {

@@ -53,7 +53,7 @@ export function MeasurementForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { id, api } = useWorkspace();
+  const { id, api, readOnly } = useWorkspace();
   const cache = useQueryClient();
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [confirmed, setConfirmed] = useState(false);
@@ -127,7 +127,17 @@ export function MeasurementForm({
       "DUPLICATE_CONFIRMATION_REQUIRED",
     ].includes(mutation.error.code);
   const submit = (data: Inputs) => {
-    if (!metric) return;
+    if (!metric || readOnly || mutation.isPending) return;
+    const precision = Math.max(0, Math.min(2, metric.precision));
+    const scaled = data.value * 10 ** precision;
+    if (Math.abs(scaled - Math.round(scaled)) > 1e-7) {
+      form.setError("value", {message: `Utiliza como máximo ${precision} decimales.`});
+      return;
+    }
+    if (!metric.allowed_methods.includes(data.method)) {
+      form.setError("method", {message:"Selecciona un método válido para esta métrica."});
+      return;
+    }
     if (data.value < metric.min_value || data.value > metric.max_value) {
       form.setError("value", {
         message: `Introduce un valor entre ${metric.min_value} y ${metric.max_value}.`,
@@ -205,7 +215,7 @@ export function MeasurementForm({
             Valor ({metric?.unit})
             <input
               type="number"
-              step="0.01"
+              step={10 ** -Math.max(0, Math.min(2, metric?.precision ?? 2))}
               min={metric?.min_value}
               max={metric?.max_value}
               {...form.register("value", { valueAsNumber: true })}
@@ -240,6 +250,7 @@ export function MeasurementForm({
               </option>
             ))}
           </select>
+          {form.formState.errors.method && <small role="alert">{form.formState.errors.method.message}</small>}
         </label>
         {method === "device" && (
           <label>
@@ -287,7 +298,7 @@ export function MeasurementForm({
           </button>
           <button
             className="primary-button"
-            disabled={mutation.isPending || (warning && !confirmed)}
+            disabled={readOnly || mutation.isPending || (warning && !confirmed)}
           >
             {mutation.isPending
               ? "Guardando…"

@@ -74,10 +74,11 @@ export function PrivateAdministrationPage() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const selectAccount = useCallback((user: ManagedUser) => {
+    if (permissionBusy) return;
     setSelectedAccount(user);
     setPermission({ profile_id: "", user_id: user.id, access_level: "read" });
     setPermissionSuccess(""); setPermissionError(""); setProfileSearch("");
-  }, []);
+  }, [permissionBusy]);
 
   const administrator = session?.role === "administrator";
   const api = useMemo(
@@ -140,7 +141,7 @@ export function PrivateAdministrationPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!api || !administrator) return;
+    if (!api || !administrator || creating) return;
     if (!/^[a-z0-9._%+-]+@example\.invalid$/.test(account.email)) {
       setFormError("Solo se permiten correos ficticios terminados en @example.invalid.");
       return;
@@ -165,7 +166,7 @@ export function PrivateAdministrationPage() {
   }
 
   async function changePermission(operation: "grant" | "revoke") {
-    if (!api || !administrator) return;
+    if (!api || !administrator || permissionBusy) return;
     const validUuid = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
     if (!permissionsReady || !validUuid.test(permission.profile_id) || !validUuid.test(permission.user_id)) {
       setPermissionError("Selecciona una cuenta activa y un expediente del catálogo.");

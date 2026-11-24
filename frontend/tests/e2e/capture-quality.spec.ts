@@ -209,3 +209,19 @@ test("self-hosted MediaPipe executes real inference on a synthetic no-person ima
   expect(modelRequests.length, "Repeated analysis should reuse the local model instance").toBe(1);
   expect(thirdPartyRequests).toEqual([]);
 });
+
+
+test("analysis accepts a validated fictitious image directly without API writes", async ({page})=>{
+  const writes:string[]=[];
+  page.on("request",r=>{if(!["GET","HEAD","OPTIONS"].includes(r.method()))writes.push(r.url());});
+  await page.goto("/analysis");
+  const input=page.locator('input[type="file"]');
+  await expect(input).toBeDisabled();
+  await page.getByRole("checkbox",{name:/Confirmo que utilizaré exclusivamente imágenes ficticias/}).check();
+  const image=await page.evaluate(()=>{const c=document.createElement("canvas");c.width=800;c.height=1100;const x=c.getContext("2d")!;x.fillStyle="#888";x.fillRect(0,0,c.width,c.height);return c.toDataURL("image/png").split(",")[1];});
+  await input.setInputFiles({name:"directa.png",mimeType:"image/png",buffer:Buffer.from(image,"base64")});
+  await expect(page.getByRole("button",{name:"Detectar pose con IA"})).toBeVisible();
+  await page.getByRole("button",{name:"Descartar fotografía del análisis"}).click();
+  await expect(input).toBeDisabled();
+  expect(writes).toEqual([]);
+});

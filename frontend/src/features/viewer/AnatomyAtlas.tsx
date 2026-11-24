@@ -169,9 +169,11 @@ export function AnatomyAtlas() {
   }, [scenarioProfileId, workspaceId]);
   const [scenarioCompatibilityError, setScenarioCompatibilityError] = useState("");
   const [scenarioNotice, setScenarioNotice] = useState("");
+  const [scenarioSearch,setScenarioSearch]=useState("");
+  const [scenarioProfileOffset,setScenarioProfileOffset]=useState(0);
   const syntheticProfiles = useQuery({
-    queryKey: ["simulation-profile-options", workspaceId],
-    queryFn: () => api.profiles("", 0),
+    queryKey: ["simulation-profile-options", workspaceId,scenarioSearch,scenarioProfileOffset],
+    queryFn: () => api.profiles(scenarioSearch.trim(),scenarioProfileOffset),
     enabled: panel === "simulacion",
   });
   const linkedProfile = useQuery({
@@ -870,8 +872,8 @@ export function AnatomyAtlas() {
               <span>RENDIMIENTO</span>
               <button className={qualityPreference === "auto" ? "active" : ""} aria-pressed={qualityPreference === "auto"}
                 title="Adaptar la calidad a la pantalla y al dispositivo" onClick={() => { setQualityPreference("auto"); setRenderStats(null); }}>Auto</button>
-              <button className={quality === "alta" ? "active" : ""} aria-pressed={quality === "alta"} onClick={() => { setQualityPreference("alta"); setRenderStats(null); }}>Alta</button>
-              <button className={quality === "fluida" ? "active" : ""} aria-pressed={quality === "fluida"} onClick={() => { setQualityPreference("fluida"); setRenderStats(null); }}>Fluida</button>
+              <button className={qualityPreference === "alta" ? "active" : ""} aria-pressed={qualityPreference === "alta"} onClick={() => { setQualityPreference("alta"); setRenderStats(null); }}>Alta</button>
+              <button className={qualityPreference === "fluida" ? "active" : ""} aria-pressed={qualityPreference === "fluida"} onClick={() => { setQualityPreference("fluida"); setRenderStats(null); }}>Fluida</button>
               <button aria-pressed={!!renderStats} onClick={() => setRenderStats(current =>
                 current ? null : controller.current?.getPerformanceStats() ?? null)}>Detalles</button>
             </div>
@@ -1083,9 +1085,10 @@ export function AnatomyAtlas() {
                     <DataTypeBadge type="SIMULADO" />
                   </div>
                   <p>Consulta y guarda escenarios por expediente.</p>
+                  <label className="studio-sim-number">Buscar expediente para simulación<input type="search" maxLength={100} value={scenarioSearch} onChange={event=>{setScenarioSearch(event.target.value);setScenarioProfileOffset(0);}}/></label>
                   <label className="studio-sim-number">
                     Expediente de prueba
-                    <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
+                    <select aria-label="Expediente ficticio para escenarios" disabled={saveVersion.isPending} value={scenarioProfileId}
                       onChange={event => {
                         scenarioExportController.current?.abort();
                         setAllScenarioExportBusy(false);
@@ -1111,7 +1114,13 @@ export function AnatomyAtlas() {
                       ))}
                     </select>
                   </label>
-                  {syntheticProfiles.isError && <p role="alert">No se pudo cargar la lista de expedientes ficticios.</p>}
+                  {syntheticProfiles.isPending && <p role="status">Cargando expedientes…</p>}
+                  {syntheticProfiles.isError && <p role="alert">No se pudo cargar la lista de expedientes ficticios. <button type="button" onClick={()=>void syntheticProfiles.refetch()}>Reintentar</button></p>}
+                  {syntheticProfiles.data && <nav className="studio-scenario-pagination" aria-label="Páginas de expedientes para simulación">
+                    <button type="button" disabled={scenarioProfileOffset===0||syntheticProfiles.isFetching} onClick={()=>setScenarioProfileOffset(Math.max(0,scenarioProfileOffset-syntheticProfiles.data.limit))}>Anterior</button>
+                    <span>{syntheticProfiles.data.total} expedientes</span>
+                    <button type="button" disabled={scenarioProfileOffset+syntheticProfiles.data.limit>=syntheticProfiles.data.total||syntheticProfiles.isFetching} onClick={()=>setScenarioProfileOffset(scenarioProfileOffset+syntheticProfiles.data.limit)}>Siguiente</button>
+                  </nav>}
                   {linkedProfile.isError && scenarioProfileId && <p role="alert">El expediente seleccionado no está disponible en este espacio de trabajo.</p>}
                   {scenarioProfileId && linkedProfile.data && (
                     <>

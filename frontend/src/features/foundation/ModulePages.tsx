@@ -40,8 +40,8 @@ export function MeasurementsPage() {
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Catálogo de medición</h2>
-        {metrics.isPending ? <p className="enterprise-hint">Cargando métricas…</p> : metrics.isError ? <p className="enterprise-hint">Catálogo no disponible.</p> :
-        <div className="enterprise-metric-list">{metrics.data.map(metric=><div key={metric.code}><strong>{metric.label}</strong><span>{metric.unit} · {metric.allowed_methods.join(", ")}</span></div>)}</div>}
+        {metrics.isPending ? <p className="enterprise-hint">Cargando métricas…</p> : metrics.isError ? <ErrorState error={metrics.error} retry={()=>void metrics.refetch()}/> :
+        <div className="enterprise-metric-list">{metrics.data.map(metric=><div key={metric.code}><strong>{metric.label}</strong><span>{metric.unit} · {metric.allowed_methods.map(method=>method==="manual"?"Manual":"Dispositivo").join(", ")}</span><small>Rango: {metric.min_value}–{metric.max_value} {metric.unit} · {metric.precision} decimales</small></div>)}</div>}
         <Limitation>Selecciona un expediente para registrar mediciones.</Limitation>
       </aside>
     </div>
@@ -158,6 +158,7 @@ export function CapturePage() {
     let active = true;
     const url = URL.createObjectURL(file);
     setPreview(url);
+    setReview(null);
     setIsReviewing(true);
     setValidationError("");
     void reviewLocalCapture(file)
@@ -244,7 +245,7 @@ export function CapturePage() {
           <p className="enterprise-file-detail">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>
           {isReviewing && <p role="status" className="enterprise-quality-note">Revisando la calidad localmente…</p>}
           {validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
-          {review && <div className="enterprise-quality-review" role="region" aria-label="Resultados de calidad local">
+          {review && !isReviewing && <div className="enterprise-quality-review" role="region" aria-label="Resultados de calidad local">
             <h3>Revisión automática de calidad</h3>
             <p className="enterprise-file-detail">{review.width} × {review.height} px · Brillo {review.averageBrightness}/255 · Contraste {review.contrast}/128</p>
             <p role="status" className="enterprise-quality-note">{review.passed
@@ -259,7 +260,7 @@ export function CapturePage() {
               Ver control de calidad en el módulo de análisis
             </Link>
           </div>}
-          {privateAuthEnabled() && review && <SyntheticCaptureArchive file={file} review={review}/>}
+          {privateAuthEnabled() && review && !isReviewing && <SyntheticCaptureArchive file={file} review={review}/>}
           <button className="secondary-button" onClick={() => setFile(null)}>Descartar imagen</button>
         </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>Selecciona una imagen o abre la cámara.</p></div>}
         {!file && validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
@@ -275,6 +276,27 @@ export function AnalysisPage() {
   useEffect(() => { discardStagedCapture(); }, []);
   const state = location.state as { localCaptureReview?: CaptureReview } | null;
   const [discarded, setDiscarded] = useState(false);
+  const [directConsent,setDirectConsent] = useState(false);
+  const [directPending,setDirectPending] = useState(false);
+  const [directError,setDirectError] = useState("");
+  const generation = useRef(0);
+  useEffect(()=>()=>{generation.current+=1;},[]);
+  const selectDirect = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file=event.target.files?.[0];
+    event.target.value="";
+    if(!directConsent || !file) return;
+    const current=++generation.current;
+    setDirectPending(true);setDirectError("");setLocalCapture(null);setDiscarded(true);
+    try {
+      const review=await reviewLocalCapture(file);
+      if(current!==generation.current) return;
+      setLocalCapture({file,review});setDiscarded(false);
+    } catch(error) {
+      if(current===generation.current) setDirectError(error instanceof Error?error.message:"No se pudo revisar la imagen.");
+    } finally {
+      if(current===generation.current) setDirectPending(false);
+    }
+  };
   const localReview = discarded ? null : localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
     ? state.localCaptureReview : null);
   const stages = [
@@ -298,10 +320,22 @@ export function AnalysisPage() {
         </div>}
         {localCapture && <>
           <PoseReview file={localCapture.file} review={localCapture.review} />
-          <button type="button" className="secondary-button" onClick={() => { setLocalCapture(null); setDiscarded(true); }}>
+          <button type="button" className="secondary-button" onClick={() => { generation.current+=1; setLocalCapture(null); setDiscarded(true); setDirectConsent(false); }}>
             Descartar fotografía del análisis
           </button>
         </>}
+        {!localCapture && <div className="enterprise-quality-review">
+          <h3>Seleccionar imagen para análisis</h3>
+          <label className="enterprise-consent"><input type="checkbox" checked={directConsent} onChange={event=>{
+            setDirectConsent(event.target.checked);
+            if(!event.target.checked){generation.current+=1;setDirectPending(false);setDirectError("");}
+          }}/><span>Confirmo que utilizaré exclusivamente imágenes ficticias.</span></label>
+          <label className="enterprise-upload"><strong>Cargar imagen</strong><small>JPG, PNG o WebP · revisión local</small>
+            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!directConsent||directPending} onChange={event=>void selectDirect(event)}/>
+          </label>
+          {directPending && <p role="status">Revisando imagen…</p>}
+          {directError && <p role="alert">{directError}</p>}
+        </div>}
         {!localCapture && <div className="enterprise-pose-visual">
           <div className="enterprise-pose-model">
             <svg viewBox="0 0 220 360" aria-label="Esquema de puntos corporales, no resultado de inteligencia artificial" role="img">
@@ -330,8 +364,10 @@ export function ReportsPage() {
   const {id,api} = useWorkspace();
   const [profileId,setProfileId] = useState("");
   const [offset,setOffset] = useState(0);
+  const [reportMetric,setReportMetric] = useState("");
+  const catalog=useQuery({queryKey:["catalog",id],queryFn:api.catalog});
   const selected=useQuery({queryKey:["report-profile",id,profileId],queryFn:()=>api.profile(profileId),enabled:!!profileId});
-  const measurements=useQuery({queryKey:["report-measurements",id,profileId,offset],queryFn:()=>api.measurements(profileId,"",offset),enabled:!!profileId});
+  const measurements=useQuery({queryKey:["report-measurements",id,profileId,offset,reportMetric],queryFn:()=>api.measurements(profileId,reportMetric,offset),enabled:!!profileId});
   const derived=useQuery({queryKey:["report-derived",id,profileId],queryFn:()=>api.derived(profileId),enabled:!!profileId});
   const current=selected.data;
   const ready=selected.isSuccess && measurements.isSuccess && derived.isSuccess &&
@@ -348,7 +384,10 @@ export function ReportsPage() {
     <PageTitle eyebrow="INFORMES" title="Reportes corporales" description="Consulta y exporta mediciones corporales."/>
     <section className="enterprise-panel enterprise-report-builder">
       <div><h2>Preparar informe</h2><ProfilePicker selected={current ?? null} selectedId={profileId}
-        onChange={next=>{setProfileId(next);setOffset(0);}} /></div>
+        onChange={next=>{setProfileId(next);setOffset(0);}} />
+        <label>Métrica del informe<select value={reportMetric} disabled={!catalog.data} onChange={event=>{setReportMetric(event.target.value);setOffset(0);}}><option value="">Todas las métricas</option>{catalog.data?.map(m=><option key={m.code} value={m.code}>{m.label} ({m.unit})</option>)}</select></label>
+        {catalog.isError && <ErrorState error={catalog.error} retry={()=>void catalog.refetch()}/>}
+      </div>
       <div className="enterprise-report-actions">
         {privateAuthEnabled() ? <>{ready && <Link className="secondary-button" to={"/profiles/"+profileId+"?tab=analytics"}>Abrir informes con auditoría (PDF/CSV)</Link>}</> :
           <button disabled={!ready || !measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button>}
@@ -361,15 +400,15 @@ export function ReportsPage() {
         selected.isError || measurements.isError || derived.isError ? <ErrorState error={selected.error ?? measurements.error ?? derived.error} retry={()=>{void selected.refetch();void measurements.refetch();void derived.refetch();}}/> :
         !ready ? <LoadingState/> :
         <><h3>{current?.display_name || current?.display_code || "Expediente"}</h3>
-          <p className="enterprise-hint">Código: {current?.display_code} · Fecha del informe: {new Date().toLocaleDateString("es-PE")}. Mediciones registradas y cálculos derivados.</p>
+          <p className="enterprise-hint">Código: {current?.display_code} · Fecha del informe: {new Date().toLocaleDateString("es-PE",{timeZone:"America/Lima"})}. Mediciones registradas y cálculos derivados.</p>
           <h4>Mediciones observadas</h4>
           {measurements.data && <ProfilePicker.Pagination page={measurements.data} onChange={setOffset} label="Páginas de mediciones del informe" />}
           {measurements.data?.items.length === 0 && <p className="enterprise-hint">No hay mediciones observadas para mostrar.</p>}
           <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Métrica</th><th>Valor</th><th>Método</th><th>Responsable</th></tr></thead><tbody>
-            {measurements.data?.items.map(m=><tr key={m.id}><td>{dateTime(m.measured_at)}</td><td>{m.metric_code}</td><td>{m.value} {m.unit}</td><td>{m.method}</td><td>{m.responsible}</td></tr>)}
+            {measurements.data?.items.map(m=><tr key={m.id}><td>{dateTime(m.measured_at)}</td><td>{catalog.data?.find(item=>item.code===m.metric_code)?.label??m.metric_code}</td><td>{m.value} {m.unit}</td><td>{m.method==="manual"?"Manual":"Dispositivo"}</td><td>{m.responsible}</td></tr>)}
           </tbody></table></div>
           <h4>Cálculos derivados</h4>
-          <div className="enterprise-derived-row">{derived.data?.map(d=><div key={d.metric_code}><span>{d.label}</span><strong>{d.value===null?"Sin datos":d.value.toFixed(2)+" "+d.unit}</strong><small>{d.formula}</small></div>)}</div>
+          <div className="enterprise-derived-row">{derived.data?.map(d=><div key={d.metric_code}><span>{d.label}</span><strong>{d.value===null?"Sin datos":d.value.toFixed(2)+" "+d.unit}</strong><small>{d.formula}</small>{d.reason&&<small>{d.reason}</small>}<small>Fuentes: {d.source_measurement_ids.length} mediciones · {dateTime(d.as_of)}</small></div>)}</div>
         </>}
       <Limitation>Vista de la página seleccionada. Informes completos en Evolución del expediente.</Limitation>
     </section>
