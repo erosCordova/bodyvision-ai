@@ -22,9 +22,9 @@ class PoseResult(BaseModel):
 
     detected: StrictBool
     visible_points: int = Field(ge=0, le=33)
-    model_sha256: Literal[
-        "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
-    ] = MODEL_SHA256
+    model_sha256: Literal["59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"] = (
+        MODEL_SHA256
+    )
     model_revision: Literal["pose_landmarker_lite/float16/1"] = MODEL_REVISION
 
     @model_validator(mode="after")
