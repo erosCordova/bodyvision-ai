@@ -1583,10 +1583,12 @@ test("fat heat view uses an observed instrument reading and keeps hypothetical v
   await page.goto("/body-3d?panel=grasa&profile="+profileId);
   await expect(page.getByRole("meter",{name:"Porcentaje de grasa corporal observado"})).toHaveAttribute("aria-valuenow","23.4");
   await expect(viewport(page)).toHaveAttribute("data-fat-heat","active",{timeout:60000});
+  await expect(viewport(page).getByLabel("Vista térmica ilustrativa")).toContainText("Un color para el porcentaje total");
   await page.getByRole("button",{name:"Crear escenario ilustrativo"}).click();
   await page.getByRole("slider",{name:/Porcentaje hipotético/}).fill("35");
   await expect(page.getByRole("meter",{name:"Porcentaje de grasa corporal observado"})).toHaveAttribute("aria-valuenow","23.4");
   await expect(viewport(page).getByLabel("Vista térmica ilustrativa")).toContainText("SIMULADO");
+  await expect(viewport(page).getByLabel("Vista térmica ilustrativa")).toContainText("Patrón ilustrativo, no grasa localizada");
   await page.getByRole("checkbox",{name:"Mostrar vista de calor"}).uncheck();
   await expect(viewport(page)).toHaveAttribute("data-fat-heat","inactive");
 });

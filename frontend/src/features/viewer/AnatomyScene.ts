@@ -86,7 +86,7 @@ const BODYVOLUME_NORMAL = `
 function attachBodyVolume(
   material: THREE.Material, layer: AnatomicalLayer,
   volume: { value: number }, bounds: { value: THREE.Vector4 },
-  thermal?: { enabled: { value: number }; percentage: { value: number } },
+  thermal?: { enabled: { value: number }; percentage: { value: number }; illustrative: { value: number }; globalColor: { value: THREE.Color } },
 ) {
   const strength = layer === "skin" ? 1 : layer === "muscles" ? 0.18 : 0;
   // No morph shader for hard anatomical structures, which must remain fixed.
@@ -106,6 +106,8 @@ ${SOFT_TISSUE_PROFILE_GLSL}`)
     if (thermal && layer === "skin") {
       shader.uniforms.uBVThermalEnabled = thermal.enabled;
       shader.uniforms.uBVThermalPercentage = thermal.percentage;
+      shader.uniforms.uBVThermalIllustrative = thermal.illustrative;
+      shader.uniforms.uBVFatGlobalColor = thermal.globalColor;
       shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec3 vBVThermalPosition;")
         .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBVThermalPosition = (modelMatrix * vec4(position, 1.0)).xyz;");
@@ -115,6 +117,8 @@ varying vec3 vBVThermalPosition;
 uniform vec4 uBVBounds;
 uniform float uBVThermalEnabled;
 uniform float uBVThermalPercentage;
+uniform float uBVThermalIllustrative;
+uniform vec3 uBVFatGlobalColor;
 // Decorative false-color palette; spatial bands are NOT anatomical measurements.
 vec3 bvThermalPalette(float t) {
   vec3 blue = vec3(0.015, 0.065, 0.85);
@@ -135,9 +139,12 @@ vec3 bvThermalDisplay() {
   float dy = (y - 0.63) / 0.25;
   float dx = x / 0.19;
   float central = exp(-dy * dy - dx * dx);
-  float bands = 0.10 + 0.79 * central + 0.10 * y;
-  float globalShift = (clamp(uBVThermalPercentage, 0.0, 100.0) - 25.0) * 0.004;
-  return bvThermalPalette(clamp(bands + globalShift, 0.0, 1.0));
+  if (uBVThermalIllustrative < 0.5) return uBVFatGlobalColor;
+  // A monotonic illustrative palette: the selected total shifts every point equally.
+  // The fixed pattern is purely graphical, never a local fat percentage.
+  float total = clamp((uBVThermalPercentage - 2.0) / 68.0, 0.0, 1.0);
+  float pattern = 0.10 + 0.80 * central + 0.10 * y;
+  return bvThermalPalette(clamp(total * 0.80 + (pattern - 0.5) * 0.65 + 0.10, 0.0, 1.0));
 }`)
         .replace("#include <color_fragment>", `#include <color_fragment>
 if (uBVThermalEnabled > 0.5) diffuseColor.rgb = bvThermalDisplay();`)
@@ -145,7 +152,7 @@ if (uBVThermalEnabled > 0.5) diffuseColor.rgb = bvThermalDisplay();`)
 if (uBVThermalEnabled > 0.5) totalEmissiveRadiance += bvThermalDisplay() * 0.22;`);
     }
   };
-  material.customProgramCacheKey = () => SOFT_TISSUE_PROFILE_VERSION + "-strength-" + strength + (thermal ? "-thermal-v1" : "");
+  material.customProgramCacheKey = () => SOFT_TISSUE_PROFILE_VERSION + "-strength-" + strength + (thermal ? "-thermal-v2" : "");
 }
 
 /**
@@ -256,7 +263,7 @@ export function createAnatomyScene(
   let comparisonDivider = 50;
   let statureCm = 175;
   let mode: RenderMode = "realista";
-  const thermal = { enabled: { value: 0 }, percentage: { value: 25 } };
+  const thermal = { enabled: { value: 0 }, percentage: { value: 25 }, illustrative: { value: 1 }, globalColor: { value: new THREE.Color("#16c6d8") } };
   let quality: SceneQuality = "alta";
   let interacting = false;
   let disposed = false;
@@ -758,8 +765,10 @@ export function createAnatomyScene(
     queueGeometryLod();
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
-  const setBodyFatThermal = (enabled: boolean, percentage: number | null) => {
+  const setBodyFatThermal = (enabled: boolean, percentage: number | null, illustrative: boolean, globalColor: string) => {
     thermal.enabled.value = enabled ? 1 : 0;
+    thermal.illustrative.value = illustrative ? 1 : 0;
+    thermal.globalColor.value.set(globalColor);
     thermal.percentage.value = percentage !== null && Number.isFinite(percentage) ? percentage : 25;
     render();
   };
