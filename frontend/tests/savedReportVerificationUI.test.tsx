@@ -93,6 +93,37 @@ describe("private report download followed by explicit saved-copy verification",
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("no coincide"));
   });
 
+  it("exports a chosen civil-date range even if the current chart is empty", async () => {
+    const range = { start_date: "2026-11-01", end_date: "2026-11-02" };
+    const exportReport = vi.fn().mockResolvedValue({ ...longitudinalReport, period: "custom", ...range });
+    render(<LongitudinalSummary rows={[]} profileId={profileId} metricCode="weight"
+      unit="kg" period="30d" exportReport={exportReport} />);
+    const details = screen.getByText("Exportar un intervalo personalizado").closest("details")!;
+    details.open = true;
+    const button = screen.getByRole("button", { name: "Descargar CSV por fechas" });
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Fecha inicial del CSV"), { target: { value: range.start_date } });
+    fireEvent.change(screen.getByLabelText("Fecha final del CSV"), { target: { value: range.end_date } });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByText("Verificar CSV guardado")).toBeInTheDocument());
+    expect(exportReport).toHaveBeenCalledWith(range);
+  });
+
+  it("rejects custom-range downloads when the response does not match the selected dates", async () => {
+    const exportReport = vi.fn().mockResolvedValue({ ...longitudinalReport, period: "custom",
+      start_date: "2026-11-01", end_date: "2026-11-03" });
+    render(<LongitudinalSummary rows={rows} profileId={profileId} metricCode="weight"
+      unit="kg" period="all" exportReport={exportReport} />);
+    const details = screen.getByText("Exportar un intervalo personalizado").closest("details")!;
+    details.open = true;
+    fireEvent.change(screen.getByLabelText("Fecha inicial del CSV"), { target: { value: "2026-11-01" } });
+    fireEvent.change(screen.getByLabelText("Fecha final del CSV"), { target: { value: "2026-11-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Descargar CSV por fechas" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("no corresponde"));
+    expect(screen.queryByText("Verificar CSV guardado")).not.toBeInTheDocument();
+  });
+
   it("checks the saved CSV by selecting the actual local file", async () => {
     const exportReport = vi.fn().mockResolvedValue(longitudinalReport);
     render(<LongitudinalSummary rows={rows} profileId={profileId} metricCode="weight"

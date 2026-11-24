@@ -3,12 +3,27 @@ import { checkReceiptBinding, reportReceiptSchema } from "./reportReceipt";
 
 export const MAX_LONGITUDINAL_BYTES = 8 * 1024 * 1024;
 
+export type ExportDateRange = { start_date: string; end_date: string };
+
+function isCivilDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < "1900-01-01") return false;
+  const parsed = new Date(value + "T00:00:00Z");
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+export function validExportRange(range: ExportDateRange): boolean {
+  return isCivilDate(range.start_date) && isCivilDate(range.end_date)
+    && range.start_date <= range.end_date;
+}
+
 export const longitudinalDownloadSchema = z.object({
   export_id: z.string().uuid(),
   generated_at: z.string().datetime({ offset: true }),
   filename: z.string().regex(/^bodyvision-historial-[a-f0-9-]{36}\.csv$/),
   metric_code: z.string().min(1).max(40),
-  period: z.enum(["30d", "90d", "1a", "all"]),
+  period: z.enum(["30d", "90d", "1a", "all", "custom"]),
+  start_date: z.string().nullable().optional(),
+  end_date: z.string().nullable().optional(),
   row_count: z.number().int().min(1).max(MAX_LONGITUDINAL_BYTES),
   csv_base64: z.string().min(1).max(4 * Math.ceil(MAX_LONGITUDINAL_BYTES / 3)),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -16,6 +31,12 @@ export const longitudinalDownloadSchema = z.object({
 }).refine((report) => report.filename === `bodyvision-historial-${report.export_id}.csv`, {
   message: "El nombre del archivo no corresponde a la exportación.",
   path: ["filename"],
+}).refine((report) => report.period === "custom"
+  ? typeof report.start_date === "string" && typeof report.end_date === "string"
+    && validExportRange({ start_date: report.start_date, end_date: report.end_date })
+  : report.start_date == null && report.end_date == null, {
+  message: "El periodo del archivo no corresponde a un intervalo válido.",
+  path: ["period"],
 });
 export type LongitudinalDownload = z.infer<typeof longitudinalDownloadSchema>;
 

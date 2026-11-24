@@ -2,13 +2,13 @@
 
 import base64
 import hashlib
-from datetime import datetime
+from datetime import date, datetime
 from itertools import chain
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy import text
 
 from app.api.deps import workspace
@@ -124,7 +124,26 @@ def export_comparison(
 class LongitudinalSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metric_code: str
-    period: Literal["30d", "90d", "1a", "all"] = "90d"
+    period: Literal["30d", "90d", "1a", "all", "custom"] = "90d"
+    start_date: str | None = None
+    end_date: str | None = None
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "LongitudinalSelection":
+        if self.period != "custom":
+            if self.start_date is not None or self.end_date is not None:
+                raise ValueError("Las fechas requieren un periodo personalizado.")
+            return self
+        if self.start_date is None or self.end_date is None:
+            raise ValueError("Selecciona las dos fechas del periodo.")
+        start, end = date.fromisoformat(self.start_date), date.fromisoformat(self.end_date)
+        if (
+            start.isoformat() != self.start_date
+            or end.isoformat() != self.end_date
+            or not date(1900, 1, 1) <= start <= end
+        ):
+            raise ValueError("El intervalo de fechas no es válido.")
+        return self
 
 
 class LongitudinalDownload(BaseModel):
@@ -132,7 +151,9 @@ class LongitudinalDownload(BaseModel):
     generated_at: datetime
     filename: str
     metric_code: str
-    period: Literal["30d", "90d", "1a", "all"]
+    period: Literal["30d", "90d", "1a", "all", "custom"]
+    start_date: str | None = None
+    end_date: str | None = None
     row_count: int
     csv_base64: str
     sha256: str
@@ -158,7 +179,13 @@ def export_longitudinal(
     )
     if metric is None:
         raise DomainError(422, "UNKNOWN_METRIC", "Selecciona una métrica autorizada.")
-    days = {"30d": 30, "90d": 90, "1a": 365, "all": None}[selection.period]
+    days = {"30d": 30, "90d": 90, "1a": 365, "all": None, "custom": None}[selection.period]
+    if selection.end_date is not None:
+        today = scope.connection.execute(
+            text("SELECT (statement_timestamp() AT TIME ZONE 'America/Lima')::date")
+        ).scalar_one()
+        if date.fromisoformat(selection.end_date) > today:
+            raise DomainError(422, "INVALID_PERIOD", "La fecha final no puede ser futura.")
     # One server cursor retains one SELECT snapshot across all fetch batches.
     # Rows are not materialized as a list; CSV bytes have a strict size budget.
     statement = text(
@@ -173,6 +200,10 @@ def export_longitudinal(
              AND (CAST(:days AS integer) IS NULL OR
                   m.measured_at >= export_clock.snapshot_at -
                       make_interval(days => CAST(:days AS integer)))
+             AND (CAST(:start_date AS date) IS NULL OR m.measured_at >=
+                  (CAST(CAST(:start_date AS date) AS timestamp) AT TIME ZONE 'America/Lima'))
+             AND (CAST(:end_date AS date) IS NULL OR m.measured_at <
+                  (CAST(CAST(:end_date AS date) + 1 AS timestamp) AT TIME ZONE 'America/Lima'))
            ORDER BY m.measured_at,m.id"""
     )
     parameters = {
@@ -180,6 +211,8 @@ def export_longitudinal(
         "profile": profile_id,
         "metric": selection.metric_code,
         "days": days,
+        "start_date": selection.start_date,
+        "end_date": selection.end_date,
     }
     try:
         with scope.connection.execute(
@@ -231,6 +264,8 @@ def export_longitudinal(
         filename=filename,
         metric_code=selection.metric_code,
         period=selection.period,
+        start_date=selection.start_date,
+        end_date=selection.end_date,
         row_count=exported.row_count,
         csv_base64=base64.b64encode(csv_bytes).decode("ascii"),
         sha256=hashlib.sha256(csv_bytes).hexdigest(),

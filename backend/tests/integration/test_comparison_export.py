@@ -245,6 +245,68 @@ def test_longitudinal_csv_scoped_audited_complete_and_hash_verified(comparison_d
     assert rows[0]["id"].encode() not in base64.b64decode(updated.json()["csv_base64"])
 
 
+def test_custom_longitudinal_interval_uses_inclusive_lima_dates(comparison_data):
+    client, owner, profile, users, _, reader, _ = comparison_data
+    endpoint = f"/api/v1/profiles/{profile}/reports/longitudinal"
+    times = [
+        datetime(2025, 5, 1, 4, 59, 59, 999999, tzinfo=UTC),
+        datetime(2025, 5, 1, 5, tzinfo=UTC),
+        datetime(2025, 5, 2, 4, 59, 59, 999999, tzinfo=UTC),
+        datetime(2025, 5, 2, 5, tzinfo=UTC),
+    ]
+    ids = [uuid4() for _ in times]
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO measurements
+                (id,organization_id,profile_id,metric_code,value,unit,method,measured_at,created_by)
+                VALUES (:id,:org,:profile,'weight',70,'kg','manual',:at,:actor)"""),
+            [
+                {
+                    "id": identifier,
+                    "org": users[0][1],
+                    "profile": profile,
+                    "at": instant,
+                    "actor": users[0][0],
+                }
+                for identifier, instant in zip(ids, times, strict=True)
+            ],
+        )
+    selection = {
+        "metric_code": "weight",
+        "period": "custom",
+        "start_date": "2025-05-01",
+        "end_date": "2025-05-01",
+    }
+    response = client.post(endpoint, json=selection, headers=reader)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["period"] == "custom" and body["start_date"] == body["end_date"]
+    assert body["row_count"] == 2
+    exported = base64.b64decode(body["csv_base64"])
+    assert hashlib.sha256(exported).hexdigest() == body["sha256"]
+    assert all(str(identifier).encode() in exported for identifier in ids[1:3])
+    assert all(str(identifier).encode() not in exported for identifier in (ids[0], ids[3]))
+    for invalid in (
+        {**selection, "start_date": None},
+        {**selection, "end_date": "2025-04-30"},
+        {**selection, "start_date": "2025-02-30"},
+        {**selection, "start_date": "20250501"},
+        {**selection, "end_date": "2099-01-01"},
+        {**selection, "period": "30d"},
+    ):
+        assert client.post(endpoint, json=invalid, headers=reader).status_code == 422
+    outsider = headers(authenticate(client, users[2][0], users[2][1]).json()["token"])
+    assert client.post(endpoint, json=selection, headers=outsider).status_code == 404
+    with owner.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM security_audit_events WHERE id=:id"),
+                {"id": body["export_id"]},
+            ).scalar_one()
+            == 1
+        )
+
+
 def test_longitudinal_csv_fails_closed_if_audit_cannot_commit(comparison_data):
     from sqlalchemy import event
 

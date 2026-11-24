@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { saveLongitudinalCsv, verifiedLongitudinalCsv, type LongitudinalDownload } from "./serverLongitudinalExport";
+import { saveLongitudinalCsv, verifiedLongitudinalCsv, validExportRange, type ExportDateRange, type LongitudinalDownload } from "./serverLongitudinalExport";
 import type { Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { summarizeLongitudinal } from "./longitudinalSummary";
@@ -22,9 +22,11 @@ export function LongitudinalSummary({
   metricCode: string;
   unit: string;
   period: "30d" | "90d" | "1a" | "all";
-  exportReport?: () => Promise<LongitudinalDownload>;
+  exportReport?: (range?: ExportDateRange) => Promise<LongitudinalDownload>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [verificationPending, setVerificationPending] = useState(false);
   const [savedCopyStatus, setSavedCopyStatus] = useState("");
   const [downloadProof, setDownloadProof] = useState<SavedReportReference | null>(null);
@@ -38,15 +40,18 @@ export function LongitudinalSummary({
     setVerificationPending(false);
     setSavedCopyStatus("");
     setDownloadProof(null);
+    setStartDate(""); setEndDate("");
     return () => { generation.current += 1; };
   }, [profileId, metricCode, period]);
-  const exportCsv = async () => {
+  const exportCsv = async (range?: ExportDateRange) => {
     if (!exportReport || busy) return;
     const token = ++generation.current;
     setBusy(true);
     setExportError("");
     try {
-      const data = await exportReport();
+      const data = range ? await exportReport(range) : await exportReport();
+      if (range && (data.period !== "custom" || data.start_date !== range.start_date || data.end_date !== range.end_date))
+        throw new Error("El archivo recibido no corresponde a las fechas solicitadas.");
       const blob = await verifiedLongitudinalCsv(data);
       if (generation.current === token) {
         saveLongitudinalCsv(blob, data.filename);
@@ -138,12 +143,31 @@ export function LongitudinalSummary({
             {summary.count < 3 &&
               " Muestra pequeña: no se puede inferir una tendencia."}
           </p>
+        </>
+      )}
           {exportReport && <div className="record-report-actions">
             <button type="button" onClick={() => void exportCsv()} disabled={busy}>
               {busy ? "Preparando historial…" : "Descargar historial observado (CSV)"}
             </button>
             <small className="muted">Historial completo del periodo, hasta 8 MiB por archivo,
               con auditoría y verificación de integridad. La firma criptográfica opcional no acredita exactitud clínica ni validez legal.</small>
+            <details>
+              <summary>Exportar un intervalo personalizado</summary>
+              <p className="muted">Fechas inclusivas según hora de Lima. Solo cambia el CSV, no el gráfico.
+                Reduce el intervalo si el historial completo supera 8 MiB.</p>
+              <label>Fecha inicial del CSV
+                <input type="date" value={startDate} disabled={busy}
+                  onChange={event => setStartDate(event.currentTarget.value)} />
+              </label>
+              <label>Fecha final del CSV
+                <input type="date" value={endDate} disabled={busy}
+                  onChange={event => setEndDate(event.currentTarget.value)} />
+              </label>
+              <button type="button" disabled={busy || !validExportRange({ start_date: startDate, end_date: endDate })}
+                onClick={() => void exportCsv({ start_date: startDate, end_date: endDate })}>
+                Descargar CSV por fechas
+              </button>
+            </details>
             {downloadProof && <>
                 {downloadProof.receipt && <>
                   <button type="button" onClick={() => {
@@ -168,8 +192,6 @@ export function LongitudinalSummary({
             </>}
           </div>}
           {exportError && <p role="alert">{exportError}</p>}
-        </>
-      )}
     </section>
   );
 }
