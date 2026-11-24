@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
+import { csvPreview, ProfilePicker } from "./ModuleControls";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
 import { PoseReview } from "../capture/PoseReview";
 import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
@@ -19,19 +20,23 @@ function Limitation({ children }: { children: ReactNode }) {
 }
 export function MeasurementsPage() {
   const { id, api } = useWorkspace();
-  const profiles = useQuery({ queryKey: ["profiles", id, "measurements"], queryFn: () => api.profiles("", 0) });
+  const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const profiles = useQuery({ queryKey: ["profiles", id, "measurements", search, offset], queryFn: () => api.profiles(search, offset) });
   const metrics = useQuery({ queryKey: ["catalog", id], queryFn: api.catalog });
   return <div className="enterprise-module">
     <PageTitle eyebrow="MEDICIONES OBSERVADAS" title="Registro de mediciones" description="Consulta y añade valores con fecha, unidad, método y responsable. Las correcciones se versionan." />
     <div className="enterprise-module-columns">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Selecciona un expediente</h2><Link to="/profiles">Ver todos →</Link></div>
+        <label className="search-label">Buscar expediente<input value={search} maxLength={100} onChange={e => { setSearch(e.target.value); setOffset(0); }} /></label>
         {profiles.isPending ? <LoadingState/> : profiles.isError ? <ErrorState error={profiles.error} retry={() => void profiles.refetch()}/> :
           profiles.data.items.length ? <div className="enterprise-record-links">
             {profiles.data.items.map(profile => <Link to={"/profiles/" + profile.id + "?tab=measurements"} key={profile.id}>
               <span className="enterprise-mini-avatar">◉</span><span><strong>{profile.display_name || profile.display_code}</strong><small>{profile.display_code} · {profile.status === "active" ? "Activo" : "Consulta restringida"}</small></span><span>Continuar →</span>
             </Link>)}
-          </div> : <p className="enterprise-hint">No hay expedientes disponibles. Crea un expediente ficticio antes de registrar medidas.</p>}
+          </div> : <p className="enterprise-hint">No hay expedientes disponibles para esta búsqueda.</p>}
+        {profiles.data && <ProfilePicker.Pagination page={profiles.data} onChange={setOffset} label="Páginas de expedientes de mediciones" />}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Catálogo de medición</h2>
@@ -48,6 +53,8 @@ export function CapturePage() {
   const cameraStream = useRef<MediaStream | null>(null);
   const cameraRequest = useRef(0);
   const [cameraOn, setCameraOn] = useState(false);
+  const [cameraPending, setCameraPending] = useState(false);
+  const [photoPending, setPhotoPending] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -63,6 +70,8 @@ export function CapturePage() {
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
     setCameraReady(false);
+    setCameraPending(false);
+    setPhotoPending(false);
   };
   useEffect(() => {
     return () => {
@@ -80,13 +89,14 @@ export function CapturePage() {
   }, [cameraOn]);
 
   const openCamera = async () => {
-    if (!consent) return;
+    if (!consent || cameraPending || cameraOn) return;
     setValidationError("");
     if (!navigator.mediaDevices?.getUserMedia) {
       setValidationError("Este navegador no permite la cámara. Usa una conexión HTTPS o localhost.");
       return;
     }
     const pending = ++cameraRequest.current;
+    setCameraPending(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -103,12 +113,15 @@ export function CapturePage() {
       if (pending === cameraRequest.current) {
         setValidationError("No se pudo acceder a la cámara. Revisa el permiso y el dispositivo.");
       }
+    } finally {
+      if (pending === cameraRequest.current) setCameraPending(false);
     }
   };
 
   const takePhoto = async () => {
     const video = videoRef.current;
-    if (!video || !cameraReady || !video.videoWidth || !video.videoHeight) return;
+    if (!video || !cameraReady || photoPending || !video.videoWidth || !video.videoHeight) return;
+    const generation = cameraRequest.current;
     const canvas = document.createElement("canvas");
     const factor = Math.min(1, 1920 / Math.max(video.videoWidth, video.videoHeight));
     canvas.width = Math.round(video.videoWidth * factor);
@@ -118,8 +131,15 @@ export function CapturePage() {
       setValidationError("No se pudo preparar la fotografía.");
       return;
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const photo = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.87));
+    setPhotoPending(true);
+    let photo: Blob | null = null;
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      photo = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.87));
+    } catch { /* handled as an unsuccessful capture below */ }
+    finally { canvas.width = canvas.height = 0; }
+    if (generation !== cameraRequest.current) return;
+    setPhotoPending(false);
     if (!photo || photo.size > 10 * 1024 * 1024) {
       setValidationError("No se pudo capturar la fotografía dentro del límite de 10 MB.");
       return;
@@ -198,8 +218,8 @@ export function CapturePage() {
         </label>
         <div className="enterprise-camera-controls">
           {!cameraOn ? (
-            <button type="button" className="secondary-button" disabled={!consent}
-              onClick={() => void openCamera()}>Abrir cámara local</button>
+            <button type="button" className="secondary-button" disabled={!consent || cameraPending}
+              onClick={() => void openCamera()}>{cameraPending ? "Solicitando permiso…" : "Abrir cámara local"}</button>
           ) : (
             <div className="enterprise-camera-session">
               <video ref={videoRef} playsInline muted autoPlay
@@ -207,13 +227,14 @@ export function CapturePage() {
                 onLoadedMetadata={() => setCameraReady(true)} />
               <p>La cámara funciona únicamente en este dispositivo; no se transmite video.</p>
               <div className="enterprise-camera-buttons">
-                <button type="button" className="primary-button" disabled={!cameraReady}
-                  onClick={() => void takePhoto()}>Tomar fotografía</button>
+                <button type="button" className="primary-button" disabled={!cameraReady || photoPending}
+                  onClick={() => void takePhoto()}>{photoPending ? "Preparando fotografía…" : "Tomar fotografía"}</button>
                 <button type="button" className="secondary-button"
                   onClick={closeCamera}>Cerrar cámara</button>
               </div>
             </div>
           )}
+          {cameraPending && <button type="button" className="secondary-button" onClick={closeCamera}>Cancelar solicitud de cámara</button>}
         </div>
       </section>
       <aside className="enterprise-panel enterprise-module-side">
@@ -253,7 +274,8 @@ export function AnalysisPage() {
   const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis());
   useEffect(() => { discardStagedCapture(); }, []);
   const state = location.state as { localCaptureReview?: CaptureReview } | null;
-  const localReview = localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
+  const [discarded, setDiscarded] = useState(false);
+  const localReview = discarded ? null : localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
     ? state.localCaptureReview : null);
   const stages = [
     { name:"Autorización", detail:"Verificación documental de consentimiento por expediente", status:"Pendiente para uso real" },
@@ -276,7 +298,7 @@ export function AnalysisPage() {
         </div>}
         {localCapture && <>
           <PoseReview file={localCapture.file} review={localCapture.review} />
-          <button type="button" className="secondary-button" onClick={() => setLocalCapture(null)}>
+          <button type="button" className="secondary-button" onClick={() => { setLocalCapture(null); setDiscarded(true); }}>
             Descartar fotografía del análisis
           </button>
         </>}
@@ -307,43 +329,49 @@ export function AnalysisPage() {
 export function ReportsPage() {
   const {id,api} = useWorkspace();
   const [profileId,setProfileId] = useState("");
-  const profiles=useQuery({queryKey:["profiles",id,"reports"],queryFn:()=>api.profiles("",0)});
-  const measurements=useQuery({queryKey:["report-measurements",id,profileId],queryFn:()=>api.measurements(profileId),enabled:!!profileId});
+  const [offset,setOffset] = useState(0);
+  const selected=useQuery({queryKey:["report-profile",id,profileId],queryFn:()=>api.profile(profileId),enabled:!!profileId});
+  const measurements=useQuery({queryKey:["report-measurements",id,profileId,offset],queryFn:()=>api.measurements(profileId,"",offset),enabled:!!profileId});
   const derived=useQuery({queryKey:["report-derived",id,profileId],queryFn:()=>api.derived(profileId),enabled:!!profileId});
-  const current=profiles.data?.items.find(profile=>profile.id===profileId);
+  const current=selected.data;
+  const ready=selected.isSuccess && measurements.isSuccess && derived.isSuccess &&
+    !selected.isFetching && !measurements.isFetching && !derived.isFetching;
   const exportCsv=()=>{
-    const rows=measurements.data?.items || [];
-    const head=["fecha","metrica","valor","unidad","metodo","responsable","tipo"];
-    const csv=[head,...rows.map(m=>[m.measured_at,m.metric_code,String(m.value),m.unit,m.method,m.responsible,m.data_type])]
-      .map(row=>row.map(value=>'"'+value.replaceAll('"','""')+'"').join(",")).join("\n");
-    const url=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+    if (!ready || privateAuthEnabled() || !measurements.data?.items.length) return;
+    const url=URL.createObjectURL(new Blob([csvPreview(measurements.data.items)],{type:"text/csv;charset=utf-8"}));
     const anchor=document.createElement("a");
-    anchor.href=url;anchor.download="bodyvision_mediciones_ficticias.csv";anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.href=url;anchor.download="bodyvision_mediciones_ficticias.csv";
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   return <div className="enterprise-module">
     <PageTitle eyebrow="INFORMES Y TRAZABILIDAD" title="Reportes corporales" description="Vista previa y exportación de mediciones ficticias con fecha, método, procedencia y límites interpretativos."/>
     <section className="enterprise-panel enterprise-report-builder">
-      <div><h2>Preparar informe</h2><label>Expediente ficticio<select value={profileId} onChange={e=>setProfileId(e.target.value)}>
-        <option value="">Seleccionar expediente</option>{profiles.data?.items.map(p=><option key={p.id} value={p.id}>{p.display_name||p.display_code} · {p.display_code}</option>)}
-      </select></label></div>
-      <div className="enterprise-report-actions"><button disabled={!measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button><button disabled={!profileId || measurements.isPending} onClick={()=>window.print()}>Imprimir vista previa</button></div>
+      <div><h2>Preparar informe</h2><ProfilePicker selected={current ?? null} selectedId={profileId}
+        onChange={next=>{setProfileId(next);setOffset(0);}} /></div>
+      <div className="enterprise-report-actions">
+        {privateAuthEnabled() ? <>{ready && <Link className="secondary-button" to={"/profiles/"+profileId+"?tab=analytics"}>Abrir informes con auditoría (PDF/CSV)</Link>}</> :
+          <button disabled={!ready || !measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button>}
+        <button disabled={!ready} onClick={()=>window.print()}>Imprimir vista previa</button>
+      </div>
     </section>
     <section className="enterprise-panel enterprise-report-preview">
       <div className="enterprise-panel-title"><h2>Vista previa del informe</h2><span>FICTICIO · NO MÉDICO</span></div>
       {!profileId ? <p className="enterprise-hint">Selecciona un expediente para generar una vista previa con datos existentes del servicio.</p> :
-        measurements.isPending || derived.isPending ? <LoadingState/> :
-        measurements.isError || derived.isError ? <p className="enterprise-hint">No se pudieron obtener todos los registros. Revisa la conexión.</p> :
+        selected.isError || measurements.isError || derived.isError ? <ErrorState error={selected.error ?? measurements.error ?? derived.error} retry={()=>{void selected.refetch();void measurements.refetch();void derived.refetch();}}/> :
+        !ready ? <LoadingState/> :
         <><h3>{current?.display_name || current?.display_code || "Expediente"}</h3>
           <p className="enterprise-hint">Código: {current?.display_code} · Fecha del informe: {new Date().toLocaleDateString("es-PE")}. Fuente: registros observados y cálculos derivados de la API.</p>
           <h4>Mediciones observadas</h4>
+          {measurements.data && <ProfilePicker.Pagination page={measurements.data} onChange={setOffset} label="Páginas de mediciones del informe" />}
+          {measurements.data?.items.length === 0 && <p className="enterprise-hint">No hay mediciones observadas para mostrar.</p>}
           <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Métrica</th><th>Valor</th><th>Método</th><th>Responsable</th></tr></thead><tbody>
             {measurements.data?.items.map(m=><tr key={m.id}><td>{dateTime(m.measured_at)}</td><td>{m.metric_code}</td><td>{m.value} {m.unit}</td><td>{m.method}</td><td>{m.responsible}</td></tr>)}
           </tbody></table></div>
           <h4>Cálculos derivados</h4>
           <div className="enterprise-derived-row">{derived.data?.map(d=><div key={d.metric_code}><span>{d.label}</span><strong>{d.value===null?"Sin datos":d.value.toFixed(2)+" "+d.unit}</strong><small>{d.formula}</small></div>)}</div>
         </>}
-      <Limitation>Este reporte es una vista preliminar de datos ficticios. El informe PDF certificado, firmas, control de permisos y auditoría deben implementarse en las fases posteriores.</Limitation>
+      <Limitation>Esta vista preliminar contiene únicamente los registros de la página seleccionada. Los informes privados con comprobantes y auditoría se generan desde Evolución del expediente. No constituyen informes médicos certificados.</Limitation>
     </section>
   </div>;
 }
@@ -366,10 +394,10 @@ export function AccessPage() {
   if (privateAuthEnabled()) return <PrivateAccessPage />;
   return <div className="enterprise-access">
     <div className="enterprise-access-art"><span>BODYVISION AI</span><h1>Un espacio profesional para explorar el cuerpo.</h1><p>Mediciones, visión anatómica y trazabilidad en una plataforma web.</p><div className="enterprise-access-orbit" aria-hidden="true">✧</div></div>
-    <section className="enterprise-access-card"><span className="eyebrow">ACCESO PROFESIONAL</span><h2>Identificación de usuario</h2><p>La autenticación con usuarios y roles es un requisito crítico pendiente de implementar en el backend.</p>
+    <section className="enterprise-access-card"><span className="eyebrow">ACCESO PROFESIONAL</span><h2>Identificación de usuario</h2><p>La autenticación con usuarios y roles está disponible en el entorno privado de pruebas, no en esta demostración pública.</p>
       <label>Correo electrónico<input type="email" placeholder="usuario@organizacion.com" disabled/></label>
       <label>Contraseña<input type="password" placeholder="••••••••" disabled/></label>
-      <button disabled>Inicio de sesión aún no disponible</button>
+      <button disabled>Inicio de sesión deshabilitado en demostración</button>
       <p>Actualmente solo está habilitada la demostración con registros ficticios; no introduzcas credenciales personales.</p>
       <Link to="/">Entrar a la demostración →</Link>
     </section>
