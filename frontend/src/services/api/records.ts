@@ -227,11 +227,14 @@ export function recordsApi(workspace: string, token?: string) {
         pageOf(measurementSchema)),
     derived: (id: string) =>
       get(`/profiles/${id}/analytics/derived`, z.array(derivedSchema)),
-    series: (id: string, metric: string, period: string) =>
-      get(
-        `/profiles/${id}/analytics/series?metric_code=${metric}&period=${period}`,
-        z.array(measurementSchema),
-      ),
+    series: (id: string, metric: string, period: string, range?: ExportDateRange) => {
+      const query = new URLSearchParams({ metric_code: metric, period });
+      if (range) {
+        query.set("start_date", range.start_date);
+        query.set("end_date", range.end_date);
+      }
+      return get(`/profiles/${id}/analytics/series?${query.toString()}`, z.array(measurementSchema));
+    },
     scenarios: (profileId: string, offset = 0, snapshotAt?: string) =>
       get(`/profiles/${profileId}/scenarios?limit=20&offset=${offset}${snapshotAt
         ? `&snapshot_at=${encodeURIComponent(snapshotAt)}` : ""}`,
