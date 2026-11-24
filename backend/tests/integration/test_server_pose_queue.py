@@ -14,8 +14,7 @@ from app.workers import server_pose
 def test_queue_worker_review_and_revocation(protected, monkeypatch):
     client, owner, profile, users = protected
     writer, reader, foreign = [
-        headers(authenticate(client, person[0], person[1]).json()["token"])
-        for person in users[:3]
+        headers(authenticate(client, person[0], person[1]).json()["token"]) for person in users[:3]
     ]
     capture_root = f"/api/v1/profiles/{profile}/captures"
     consent_ids = {
@@ -50,6 +49,7 @@ def test_queue_worker_review_and_revocation(protected, monkeypatch):
                 ),
                 {"role": role},
             ).scalar_one()
+
     # Controlled adapter in this SQL integration test only; it is not proof
     # of real MediaPipe inference. The worker still decrypts and verifies the PNG.
     def controlled_inference(payload, model):
