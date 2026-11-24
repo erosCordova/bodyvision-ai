@@ -75,9 +75,7 @@ def test_offline_cli_rejects_duplicate_fields_and_untrusted_key(tmp_path, capsys
     ]
     assert main(args) == 0
     assert json.loads(capsys.readouterr().out)["event"] == "report_signature_verified"
-    manifest.write_text(
-        receipt.model_dump_json()[:-1] + ',"version":1}', encoding="utf-8"
-    )
+    manifest.write_text(receipt.model_dump_json()[:-1] + ',"version":1}', encoding="utf-8")
     assert main(args) == 2
     assert json.loads(capsys.readouterr().out) == {"event": "report_signature_rejected"}
     manifest.write_text(receipt.model_dump_json(), encoding="utf-8")
