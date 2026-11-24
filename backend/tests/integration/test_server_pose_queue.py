@@ -18,7 +18,9 @@ def test_queue_worker_review_and_revocation(protected, monkeypatch):
         for person in users[:3]
     ]
     capture_root = f"/api/v1/profiles/{profile}/captures"
-    consent_ids = {purpose: accept(client, writer, profile, purpose) for purpose in ("capture", "storage")}
+    consent_ids = {
+        purpose: accept(client, writer, profile, purpose) for purpose in ("capture", "storage")
+    }
     image = _synthetic_png()
     saved = client.post(
         capture_root,
@@ -42,7 +44,9 @@ def test_queue_worker_review_and_revocation(protected, monkeypatch):
     with owner.connect() as connection:
         for role in ("bodyvision_app", "bodyvision_auth_app"):
             assert not connection.execute(
-                text("SELECT has_function_privilege(:role,'public.claim_server_pose(uuid)','EXECUTE')"),
+                text(
+                    "SELECT has_function_privilege(:role,'public.claim_server_pose(uuid)','EXECUTE')"
+                ),
                 {"role": role},
             ).scalar_one()
     # Controlled adapter in this SQL integration test only; it is not proof
