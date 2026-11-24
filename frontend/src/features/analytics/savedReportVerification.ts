@@ -1,3 +1,5 @@
+import type { ReportReceipt } from "./reportReceipt";
+
 /** Verify an explicitly selected *saved* report against the already verified API response.
  * Only the user's browser reads the file; nothing is uploaded or persisted here.
  * A matching SHA-256 proves byte equality at selection time, not authorship,
@@ -8,6 +10,7 @@ export type SavedReportReference = Readonly<{
   format: "pdf" | "csv";
   filename: string;
   sha256: string;
+  receipt?: ReportReceipt | null;
 }>;
 
 const LIMITS = {
