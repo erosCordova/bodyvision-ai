@@ -330,7 +330,10 @@ def test_series_only_observed_and_current(client):
     post(client, profile, entry())
     rows = client.get(f"/api/v1/profiles/{profile}/analytics/series?period=all").json()
     assert len(rows) == 1 and rows[0]["data_type"] == "OBSERVADO" and rows[0]["is_current"]
-    assert client.get("/api/v1/dashboard/summary").json()["measurements_30d"] >= 1
+    summary = client.get("/api/v1/dashboard/summary").json()
+    assert summary["measurements_30d"] >= 1
+    assert 0 <= summary["outliers_30d"] <= summary["measurements_30d"]
+    assert summary["restricted_profiles"] >= 0
 
 
 def test_minor_profile_accepts_only_manual_measurements(client):

@@ -43,6 +43,8 @@ describe("Synthetic data core", () => {
               active_profiles: 17,
               measurements_30d: 42,
               corrections: 3,
+              outliers_30d: 2,
+              restricted_profiles: 1,
               recent_measurements: [],
               synthetic: true,
             }),
@@ -53,6 +55,10 @@ describe("Synthetic data core", () => {
     show();
     expect(await screen.findByText("17")).toBeVisible();
     expect(screen.getByText("42")).toBeVisible();
+    const alerts = screen.getByRole("region", { name: "Alertas de seguimiento" });
+    expect(within(alerts).getByText("2")).toBeVisible();
+    expect(within(alerts).getByText("1")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Explorar evolución" })).toBeVisible();
     expect(screen.getByText("Aún no hay mediciones recientes.")).toBeVisible();
   });
   it("shows loading while waiting for summary", () => {

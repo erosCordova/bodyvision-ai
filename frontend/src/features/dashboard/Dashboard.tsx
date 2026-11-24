@@ -1,8 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { EmptyState, ErrorState, LoadingState, dateTime } from "../../components/ui/States";
+import { ProfilePicker } from "../foundation/ModuleControls";
+import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
+const HistoryChart = lazy(() => import("../analytics/HistoryChart").then(m => ({ default: m.HistoryChart })));
 
 const DashboardBodyPreview = lazy(() => import("./DashboardBodyPreview").then(m => ({ default: m.DashboardBodyPreview })));
 const shortcuts=[
@@ -11,6 +14,51 @@ const shortcuts=[
   {to:"/simulation",symbol:"⬡",title:"Simulación 3D",detail:"Peso y estatura"},
   {to:"/reports",symbol:"▧",title:"Reportes",detail:"Consultar informes"},
 ];
+
+function DashboardEvolution() {
+  const { id, api } = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const [profileId, setProfileId] = useState("");
+  const [metric, setMetric] = useState("weight");
+  const [period, setPeriod] = useState("90d");
+  const profile = useQuery({
+    queryKey: ["dashboard-profile", id, profileId],
+    queryFn: () => api.profile(profileId),
+    enabled: open && Boolean(profileId),
+  });
+  const catalog = useQuery({
+    queryKey: ["dashboard-catalog", id],
+    queryFn: api.catalog,
+    enabled: open && Boolean(profileId),
+  });
+  const options = catalog.data ?? [];
+  const chosen = options.find(item => item.code === metric) ?? options[0];
+  const series = useQuery({
+    queryKey: ["dashboard-series", id, profileId, chosen?.code, period],
+    queryFn: () => api.series(profileId, chosen!.code, period),
+    enabled: open && Boolean(profileId) && profile.isSuccess && catalog.isSuccess && Boolean(chosen),
+  });
+  return <section className="enterprise-panel product-evolution" aria-label="Evolución corporal">
+    <div className="enterprise-panel-title"><h2>Evolución corporal</h2><DataTypeBadge type="OBSERVADO"/></div>
+    {!open ? <div className="product-evolution-body"><p className="enterprise-hint">Consulta la evolución de un expediente, sin mezclar personas ni unidades.</p><button type="button" className="secondary-button" onClick={()=>setOpen(true)}>Explorar evolución</button></div> :
+      <div className="product-evolution-body">
+        <ProfilePicker selected={profile.data ?? null} selectedId={profileId} onChange={setProfileId}/>
+        {!profileId ? <EmptyState text="Selecciona un expediente para consultar su evolución."/> :
+          profile.isPending || catalog.isPending ? <LoadingState/> :
+          profile.isError ? <ErrorState error={profile.error} retry={()=>void profile.refetch()}/> :
+          catalog.isError ? <ErrorState error={catalog.error} retry={()=>void catalog.refetch()}/> :
+          !chosen ? <EmptyState text="No hay métricas disponibles."/> :
+          <>
+            <div className="dashboard-series-controls">
+              <label>Métrica<select value={chosen.code} onChange={e=>setMetric(e.target.value)}>{options.map(item=><option key={item.code} value={item.code}>{item.label} ({item.unit})</option>)}</select></label>
+              <label>Periodo<select value={period} onChange={e=>setPeriod(e.target.value)}><option value="30d">30 días</option><option value="90d">90 días</option><option value="1a">1 año</option></select></label>
+            </div>
+            {series.isPending ? <LoadingState/> : series.isError ? <ErrorState error={series.error} retry={()=>void series.refetch()}/> : <Suspense fallback={<LoadingState/>}><HistoryChart rows={series.data} unit={chosen.unit}/></Suspense>}
+            <Link to={"/profiles/"+profileId+"?tab=analytics"}>Ver historial y fuentes →</Link>
+          </>}
+      </div>}
+  </section>;
+}
 
 export function Dashboard() {
   const { id, api } = useWorkspace();
@@ -43,6 +91,15 @@ export function Dashboard() {
                 <p>{metric.label}</p><strong>{metric.value.toLocaleString("es-PE")}</strong><small>{metric.detail}</small>
               </article>)}
           </section>
+          <section className="enterprise-panel dashboard-alerts" aria-label="Alertas de seguimiento">
+            <div className="enterprise-panel-title"><h2>Alertas de seguimiento</h2></div>
+            {query.isPending ? <LoadingState/> : query.isError || data?.outliers_30d === undefined || data.restricted_profiles === undefined ? <p className="enterprise-hint">Alertas no disponibles.</p> :
+              <div className="dashboard-alert-items">
+                <Link to="/measurements"><span>Valores atípicos confirmados · 30 días</span><strong>{data.outliers_30d}</strong></Link>
+                <Link to="/profiles"><span>Expedientes restringidos</span><strong>{data.restricted_profiles}</strong></Link>
+                <small>Indicadores de seguimiento; no son alertas clínicas.</small>
+              </div>}
+          </section>
           <section className="enterprise-panel product-shortcuts">
             <div className="enterprise-panel-title"><h2>Accesos rápidos</h2></div>
             <div className="product-shortcut-grid">{shortcuts.map(item=><Link to={item.to} key={item.to}>
@@ -58,6 +115,7 @@ export function Dashboard() {
           </section>
         </div>
       </div>
+      <DashboardEvolution key={id}/>
     </div>
   );
 }

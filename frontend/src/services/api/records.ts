@@ -94,6 +94,8 @@ const derivedSchema = z.object({
 });
 export type Derived = z.infer<typeof derivedSchema>;
 const summarySchema = z.object({
+  outliers_30d: z.number().int().nonnegative().optional(),
+  restricted_profiles: z.number().int().nonnegative().optional(),
   active_profiles: z.number(),
   measurements_30d: z.number(),
   corrections: z.number(),

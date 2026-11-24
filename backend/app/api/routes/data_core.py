@@ -378,7 +378,24 @@ def summary(scope: Scope) -> dict:
         .mappings()
         .all()
     )
+    outliers = conn.execute(
+        text(
+            "SELECT count(*) FROM measurements WHERE organization_id=:org AND is_current "
+            "AND measured_at>=now()-interval '30 days' AND outlier_confirmed "
+            "AND has_profile_access(profile_id)"
+        ),
+        org,
+    ).scalar_one()
+    restricted = conn.execute(
+        text(
+            "SELECT count(*) FROM profiles WHERE organization_id=:org "
+            "AND status='restricted' AND has_profile_access(id)"
+        ),
+        org,
+    ).scalar_one()
     return {
+        "outliers_30d": outliers,
+        "restricted_profiles": restricted,
         "active_profiles": active,
         "measurements_30d": measured,
         "corrections": corrections,
