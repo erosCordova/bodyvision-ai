@@ -325,7 +325,9 @@ def series(
         rows = records.history(scope, profile_id, metric_code, start_date=start, end_date=end)
     else:
         if start_date is not None or end_date is not None:
-            raise DomainError(422, "INVALID_PERIOD", "Las fechas requieren un periodo personalizado.")
+            raise DomainError(
+                422, "INVALID_PERIOD", "Las fechas requieren un periodo personalizado."
+            )
         rows = records.history(scope, profile_id, metric_code)
     days = {"30d": 30, "90d": 90, "1a": 365}.get(period)
     if days:
