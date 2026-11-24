@@ -20,7 +20,10 @@ function parseReceipt(bytes: ArrayBuffer): ReportReceipt {
   // The v1 receipt contains only flat ASCII fields and unescaped values.
   // Reject escape sequences and duplicate keys rather than accepting
   // JSON.parse's last-wins interpretation. Pretty-printing is allowed.
-  if (/[\\\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\uffff]/.test(text))
+  if (Array.from(text).some(character => {
+    const code = character.codePointAt(0)!;
+    return code === 92 || (code < 32 && code !== 9 && code !== 10 && code !== 13) || code > 126;
+  }))
     throw new Error("El comprobante contiene caracteres no autorizados.");
   const keys = Array.from(text.matchAll(/"([a-z_]+)"\s*:/g), match => match[1]);
   const parsed = reportReceiptSchema.parse(JSON.parse(text));
