@@ -155,6 +155,13 @@ def upgrade() -> None:
             AND j.status='processing' AND j.lease_token=token AND j.lease_until>clock_timestamp();
           IF NOT FOUND OR NOT public.server_pose_authorized(
             entry.organization_id,entry.profile_id,entry.requested_by) THEN RETURN; END IF;
+          PERFORM 1 FROM public.synthetic_capture_objects c WHERE c.id=entry.capture_id
+            AND c.expires_at>clock_timestamp() FOR SHARE OF c;
+          IF NOT FOUND THEN RETURN; END IF;
+          INSERT INTO public.security_audit_events
+            (id,organization_id,actor_id,correlation_id,action,resource_type,resource_id,outcome)
+            VALUES(gen_random_uuid(),entry.organization_id,entry.requested_by,job,
+              'pose.server.capture_read','profile',entry.profile_id,'allowed');
           RETURN QUERY SELECT c.ciphertext,c.sha256_digest FROM public.synthetic_capture_objects c
             WHERE c.id=entry.capture_id AND c.organization_id=entry.organization_id
               AND c.profile_id=entry.profile_id AND c.expires_at>clock_timestamp() FOR SHARE OF c;
@@ -201,8 +208,15 @@ def upgrade() -> None:
               OR problem NOT IN ('INFERENCE_FAILED','TIMEOUT') THEN clock_timestamp() END
             WHERE j.id=job AND j.status='processing' AND j.lease_token=token
               AND j.lease_until>clock_timestamp() RETURNING j.id INTO changed;
+          IF changed IS NOT NULL THEN
+            INSERT INTO public.security_audit_events
+              (id,organization_id,actor_id,correlation_id,action,resource_type,resource_id,outcome)
+              SELECT gen_random_uuid(),j.organization_id,j.requested_by,job,
+                'pose.server.attempt_finished','profile',j.profile_id,'allowed'
+              FROM public.server_pose_jobs j WHERE j.id=changed;
+          END IF;
           RETURN changed IS NOT NULL;
-        END $$;
+        END $;
 
         CREATE FUNCTION public.review_server_pose(
           job uuid,decision text,event_id uuid,correlation uuid
