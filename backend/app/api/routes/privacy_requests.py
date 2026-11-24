@@ -57,9 +57,9 @@ class PrivacyRequestRead(BaseModel):
     can_review: bool
     rejected_at: datetime | None
     rejected_by: UUID | None
-    rejection_reason: Literal[
-        "invalid_synthetic_request", "withdrawn_by_requester", "duplicate_review"
-    ] | None
+    rejection_reason: (
+        Literal["invalid_synthetic_request", "withdrawn_by_requester", "duplicate_review"] | None
+    )
 
 
 class PrivacyRequestPage(BaseModel):
