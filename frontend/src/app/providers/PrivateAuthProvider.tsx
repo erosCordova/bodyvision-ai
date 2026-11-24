@@ -81,7 +81,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 async function authError(response: Response): Promise<never> {
   const body: unknown = await response.json().catch(() => null);
   const result = z.object({ code: z.string() }).safeParse(body);
-  const code = result.success ? result.data.code : response.status === 401 ? "INVALID_CREDENTIALS" : "AUTH_ERROR";
+  const code = result.success ? result.data.code : response.status === 401 ? "INVALID_CREDENTIALS" : response.status === 429 ? "LOGIN_RATE_LIMITED" : response.status === 422 ? "UNPROCESSABLE_ENTITY" : response.status >= 500 ? "SERVICE_UNAVAILABLE" : "AUTH_ERROR";
   const messages: Record<string, string> = {
     INVALID_CREDENTIALS: "Organización, correo o contraseña incorrectos.",
     MFA_SETUP_REQUIRED: "Configura la verificación de dos factores para ingresar.",
@@ -89,11 +89,39 @@ async function authError(response: Response): Promise<never> {
     MFA_CODE_INVALID: "El código es inválido, ya se utilizó o ha caducado.",
     MFA_ALREADY_ENABLED: "La verificación ya está configurada en esta cuenta.",
     LOGIN_RATE_LIMITED: "Demasiados intentos. Inténtalo de nuevo en 15 minutos.",
+    UNPROCESSABLE_ENTITY: "Revisa el formato del correo y la contraseña.",
+    SERVICE_UNAVAILABLE: "El servidor de pruebas no está disponible temporalmente. Vuelve a intentar el acceso.",
+    INTERNAL_ERROR: "El servidor no pudo completar el acceso. Inténtalo nuevamente.",
   };
   throw new PrivateAuthError(
     code,
     messages[code] ?? "No fue posible completar la verificación del acceso privado.",
   );
+}
+
+// Warm the free hosted service before sending credentials. Never retry a
+// password submission automatically: its result may have been committed.
+export async function waitForSandboxReady(): Promise<void> {
+  if (!sandboxAuthEnabled()) return;
+  const deadline=Date.now()+90000;
+  while(Date.now()<deadline){
+    const controller=new AbortController();
+    const timer=window.setTimeout(()=>controller.abort(),Math.max(1,deadline-Date.now()));
+    try {
+      const response=await fetch("/api/v1/health/live",{cache:"no-store",signal:controller.signal});
+      if(response.ok){
+        const body=await response.json().catch(()=>null);
+        if(body?.status==="alive"&&body?.environment==="sandbox")return;
+        throw new PrivateAuthError("SERVICE_UNAVAILABLE","El servicio de pruebas no respondió correctamente.");
+      }
+      if(![502,503,504].includes(response.status))throw new PrivateAuthError("SERVICE_UNAVAILABLE","No se pudo conectar al servidor de pruebas.");
+    }catch(error){
+      if(error instanceof PrivateAuthError)throw error;
+    }finally{window.clearTimeout(timer);}
+    if(Date.now()+1500<deadline)await new Promise(resolve=>window.setTimeout(resolve,1500));
+    else break;
+  }
+  throw new PrivateAuthError("SERVICE_UNAVAILABLE","El servidor de pruebas aún no responde. Vuelve a intentar el acceso.");
 }
 
 function validateSession(body: unknown): PrivateSession {
@@ -211,13 +239,15 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
       const ticket = ++epoch.current;
       retiredAccessTokens.current.clear();
       const cookieFlow = privateCookieAuthEnabled();
+      if(sandboxAuthEnabled())await waitForSandboxReady();
+      if(ticket!==epoch.current)throw new Error("La solicitud de acceso quedó obsoleta.");
       const response = cookieFlow
         ? await cookieAccessRequest("login", credentials)
         : await fetch("/api/v1/auth/login", {
             method: "POST",
             cache: "no-store",
             credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "X-Correlation-ID": crypto.randomUUID() },
             body: JSON.stringify(credentials),
           });
       if (!response.ok) return authError(response);

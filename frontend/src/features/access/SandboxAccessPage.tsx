@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
+import { usePrivateAuth, waitForSandboxReady, PrivateAuthError } from "../../app/providers/PrivateAuthProvider";
 import "./sandbox-access.css";
 
 const AtlasPreview = lazy(() => import("../dashboard/DashboardBodyPreview").then(module => ({default:module.DashboardBodyPreview})));
@@ -39,6 +39,7 @@ export function SandboxAccessPage() {
     setBusy(true);
     try{
       if(register){
+        await waitForSandboxReady();
         const response=await fetch("/api/v1/auth/register",{method:"POST",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email.trim(),password,synthetic_only:synthetic})});
         if(!response.ok){
           if(response.status===429)throw new Error("Demasiados intentos. Inténtalo más tarde.");
@@ -51,7 +52,7 @@ export function SandboxAccessPage() {
       }
       await login({organization_id:"10000000-0000-4000-8000-000000000001",email:email.trim(),password});
       setPassword("");navigate("/",{replace:true});
-    }catch(cause){setPassword("");setConfirmation("");setError(cause instanceof Error?cause.message:"No se pudo ingresar.");}
+    }catch(cause){if(cause instanceof PrivateAuthError && cause.code==="INVALID_CREDENTIALS"){setPassword("");setConfirmation("");}setError(cause instanceof TypeError?"No hay conexión con el servicio de pruebas. Inténtalo nuevamente.":cause instanceof Error?cause.message:"No se pudo ingresar.");}
     finally{setBusy(false);}
   }
   function switchMode(next:boolean){
