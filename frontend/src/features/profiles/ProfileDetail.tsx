@@ -16,7 +16,8 @@ import { MeasurementForm } from "../measurements/MeasurementForm";
 import { MeasurementComparison } from "../analytics/MeasurementComparison";
 import { LongitudinalSummary } from "../analytics/LongitudinalSummary";
 import { validExportRange } from "../analytics/serverLongitudinalExport";
-import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { privateAuthEnabled, sandboxAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { SandboxCaptureLibrary } from "../capture/SandboxCaptureLibrary";
 import { PoseSummaryArchive } from "../capture/PoseSummaryArchive";
 import { ConsentPanel } from "./ConsentPanel";
 const HistoryChart = lazy(() =>
@@ -30,7 +31,7 @@ export function ProfileDetail() {
   const cache = useQueryClient();
   const [tab, setTab] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
-    return requested === "measurements" || requested === "analytics" ? requested : "summary";
+    return requested === "measurements" || requested === "analytics" || (requested==="images" && sandboxAuthEnabled()) ? requested : "summary";
   });
   const [metric, setMetric] = useState("weight");
   const [period, setPeriod] = useState("90d");
@@ -120,6 +121,7 @@ export function ProfileDetail() {
             · Organización ficticia
           </p>
           {privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
+          {sandboxAuthEnabled() && <Link className="back-link" to={`/analysis?profile=${profileId}`}>Analizar imágenes →</Link>}
           <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
             Abrir simulador 3D y escenarios ficticios →
           </Link>
@@ -140,6 +142,7 @@ export function ProfileDetail() {
           ["summary", "Resumen"],
           ["measurements", "Mediciones"],
           ["analytics", "Evolución"],
+          ...(sandboxAuthEnabled() ? [["images","Imágenes"]] : []),
           ...(privateAuthEnabled() ? [["pose", "Resultados de pose"]] : []),
         ].map(([code, label]) => (
           <button
@@ -153,6 +156,7 @@ export function ProfileDetail() {
       </nav>
       {tab === "pose" && privateAuthEnabled() && <PoseSummaryArchive key={profileId}
         fixedProfileId={profileId} summary={null} runSerial={0} />}
+      {tab === "images" && sandboxAuthEnabled() && <SandboxCaptureLibrary key={profileId} fixedProfileId={profileId} allowUpload={current.status==="active"} />}
       {tab === "summary" && (
         <>
           <div className="section-title">

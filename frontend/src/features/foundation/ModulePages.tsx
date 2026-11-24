@@ -5,6 +5,7 @@ import { csvPreview, ProfilePicker } from "./ModuleControls";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
 import { PoseReview } from "../capture/PoseReview";
 import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
+import { SandboxCaptureLibrary } from "../capture/SandboxCaptureLibrary";
 import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { privateAuthEnabled, sandboxAuthEnabled } from "../../app/providers/PrivateAuthProvider";
@@ -268,6 +269,7 @@ export function CapturePage() {
         <Limitation>Solo imágenes ficticias. No apto para uso clínico.</Limitation>
       </aside>
     </div>
+    {sandboxAuthEnabled() && <SandboxCaptureLibrary file={file} allowUpload={Boolean(consent && file && review?.passed && !isReviewing)} />}
   </div>;
 }
 
@@ -325,6 +327,7 @@ export function AnalysisPage() {
             Descartar fotografía del análisis
           </button>
         </>}
+        {sandboxAuthEnabled() && <SandboxCaptureLibrary file={localCapture?.file??null} allowUpload={Boolean(localCapture?.review.passed)} onAnalyze={async (file,review)=>{generation.current+=1;setLocalCapture({file,review});setDiscarded(false);setDirectPending(false);setDirectError("");}}/>}
         {!localCapture && <div className="enterprise-quality-review">
           <h3>Seleccionar imagen para análisis</h3>
           <label className="enterprise-consent"><input type="checkbox" checked={directConsent} onChange={event=>{

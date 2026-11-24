@@ -36,6 +36,7 @@ async function scopedFetch(token: string, path: string, init: RequestInit = {}) 
       SYNTHETIC_CONFIRMATION_REQUIRED: "Debes confirmar que el archivo es ficticio.",
       INVALID_PNG: "El PNG no es compatible o contiene metadatos no permitidos.",
       CAPTURE_SIZE: "Archivo demasiado grande para este prototipo (máximo 256 KiB).",
+      CAPTURE_LIMIT: "Has alcanzado el límite de 20 imágenes por cuenta de pruebas.",
       FORBIDDEN: "El expediente no permite esta operación.",
       NOT_FOUND: "Captura o expediente no disponible.",
     };

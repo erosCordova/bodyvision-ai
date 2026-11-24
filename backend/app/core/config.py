@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:8080"]
     allowed_hosts: list[str] = ["localhost", "127.0.0.1", "backend", "testserver"]
     sandbox_password_hash: SecretStr | None = None
+    sandbox_capture_key: SecretStr | None = None
     identity_enabled: bool = False
     auth_database_url: SecretStr | None = None
     mfa_enabled: bool = False
@@ -69,6 +70,10 @@ class Settings(BaseSettings):
                 raise ValueError("Invalid sandbox password verifier")
         elif self.sandbox_password_hash is not None:
             raise ValueError("Sandbox verifier is forbidden outside sandbox")
+        if self.sandbox_capture_key is not None:
+            if self.app_env != "sandbox":
+                raise ValueError("Sandbox capture key is forbidden outside sandbox")
+            Fernet(self.sandbox_capture_key.get_secret_value().encode("ascii"))
         if self.identity_enabled:
             if self.app_env not in {"local", "test"}:
                 raise ValueError("Private authentication is local/test only")

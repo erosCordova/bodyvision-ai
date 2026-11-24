@@ -953,6 +953,7 @@ export function AnatomyAtlas() {
           <div className="studio-right-content">
             {panel === "grasa" && <section ref={fatPanelRef} className="studio-fat-panel" aria-label="Grasa corporal">
               <h2>Grasa corporal</h2>
+              {sandboxAuthEnabled() && fatProfileId && fatProfile.isSuccess && <Link to={`/profiles/${fatProfileId}?tab=images`}>Consultar imágenes del expediente →</Link>}
               <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId}
                 onChange={next=>{setFatProfileId(next);setFatSimulation(null);}}/>
               {fatProfileId && (fatProfile.isPending ? <LoadingState/> : fatProfile.isError ?

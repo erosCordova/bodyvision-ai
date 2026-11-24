@@ -17,6 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.sandbox_auth import router as sandbox_router, check_sandbox_session, sandbox_event
+from app.api.routes.sandbox_captures import router as sandbox_capture_router
 from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.operations import router as operations_router
@@ -194,6 +195,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                             path in {"/api/v1/auth/logout", "/api/v1/auth/activity", "/api/v1/profiles"}
                             or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}(?:/archive|/measurements)?", path)
                             or __import__("re").fullmatch(r"/api/v1/measurements/[0-9a-fA-F-]{36}", path)
+                            or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}/captures(?:/[0-9a-fA-F-]{36})?", path)
                         ):
                             response = error(request, 403, "SANDBOX_LIMIT", "Operación no habilitada en pruebas.")
                         else:
@@ -251,6 +253,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(simulation_router)
     if settings.app_env == "sandbox":
         app.include_router(sandbox_router)
+        app.include_router(sandbox_capture_router)
     if settings.identity_enabled:
         app.include_router(auth_router)
         app.include_router(operations_router)
