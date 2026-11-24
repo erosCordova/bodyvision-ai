@@ -34,7 +34,7 @@ describe("BODYVISION project progress assessment", () => {
     for (const pr of ["#65", "#67", "#69", "#71", "#73"]) {
       expect(production.completed).toContain(pr);
     }
-    expect(overallProgress).toBe(94);
+    expect(overallProgress).toBe(95);
     expect(production.pending).toContain("respaldos productivos/PITR");
 
   });
@@ -46,11 +46,13 @@ describe("phase 0–2 acceptance gates", () => {
     expect(phaseClosureAudit.map(entry => entry.technical)).toEqual([
       "verified", "verified", "verified",
     ]);
-    expect(closedWithFormalAcceptance).toBe(1);
+    expect(closedWithFormalAcceptance).toBe(2);
     expect(phaseClosureAudit[0].formalAcceptance).toBe("product-approved");
     expect(phaseAssessment[0].progress).toBe(100);
-    expect(phaseClosureAudit.slice(1).every(entry => entry.formalAcceptance === "pending")).toBe(true);
-    expect(phaseClosureAudit[2].owner).toContain("por confirmar");
+    expect(phaseClosureAudit[1].formalAcceptance).toBe("pending");
+    expect(phaseClosureAudit[2].formalAcceptance).toBe("product-approved");
+    expect(phaseClosureAudit[2].owner).toContain("revisores independientes pendientes");
+    expect(phaseAssessment[2].progress).toBe(100);
     expect(phaseClosureAudit[1].operationalReception).toBe("assisted");
     expect(phaseAssessment.find(phase => phase.id === 1)?.progress).toBe(100);
     expect(phaseClosureAudit[0].mappedExecutionPhase).toContain("F1–F10");
