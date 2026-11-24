@@ -15,10 +15,10 @@ export type ProjectPhase = {
 };
 export const reviewedAt = "2026-11-23";
 export const phaseAssessment: ProjectPhase[] = [
-  { id: 0, name: "Descubrimiento y diseño", progress: 85,
-    completed: "Documentos maestros v2/v3, arquitectura y pantallas objetivo.",
-    pending: "Formalizar aceptación, responsables y matriz de riesgos.",
-    milestone: "Alcance y criterios firmados." },
+  { id: 0, name: "Descubrimiento y diseño", progress: 100,
+    completed: "Documentos maestros v2/v3, arquitectura, pantallas objetivo y planificación. El responsable del producto confirmó expresamente el alcance, arquitectura y planificación actual el 23-11-2026. Se conserva el modelo anatómico elegido y el objetivo original.",
+    pending: "Sin pendientes del cierre de planificación. Revisiones especializadas, designación de revisores independientes y autorización de uso real permanecen en sus gates posteriores.",
+    milestone: "Alcance, arquitectura y planificación aceptados expresamente por producto." },
   { id: 1, name: "Fundación técnica", progress: 100,
     completed: "Monorepo, FastAPI, React, PostgreSQL, Docker, migraciones y CI; pruebas aisladas y conservación de datos. Recepción asistida en Windows: instalación/reinicio del usuario, revisión desde Chrome y versiones 72/72/71 kg conservadas; API y esquema conectados tras el reinicio.",
     pending: "Sin pendientes del cierre técnico local ficticio. Firmas de producto, otras plataformas, staging/producción y respaldo conservan sus propios criterios; esta recepción no los certifica.",
