@@ -16,5 +16,6 @@ test("project phases show an explained progress estimate", async ({ page }) => {
   await expect(audit.getByText(/F1–F10/)).toBeVisible();
   await expect(page.getByText(/Estimación manual/).first()).toBeVisible();
   await page.getByRole("link", { name: "BODYVISION AI" }).first().click();
-  await expect(page.getByRole("progressbar", { name: "Avance estimado del proyecto" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard general" })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Avance estimado del proyecto" })).toHaveCount(0);
 });

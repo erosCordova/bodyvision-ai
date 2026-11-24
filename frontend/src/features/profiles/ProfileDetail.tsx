@@ -28,7 +28,10 @@ export function ProfileDetail() {
   const { profileId = "" } = useParams();
   const { id, api, readOnly } = useWorkspace();
   const cache = useQueryClient();
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") === "measurements" ? "measurements" : "summary");
+  const [tab, setTab] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return requested === "measurements" || requested === "analytics" ? requested : "summary";
+  });
   const [metric, setMetric] = useState("weight");
   const [period, setPeriod] = useState("90d");
   const [startDate, setStartDate] = useState("");
