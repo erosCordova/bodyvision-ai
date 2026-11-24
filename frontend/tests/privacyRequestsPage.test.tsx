@@ -128,3 +128,40 @@ describe("cola de atención de privacidad", () => {
     client.clear();
   });
 });
+
+it("confirma el rechazo ficticio y conserva su motivo en la cola", async () => {
+  fixture.role = "privacy_officer";
+  const row = {
+    id: "11111111-1111-4111-8111-111111111111", profile_id: fixture.profileId,
+    request_type: "access", status: "in_review",
+    requested_by: "33333333-3333-4333-8333-333333333333",
+    received_at: "2026-11-22T13:00:00Z", review_target_at: "2026-11-29T13:00:00Z",
+    review_started_at: "2026-11-22T14:00:00Z", reviewed_by: "44444444-4444-4444-8444-444444444444",
+    profile_code: "BV-FAKE123", review_overdue: false, can_review: true,
+    rejected_at: null as string | null, rejected_by: null as string | null,
+    rejection_reason: null as string | null,
+  };
+  const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith("/reject") && options?.method === "POST") {
+      expect(JSON.parse(String(options.body))).toEqual({
+        reason: "duplicate_review", synthetic_confirmed: true,
+      });
+      row.status = "rejected";
+      row.rejected_at = "2026-11-22T15:00:00Z";
+      row.rejected_by = row.reviewed_by;
+      row.rejection_reason = "duplicate_review";
+      return Response.json(row);
+    }
+    return Response.json({ items: [row], total: 1, limit: 20, offset: 0 });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = render(<QueryClientProvider client={client}><PrivacyRequestsPage /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Rechazar solicitud ficticia" }));
+  fireEvent.change(screen.getByLabelText("Motivo del rechazo ficticio"), { target: { value: "duplicate_review" } });
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar rechazo ficticio" }));
+  expect(await screen.findByText("Rechazo administrativo ficticio registrado. No constituye una resolución legal.")).toBeVisible();
+  expect(await screen.findByText(/Rechazo ficticio:.*Revisión duplicada/)).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Rechazar solicitud ficticia" })).not.toBeInTheDocument();
+  view.unmount(); client.clear();
+});
