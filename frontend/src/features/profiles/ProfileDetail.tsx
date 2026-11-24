@@ -54,17 +54,19 @@ export function ProfileDetail() {
   const measurements = useQuery({
     queryKey: ["measurements", id, profileId, metric, offset],
     queryFn: () => api.measurements(profileId, metric, offset),
+    enabled: profile.isSuccess && (tab === "measurements" || tab === "analytics"),
   });
   const derived = useQuery({
     queryKey: ["derived", id, profileId],
     queryFn: () => api.derived(profileId),
+    enabled: profile.isSuccess && tab === "summary",
   });
   const series = useQuery({
     queryKey: ["series", id, profileId, metric, periodKey],
     queryFn: () => period === "custom"
       ? api.series(profileId, metric, period, customRange)
       : api.series(profileId, metric, period),
-    enabled: periodReady,
+    enabled: profile.isSuccess && tab === "analytics" && periodReady,
   });
   const versions = useQuery({
     queryKey: ["versions", id, versionId, versionOffset],
@@ -198,6 +200,7 @@ export function ProfileDetail() {
           )}
           <section className="panel form-panel">
             <h2>Datos y estado del expediente</h2>
+            <dl className="profile-metadata"><div><dt>Código</dt><dd>{current.display_code}</dd></div><div><dt>Registrado</dt><dd>{dateTime(current.created_at)}</dd></div><div><dt>Tipo de registro</dt><dd>Ficticio</dd></div></dl>
             {current.status === "restricted" && <p role="status">
               Expediente restringido: las mediciones y la referencia son de solo lectura.
               Reactiva el registro para volver a realizar cambios autorizados.
@@ -206,7 +209,7 @@ export function ProfileDetail() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  update.mutate({ display_name: name || null });
+                  if (!readOnly) update.mutate({ display_name: name.trim() || null });
                 }}
               >
                 <label>
@@ -217,7 +220,7 @@ export function ProfileDetail() {
                     onChange={(e) => setName(e.target.value)}
                   />
                 </label>
-                <button className="primary-button" disabled={update.isPending}>
+                <button className="primary-button" disabled={readOnly || update.isPending}>
                   Guardar referencia
                 </button>
                 <button type="button" onClick={() => setEditing(false)}>

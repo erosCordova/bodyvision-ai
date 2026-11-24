@@ -294,3 +294,21 @@ test("custom evolution interval queries Lima dates and restores the standard per
   await period.selectOption("all");
   await expect(page.getByRole("img", { name: /Gráfico con/ })).toBeVisible();
 });
+
+
+test("profile list filters by server status and clears filters", async ({ page, request }) => {
+  const headers = { "X-Workspace-ID": "10000000-0000-4000-8000-000000000001" };
+  const name = "Filtro ficticio " + randomUUID().slice(0,8);
+  const created = await request.post("/api/v1/profiles", { headers, data: {display_name:name,birth_year:1995} });
+  expect(created.status()).toBe(201);
+  const profile = await created.json();
+  expect((await request.patch("/api/v1/profiles/"+profile.id, {headers,data:{status:"restricted"}})).status()).toBe(200);
+  await page.goto("/profiles?status=restricted");
+  await page.getByRole("searchbox").fill(name);
+  await expect(page.getByRole("link",{name:new RegExp(name)})).toBeVisible();
+  await page.getByLabel("Estado del expediente").selectOption("active");
+  await expect(page.getByText("No hay expedientes con esos filtros")).toBeVisible();
+  await page.getByRole("button",{name:"Limpiar filtros"}).click();
+  await expect(page.getByLabel("Estado del expediente")).toHaveValue("");
+  await expect(page.getByRole("searchbox")).toHaveValue("");
+});

@@ -202,9 +202,9 @@ export function recordsApi(workspace: string, token?: string) {
         { initial_id: initialId, final_id: finalId }, comparisonDownloadSchema),
     workspaces: () => get("/workspaces", workspacesSchema),
     summary: () => get("/dashboard/summary", summarySchema),
-    profiles: (search = "", offset = 0) =>
+    profiles: (search = "", offset = 0, status?: Profile["status"]) =>
       get(
-        `/profiles?search=${encodeURIComponent(search)}&offset=${offset}&limit=12`,
+        `/profiles?search=${encodeURIComponent(search)}&offset=${offset}&limit=12${status ? `&status=${status}` : ""}`,
         pageOf(profileSchema),
       ),
     profile: (id: string) => get(`/profiles/${id}`, profileSchema),

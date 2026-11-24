@@ -3,13 +3,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import type { Profile } from "../../services/api/records";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import {
   EmptyState,
   ErrorState,
   InlineError,
   LoadingState,
+  dateTime,
 } from "../../components/ui/States";
 const schema = z.object({
   display_name: z.string().max(100),
@@ -25,11 +27,24 @@ export function ProfilesPage() {
   const cache = useQueryClient();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("status");
+  const status: Profile["status"] | undefined =
+    requested === "active" || requested === "restricted" || requested === "archived" ? requested : undefined;
+  const changeStatus = (next: string) => {
+    setOffset(0);
+    setParams(previous => {
+      const updated = new URLSearchParams(previous);
+      if (next) updated.set("status", next);
+      else updated.delete("status");
+      return updated;
+    }, { replace: true });
+  };
   const [offset, setOffset] = useState(0);
   const [creating, setCreating] = useState(false);
   const query = useQuery({
-    queryKey: ["profiles", id, search, offset],
-    queryFn: () => api.profiles(search, offset),
+    queryKey: ["profiles", id, search, offset, status],
+    queryFn: () => api.profiles(search.trim(), offset, status),
   });
   const form = useForm<Inputs>({
     resolver: zodResolver(schema),
@@ -37,7 +52,7 @@ export function ProfilesPage() {
   });
   const mutation = useMutation({
     mutationFn: (data: Inputs) =>
-      api.createProfile({ ...data, display_name: data.display_name || null }),
+      api.createProfile({ ...data, display_name: data.display_name.trim() || null }),
     onSuccess: async (profile) => {
       await cache.invalidateQueries({ queryKey: ["profiles", id] });
       await cache.invalidateQueries({ queryKey: ["summary", id] });
@@ -76,7 +91,7 @@ export function ProfilesPage() {
           >
             <label>
               Nombre de referencia (opcional)
-              <input {...form.register("display_name")} />
+              <input maxLength={100} {...form.register("display_name")} />
             </label>
             <label>
               Año de nacimiento
@@ -88,10 +103,7 @@ export function ProfilesPage() {
             {form.formState.errors.birth_year && (
               <p role="alert">Introduce un año válido.</p>
             )}
-            <p className="muted">
-              Los menores solo podrán tener mediciones manuales; la captura de
-              imágenes no está habilitada en esta fase.
-            </p>
+            <p className="muted">Usa únicamente datos ficticios. La captura requiere consentimiento vigente y mayoría de edad.</p>
             {mutation.isError && <InlineError error={mutation.error} />}
             <button className="primary-button" disabled={mutation.isPending}>
               {mutation.isPending ? "Guardando…" : "Crear expediente"}
@@ -99,10 +111,12 @@ export function ProfilesPage() {
           </form>
         </section>
       )}
+      <div className="profiles-toolbar">
       <label className="search-label">
         Buscar por código o referencia
         <input
           type="search"
+          maxLength={100}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -111,6 +125,16 @@ export function ProfilesPage() {
           placeholder="Buscar expediente ficticio…"
         />
       </label>
+      <label>Estado del expediente
+        <select value={status ?? ""} onChange={e=>changeStatus(e.target.value)}>
+          <option value="">Todos los estados</option>
+          <option value="active">Activos</option>
+          <option value="restricted">Restringidos</option>
+          <option value="archived">Archivados</option>
+        </select>
+      </label>
+      {(search || status) && <button type="button" onClick={()=>{setSearch("");changeStatus("");}}>Limpiar filtros</button>}
+      </div>
       {query.isPending ? (
         <LoadingState />
       ) : query.isError ? (
@@ -120,8 +144,8 @@ export function ProfilesPage() {
           {query.data.items.length === 0 ? (
             <EmptyState
               text={
-                search
-                  ? "No hay expedientes con esa búsqueda"
+                search || status
+                  ? "No hay expedientes con esos filtros"
                   : "Aún no hay expedientes"
               }
             />
@@ -146,22 +170,23 @@ export function ProfilesPage() {
                   <h2>{p.display_name || p.display_code}</h2>
                   <p>{p.display_code}</p>
                   <small>Año de nacimiento: {p.birth_year}</small>
+                  <small>Registro: {dateTime(p.created_at)}</small>
                   <span className="open-record">Abrir expediente →</span>
                 </Link>
               ))}
             </div>
           )}
           <div className="pagination">
-            <span>{query.data.total} expedientes</span>
+            <span role="status">{query.data.total ? `${query.data.offset + 1}–${query.data.offset + query.data.items.length} de ${query.data.total}` : "0"} expedientes</span>
             <button
               disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - 12))}
+              onClick={() => setOffset(Math.max(0, offset - query.data.limit))}
             >
               Anterior
             </button>
             <button
-              disabled={offset + 12 >= query.data.total}
-              onClick={() => setOffset(offset + 12)}
+              disabled={offset + query.data.limit >= query.data.total}
+              onClick={() => setOffset(offset + query.data.limit)}
             >
               Siguiente
             </button>

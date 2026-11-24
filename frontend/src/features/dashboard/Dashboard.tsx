@@ -96,7 +96,7 @@ export function Dashboard() {
             {query.isPending ? <LoadingState/> : query.isError || data?.outliers_30d === undefined || data.restricted_profiles === undefined ? <p className="enterprise-hint">Alertas no disponibles.</p> :
               <div className="dashboard-alert-items">
                 <Link to="/measurements"><span>Valores atípicos confirmados · 30 días</span><strong>{data.outliers_30d}</strong></Link>
-                <Link to="/profiles"><span>Expedientes restringidos</span><strong>{data.restricted_profiles}</strong></Link>
+                <Link to="/profiles?status=restricted"><span>Expedientes restringidos</span><strong>{data.restricted_profiles}</strong></Link>
                 <small>Indicadores de seguimiento; no son alertas clínicas.</small>
               </div>}
           </section>

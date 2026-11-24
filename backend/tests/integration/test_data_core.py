@@ -455,3 +455,28 @@ def test_custom_series_uses_inclusive_lima_dates_and_current_rows(client):
     assert client.get(path, params={**params, "period": "all"}).status_code == 422
     foreign = client.get(path, params=params, headers={"X-Workspace-ID": str(SECOND_WORKSPACE)})
     assert foreign.status_code == 404
+
+
+def test_profile_status_filter_and_workspace_isolation(client):
+    active = new_profile(client)
+    restricted = new_profile(client)
+    archived = new_profile(client)
+    foreign = new_profile(client, SECOND_WORKSPACE)
+    assert client.patch(
+        f"/api/v1/profiles/{restricted}", json={"status": "restricted"}
+    ).status_code == 200
+    assert client.post(f"/api/v1/profiles/{archived}/archive").status_code == 200
+    for state, expected in (("active", active), ("restricted", restricted), ("archived", archived)):
+        response = client.get("/api/v1/profiles", params={"status": state, "limit": 100})
+        assert response.status_code == 200
+        rows = response.json()
+        assert all(row["status"] == state for row in rows["items"])
+        ids = {row["id"] for row in rows["items"]}
+        assert expected in ids
+        assert foreign not in ids
+    combined = client.get(
+        "/api/v1/profiles", params={"status": "restricted", "search": "Caso ficticio", "limit": 1}
+    ).json()
+    assert combined["total"] >= 1
+    assert len(combined["items"]) == 1
+    assert client.get("/api/v1/profiles?status=unknown").status_code == 422
