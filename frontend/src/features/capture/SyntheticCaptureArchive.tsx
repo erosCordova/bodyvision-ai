@@ -9,6 +9,7 @@ import {
   CAPTURE_ARCHIVE_PAGE_SIZE, prepareSyntheticPng, syntheticCapturesApi,
 } from "../../services/api/syntheticCaptures";
 import type { CaptureReview } from "./captureQuality";
+import { ServerPosePanel } from "./ServerPosePanel";
 
 /** Optional encrypted repository of fictional samples. No clinical photos. */
 export function SyntheticCaptureArchive({
@@ -23,6 +24,7 @@ export function SyntheticCaptureArchive({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busyDownload, setBusyDownload] = useState("");
+  const [poseCapture, setPoseCapture] = useState("");
   const scope = session ? [session.organization_id, session.user_id] : [];
   const profiles = useQuery({
     queryKey: ["synthetic-capture-profiles", ...scope],
@@ -46,6 +48,7 @@ export function SyntheticCaptureArchive({
   });
   useEffect(() => {
     setAttested(false);
+    setPoseCapture("");
     setNotice("");
     setError("");
   }, [file, profileId]);
@@ -55,6 +58,7 @@ export function SyntheticCaptureArchive({
         CAPTURE_ARCHIVE_PAGE_SIZE) - 1) * CAPTURE_ARCHIVE_PAGE_SIZE);
     }
   }, [archive.data, pageOffset]);
+  const poseConsent = Boolean(consent.data?.items.some(item => item.purpose === "pose" && item.effective));
   const canWrite = Boolean(session && session.role !== "member" && consent.data?.can_record);
   const upload = useMutation({
     mutationFn: async () => {
@@ -203,6 +207,10 @@ export function SyntheticCaptureArchive({
                     onClick={() => void download(item.id)}>
                     Descargar PNG
                   </button>
+                  {poseConsent && <button type="button" className="secondary-button"
+                    onClick={() => setPoseCapture(poseCapture === item.id ? "" : item.id)}>
+                    {poseCapture === item.id ? "Cerrar análisis de servidor" : "Análisis de pose en servidor"}
+                  </button>}
                   {canWrite && <button type="button" className="secondary-button"
                     disabled={remove.isPending}
                     onClick={() => {
@@ -212,6 +220,9 @@ export function SyntheticCaptureArchive({
                     Borrar definitivamente
                   </button>}
                 </div>
+                {poseConsent && poseCapture === item.id && <ServerPosePanel
+                  key={`${profileId}-${item.id}`} token={session.token} profileId={profileId}
+                  captureId={item.id} canWrite={canWrite} />}
               </li>
             ))}
           </ol>
