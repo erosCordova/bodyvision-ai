@@ -55,6 +55,6 @@ export function DashboardBodyPreview() {
       <strong>{failed?"Modelo 3D no disponible":"Cargando modelo anatómico…"}</strong>
       {failed && <button type="button" onClick={()=>{setError("");setAttempt(n=>n+1);}}>Reintentar</button>}
     </div>}
-    <div className="atlas-credit"><a href="https://www.z-anatomy.com/" target="_blank" rel="noreferrer">Z-Anatomy</a> · <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/" target="_blank" rel="noreferrer">BodyParts3D</a> · <a href="https://github.com/SeemaBansal1/3d-human-body-anatomy" target="_blank" rel="noreferrer">Fuente del atlas</a></div>
+    <div className="atlas-credit"><a href="https://www.z-anatomy.com/" target="_blank" rel="noreferrer">Z-Anatomy (CC BY-SA 4.0)</a> · <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/" target="_blank" rel="noreferrer">BodyParts3D (CC BY-SA 2.1 JP)</a> · <a href="https://github.com/SeemaBansal1/3d-human-body-anatomy" target="_blank" rel="noreferrer">Fuente del atlas</a></div>
   </div>;
 }
