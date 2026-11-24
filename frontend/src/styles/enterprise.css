@@ -456,3 +456,6 @@
 .dashboard-hologram .atlas-credit{font-size:9px;line-height:1.5;bottom:8px}
 .product-hero-bottom{justify-content:flex-end}
 @media(max-width:700px){.dashboard-hologram.product-atlas .enterprise-realbody-canvas{inset:0 0 40px}}
+
+.dashboard-animation-toggle{position:absolute;z-index:3;top:12px;right:12px;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1px solid #63b8d955;background:#0c192de6;color:#b5edff;cursor:pointer;font-size:17px;line-height:1}
+.dashboard-animation-toggle:hover,.dashboard-animation-toggle:focus-visible{border-color:#67e8f9;background:#194960;outline:2px solid #67e8f9;outline-offset:3px}

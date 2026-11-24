@@ -220,6 +220,9 @@ export function createAnatomyScene(
   let contextUnavailable = false;
   let fitted = false;
   let autoRotate = false;
+  let dashboardHalo: THREE.Group | null = null;
+  let scanElapsed = 0;
+  let scanTimestamp: number | null = null;
   let isolated = false;
   let selectedMesh: THREE.Mesh | null = null;
   let selectedLayer: AnatomicalLayer | null = null;
@@ -386,9 +389,17 @@ export function createAnatomyScene(
     // Count callback spacing only when this rotation actually submits WebGL.
     // Never mistake idle requestAnimationFrame callbacks for rendered frames.
     const before = renderedFrames;
+    if (dashboardHalo?.visible) {
+      if (scanTimestamp !== null) scanElapsed += Math.min(100, timestamp - scanTimestamp);
+      scanTimestamp = timestamp;
+      // Eight seconds per round trip, starting at the top of the fitted atlas.
+      const progress = (1 + Math.cos(scanElapsed * Math.PI * 2 / 8000)) / 2;
+      dashboardHalo.position.y = THREE.MathUtils.lerp(massBounds.value.x, massBounds.value.y, progress);
+    }
     // OrbitControls emits "change" and renders through its registered listener.
     // A second synchronous render per animation frame would double GPU work.
     controls.update();
+    if (dashboardHalo?.visible && renderedFrames === before) render();
     previousVisibleRafTimestamp = renderedFrames > before
       ? recordVisibleRafInterval(visibleRafIntervals, previousVisibleRafTimestamp, timestamp)
       : null;
@@ -400,6 +411,7 @@ export function createAnatomyScene(
     // A hidden tab, paused rotation or WebGL context loss starts a new
     // observational interval rather than manufacturing a huge frame delay.
     previousVisibleRafTimestamp = null;
+    scanTimestamp = null;
     if (autoRotate && !document.hidden && !disposed && !contextUnavailable) raf = requestAnimationFrame(tick);
   };
   const setAutoRotate = (enabled: boolean) => {
@@ -409,6 +421,36 @@ export function createAnatomyScene(
     controls.autoRotate = autoRotate;
     controls.autoRotateSpeed = 0.9;
     updateAnimation();
+  };
+  // Dashboard-only decorative scanner. It never changes anatomy or measurements.
+  const setDashboardAnimation = (enabled: boolean) => {
+    const next = enabled && fitted && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (next && !dashboardHalo) {
+      dashboardHalo = new THREE.Group();
+      dashboardHalo.name = "Dashboard decorative scan halo";
+      const bounds = new THREE.Box3().setFromObject(root);
+      const size = bounds.getSize(new THREE.Vector3());
+      const radius = Math.max(Math.hypot(size.x, size.z) * 0.58, 0.22);
+      const addRing = (tube: number, color: number, opacity: number) => {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(radius, tube, 8, 96),
+          new THREE.MeshBasicMaterial({
+            color, transparent: true, opacity, depthWrite: false,
+            blending: THREE.AdditiveBlending, toneMapped: false,
+          }),
+        );
+        ring.rotation.x = Math.PI / 2;
+        dashboardHalo!.add(ring);
+      };
+      addRing(0.026, 0x0ea5e9, 0.14);
+      addRing(0.013, 0x22d3ee, 0.38);
+      addRing(0.004, 0xcffafe, 0.95);
+      dashboardHalo.position.set(massBounds.value.z, massBounds.value.y, massBounds.value.w);
+      scene.add(dashboardHalo);
+    }
+    if (dashboardHalo) dashboardHalo.visible = next;
+    setAutoRotate(next);
+    render();
   };
   const visibilityChange = () => updateAnimation();
   document.addEventListener("visibilitychange", visibilityChange);
@@ -861,6 +903,7 @@ export function createAnatomyScene(
     canvas.removeEventListener("keydown", keyboard);
     controls.dispose();
     restoreHighlight();
+    if (dashboardHalo) releaseRoot(dashboardHalo);
     for (const group of objects.values()) releaseRoot(group);
     for (const entry of lodEntries.values()) {
       entry.high.dispose();
@@ -980,5 +1023,5 @@ export function createAnatomyScene(
       resize();
     }
   };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
 }
