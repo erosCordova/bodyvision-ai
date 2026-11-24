@@ -15,9 +15,9 @@ const shortcuts=[
   {to:"/reports",symbol:"▧",title:"Reportes",detail:"Consultar informes"},
 ];
 
-function DashboardEvolution() {
+export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
   const { id, api } = useWorkspace();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [profileId, setProfileId] = useState("");
   const [metric, setMetric] = useState("weight");
   const [period, setPeriod] = useState("90d");
@@ -105,6 +105,13 @@ export function Dashboard() {
             <div className="product-shortcut-grid">{shortcuts.map(item=><Link to={item.to} key={item.to}>
               <span aria-hidden="true">{item.symbol}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div><span aria-hidden="true">↗</span>
             </Link>)}</div>
+          </section>
+          <section className="enterprise-panel enterprise-recent" aria-label="Expedientes recientes">
+            <div className="enterprise-panel-title"><h2>Expedientes recientes</h2><Link to="/profiles">Ver expedientes →</Link></div>
+            {query.isPending ? <LoadingState/> : query.isError || !data?.recent_profiles ? <p className="enterprise-hint">Expedientes recientes no disponibles.</p> : data.recent_profiles.length === 0 ? <EmptyState text="Aún no hay expedientes."/> :
+              <div className="enterprise-activity-list">{data.recent_profiles.map(row=><Link key={row.id} to={"/profiles/"+row.id} className="enterprise-activity-item">
+                <span aria-hidden="true">◉</span><div><strong>{row.display_code}</strong><small>{row.status==="active"?"Activo":row.status==="restricted"?"Restringido":"Archivado"}</small></div><time>{dateTime(row.created_at)}</time>
+              </Link>)}</div>}
           </section>
           <section className="enterprise-panel enterprise-recent product-recent">
             <div className="enterprise-panel-title"><h2>Actividad reciente</h2><Link to="/measurements">Ver todo →</Link></div>

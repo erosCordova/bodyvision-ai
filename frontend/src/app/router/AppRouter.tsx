@@ -4,6 +4,7 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { FoundationPage } from "../../features/foundation/FoundationPage";
 import { DataLayout } from "../layouts/DataLayout";
 import { Dashboard } from "../../features/dashboard/Dashboard";
+import { AnalyticsPage, ConsentsPage } from "../../features/analytics/DocumentModules";
 import { ProfilesPage } from "../../features/profiles/ProfilesPage";
 import { ProfileDetail } from "../../features/profiles/ProfileDetail";
 import { privateAuthEnabled, usePrivateAuth } from "../providers/PrivateAuthProvider";
@@ -41,6 +42,8 @@ function ApplicationRoutes() {
           <Route path="/measurements" element={<Suspense fallback={loading}><MeasurementsPage /></Suspense>} />
           <Route path="/capture" element={<Suspense fallback={loading}><CapturePage /></Suspense>} />
           <Route path="/analysis" element={<Suspense fallback={loading}><AnalysisPage /></Suspense>} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/consents" element={<ConsentsPage />} />
           <Route path="/reports" element={<Suspense fallback={loading}><ReportsPage /></Suspense>} />
           <Route path="/privacy" element={<Suspense fallback={loading}><PrivacyRequestsPage /></Suspense>} />
           <Route path="/administration" element={<Suspense fallback={loading}><AdministrationPage /></Suspense>} />

@@ -396,7 +396,18 @@ def summary(scope: Scope) -> dict:
         ),
         org,
     ).scalar_one()
+    recent_profiles = (
+        conn.execute(
+            text(
+                "SELECT id,display_code,status,created_at FROM profiles "
+                "WHERE organization_id=:org AND has_profile_access(id) "
+                "ORDER BY created_at DESC,id LIMIT 5"
+            ),
+            org,
+        ).mappings().all()
+    )
     return {
+        "recent_profiles": [dict(row) for row in recent_profiles],
         "outliers_30d": outliers,
         "restricted_profiles": restricted,
         "active_profiles": active,

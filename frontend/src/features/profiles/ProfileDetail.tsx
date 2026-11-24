@@ -119,6 +119,7 @@ export function ProfileDetail() {
                 : "Archivado"}{" "}
             · Organización ficticia
           </p>
+          {privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
           <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
             Abrir simulador 3D y escenarios ficticios →
           </Link>

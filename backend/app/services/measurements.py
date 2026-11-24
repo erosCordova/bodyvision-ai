@@ -1,6 +1,7 @@
 import hashlib
 import statistics
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -33,6 +34,12 @@ def validate(
             "VALIDATION_ERROR",
             "El valor está fuera del rango del catálogo.",
             {"min": float(metric["min_value"]), "max": float(metric["max_value"])},
+        )
+    precision = max(0, min(2, int(metric["precision"])))
+    if data.value != data.value.quantize(Decimal(1).scaleb(-precision)):
+        raise DomainError(
+            422, "VALIDATION_ERROR", "El valor excede la precisión del catálogo.",
+            {"precision": precision},
         )
     if data.method == "device" and not data.instrument:
         raise DomainError(422, "VALIDATION_ERROR", "Indica el instrumento utilizado.")

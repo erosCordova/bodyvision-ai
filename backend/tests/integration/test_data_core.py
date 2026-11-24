@@ -480,3 +480,20 @@ def test_profile_status_filter_and_workspace_isolation(client):
     assert combined["total"] >= 1
     assert len(combined["items"]) == 1
     assert client.get("/api/v1/profiles?status=unknown").status_code == 422
+
+
+def test_catalog_precision_is_enforced_by_api(client, monkeypatch):
+    from app.repositories import records
+
+    original = records.metrics
+
+    def configured_metrics(scope):
+        return [
+            {**item, "precision": 1} if item["code"] == "weight" else item
+            for item in original(scope)
+        ]
+
+    monkeypatch.setattr(records, "metrics", configured_metrics)
+    profile = new_profile(client)
+    assert post(client, profile, entry(70.12)).status_code == 422
+    assert post(client, profile, entry(70.1)).status_code == 201

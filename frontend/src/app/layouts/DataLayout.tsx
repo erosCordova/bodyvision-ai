@@ -11,6 +11,8 @@ const sections = [
   { route: "/capture", name: "Captura corporal", icon: "◫", short: "Captura" },
   { route: "/analysis", name: "Análisis IA", icon: "✧", short: "Análisis" },
   { route: "/body-3d", name: "Visión 3D", icon: "⬡", short: "Visión 3D" },
+  { route: "/analytics", name: "Analítica", icon: "⌁", short: "Analítica" },
+  { route: "/consents", name: "Consentimientos", icon: "◇", short: "Consentimiento" },
   { route: "/reports", name: "Reportes", icon: "▧", short: "Reportes" },
   { route: "/privacy", name: "Privacidad", icon: "◇", short: "Privacidad" },
   { route: "/administration", name: "Administración", icon: "⚙", short: "Ajustes" },

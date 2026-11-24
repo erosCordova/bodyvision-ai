@@ -24,16 +24,17 @@ export function HistoryChart({
       const time = Date.parse(row.measured_at);
       if (
         index &&
-        time - Date.parse(rows[index - 1].measured_at) > 48 * 3600000
+        (time - Date.parse(rows[index - 1].measured_at) > 48 * 3600000 ||
+          row.method !== rows[index - 1].method || row.unit !== rows[index - 1].unit)
       )
         data.push({
           time: (time + Date.parse(rows[index - 1].measured_at)) / 2,
           value: null,
         });
-      data.push({ time, value: row.value });
+      data.push({ time, value: row.unit === unit ? row.value : null });
     });
     return data;
-  }, [rows]);
+  }, [rows, unit]);
   if (!rows.length)
     return <EmptyState text="No hay mediciones en este periodo" />;
   const date = (value: number) =>
@@ -52,8 +53,7 @@ export function HistoryChart({
         <DataTypeBadge type="OBSERVADO" />
       </div>
       <p className="muted">
-        Los huecos se mantienen sin interpolación. Cada punto corresponde a una
-        medición vigente; consulta método y atípicos en la tabla.
+        Los huecos superiores a 48 horas y los cambios de método no se conectan. Cada punto corresponde a una medición vigente; consulta las fuentes en el historial.
       </p>
       <div
         className="chart"
