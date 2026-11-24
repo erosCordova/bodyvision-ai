@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { EmptyState, ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 import { ProfilePicker } from "../foundation/ModuleControls";
@@ -18,7 +18,8 @@ const shortcuts=[
 export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
   const { id, api } = useWorkspace();
   const [open, setOpen] = useState(initiallyOpen);
-  const [profileId, setProfileId] = useState("");
+  const [params]=useSearchParams();
+  const [profileId, setProfileId] = useState(params.get("profile")??"");
   const [metric, setMetric] = useState("body_fat_pct");
   const [period, setPeriod] = useState("90d");
   const profile = useQuery({
@@ -40,7 +41,7 @@ export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: 
   });
   return <section className="enterprise-panel product-evolution" aria-label="Evolución corporal">
     <div className="enterprise-panel-title"><h2>Evolución corporal</h2><DataTypeBadge type="OBSERVADO"/></div>
-    {!open ? <div className="product-evolution-body"><p className="enterprise-hint">Consulta la evolución de un expediente, sin mezclar personas ni unidades.</p><button type="button" className="secondary-button" onClick={()=>setOpen(true)}>Explorar evolución</button></div> :
+    {!open ? <div className="product-evolution-body"><button type="button" className="secondary-button" onClick={()=>setOpen(true)}>Explorar evolución</button></div> :
       <div className="product-evolution-body">
         <ProfilePicker selected={profile.data ?? null} selectedId={profileId} onChange={setProfileId}/>
         {!profileId ? <EmptyState text="Selecciona un expediente para consultar su evolución."/> :
@@ -54,7 +55,7 @@ export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: 
               <label>Periodo<select value={period} onChange={e=>setPeriod(e.target.value)}><option value="30d">30 días</option><option value="90d">90 días</option><option value="1a">1 año</option></select></label>
             </div>
             {series.isPending ? <LoadingState/> : series.isError ? <ErrorState error={series.error} retry={()=>void series.refetch()}/> : <Suspense fallback={<LoadingState/>}><HistoryChart rows={series.data} unit={chosen.unit}/></Suspense>}
-            <Link to={"/profiles/"+profileId+"?tab=analytics"}>Ver historial y fuentes →</Link>
+            <div className="bv-context-actions"><Link to={"/profiles/"+profileId+"?tab=analytics&metric=body_fat_pct"}>Historial →</Link><Link to={"/body-3d?panel=grasa&profile="+profileId}>Visor 3D →</Link></div>
           </>}
       </div>}
   </section>;
@@ -81,7 +82,7 @@ export function Dashboard() {
           <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
             <DashboardBodyPreview />
           </Suspense>
-          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link><Link className="secondary-button dashboard-fat-link" to="/body-3d?panel=grasa">Grasa corporal y mapa de calor ↗</Link></div>
+          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link><Link className="secondary-button dashboard-fat-link" to="/body-3d?panel=grasa">Grasa corporal ↗</Link></div>
         </section>
         <div className="product-dashboard-side">
           <section className="product-metrics" aria-label="Indicadores reales de la organización ficticia">
@@ -97,7 +98,7 @@ export function Dashboard() {
               <div className="dashboard-alert-items">
                 <Link to="/measurements"><span>Valores atípicos confirmados · 30 días</span><strong>{data.outliers_30d}</strong></Link>
                 <Link to="/profiles?status=restricted"><span>Expedientes restringidos</span><strong>{data.restricted_profiles}</strong></Link>
-                <small>Indicadores de seguimiento; no son alertas clínicas.</small>
+                <small>No son alertas clínicas.</small>
               </div>}
           </section>
           <section className="enterprise-panel product-shortcuts">
@@ -122,7 +123,7 @@ export function Dashboard() {
           </section>
         </div>
       </div>
-      <DashboardEvolution key={id}/>
+      <DashboardEvolution key={id} initiallyOpen/>
     </div>
   );
 }

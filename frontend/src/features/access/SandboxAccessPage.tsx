@@ -66,9 +66,9 @@ export function SandboxAccessPage() {
     </header>
     <div className="bv-access-layout">
       <section className="bv-access-showcase" aria-label="BodyVision AI">
-        <div className="bv-access-hero-copy"><p className="bv-access-kicker">ANÁLISIS CORPORAL INTELIGENTE</p><h1>El cuerpo humano,<br/>en otra dimensión<span>.</span></h1><p>Explora la anatomía 3D, la composición corporal y su evolución en un solo espacio.</p></div>
+        <div className="bv-access-hero-copy"><h1>Tu evolución,<br/>en 3D<span>.</span></h1><p>Composición corporal y seguimiento físico.</p></div>
         <AccessVisual/>
-        <div className="bv-access-visual-caption"><span><AccessIcon name="scan"/> Atlas anatómico interactivo</span><span>MODELO EDUCATIVO</span></div>
+        <div className="bv-access-visual-caption"><span><AccessIcon name="scan"/> Atlas anatómico interactivo</span></div>
       </section>
       <main className="bv-access-card">
         {session?<><div className="bv-access-card-icon"><AccessIcon name="shield"/></div><h2>Sesión activa</h2><p className="bv-access-subtitle">Tu espacio de trabajo está listo.</p><Link className="bv-access-primary" to="/">Abrir dashboard <AccessIcon name="arrow"/></Link><button type="button" className="bv-access-switch" onClick={()=>void logout().then(ok=>{if(!ok)setError("No se confirmó la revocación remota.");})}>Cerrar sesión</button></>:<>

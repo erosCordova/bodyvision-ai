@@ -1,17 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../providers/WorkspaceProvider";
-import { privateAuthEnabled, sessionRequired, usePrivateAuth } from "../providers/PrivateAuthProvider";
+import { privateAuthEnabled, sandboxAuthEnabled, sessionRequired, usePrivateAuth } from "../providers/PrivateAuthProvider";
 import "../../styles/enterprise.css";
 
 const sections = [
-  { route: "/", name: "Dashboard", icon: "▦", short: "Inicio" },
+  { route: "/", name: "Resumen", icon: "▦", short: "Inicio" },
   { route: "/profiles", name: "Expedientes", icon: "▤", short: "Expedientes" },
   { route: "/measurements", name: "Mediciones", icon: "▥", short: "Mediciones" },
   { route: "/capture", name: "Captura corporal", icon: "◫", short: "Captura" },
   { route: "/analysis", name: "Análisis IA", icon: "✧", short: "Análisis" },
   { route: "/body-3d", name: "Visión 3D", icon: "⬡", short: "Visión 3D" },
-  { route: "/analytics", name: "Analítica", icon: "⌁", short: "Analítica" },
+  { route: "/analytics", name: "Evolución", icon: "⌁", short: "Analítica" },
   { route: "/consents", name: "Consentimientos", icon: "◇", short: "Consentimiento" },
   { route: "/reports", name: "Reportes", icon: "▧", short: "Reportes" },
   { route: "/privacy", name: "Privacidad", icon: "◇", short: "Privacidad" },
@@ -24,6 +25,9 @@ export function DataLayout() {
   const protectedMode = sessionRequired();
   const navigate = useNavigate();
   const location = useLocation();
+  const [mobileMenu,setMobileMenu]=useState(false);
+  const selectedProfile=location.pathname.match(/^\/profiles\/([^/]+)$/)?.[1]??new URLSearchParams(location.search).get("profile")??"";
+  const scopedPath=(route:string)=>selectedProfile&&["/capture","/analysis","/analytics","/reports","/body-3d"].includes(route)?route+"?"+new URLSearchParams({profile:selectedProfile,...(route==="/body-3d"?{panel:"grasa"}:{})}):route;
   const workspaces = useQuery({
     queryKey: ["workspaces", protectedMode ? session?.organization_id : "demo", protectedMode ? session?.user_id : "demo"],
     queryFn: api.workspaces,
@@ -38,38 +42,37 @@ export function DataLayout() {
   return (
     <div className="data-shell enterprise-shell">
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
-      <aside className="data-sidebar enterprise-sidebar">
+      <aside className={"data-sidebar enterprise-sidebar"+(mobileMenu?" mobile-open":"")}>
         <Link to={privacyOnly ? "/privacy" : "/"} className="brand enterprise-brand">
           <span className="brand-mark" aria-hidden="true">⌘</span>
-          <span>BODYVISION <strong>AI</strong><small>Plataforma de análisis corporal</small></span>
+          <span>BODYVISION <strong>AI</strong></span>
         </Link>
-        <p className="nav-label">ESPACIO DE TRABAJO</p>
-        <nav aria-label="Navegación principal">
-          {sections.filter(section => privacyOnly ? section.route === "/privacy" :
-            section.route !== "/privacy" || privateAuthEnabled()).map(section => (
-            <NavLink to={section.route} key={section.route} end={section.route === "/"}
-              className={({ isActive }) => isActive ? "active" : undefined} title={section.name}>
-              <span className="enterprise-icon" aria-hidden="true">{section.icon}</span>
-              <span className="enterprise-nav-label">{section.name}</span>
-            </NavLink>
-          ))}
+        <button type="button" className="bv-mobile-menu" aria-expanded={mobileMenu} aria-controls="bv-main-nav" onClick={()=>setMobileMenu(v=>!v)}>{mobileMenu?"Cerrar menú":"Menú"} <span aria-hidden="true">{mobileMenu?"×":"☰"}</span></button>
+        <nav id="bv-main-nav" aria-label="Navegación principal">
+          {[
+            {label:"Seguimiento",routes:["/","/profiles","/measurements","/analytics"]},
+            {label:"Evaluación",routes:["/capture","/analysis","/body-3d","/reports"]},
+            {label:"Configuración",routes:["/consents","/privacy","/administration"]},
+          ].map(group=>{
+            const items=group.routes.map(route=>sections.find(s=>s.route===route)!).filter(section=>privacyOnly?section.route==="/privacy":(section.route!=="/privacy"||privateAuthEnabled())&&(section.route!=="/consents"||!sandboxAuthEnabled()));
+            return items.length>0&&<div className="bv-nav-group" key={group.label}><p className="nav-label">{group.label}</p>{items.map(section=><NavLink to={scopedPath(section.route)} key={section.route} end={section.route==="/"} onClick={()=>setMobileMenu(false)} className={({isActive})=>isActive?"active":undefined}><span className="enterprise-icon" aria-hidden="true">{section.icon}</span><span className="enterprise-nav-label">{section.name}</span></NavLink>)}</div>;
+          })}
         </nav>
         <div className="enterprise-sidebar-bottom">
           <div className="enterprise-workspace-hint">
             <span className="enterprise-demo-dot" />
-            <strong>ENTORNO FICTICIO</strong>
-            <small>{protectedMode ? "Sesión privada de pruebas" : readOnly ? "Consulta de demostración" : "Operación local de prueba"}</small>
+            <strong>Espacio de pruebas</strong>
           </div>
-          <Link to="/access" className="enterprise-security-link">♙ Acceso y seguridad</Link>
+          <Link to="/access" className="enterprise-security-link">♙ Mi cuenta</Link>
           
         </div>
       </aside>
       <div className="data-workspace enterprise-workspace">
         <header className="data-topbar enterprise-topbar">
-          <div className="enterprise-crumbs"><span>BODYVISION AI</span><span>›</span><strong>{current.name}</strong></div>
+          <div className="enterprise-crumbs"><strong>{current.name}</strong></div>
           <div className="enterprise-topbar-end">
 
-            <label>
+            {!protectedMode&&<label>
               <span className="sr-only">Organización ficticia</span>
               <select aria-label="Organización ficticia" value={id}
                 onChange={event => { setId(event.target.value); navigate("/"); }}
@@ -79,7 +82,7 @@ export function DataLayout() {
                 )}
                 {workspaces.data?.items.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
-            </label>
+            </label>}
             {!protectedMode && <Link to="/access" className="enterprise-mobile-access">Acceso</Link>}
             {protectedMode && session && (
               <button type="button" className="enterprise-logout-button"
@@ -94,10 +97,9 @@ export function DataLayout() {
           </div>
         </header>
         <div className="enterprise-demo-banner">
-          <strong>{protectedMode ? "DATOS FICTICIOS · SESIÓN PRIVADA" : readOnly ? "DEMOSTRACIÓN · SOLO LECTURA" : "DATOS FICTICIOS"}</strong>
+          <strong>{readOnly?"Solo lectura":"Datos ficticios"}</strong>
           <span>
-            {protectedMode ? "No introduzcas información personal real." : readOnly ? "Consulta de ejemplo. No apta para uso clínico." :
-              "No introduzcas información personal real."}
+            No introducir datos personales reales.
           </span>
           {workspaces.isError && <button onClick={() => void workspaces.refetch()}>Reintentar conexión</button>}
         </div>
@@ -111,8 +113,7 @@ export function DataLayout() {
           <Outlet />
         </main>
         <footer className="enterprise-footer">
-          <span>© BODYVISION AI</span>
-          <span>No apto para uso clínico.</span>
+          <span>BodyVision AI · No apto para uso clínico</span>
         </footer>
       </div>
     </div>

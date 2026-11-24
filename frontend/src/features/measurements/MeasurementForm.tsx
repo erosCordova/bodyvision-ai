@@ -174,8 +174,7 @@ export function MeasurementForm({
     >
       <DataTypeBadge type="OBSERVADO" />
       <p className="muted">
-        Introduce únicamente valores ficticios observados. Una corrección
-        conserva la versión anterior.
+        {correction?"La versión anterior se conserva.":"Solo mediciones ficticias."}
       </p>
       <form
         onSubmit={form.handleSubmit(submit)}
@@ -220,7 +219,7 @@ export function MeasurementForm({
               ))}
           </select>
         </label>
-        <p className="muted">{metric?.instructions}</p>
+        {metric?.instructions&&<details className="bv-secondary-details"><summary>Cómo medir</summary><p className="muted">{metric.instructions}</p></details>}
         <div className="form-grid">
           <div className="measurement-value-field">
             <label htmlFor="measurement-value">Valor ({metric?.unit})</label>

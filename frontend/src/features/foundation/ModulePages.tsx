@@ -16,10 +16,10 @@ import { PrivateAdministrationPage } from "../access/PrivateAdministrationPage";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 
 function PageTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return <div className="enterprise-page-head"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div></div>;
+  return <div className="enterprise-page-head"><div>{eyebrow&&<p className="eyebrow">{eyebrow}</p>}<h1>{title}</h1>{description&&<p>{description}</p>}</div></div>;
 }
 function Limitation({ children }: { children: ReactNode }) {
-  return <div className="enterprise-limit"><strong>Información</strong><p>{children}</p></div>;
+  return <div className="enterprise-limit"><p>{children}</p></div>;
 }
 export function MeasurementsPage() {
   const { id, api } = useWorkspace();
@@ -28,7 +28,7 @@ export function MeasurementsPage() {
   const profiles = useQuery({ queryKey: ["profiles", id, "measurements", search, offset], queryFn: () => api.profiles(search, offset) });
   const metrics = useQuery({ queryKey: ["catalog", id], queryFn: api.catalog });
   return <div className="enterprise-module">
-    <PageTitle eyebrow="MEDICIONES" title="Registro de mediciones" description="Consulta y registra medidas corporales." />
+    <PageTitle eyebrow="" title="Mediciones" description=""/>
     <div className="enterprise-module-columns">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Selecciona un expediente</h2><Link to="/profiles">Ver todos →</Link></div>
@@ -42,10 +42,10 @@ export function MeasurementsPage() {
         {profiles.data && <ProfilePicker.Pagination page={profiles.data} onChange={setOffset} label="Páginas de expedientes de mediciones" />}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
-        <h2>Catálogo de medición</h2>
+        <details><summary>Mediciones disponibles</summary>
         {metrics.isPending ? <p className="enterprise-hint">Cargando métricas…</p> : metrics.isError ? <ErrorState error={metrics.error} retry={()=>void metrics.refetch()}/> :
         <div className="enterprise-metric-list">{metrics.data.map(metric=><div key={metric.code}><strong>{metric.label}</strong><span>{metric.unit} · {metric.allowed_methods.map(method=>method==="manual"?"Manual":"Dispositivo").join(", ")}</span><small>Rango: {metric.min_value}–{metric.max_value} {metric.unit} · {metric.precision} decimales</small></div>)}</div>}
-        <Limitation>Selecciona un expediente para registrar mediciones.</Limitation>
+        </details><Limitation>Selecciona un expediente para registrar mediciones.</Limitation>
       </aside>
     </div>
   </div>;
@@ -196,16 +196,16 @@ export function CapturePage() {
     event.target.value = "";
   };
   return <div className="enterprise-module">
-    <PageTitle eyebrow="CAPTURA GUIADA" title="Captura corporal" description="Selecciona una imagen ficticia y revisa su calidad."/>
+    <PageTitle eyebrow="" title="Captura corporal" description=""/>
     <div className="enterprise-capture-grid">
       <section className="enterprise-panel enterprise-module-main">
-        <div className="enterprise-panel-title"><h2>Guía de toma fotográfica</h2><span>RECOMENDACIONES</span></div>
-        <div className="enterprise-capture-steps">
+        <div className="enterprise-panel-title"><h2>Añadir fotografía</h2></div>
+        <details className="bv-secondary-details"><summary>Recomendaciones para la foto</summary><div className="enterprise-capture-steps">
           <article><span>01</span><div><h3>Consentimiento</h3><p>Utiliza imágenes ficticias y confirma tu consentimiento.</p></div></article>
           <article><span>02</span><div><h3>Postura y encuadre</h3><p>Cuerpo entero, brazos separados y fondo despejado.</p></div></article>
           <article><span>03</span><div><h3>Iluminación y resolución</h3><p>Buena iluminación, sin filtros ni recortes.</p></div></article>
           <article><span>04</span><div><h3>Revisión y trazabilidad</h3><p>Revisa la calidad antes de continuar.</p></div></article>
-        </div>
+        </div></details>
         <label className="enterprise-consent"><input type="checkbox" checked={consent} onChange={e => {
           setConsent(e.target.checked);
           if (!e.target.checked) {
@@ -217,13 +217,13 @@ export function CapturePage() {
           <span>Confirmo que utilizaré exclusivamente imágenes ficticias. La revisión es local.</span>
         </label>
         <label className={"enterprise-upload" + (consent ? "" : " disabled")}>
-          <span>＋</span><strong>Seleccionar imagen para revisión local</strong><small>JPG, PNG o WebP · hasta 10 MB</small>
+          <span>＋</span><strong>Seleccionar imagen</strong><small>JPG, PNG o WebP · hasta 10 MB</small>
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!consent} onChange={fileChange}/>
         </label>
         <div className="enterprise-camera-controls">
           {!cameraOn ? (
             <button type="button" className="secondary-button" disabled={!consent || cameraPending}
-              onClick={() => void openCamera()}>{cameraPending ? "Solicitando permiso…" : "Abrir cámara local"}</button>
+              onClick={() => void openCamera()}>{cameraPending ? "Solicitando permiso…" : "Abrir cámara"}</button>
           ) : (
             <div className="enterprise-camera-session">
               <video ref={videoRef} playsInline muted autoPlay
@@ -249,18 +249,17 @@ export function CapturePage() {
           {isReviewing && <p role="status" className="enterprise-quality-note">Revisando la calidad localmente…</p>}
           {validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
           {review && !isReviewing && <div className="enterprise-quality-review" role="region" aria-label="Resultados de calidad local">
-            <h3>Revisión automática de calidad</h3>
-            <p className="enterprise-file-detail">{review.width} × {review.height} px · Brillo {review.averageBrightness}/255 · Contraste {review.contrast}/128</p>
+            <h3>Calidad de imagen</h3>
             <p role="status" className="enterprise-quality-note">{review.passed
               ? "Sin alertas técnicas básicas. La postura y la presencia de un cuerpo NO se han comprobado."
               : "Se encontraron condiciones que conviene mejorar antes de una futura estimación de pose."}</p>
-            <ul>{review.checks.map(check => <li key={check.id}>
+            <details className="bv-secondary-details"><summary>Ver criterios de calidad</summary><ul>{review.checks.map(check => <li key={check.id}>
               <strong>{check.passed ? "✓" : "!"} {check.label}</strong>
               <span>{check.detail}</span>
-            </li>)}</ul>
-            <Link className="secondary-button" to="/analysis" state={{ localCaptureReview: review }}
+            </li>)}</ul></details>
+            <Link className="secondary-button" to={"/analysis"+window.location.search} state={{ localCaptureReview: review }}
               onClick={() => stageCaptureForAnalysis(file, review)}>
-              Ver control de calidad en el módulo de análisis
+              Abrir análisis IA
             </Link>
           </div>}
           {sandboxAuthEnabled() && consent && review && !isReviewing && <AutomaticPosePreview file={file}/>}
@@ -388,7 +387,7 @@ export function ReportsPage() {
     window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   return <div className="enterprise-module">
-    <PageTitle eyebrow="INFORMES" title="Reportes corporales" description="Consulta y exporta mediciones corporales."/>
+    <PageTitle eyebrow="" title="Reportes" description=""/>
     <section className="enterprise-panel enterprise-report-builder">
       <div><h2>Preparar informe</h2><ProfilePicker selected={current ?? null} selectedId={profileId}
         onChange={next=>{setProfileId(next);setOffset(0);}} />
@@ -425,7 +424,7 @@ export function ReportsPage() {
 export function AdministrationPage() {
   if (privateAuthEnabled()) return <PrivateAdministrationPage />;
   return <div className="enterprise-module">
-    <PageTitle eyebrow="ADMINISTRACIÓN" title="Administración y seguridad" description="Gestiona el acceso y la privacidad."/>
+    <PageTitle eyebrow="" title="Ajustes y seguridad" description=""/>
     <div className="enterprise-admin-grid">
       {[
         ["Usuarios y roles","Administrador, especialista y usuario final. Permisos granulares por expediente.","SOLO ACCESO PRIVADO"],

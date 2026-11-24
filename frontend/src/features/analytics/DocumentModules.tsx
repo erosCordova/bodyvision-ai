@@ -10,7 +10,7 @@ import { ErrorState, LoadingState } from "../../components/ui/States";
 
 export function AnalyticsPage() {
   return <div className="enterprise-module">
-    <div className="enterprise-page-head"><h1>Analítica corporal</h1></div>
+    <div className="enterprise-page-head"><h1>Evolución corporal</h1></div>
     <DashboardEvolution initiallyOpen/>
   </div>;
 }

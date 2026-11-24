@@ -41,7 +41,7 @@ export function ProfilesPage() {
     }, { replace: true });
   };
   const [offset, setOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(params.get("new")==="1"&&!readOnly);
   const query = useQuery({
     queryKey: ["profiles", id, search, offset, status],
     queryFn: () => api.profiles(search.trim(), offset, status),
@@ -63,12 +63,7 @@ export function ProfilesPage() {
     <>
       <div className="data-heading">
         <div>
-          <p className="eyebrow">REGISTRO CORPORAL</p>
           <h1>Expedientes</h1>
-          <p className="intro">
-            Datos mínimos y una historia de mediciones para cada expediente
-            ficticio.
-          </p>
         </div>
         <button
           className="primary-button"
@@ -113,7 +108,7 @@ export function ProfilesPage() {
       )}
       <div className="profiles-toolbar">
       <label className="search-label">
-        Buscar por código o referencia
+        Buscar
         <input
           type="search"
           maxLength={100}
@@ -125,7 +120,7 @@ export function ProfilesPage() {
           placeholder="Buscar expediente ficticio…"
         />
       </label>
-      <label>Estado del expediente
+      <label>Estado
         <select value={status ?? ""} onChange={e=>changeStatus(e.target.value)}>
           <option value="">Todos los estados</option>
           <option value="active">Activos</option>
@@ -165,18 +160,18 @@ export function ProfilesPage() {
                         : "Archivado"}
                   </span>
                   <span className="profile-symbol" aria-hidden="true">
-                    ◉
+                    {(p.display_name||p.display_code).slice(0,2).toUpperCase()}
                   </span>
                   <h2>{p.display_name || p.display_code}</h2>
                   <p>{p.display_code}</p>
                   <small>Año de nacimiento: {p.birth_year}</small>
-                  <small>Registro: {dateTime(p.created_at)}</small>
+                  <small>{dateTime(p.created_at)}</small>
                   <span className="open-record">Abrir expediente →</span>
                 </Link>
               ))}
             </div>
           )}
-          <div className="pagination">
+          {query.data.total>query.data.limit&&<div className="pagination">
             <span role="status">{query.data.total ? `${query.data.offset + 1}–${query.data.offset + query.data.items.length} de ${query.data.total}` : "0"} expedientes</span>
             <button
               disabled={offset === 0}
@@ -190,7 +185,7 @@ export function ProfilesPage() {
             >
               Siguiente
             </button>
-          </div>
+          </div>}
         </>
       )}
     </>

@@ -18,7 +18,7 @@ export function ErrorState({
       <h2>No se pudo cargar la información</h2>
       <p>{error?.message}</p>
       {error instanceof ApiError && (
-        <p className="reference">Referencia: {error.correlationId}</p>
+        <details className="reference"><summary>Referencia de soporte</summary>{error.correlationId}</details>
       )}
       <button onClick={retry}>Reintentar</button>
     </div>
@@ -29,7 +29,7 @@ export function EmptyState({ text }: { text: string }) {
     <div className="panel state empty">
       <span aria-hidden="true">▱</span>
       <h2>{text}</h2>
-      <p>Los registros aparecerán aquí cuando los añadas.</p>
+
     </div>
   );
 }

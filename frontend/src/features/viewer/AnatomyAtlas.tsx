@@ -973,7 +973,7 @@ export function AnatomyAtlas() {
                 <ErrorState error={fatProfile.error} retry={()=>void fatProfile.refetch()}/> :
                 fatMeasurements.isPending ? <LoadingState/> : fatMeasurements.isError ?
                 <ErrorState error={fatMeasurements.error} retry={()=>void fatMeasurements.refetch()}/> : null)}
-              {!fatProfileId&&<Link className="studio-inline-link" to="/profiles">+ Crear expediente</Link>}
+              {!fatProfileId&&<Link className="studio-inline-link" to="/profiles?new=1">+ Crear expediente</Link>}
               <div className="studio-composition-grid">
                 <div><span>Peso</span><strong>{latestWeight?latestWeight.value:"—"} <small>kg</small></strong></div>
                 <div><span>Estatura</span><strong>{latestHeight?latestHeight.value:"—"} <small>cm</small></strong></div>

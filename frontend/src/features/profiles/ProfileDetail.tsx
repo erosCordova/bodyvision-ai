@@ -118,16 +118,16 @@ export function ProfileDetail() {
               : current.status === "restricted"
                 ? "Restringido"
                 : "Archivado"}{" "}
-            · Organización ficticia
+            
           </p>
-          {privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
+          <div className="bv-context-actions">{privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
           {sandboxAuthEnabled() && <Link className="back-link" to={`/analysis?profile=${profileId}`}>Analizar imágenes →</Link>}
           <Link className="back-link" to={`/body-3d?panel=grasa&profile=${profileId}`}>
             Visor 3D →
           </Link>
           <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
-            Abrir simulador →
-          </Link>
+            Simular →
+          </Link></div>
         </div>
         <button
           className="primary-button"
@@ -137,9 +137,7 @@ export function ProfileDetail() {
           + Registrar medición
         </button>
       </div>
-      <p className="success-notice" role="status" aria-live="polite">
-        {notice}
-      </p>
+      {notice&&<p className="success-notice" role="status" aria-live="polite">{notice}</p>}
       <nav className="record-tabs" aria-label="Secciones del expediente">
         {[
           ["summary", "Resumen"],
