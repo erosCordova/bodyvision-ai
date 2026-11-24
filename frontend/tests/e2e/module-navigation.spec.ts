@@ -58,3 +58,29 @@ test("mobile navigation keeps account entry accessible", async ({page}) => {
   await page.getByRole("link",{name:/Entrar a la demostración/}).click();
   await expect(page.getByRole("heading",{name:"Dashboard general"})).toBeVisible();
 });
+
+test("camera permission can be cancelled without reactivating the camera", async ({page}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+      configurable: true,
+      value: () => new Promise<MediaStream>(resolve => {
+        Object.assign(window, { finishCamera: () => {
+          const canvas=document.createElement("canvas");
+          const stream=canvas.captureStream();
+          resolve(stream);
+          Object.assign(window,{ testCameraTracks:stream.getTracks() });
+        } });
+      }),
+    });
+  });
+  await page.goto("/capture");
+  await page.getByRole("checkbox",{name:/Confirmo que utilizaré exclusivamente imágenes ficticias/}).check();
+  await page.getByRole("button",{name:"Abrir cámara local"}).click();
+  await page.getByRole("button",{name:"Cancelar solicitud de cámara"}).click();
+  await page.evaluate(()=> (window as unknown as {finishCamera:()=>void}).finishCamera());
+  await expect.poll(()=>page.evaluate(()=>
+    (window as unknown as {testCameraTracks:MediaStreamTrack[]}).testCameraTracks.every(t=>t.readyState==="ended"),
+  )).toBe(true);
+  await expect(page.getByRole("button",{name:"Abrir cámara local"})).toBeEnabled();
+  await expect(page.locator("video")).toHaveCount(0);
+});
