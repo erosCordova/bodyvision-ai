@@ -7,6 +7,7 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.access_tokens import decode_signing_key
+from app.services.report_signatures import decode_report_signing_key
 
 
 class Settings(BaseSettings):
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
     jwt_access_enabled: bool = False
     jwt_signing_key: SecretStr | None = None
     mfa_encryption_key: SecretStr | None = None
+    report_signing_key: SecretStr | None = None
     capture_encryption_key: SecretStr | None = None
     capture_decryption_keys: list[SecretStr] = []
     capture_retention_interval_seconds: int = 900
@@ -82,6 +84,10 @@ class Settings(BaseSettings):
                 == self.capture_encryption_key.get_secret_value()
             ):
                 raise ValueError("JWT and capture signing secrets must differ")
+        if self.report_signing_key is not None:
+            if not self.identity_enabled or self.app_env not in {"local", "test"}:
+                raise ValueError("Report signatures require private local/test identity")
+            decode_report_signing_key(self.report_signing_key.get_secret_value())
         if self.mfa_enabled:
             if not self.identity_enabled or self.mfa_encryption_key is None:
                 raise ValueError(
