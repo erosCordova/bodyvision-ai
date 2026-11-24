@@ -122,7 +122,9 @@ def test_optional_signed_report_receipts_are_scoped_and_independently_verifiable
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes_raw()
     monkeypatch.setattr(
-        client.app.state.settings, "report_signing_key", SecretStr(private.private_bytes_raw().hex())
+        client.app.state.settings,
+        "report_signing_key",
+        SecretStr(private.private_bytes_raw().hex()),
     )
     outsider = headers(authenticate(client, users[2][0], users[2][1]).json()["token"])
     for suffix, selection, field, id_field in (
