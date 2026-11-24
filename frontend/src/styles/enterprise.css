@@ -377,3 +377,20 @@
 .enterprise-idle-warning button{background:#f8dfac;border:1px solid #d4a856;
   color:#3d2a11;border-radius:7px;padding:9px 12px;font-weight:750;cursor:pointer}
 .enterprise-idle-warning button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+
+/* Shared functional navigation and bounded report selectors. */
+.enterprise-mobile-access{display:none}
+.module-profile-picker{display:grid;gap:12px;min-width:0}
+.module-profile-picker label{display:grid;gap:7px;min-width:0}
+.module-profile-picker input,.module-profile-picker select{width:100%;min-width:0}
+.module-pagination{align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:8px;margin:12px 0}
+.module-pagination span{font-size:12px;color:#a7bed8}
+@media(max-width:700px){
+  .enterprise-mobile-access{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:7px 10px;border:1px solid #345677;border-radius:7px;font-size:11px;color:#d9e8f6}
+  .enterprise-topbar{flex-wrap:wrap}
+  .enterprise-topbar-end{flex-wrap:wrap;max-width:100%}
+  .enterprise-report-builder{min-width:0}
+}
+@media print{
+  .module-pagination,.module-profile-picker{display:none!important}
+}
