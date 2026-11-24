@@ -401,10 +401,10 @@ export function AnatomyAtlas() {
 
   useEffect(() => controller.current?.update(new Set(visible), opacity), [visible, opacity, restart]);
   useEffect(() => controller.current?.setRenderMode(mode), [mode, restart]);
-  const fatHeatActive = panel==="grasa" && fatHeat && displayedFat!==null && mode==="realista" &&
+  const fatHeatActive = panel==="grasa" && fatHeat && mode==="realista" &&
     visible.length===1 && visible[0]==="skin" && opacity.skin===1 && !isolated && !comparison &&
     weightVariation===0 && statureCm===BASELINE_HEIGHT_CM && referenceKg===70;
-  useEffect(()=>controller.current?.setBodyFatColor(fatHeatActive && displayedFat!==null ? fatScaleColor(displayedFat) : null),
+  useEffect(()=>controller.current?.setBodyFatThermal(fatHeatActive, displayedFat),
     [fatHeatActive,displayedFat,restart]);
   useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
@@ -811,6 +811,7 @@ export function AnatomyAtlas() {
 
         <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")} data-fat-heat={fatHeatActive && !error && layerStates.skin==="ready" ? "active":"inactive"}>
           <div className="studio-canvas" ref={host} />
+          {fatHeatActive && !error && <div className="studio-thermal-key" aria-label="Vista térmica ilustrativa"><strong>{displayedFat===null?"Sin medición":displayedFat.toLocaleString("es-PE",{maximumFractionDigits:2})+" %"}</strong><small>{fatSimulation!==null?"SIMULADO":latestFat?"OBSERVADO · TOTAL":"PATRÓN VISUAL"}</small><div className="studio-thermal-ramp"/><small>Color ilustrativo, no grasa localizada</small></div>}
           {comparison && !error && (
             <div className="studio-compare" aria-label="Comparación dividida del mismo modelo 3D">
               <div className="studio-compare-divider" style={{ left: `${comparisonDivider}%` }} />
@@ -832,7 +833,7 @@ export function AnatomyAtlas() {
           )}
           <div className="studio-view-top">
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
-            <span>{fatHeatActive ? "COLOR GLOBAL · "+(fatSimulation===null?"OBSERVADO":"SIMULADO")+" · "+displayedFat+" %" : "MODELO EDUCATIVO"}</span>
+            <span>{fatHeatActive ? "VISTA TÉRMICA ILUSTRATIVA" : "MODELO EDUCATIVO"}</span>
           </div>
           {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado" data-rendered-frames={renderStats.renderedFrames}>
             <strong>Diagnóstico de visualización</strong>
@@ -973,12 +974,12 @@ export function AnatomyAtlas() {
                 </>}
               </div>
               <label className="studio-fat-toggle"><input type="checkbox" checked={fatHeat} onChange={event=>setFatHeat(event.target.checked)}/> Mostrar vista de calor</label>
-              <div className="studio-fat-legend" aria-label="Escala cromática global de 0 a 100 por ciento">
-                <div/><span>0 %</span><span>50 %</span><span>100 %</span>
+              <div className="studio-fat-legend" aria-label="Paleta térmica ilustrativa, sin valores regionales">
+                <div/><span>Frío visual</span><span>Cálido visual</span>
               </div>
-              <p>Color global ilustrativo del porcentaje total. No representa grasa por regiones, temperatura ni categorías clínicas.</p>
-              {fatHeat && displayedFat!==null && !fatHeatActive && <p role="status">Para ver el color global, restaura la superficie original sin comparación ni cambios de peso o estatura.</p>}
-              {fatHeat && displayedFat!==null && !fatHeatActive && <button type="button" onClick={()=>{resetSimulation();openFat();}}>Restaurar superficie para mapa</button>}
+              <p>Patrón térmico ilustrativo sobre la malla 3D. El porcentaje es corporal total; los colores no miden grasa por zonas ni temperatura.</p>
+              {fatHeat && !fatHeatActive && <p role="status">Para ver el mapa térmico, restaura la superficie original sin comparación ni cambios de peso o estatura.</p>}
+              {fatHeat && !fatHeatActive && <button type="button" onClick={()=>{resetSimulation();openFat();}}>Restaurar superficie para mapa</button>}
             </section>}
             {panel === "simulacion" && (
               <div className="studio-simulation">

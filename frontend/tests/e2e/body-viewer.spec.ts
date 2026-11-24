@@ -1586,7 +1586,7 @@ test("fat heat view uses an observed instrument reading and keeps hypothetical v
   await page.getByRole("button",{name:"Crear escenario ilustrativo"}).click();
   await page.getByRole("slider",{name:/Porcentaje hipotético/}).fill("35");
   await expect(page.getByRole("meter",{name:"Porcentaje de grasa corporal observado"})).toHaveAttribute("aria-valuenow","23.4");
-  await expect(viewport(page)).toContainText("SIMULADO");
+  await expect(viewport(page).getByLabel("Vista térmica ilustrativa")).toContainText("SIMULADO");
   await page.getByRole("checkbox",{name:"Mostrar vista de calor"}).uncheck();
   await expect(viewport(page)).toHaveAttribute("data-fat-heat","inactive");
 });
@@ -1601,4 +1601,13 @@ test("fat panel is discoverable without horizontal toolbar scrolling",async({pag
   await entry.click();
   await expect(page.getByRole("heading",{name:"Grasa corporal",exact:true})).toBeVisible();
   await expect(page.getByText("Sin registro",{exact:true})).toBeVisible();
+});
+
+
+test("thermal style is available without inventing a fat measurement",async({page})=>{
+  await sourceFixtures(page);
+  await page.goto("/body-3d?panel=grasa");
+  await expect(viewport(page)).toHaveAttribute("data-fat-heat","active",{timeout:60000});
+  await expect(viewport(page).getByLabel("Vista térmica ilustrativa")).toContainText("Sin medición");
+  await expect(page.getByRole("meter",{name:"Porcentaje de grasa corporal observado"})).toHaveCount(0);
 });

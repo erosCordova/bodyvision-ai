@@ -86,6 +86,7 @@ const BODYVOLUME_NORMAL = `
 function attachBodyVolume(
   material: THREE.Material, layer: AnatomicalLayer,
   volume: { value: number }, bounds: { value: THREE.Vector4 },
+  thermal?: { enabled: { value: number }; percentage: { value: number } },
 ) {
   const strength = layer === "skin" ? 1 : layer === "muscles" ? 0.18 : 0;
   // No morph shader for hard anatomical structures, which must remain fixed.
@@ -102,8 +103,47 @@ uniform float uBVStrength;
 ${SOFT_TISSUE_PROFILE_GLSL}`)
       .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\n" + BODYVOLUME_NORMAL)
       .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + BODYVOLUME_VERTEX);
+    if (thermal && layer === "skin") {
+      shader.uniforms.uBVThermalEnabled = thermal.enabled;
+      shader.uniforms.uBVThermalPercentage = thermal.percentage;
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vBVThermalPosition;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBVThermalPosition = (modelMatrix * vec4(position, 1.0)).xyz;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>
+varying vec3 vBVThermalPosition;
+uniform vec4 uBVBounds;
+uniform float uBVThermalEnabled;
+uniform float uBVThermalPercentage;
+// Decorative false-color palette; spatial bands are NOT anatomical measurements.
+vec3 bvThermalPalette(float t) {
+  vec3 blue = vec3(0.015, 0.065, 0.85);
+  vec3 cyan = vec3(0.005, 0.8, 0.95);
+  vec3 green = vec3(0.10, 0.95, 0.12);
+  vec3 yellow = vec3(1.0, 0.88, 0.025);
+  vec3 red = vec3(1.0, 0.035, 0.012);
+  if (t < 0.25) return mix(blue, cyan, t * 4.0);
+  if (t < 0.50) return mix(cyan, green, (t - 0.25) * 4.0);
+  if (t < 0.75) return mix(green, yellow, (t - 0.50) * 4.0);
+  return mix(yellow, red, (t - 0.75) * 4.0);
+}
+vec3 bvThermalDisplay() {
+  float span = max(uBVBounds.y - uBVBounds.x, 0.0001);
+  float y = clamp((vBVThermalPosition.y - uBVBounds.x) / span, 0.0, 1.0);
+  float x = abs(vBVThermalPosition.x - uBVBounds.z) / span;
+  // Stylized gradient from the atlas reference composition; no local fat estimates.
+  float central = exp(-pow((y - 0.63) / 0.25, 2.0) - pow(x / 0.19, 2.0));
+  float bands = 0.10 + 0.79 * central + 0.10 * y;
+  float globalShift = (clamp(uBVThermalPercentage, 0.0, 100.0) - 25.0) * 0.004;
+  return bvThermalPalette(clamp(bands + globalShift, 0.0, 1.0));
+}`)
+        .replace("#include <color_fragment>", `#include <color_fragment>
+if (uBVThermalEnabled > 0.5) diffuseColor.rgb = bvThermalDisplay();`)
+        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+if (uBVThermalEnabled > 0.5) totalEmissiveRadiance += bvThermalDisplay() * 0.22;`);
+    }
   };
-  material.customProgramCacheKey = () => SOFT_TISSUE_PROFILE_VERSION + "-strength-" + strength;
+  material.customProgramCacheKey = () => SOFT_TISSUE_PROFILE_VERSION + "-strength-" + strength + (thermal ? "-thermal-v1" : "");
 }
 
 /**
@@ -214,7 +254,7 @@ export function createAnatomyScene(
   let comparisonDivider = 50;
   let statureCm = 175;
   let mode: RenderMode = "realista";
-  let bodyFatColor: string | null = null;
+  const thermal = { enabled: { value: 0 }, percentage: { value: 25 } };
   let quality: SceneQuality = "alta";
   let interacting = false;
   let disposed = false;
@@ -528,7 +568,7 @@ export function createAnatomyScene(
         if (!(material instanceof THREE.MeshPhysicalMaterial)) continue;
         const originalColor = material.userData.baseColor as string | undefined;
         const reference = new THREE.Color(originalColor || anatomicalLayers.find(item => item.id === layer)?.color || "#c8d5e4");
-        material.color.copy(mode === "holograma" ? new THREE.Color("#64cfe8") : mode === "radiografia" ? new THREE.Color("#c3e9f7") : layer === "skin" && bodyFatColor ? new THREE.Color(bodyFatColor) : reference);
+        material.color.copy(mode === "holograma" ? new THREE.Color("#64cfe8") : mode === "radiografia" ? new THREE.Color("#c3e9f7") : reference);
         const wireframe = mode === "holograma";
         const nextOpacity = mode === "radiografia" ? Math.min(s.opacity, 0.26) : mode === "holograma" ? Math.min(s.opacity, 0.83) : s.opacity;
         const transparent = nextOpacity < 1;
@@ -664,7 +704,7 @@ export function createAnatomyScene(
                 metalness: 0, side: THREE.DoubleSide,
                 polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
               });
-              attachBodyVolume(result, layer, volume, massBounds);
+              attachBodyVolume(result, layer, volume, massBounds, layer === "skin" ? thermal : undefined);
               result.userData.baseColor = a.color;
               cached.set(cacheKey, result);
             }
@@ -716,7 +756,11 @@ export function createAnatomyScene(
     queueGeometryLod();
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
-  const setBodyFatColor = (color: string | null) => { if (bodyFatColor === color) return; bodyFatColor = color; applyAll(); };
+  const setBodyFatThermal = (enabled: boolean, percentage: number | null) => {
+    thermal.enabled.value = enabled ? 1 : 0;
+    thermal.percentage.value = percentage !== null && Number.isFinite(percentage) ? percentage : 25;
+    render();
+  };
   const setWeightVariation = (percent: number, referenceKg = DEFAULT_REFERENCE_KG) => {
     const visual = bodyVisualScenario(referenceKg, percent);
     referenceVolume = visual.referenceRadialVariation;
@@ -1025,5 +1069,5 @@ export function createAnatomyScene(
       resize();
     }
   };
-  return { update, focus, clearSelection, setRenderMode, setBodyFatColor, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setBodyFatThermal, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
 }
