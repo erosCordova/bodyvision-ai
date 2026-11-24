@@ -32,7 +32,7 @@ export function parseMeasurementValue(raw: unknown): number {
 }
 const schema = z.object({
   metric_code: z.string().min(1),
-  value: z.number({ invalid_type_error: "Introduce un número válido, por ejemplo 80,5." }).finite(),
+  value: z.number({ error: "Introduce un número válido, por ejemplo 80,5." }).finite(),
   measured_at: z
     .string()
     .min(1)
