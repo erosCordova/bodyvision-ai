@@ -1,7 +1,8 @@
 """Audited rejection of synthetic privacy requests, not legal fulfillment."""
 
-from alembic import op
 from sqlalchemy import text
+
+from alembic import op
 
 revision = "0032_privacy_rejection"
 down_revision = "0031_private_audit_export"
