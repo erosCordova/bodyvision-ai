@@ -266,7 +266,8 @@ def upgrade() -> None:
         GRANT EXECUTE ON FUNCTION public.enqueue_server_pose(uuid,uuid,uuid,uuid,uuid),
           public.review_server_pose(uuid,text,uuid,uuid) TO bodyvision_app;
         REVOKE ALL ON FUNCTION public.claim_server_pose(uuid),public.read_server_pose(uuid,uuid),
-          public.finish_server_pose(uuid,uuid,jsonb,text) FROM PUBLIC,bodyvision_app,bodyvision_auth_app;
+          public.finish_server_pose(uuid,uuid,jsonb,text)
+          FROM PUBLIC,bodyvision_app,bodyvision_auth_app;
         GRANT EXECUTE ON FUNCTION public.claim_server_pose(uuid),public.read_server_pose(uuid,uuid),
           public.finish_server_pose(uuid,uuid,jsonb,text) TO bodyvision_pose_worker;
         UPDATE public.system_schema_state SET revision='0033_server_pose_queue';
