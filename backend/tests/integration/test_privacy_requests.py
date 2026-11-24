@@ -306,3 +306,54 @@ def test_request_history_isolation_between_same_profile_grantees_and_admin_queue
             )
         ).scalar_one()
         assert privileges is False
+
+
+def test_synthetic_rejection_is_authorized_terminal_and_audited(protected):
+    client, owner, profile_id, users = protected
+    editor, member, outsider, administrator = (login(client, person) for person in users)
+    base = f"/api/v1/profiles/{profile_id}/privacy-requests"
+    data = {"request_type": "access", "synthetic_confirmed": True}
+    created = client.post(base, headers=member, json=data)
+    assert created.status_code == 201, created.text
+    identifier = created.json()["id"]
+    root = f"/api/v1/privacy-requests/{identifier}"
+    payload = {"reason": "invalid_synthetic_request", "synthetic_confirmed": True}
+    assert client.post(root + "/reject", headers=administrator, json=payload).status_code == 404
+    for actor in (editor, member, outsider):
+        assert client.post(root + "/reject", headers=actor, json=payload).status_code == 403
+    with owner.begin() as conn:
+        conn.execute(
+            text("""INSERT INTO profile_access
+              (id,organization_id,profile_id,user_id,access_level)
+              VALUES (:id,:org,:profile,:user,'manage')"""),
+            {"id": uuid4(), "org": users[3][1], "profile": profile_id, "user": users[3][0]},
+        )
+    assert client.post(root + "/reject", headers=administrator, json=payload).status_code == 409
+    assert client.post(root + "/review", headers=administrator).status_code == 200
+    invalid = client.post(
+        root + "/reject", headers=administrator, json={**payload, "reason": "personal note"}
+    )
+    assert invalid.status_code == 422
+    result = client.post(root + "/reject", headers=administrator, json=payload)
+    assert result.status_code == 200, result.text
+    row = result.json()
+    assert row["status"] == "rejected" and row["rejection_reason"] == payload["reason"]
+    assert row["rejected_by"] == str(users[3][0]) and row["rejected_at"]
+    assert row["review_overdue"] is False
+    assert client.post(root + "/reject", headers=administrator, json=payload).status_code == 409
+    assert client.get(base, headers=member).json()["items"][0]["status"] == "rejected"
+    assert client.get(base, headers=editor).json()["total"] == 0
+    queue = client.get("/api/v1/privacy-requests?status=rejected", headers=administrator)
+    assert queue.json()["total"] == 1
+    assert client.post(base, headers=member, json=data).status_code == 201
+    with owner.connect() as conn:
+        count = conn.execute(
+            text("""SELECT count(*) FROM security_audit_events
+              WHERE resource_id=:profile AND action='privacy.request.rejected'"""),
+            {"profile": profile_id},
+        ).scalar_one()
+        assert count == 1
+        assert not conn.execute(
+            text("""SELECT has_function_privilege('bodyvision_auth_app',
+              'public.reject_synthetic_privacy_request(uuid,text,uuid,uuid)','EXECUTE')""")
+        ).scalar_one()

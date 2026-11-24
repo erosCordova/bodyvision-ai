@@ -32,6 +32,8 @@ describe("solicitudes ARCO ficticias", () => {
   });
   it("rechaza estados de cumplimiento no implementados y claves extra", () => {
     expect(privacyRequestSchema.safeParse({ ...record, status: "completed" }).success).toBe(false);
+    expect(privacyRequestSchema.safeParse({ ...record, status: "rejected", rejection_reason: "duplicate_review" }).success).toBe(true);
+    expect(privacyRequestSchema.safeParse({ ...record, rejection_reason: "free text" }).success).toBe(false);
     expect(privacyRequestSchema.safeParse({ ...record, notes: "identidad privada" }).success).toBe(false);
     expect(privacyRequestSchema.safeParse({ ...record, request_type: "medical_diagnosis" }).success)
       .toBe(false);
