@@ -25,7 +25,7 @@ function parseReceipt(bytes: ArrayBuffer): ReportReceipt {
     return code === 92 || (code < 32 && code !== 9 && code !== 10 && code !== 13) || code > 126;
   }))
     throw new Error("El comprobante contiene caracteres no autorizados.");
-  const keys = Array.from(text.matchAll(/"([a-z_]+)"\s*:/g), match => match[1]);
+  const keys = Array.from(text.matchAll(/"([a-z_0-9]+)"\s*:/g), match => match[1]);
   const parsed = reportReceiptSchema.parse(JSON.parse(text));
   if (keys.length !== Object.keys(parsed).length || new Set(keys).size !== keys.length)
     throw new Error("El comprobante tiene campos duplicados o ambiguos.");
