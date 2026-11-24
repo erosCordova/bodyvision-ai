@@ -47,10 +47,12 @@ class ReviewInput(QueueInput):
 
 
 def _authorize(scope: Workspace, request: Request, profile: UUID, write: bool = False):
+    if not request.app.state.settings.server_pose_queue_enabled:
+        raise DomainError(
+            503, "POSE_QUEUE_DISABLED", "La cola de pose requiere un trabajador configurado."
+        )
     synthetic_captures._cipher(request)
-    if not scope.authenticated or (
-        write and scope.role not in {"administrator", "specialist"}
-    ):
+    if not scope.authenticated or (write and scope.role not in {"administrator", "specialist"}):
         raise DomainError(403, "FORBIDDEN", "Se requiere un permiso privado de prueba.")
     records.profile(scope, profile, write=write)
     synthetic_captures._consented(scope, profile)
