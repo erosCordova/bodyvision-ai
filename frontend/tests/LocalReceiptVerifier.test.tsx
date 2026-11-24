@@ -13,7 +13,9 @@ describe("local saved report receipt controls", () => {
   it("requires all three independent files and never requires a fresh export", async () => {
     vi.mocked(verifyLocalReportReceipt).mockResolvedValue(undefined);
     render(<LocalReceiptVerifier/>);
-    const button = screen.getByRole("button", { name: "Verificar firma Ed25519", hidden: true });
+    const details = screen.getByText("Verificar firma de un informe guardado").closest("details")!;
+    details.open = true;
+    const button = screen.getByRole("button", { name: "Verificar firma Ed25519" });
     expect(button).toBeDisabled();
     const report = new File(["fictional"], "report.pdf");
     const receipt = new File(["{}"], "receipt.json");
