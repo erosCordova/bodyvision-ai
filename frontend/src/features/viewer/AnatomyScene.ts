@@ -214,6 +214,7 @@ export function createAnatomyScene(
   let comparisonDivider = 50;
   let statureCm = 175;
   let mode: RenderMode = "realista";
+  let bodyFatColor: string | null = null;
   let quality: SceneQuality = "alta";
   let interacting = false;
   let disposed = false;
@@ -527,7 +528,7 @@ export function createAnatomyScene(
         if (!(material instanceof THREE.MeshPhysicalMaterial)) continue;
         const originalColor = material.userData.baseColor as string | undefined;
         const reference = new THREE.Color(originalColor || anatomicalLayers.find(item => item.id === layer)?.color || "#c8d5e4");
-        material.color.copy(mode === "holograma" ? new THREE.Color("#64cfe8") : mode === "radiografia" ? new THREE.Color("#c3e9f7") : reference);
+        material.color.copy(mode === "holograma" ? new THREE.Color("#64cfe8") : mode === "radiografia" ? new THREE.Color("#c3e9f7") : layer === "skin" && bodyFatColor ? new THREE.Color(bodyFatColor) : reference);
         const wireframe = mode === "holograma";
         const nextOpacity = mode === "radiografia" ? Math.min(s.opacity, 0.26) : mode === "holograma" ? Math.min(s.opacity, 0.83) : s.opacity;
         const transparent = nextOpacity < 1;
@@ -715,6 +716,7 @@ export function createAnatomyScene(
     queueGeometryLod();
   };
   const setRenderMode = (next: RenderMode) => { mode = next; applyAll(); };
+  const setBodyFatColor = (color: string | null) => { if (bodyFatColor === color) return; bodyFatColor = color; applyAll(); };
   const setWeightVariation = (percent: number, referenceKg = DEFAULT_REFERENCE_KG) => {
     const visual = bodyVisualScenario(referenceKg, percent);
     referenceVolume = visual.referenceRadialVariation;
@@ -1023,5 +1025,5 @@ export function createAnatomyScene(
       resize();
     }
   };
-  return { update, focus, clearSelection, setRenderMode, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setBodyFatColor, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
 }

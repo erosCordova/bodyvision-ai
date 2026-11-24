@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
-import { dateTime } from "../../components/ui/States";
+import { dateTime, ErrorState, LoadingState } from "../../components/ui/States";
+import { ProfilePicker } from "../foundation/ModuleControls";
+import { fatScaleColor, validFatPercentage } from "./bodyFatScale";
 import { Link, useNavigate } from "react-router-dom";
 import {
   anatomicalLayers, createAnatomyScene,
@@ -41,7 +43,7 @@ type AtlasEntry = {
   layer: AnatomicalLayer;
 };
 type AtlasData = { structures?: Omit<AtlasEntry, "layer">[] };
-type Panel = "informacion" | "recorridos" | "guia" | "simulacion";
+type Panel = "informacion" | "recorridos" | "guia" | "simulacion" | "grasa";
 type TourStep = { layer: AnatomicalLayer; name: string; title: string; intro: string };
 type Tour = { id: string; title: string; description: string; icon: string; steps: TourStep[] };
 
@@ -135,11 +137,32 @@ export function AnatomyAtlas() {
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<AtlasController | null>(null);
-  const [panel, setPanel] = useState<Panel>(() => new URLSearchParams(window.location.search).get("panel") === "simulacion" ? "simulacion" : "informacion");
+  const [panel, setPanel] = useState<Panel>(() => {
+    const p = new URLSearchParams(window.location.search).get("panel");
+    return p === "simulacion" || p === "grasa" ? p : "informacion";
+  });
   const [visible, setVisible] = useState<AnatomicalLayer[]>(["skin"]);
   const [opacity, setOpacity] = useState<LayerOpacity>({ ...initialOpacity });
   const [mode, setMode] = useState<RenderMode>("realista");
   const [meshOverlay, setMeshOverlay] = useState(false);
+  const [fatProfileId,setFatProfileId] = useState(() => new URLSearchParams(window.location.search).get("profile") ?? "");
+  const [fatHeat,setFatHeat] = useState(true);
+  const [fatSimulation,setFatSimulation] = useState<number|null>(null);
+  const fatProfile = useQuery({
+    queryKey:["profile",workspaceId,fatProfileId],
+    queryFn:()=>api.profile(fatProfileId),
+    enabled:panel==="grasa" && !!fatProfileId,
+  });
+  const fatMeasurements = useQuery({
+    queryKey:["measurements",workspaceId,fatProfileId,"body_fat_pct",0],
+    queryFn:()=>api.measurements(fatProfileId,"body_fat_pct",0),
+    enabled:panel==="grasa" && !!fatProfileId && fatProfile.isSuccess && fatProfile.data.id===fatProfileId,
+  });
+  const latestFat = fatProfile.isSuccess && !fatProfile.isError && fatMeasurements.isSuccess && !fatMeasurements.isError
+    ? fatMeasurements.data.items.find(row=>row.profile_id===fatProfileId && row.metric_code==="body_fat_pct" &&
+      row.unit==="%" && row.is_current && row.method==="device" && !!row.instrument?.trim() &&
+      validFatPercentage(row.value)) : undefined;
+  const displayedFat = fatSimulation ?? latestFat?.value ?? null;
   const [referenceKg, setReferenceKg] = useState(70);
   const [weightVariation, setWeightVariation] = useState(0);
   const [statureCm, setStatureCm] = useState(BASELINE_HEIGHT_CM);
@@ -377,6 +400,11 @@ export function AnatomyAtlas() {
 
   useEffect(() => controller.current?.update(new Set(visible), opacity), [visible, opacity, restart]);
   useEffect(() => controller.current?.setRenderMode(mode), [mode, restart]);
+  const fatHeatActive = panel==="grasa" && fatHeat && displayedFat!==null && mode==="realista" &&
+    visible.length===1 && visible[0]==="skin" && opacity.skin===1 && !isolated && !comparison &&
+    weightVariation===0 && statureCm===BASELINE_HEIGHT_CM && referenceKg===70;
+  useEffect(()=>controller.current?.setBodyFatColor(fatHeatActive && displayedFat!==null ? fatScaleColor(displayedFat) : null),
+    [fatHeatActive,displayedFat,restart]);
   useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
   useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
@@ -525,6 +553,11 @@ export function AnatomyAtlas() {
     setIsolated(false);
     controller.current?.clearSelection();
     controller.current?.resetCamera();
+  };
+  const openFat = () => {
+    setPanel("grasa");setTour(null);setVisible(["skin"]);setOpacity({...initialOpacity});
+    setMode("realista");setIsolated(false);setMeshOverlay(false);setFatHeat(true);
+    controller.current?.clearSelection();
   };
   const toggleMesh = () => {
     if (mode === "holograma") setMode("realista");
@@ -770,7 +803,7 @@ export function AnatomyAtlas() {
           </div>
         </aside>
 
-        <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")}>
+        <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")} data-fat-heat={fatHeatActive && !error && layerStates.skin==="ready" ? "active":"inactive"}>
           <div className="studio-canvas" ref={host} />
           {comparison && !error && (
             <div className="studio-compare" aria-label="Comparación dividida del mismo modelo 3D">
@@ -793,7 +826,7 @@ export function AnatomyAtlas() {
           )}
           <div className="studio-view-top">
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
-            <span>MODELO EDUCATIVO</span>
+            <span>{fatHeatActive ? "COLOR GLOBAL · "+(fatSimulation===null?"OBSERVADO":"SIMULADO")+" · "+displayedFat+" %" : "MODELO EDUCATIVO"}</span>
           </div>
           {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado" data-rendered-frames={renderStats.renderedFrames}>
             <strong>Diagnóstico de visualización</strong>
@@ -882,6 +915,7 @@ export function AnatomyAtlas() {
               <button className={meshOverlay ? "active" : ""} aria-pressed={meshOverlay} onClick={toggleMesh} title="Superponer malla poligonal sobre la anatomía">Malla 3D</button>
               <button className={showMarker ? "active" : ""} aria-pressed={showMarker} onClick={() => setShowMarker(v => !v)}>Etiqueta</button>
               <button className={spin ? "active" : ""} aria-pressed={spin} disabled={reducedMotion} onClick={() => setSpin(v => !v)}>Giro</button>
+              <button className={panel === "grasa" ? "active" : ""} aria-pressed={panel === "grasa"} onClick={openFat}>Mapa de calor</button>
               <button className={panel === "simulacion" ? "active" : ""} aria-pressed={panel === "simulacion"} onClick={openSimulation}>Peso y estatura</button>
               <button onClick={() => controller.current?.resetCamera()}>Restablecer</button>
             </div>
@@ -894,9 +928,49 @@ export function AnatomyAtlas() {
             <button role="tab" aria-selected={panel === "informacion"} className={panel === "informacion" ? "active" : ""} onClick={() => setPanel("informacion")}>Información</button>
             <button role="tab" aria-selected={panel === "recorridos"} className={panel === "recorridos" ? "active" : ""} onClick={() => setPanel("recorridos")}>Recorridos</button>
             <button role="tab" aria-selected={panel === "guia"} className={panel === "guia" ? "active" : ""} onClick={() => setPanel("guia")}>Guía</button>
+            <button role="tab" aria-selected={panel === "grasa"} className={panel === "grasa" ? "active" : ""} onClick={openFat}>Grasa</button>
             <button role="tab" aria-selected={panel === "simulacion"} className={panel === "simulacion" ? "active" : ""} onClick={openSimulation}>Simulación</button>
           </div>
           <div className="studio-right-content">
+            {panel === "grasa" && <section className="studio-fat-panel" aria-label="Grasa corporal">
+              <h2>Grasa corporal</h2>
+              <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId}
+                onChange={next=>{setFatProfileId(next);setFatSimulation(null);}}/>
+              {fatProfileId && (fatProfile.isPending ? <LoadingState/> : fatProfile.isError ?
+                <ErrorState error={fatProfile.error} retry={()=>void fatProfile.refetch()}/> :
+                fatMeasurements.isPending ? <LoadingState/> : fatMeasurements.isError ?
+                <ErrorState error={fatMeasurements.error} retry={()=>void fatMeasurements.refetch()}/> : null)}
+              <div className="studio-fat-reading">
+                <DataTypeBadge type="OBSERVADO"/>
+                <strong>{latestFat ? latestFat.value.toLocaleString("es-PE",{maximumFractionDigits:2})+" %" : "Sin registro"}</strong>
+                <div className="studio-fat-meter" role="meter" aria-label="Porcentaje de grasa corporal observado"
+                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={latestFat?.value}
+                  aria-valuetext={latestFat ? latestFat.value+" %" : "Sin medición disponible"}>
+                  {latestFat && <span style={{width:latestFat.value+"%",background:fatScaleColor(latestFat.value)}}/>}
+                </div>
+                {latestFat ? <dl><dt>Fecha</dt><dd>{dateTime(latestFat.measured_at)}</dd>
+                  <dt>Instrumento</dt><dd>{latestFat.instrument}</dd><dt>Responsable</dt><dd>{latestFat.responsible}</dd></dl> :
+                  <p>Selecciona un expediente con una medición instrumental de grasa corporal.</p>}
+                {fatProfileId && fatProfile.isSuccess && <Link to={"/profiles/"+fatProfileId+"?tab=measurements"}>Ver mediciones y fuentes →</Link>}
+              </div>
+              <div className="studio-fat-reading">
+                <DataTypeBadge type="SIMULADO"/>
+                {fatSimulation===null ? <button type="button" onClick={()=>setFatSimulation(latestFat?.value??20)}>Crear escenario ilustrativo</button> : <>
+                  <label>Porcentaje hipotético <strong>{fatSimulation.toLocaleString("es-PE")} %</strong>
+                    <input type="range" min={2} max={70} step={0.1} value={fatSimulation}
+                      onChange={event=>setFatSimulation(Number(event.target.value))}/></label>
+                  <button type="button" onClick={()=>setFatSimulation(null)}>Volver al dato observado</button>
+                  <small>Valor elegido por el usuario. No predice cambios de grasa por peso o estatura ni modifica mediciones.</small>
+                </>}
+              </div>
+              <label className="studio-fat-toggle"><input type="checkbox" checked={fatHeat} onChange={event=>setFatHeat(event.target.checked)}/> Mostrar vista de calor</label>
+              <div className="studio-fat-legend" aria-label="Escala cromática global de 0 a 100 por ciento">
+                <div/><span>0 %</span><span>50 %</span><span>100 %</span>
+              </div>
+              <p>Color global ilustrativo del porcentaje total. No representa grasa por regiones, temperatura ni categorías clínicas.</p>
+              {fatHeat && displayedFat!==null && !fatHeatActive && <p role="status">Para ver el color global, restaura la superficie original sin comparación ni cambios de peso o estatura.</p>}
+              {fatHeat && displayedFat!==null && !fatHeatActive && <button type="button" onClick={()=>{resetSimulation();openFat();}}>Restaurar superficie para mapa</button>}
+            </section>}
             {panel === "simulacion" && (
               <div className="studio-simulation">
                 <p className="studio-eyebrow">SIMULACIÓN · SOBRE EL MODELO 3D</p>

@@ -1571,3 +1571,22 @@ test("F6 observes rAF intervals during actual synthetic 3D rotation without clai
   await expect(page.locator(".studio-canvas canvas")).toHaveCount(1);
   expect(writes).toEqual([]);
 });
+
+
+test("fat heat view uses an observed instrument reading and keeps hypothetical value separate", async ({page})=>{
+  const profileId="30000000-0000-4000-8000-000000000001";
+  const profile={id:profileId,organization_id:"10000000-0000-4000-8000-000000000001",display_code:"FICT-GRASA",display_name:null,birth_year:1990,sex:null,status:"active",created_at:"2026-01-01T00:00:00Z",synthetic:true};
+  const row={id:"30000000-0000-4000-8000-000000000002",profile_id:profileId,metric_code:"body_fat_pct",value:23.4,unit:"%",measured_at:"2026-01-01T00:00:00Z",method:"device",instrument:"Bioimpedancia ficticia",notes:null,created_by:"30000000-0000-4000-8000-000000000003",responsible:"Operador ficticio",created_at:"2026-01-01T00:00:00Z",supersedes_id:null,correction_reason:null,is_current:true,outlier_confirmed:false,data_type:"OBSERVADO"};
+  await sourceFixtures(page);
+  await page.route("**/api/v1/profiles/"+profileId,route=>route.fulfill({json:profile}));
+  await page.route("**/api/v1/profiles/"+profileId+"/measurements?**",route=>route.fulfill({json:{items:[row],total:1,limit:20,offset:0}}));
+  await page.goto("/body-3d?panel=grasa&profile="+profileId);
+  await expect(page.getByRole("meter",{name:"Porcentaje de grasa corporal observado"})).toHaveAttribute("aria-valuenow","23.4");
+  await expect(viewport(page)).toHaveAttribute("data-fat-heat","active",{timeout:60000});
+  await page.getByRole("button",{name:"Crear escenario ilustrativo"}).click();
+  await page.getByRole("slider",{name:/Porcentaje hipotético/}).fill("35");
+  await expect(page.getByRole("meter",{name:"Porcentaje de grasa corporal observado"})).toHaveAttribute("aria-valuenow","23.4");
+  await expect(viewport(page)).toContainText("SIMULADO");
+  await page.getByRole("checkbox",{name:"Mostrar vista de calor"}).uncheck();
+  await expect(viewport(page)).toHaveAttribute("data-fat-heat","inactive");
+});
