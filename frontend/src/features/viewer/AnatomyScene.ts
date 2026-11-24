@@ -691,57 +691,103 @@ export function createAnatomyScene(
     group.name = "Tejido adiposo ilustrativo";
     group.visible = false;
     const material = new THREE.MeshPhysicalMaterial({
-      color: "#e9b74b", roughness: .67, clearcoat: .12,
-      side: THREE.DoubleSide, metalness: 0,
+      color:"#d9a04d",roughness:.82,clearcoat:.025,metalness:0,
+      side:THREE.FrontSide,transparent:true,depthWrite:false,
     });
-    attachBodyVolume(material, "skin", volume, massBounds);
-    const baseCompile = material.onBeforeCompile;
-    const mask = `
-      float adiposeMask(vec3 p) {
-        float span = max(uBVBounds.y-uBVBounds.x,.00001);
-        float h = (p.y-uBVBounds.x)/span;
-        float x = abs(p.x-uBVBounds.z)/span;
-        float torso = smoothstep(.32,.44,h)*(1.-smoothstep(.72,.84,h))*(1.-smoothstep(.12,.22,x));
-        float thighs = smoothstep(.16,.23,h)*(1.-smoothstep(.42,.53,h))*(1.-smoothstep(.10,.18,x));
-        float arms = smoothstep(.37,.48,h)*(1.-smoothstep(.70,.81,h))*smoothstep(.13,.20,x);
-        return max(torso,max(thighs*.8,arms*.65));
+    attachBodyVolume(material,"skin",volume,massBounds);
+    const baseCompile=material.onBeforeCompile;
+    // Smooth illustrative pads on the atlas, rather than a truncated body
+    // shell. No patient-specific deposition or measured thickness.
+    const fields=`
+      float bvBand(float p,float lo,float a,float b,float hi){
+        return smoothstep(lo,a,p)*(1.-smoothstep(b,hi,p));
+      }
+      vec3 bvAdiposeP(vec3 world){
+        float s=max(uBVBounds.y-uBVBounds.x,.00001);
+        return vec3(world.x-uBVBounds.z,world.y-uBVBounds.x,world.z-uBVBounds.w)/s;
+      }
+      float bvAdiposeField(vec3 p){
+        float x=abs(p.x), h=p.y;
+        float abdomen=bvBand(h,.36,.44,.62,.72)*(1.-smoothstep(.095,.175,x));
+        float chest=.54*bvBand(h,.61,.68,.755,.825)*(1.-smoothstep(.105,.18,x));
+        float hips=.86*bvBand(h,.34,.40,.49,.57)*(1.-smoothstep(.115,.19,x));
+        float thigh=.72*bvBand(h,.17,.26,.40,.47)*(1.-smoothstep(.09,.16,x));
+        float arm=.45*bvBand(h,.51,.56,.71,.79)*smoothstep(.115,.16,x)*(1.-smoothstep(.25,.31,x));
+        float calf=.23*bvBand(h,.07,.13,.23,.28)*(1.-smoothstep(.085,.135,x));
+        // Preserve the head, hands, feet and transition across joints.
+        return max(max(max(abdomen,chest),max(hips,thigh)),max(arm,calf));
       }
     `;
-    material.onBeforeCompile = (shader,renderer) => {
+    const lobules=`
+      vec3 bvCellHash(vec3 p){
+        p=fract(p*vec3(.1031,.1030,.0973));
+        p+=dot(p,p.yxz+33.33);
+        return fract((p.xxy+p.yxx)*p.zyx);
+      }
+      float bvLobules(vec3 p){
+        vec3 q=p*265.;
+        vec3 i=floor(q),f=fract(q);
+        float nearest=10.,second=10.;
+        // Eight surrounding jittered sites, small organic variation.
+        for(int x=0;x<2;x++)for(int y=0;y<2;y++)for(int z=0;z<2;z++){
+          vec3 off=vec3(float(x),float(y),float(z))-step(f,vec3(.5));
+          vec3 r=off+.22+.56*bvCellHash(i+off)-f;
+          float d=dot(r,r);
+          second=min(second,max(nearest,d));nearest=min(nearest,d);
+        }
+        return smoothstep(.015,.16,second-nearest);
+      }
+    `;
+    material.onBeforeCompile=(shader,renderer)=>{
       baseCompile.call(material,shader,renderer);
-      shader.uniforms.uBVAdipose = adiposeFraction;
+      shader.uniforms.uBVAdipose=adiposeFraction;
       shader.vertexShader=shader.vertexShader.replace("#include <common>",
-        "#include <common>\nuniform float uBVAdipose; varying vec3 vAdiposePoint;")
-        .replace("#include <project_vertex>", `
+        "#include <common>\\nuniform float uBVAdipose; varying vec3 vAdiposePoint;\\n"+fields)
+        .replace("#include <project_vertex>",`
           vAdiposePoint=(modelMatrix*vec4(position,1.)).xyz;
-          float adiposeSpan=max(uBVBounds.y-uBVBounds.x,.00001);
-          vec3 adiposeP=vec3(vAdiposePoint.x-uBVBounds.z,vAdiposePoint.y-uBVBounds.x,vAdiposePoint.z-uBVBounds.w)/adiposeSpan;
-          float adiposeLobules=sin(adiposeP.x*151.+sin(adiposeP.y*93.))*sin(adiposeP.y*166.+sin(adiposeP.z*81.))*sin(adiposeP.z*159.);
-          float adiposeScale=max(length(modelMatrix[0].xyz),.00001);
-          // Below the reference skin; a graphical offset, not calibrated tissue thickness.
-          float adiposeOffset=(mix(-.025,-.002,uBVAdipose)+.0027*adiposeLobules)*adiposeSpan/adiposeScale;
-          transformed+=normalize(normal)*adiposeOffset;
+          vec3 p=bvAdiposeP(vAdiposePoint);
+          float tissue=bvAdiposeField(p);
+          // Continuous world-space displacement avoids tearing seams between
+          // split atlas meshes. Taper each deposit smoothly at its boundaries.
+          float coverage=smoothstep(.07,.60,tissue);
+          float inset=mix(.19,.035,clamp((uBVAdipose-.02)/.68,0.,1.));
+          vec3 offset=vec3(-p.x,0.,-p.z)*inset*coverage*max(uBVBounds.y-uBVBounds.x,.00001);
+          vec3 ax=modelMatrix[0].xyz,ay=modelMatrix[1].xyz,az=modelMatrix[2].xyz;
+          transformed+=vec3(dot(offset,ax)/max(dot(ax,ax),.00001),dot(offset,ay)/max(dot(ay,ay),.00001),dot(offset,az)/max(dot(az,az),.00001));
           #include <project_vertex>`);
       shader.fragmentShader=shader.fragmentShader.replace("#include <common>",
-        "#include <common>\nuniform vec4 uBVBounds; uniform float uBVAdipose; varying vec3 vAdiposePoint;\n"+mask)
-        .replace("#include <color_fragment>", `
+        "#include <common>\\nuniform vec4 uBVBounds; uniform float uBVAdipose; varying vec3 vAdiposePoint;\\n"+fields+lobules)
+        .replace("#include <color_fragment>",`
           #include <color_fragment>
-          float tissue=adiposeMask(vAdiposePoint);
-          if(tissue<mix(.46,.12,uBVAdipose)) discard;
-          float span=max(uBVBounds.y-uBVBounds.x,.00001);
-          vec3 p=vec3(vAdiposePoint.x-uBVBounds.z,vAdiposePoint.y-uBVBounds.x,vAdiposePoint.z-uBVBounds.w)/span;
-          float lobules=sin(p.x*151.+sin(p.y*93.))*sin(p.y*166.+sin(p.z*81.))*sin(p.z*159.);
-          float lobuleShade=smoothstep(-.75,.72,lobules);
-          diffuseColor.rgb=mix(vec3(.55,.27,.045),vec3(1.,.76,.32),.24+.76*lobuleShade);
+          vec3 p=bvAdiposeP(vAdiposePoint);
+          float tissue=bvAdiposeField(p);
+          float strength=clamp((uBVAdipose-.02)/.68,0.,1.);
+          float coverage=smoothstep(mix(.26,.065,strength),mix(.72,.31,strength),tissue);
+          if(coverage<.008)discard;
+          float lobule=bvLobules(p);
+          vec3 septum=vec3(.41,.205,.063),fat=vec3(.83,.52,.20);
+          diffuseColor.rgb=mix(septum,fat,.38+.62*lobule);
+          diffuseColor.a*=coverage;
+        `)
+        .replace("#include <normal_fragment_maps>",`
+          #include <normal_fragment_maps>
+          // Fine, subtle normal relief instead of coarse inflated vertices.
+          float relief=bvLobules(bvAdiposeP(vAdiposePoint));
+          vec3 dx=dFdx(-vViewPosition),dy=dFdy(-vViewPosition);
+          vec3 rx=cross(dy,normal),ry=cross(normal,dx);
+          float det=dot(dx,rx);
+          vec3 grad=sign(det)*(dFdx(relief)*rx+dFdy(relief)*ry);
+          normal=normalize(max(abs(det),.0000001)*normal-.00085*grad);
         `);
     };
-    material.customProgramCacheKey = () => "bodyvision-adipose-illustrative-v1";
+    material.customProgramCacheKey=()=>"bodyvision-adipose-illustrative-v2";
     skin.updateWorldMatrix(true,true);
     const inverse = anatomical.matrixWorld.clone().invert();
     skin.traverse(node=>{
       if (!(node instanceof THREE.Mesh) || node.userData.bodyvisionMeshOverlay || node instanceof THREE.SkinnedMesh) return;
       // Separate geometry ownership avoids disposing the reference skin's buffers.
       const mesh = new THREE.Mesh(node.geometry.clone(),material);
+      mesh.renderOrder=3;
       mesh.name="Tejido adiposo ilustrativo";
       mesh.matrixAutoUpdate=false;
       mesh.matrix.copy(inverse.clone().multiply(node.matrixWorld));
@@ -752,8 +798,8 @@ export function createAnatomyScene(
     adiposeMaterial=material;
     anatomical.add(group);
     material.opacity=adiposeOpacity;
-    material.transparent=adiposeOpacity<1;
-    material.depthWrite=adiposeOpacity===1;
+    material.transparent=true;
+    material.depthWrite=false;
     group.visible=adiposeVisible&&!isolated&&mode==="realista";
   };
 
@@ -861,8 +907,7 @@ export function createAnatomyScene(
     if(adiposeGroup)adiposeGroup.visible=enabled&&!isolated&&mode==="realista";
     if(adiposeMaterial){
       adiposeMaterial.opacity=adiposeOpacity;
-      const transparent=adiposeOpacity<1;
-      if(adiposeMaterial.transparent!==transparent){adiposeMaterial.transparent=transparent;adiposeMaterial.depthWrite=!transparent;adiposeMaterial.needsUpdate=true;}
+      // Always blend the tapered edges, even at 100% opacity.
     }
     render();
   };
@@ -1133,7 +1178,7 @@ export function createAnatomyScene(
       layerGeometry,
     };
   };
-  const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible) load(layer); };
+  const retryLayer = (layer: AnatomicalLayer) => { if (settings.get(layer)?.visible || (layer==="skin"&&adiposeVisible)) load(layer); };
   let capturingSnapshot = false;
   const capturePng = async (
     portraitForPose = false,

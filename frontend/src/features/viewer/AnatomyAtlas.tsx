@@ -152,7 +152,7 @@ export function AnatomyAtlas() {
   const [fatProfileId,setFatProfileId] = useState(() => new URLSearchParams(window.location.search).get("profile") ?? "");
   const [fatHeat,setFatHeat] = useState(true);
   const [adipose,setAdipose] = useState(false);
-  const [adiposeOpacity,setAdiposeOpacity] = useState(1);
+  const [adiposeOpacity,setAdiposeOpacity] = useState(.85);
   const [fatEntryOpen,setFatEntryOpen] = useState(false);
   const fatCatalog=useQuery({queryKey:["catalog",workspaceId],queryFn:api.catalog,enabled:panel==="grasa"&&!readOnly});
   const [fatSimulation,setFatSimulation] = useState<number|null>(null);
@@ -587,7 +587,7 @@ export function AnatomyAtlas() {
     setMode("realista");setIsolated(false);setMeshOverlay(false);setFatHeat(true);
     controller.current?.clearSelection();
   };
-  const showAdipose=()=>{setPanel("grasa");setAdipose(true);setFatHeat(false);setMode("realista");setComparison(false);setIsolated(false);setTour(null);setVisible(["muscles"]);controller.current?.clearSelection();};
+  const showAdipose=()=>{setPanel("grasa");setAdipose(true);setFatHeat(false);setMode("realista");setComparison(false);setIsolated(false);setTour(null);setVisible(["muscles","skeleton"]);setOpacity({...initialOpacity});controller.current?.clearSelection();};
   useEffect(() => {
     if (panel === "grasa" && window.matchMedia("(max-width: 1050px)").matches) {
       fatPanelRef.current?.scrollIntoView({block:"start",behavior:"instant"});
@@ -1008,7 +1008,7 @@ export function AnatomyAtlas() {
                 </>}
               </div>
               {sandboxAuthEnabled() && fatProfileId && fatProfile.isSuccess && <details><summary>Imágenes de referencia del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId}/></details>}
-              <div className="studio-fat-reading"><strong>Visualización del tejido adiposo</strong><button type="button" className="primary-button" aria-pressed={adipose} onClick={showAdipose}>Mostrar grasa corporal 3D</button><button type="button" aria-pressed={fatHeat&&!adipose} onClick={openFat}>Mostrar mapa de calor</button><small>La capa dorada se genera sobre el atlas, con textura lobulada y grosor gráfico variable. Distribución ilustrativa, no medida por regiones. {displayedFat===null?"Sin porcentaje registrado: referencia visual sin valor clínico.":`Porcentaje de referencia: ${displayedFat}% (${fatSimulation!==null?"simulado":"registrado"}).`}</small></div>
+              <div className="studio-fat-reading"><strong>Visualización del tejido adiposo</strong><button type="button" className="primary-button" aria-pressed={adipose} onClick={showAdipose}>Mostrar grasa corporal 3D</button><button type="button" aria-pressed={fatHeat&&!adipose} onClick={openFat}>Mostrar mapa de calor</button><small>Depósitos adiposos ilustrativos sobre músculos y huesos. Bordes suaves, relieve fino y cobertura variable según el porcentaje de referencia. No son una segmentación anatómica medida. {displayedFat===null?"Sin porcentaje registrado: referencia visual sin valor clínico.":`Porcentaje de referencia: ${displayedFat}% (${fatSimulation!==null?"simulado":"registrado"}).`}</small></div>
               <div className="studio-fat-legend" aria-label={illustrativeFat?"Paleta térmica ilustrativa, sin valores regionales":"Escala global del porcentaje registrado"}>
                 <div className={illustrativeFat?"":"studio-fat-global-ramp"}/><span>{illustrativeFat?"Menor intensidad":"0 %"}</span><span>{illustrativeFat?"Mayor intensidad":"100 %"}</span>
               </div>
