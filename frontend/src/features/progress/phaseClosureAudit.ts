@@ -92,9 +92,9 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
   },
   {
     phaseId: 2, title: "Expedientes y mediciones",
-    technical: "verified", formalAcceptance: "pending",
+    technical: "verified", formalAcceptance: "product-approved",
     mappedExecutionPhase: "F2 de IMPLEMENTATION_SPEC: expediente, catálogo, mediciones, derivadas y gráficos.",
-    owner: "Responsables de producto, dominio y QA por confirmar",
+    owner: "Usuario del proyecto: conformidad expresa de producto (23-11-2026); revisores independientes pendientes",
     checks: [
       {
         id: "F2-CRUD", requirement: "Alta, consulta y corrección versionada sin sobrescribir observaciones.",
@@ -118,7 +118,8 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
       },
       {
         id: "F2-ACCEPTANCE", requirement: "Aceptación funcional final del flujo ficticio por el responsable del producto.",
-        state: "pending", pendingReason: "El cierre técnico consta; falta la revisión y conformidad del responsable.",
+        state: "verified",
+        evidence: { label: "Aceptación expresa del flujo ficticio por producto", url: doc("docs/qa/PHASE_2_PRODUCT_ACCEPTANCE_2026_11_23.md") },
       },
     ],
   },
