@@ -21,6 +21,7 @@ from app.services.longitudinal_csv import (
     CsvUnitMismatchError,
     build_longitudinal_csv,
 )
+from app.services.report_signatures import ReportReceipt, sign_report
 
 router = APIRouter(prefix="/api/v1", tags=["Private fictional comparison reports"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
@@ -38,6 +39,7 @@ class ComparisonDownload(BaseModel):
     filename: str
     pdf_base64: str
     sha256: str
+    receipt: ReportReceipt | None = None
 
 
 @router.post("/profiles/{profile_id}/reports/comparison", response_model=ComparisonDownload)
@@ -96,12 +98,26 @@ def export_comparison(
         text("SELECT audit_private_comparison_export(:event,:correlation,:profile,'pdf')"),
         {"event": report_id, "correlation": scope.correlation_id, "profile": profile_id},
     ).scalar_one()
+    filename = f"bodyvision-{report_id}.pdf"
+    receipt = (
+        sign_report(
+            settings.report_signing_key.get_secret_value(),
+            format_name="pdf",
+            export_id=report_id,
+            filename=filename,
+            generated_at=generated_at,
+            content=pdf,
+        )
+        if settings.report_signing_key is not None
+        else None
+    )
     return ComparisonDownload(
         report_id=report_id,
         generated_at=generated_at,
-        filename=f"bodyvision-{report_id}.pdf",
+        filename=filename,
         pdf_base64=base64.b64encode(pdf).decode("ascii"),
         sha256=hashlib.sha256(pdf).hexdigest(),
+        receipt=receipt,
     )
 
 
@@ -120,6 +136,7 @@ class LongitudinalDownload(BaseModel):
     row_count: int
     csv_base64: str
     sha256: str
+    receipt: ReportReceipt | None = None
 
 
 @router.post("/profiles/{profile_id}/reports/longitudinal", response_model=LongitudinalDownload)
@@ -194,13 +211,28 @@ def export_longitudinal(
         text("SELECT audit_private_comparison_export(:event,:correlation,:profile,'csv')"),
         {"event": report_id, "correlation": scope.correlation_id, "profile": profile_id},
     ).scalar_one()
+    filename = f"bodyvision-historial-{report_id}.csv"
+    receipt = (
+        sign_report(
+            settings.report_signing_key.get_secret_value(),
+            format_name="csv",
+            export_id=report_id,
+            filename=filename,
+            generated_at=generated_at,
+            content=csv_bytes,
+            row_count=exported.row_count,
+        )
+        if settings.report_signing_key is not None
+        else None
+    )
     return LongitudinalDownload(
         export_id=report_id,
         generated_at=generated_at,
-        filename=f"bodyvision-historial-{report_id}.csv",
+        filename=filename,
         metric_code=selection.metric_code,
         period=selection.period,
         row_count=exported.row_count,
         csv_base64=base64.b64encode(csv_bytes).decode("ascii"),
         sha256=hashlib.sha256(csv_bytes).hexdigest(),
+        receipt=receipt,
     )

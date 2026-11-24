@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkReceiptBinding, reportReceiptSchema } from "./reportReceipt";
 
 export const comparisonDownloadSchema = z.object({
   report_id: z.string().uuid(),
@@ -6,6 +7,7 @@ export const comparisonDownloadSchema = z.object({
   filename: z.string().regex(/^bodyvision-[a-f0-9-]{36}\.pdf$/),
   pdf_base64: z.string().min(1).max(100000),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  receipt: reportReceiptSchema.nullable().optional(),
 }).refine((report) => report.filename === `bodyvision-${report.report_id}.pdf`, {
   message: "El nombre del archivo no corresponde al informe.",
   path: ["filename"],
@@ -21,6 +23,11 @@ export async function verifiedComparisonPdf(report: ComparisonDownload): Promise
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
   if (hex !== parsed.sha256) throw new Error("No se pudo verificar la integridad del PDF.");
+  checkReceiptBinding(parsed.receipt, {
+    format: "pdf", exportId: parsed.report_id, filename: parsed.filename,
+    sha256: parsed.sha256, generatedAt: parsed.generated_at, byteCount: bytes.byteLength,
+    rowCount: null,
+  });
   return new Blob([bytes], { type: "application/pdf" });
 }
 

@@ -4,6 +4,7 @@ import type { Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { summarizeLongitudinal } from "./longitudinalSummary";
 import { verifySavedReportFile, type SavedReportReference } from "./savedReportVerification";
+import { saveReportReceipt } from "./reportReceipt";
 
 const number = (value: number) => new Intl.NumberFormat("es-PE", {
   maximumFractionDigits: 2,
@@ -49,7 +50,7 @@ export function LongitudinalSummary({
       const blob = await verifiedLongitudinalCsv(data);
       if (generation.current === token) {
         saveLongitudinalCsv(blob, data.filename);
-        setDownloadProof({ filename: data.filename, sha256: data.sha256, format: "csv" });
+        setDownloadProof({ filename: data.filename, sha256: data.sha256, format: "csv", receipt: data.receipt });
         setSavedCopyStatus("");
       }
     } catch (error) {
@@ -142,9 +143,14 @@ export function LongitudinalSummary({
               {busy ? "Preparando historial…" : "Descargar historial observado (CSV)"}
             </button>
             <small className="muted">Historial completo del periodo, hasta 8 MiB por archivo,
-              con auditoría y verificación de integridad. No es una firma digital
-              ni acredita exactitud clínica.</small>
+              con auditoría y verificación de integridad. La firma criptográfica opcional no acredita exactitud clínica ni validez legal.</small>
             {downloadProof && <>
+                {downloadProof.receipt && <>
+                  <button type="button" onClick={() => {
+                    if (downloadProof.receipt) saveReportReceipt(downloadProof.receipt);
+                  }}>Descargar comprobante de firma (JSON)</button>
+                  <small className="muted">Verificación independiente: requiere una clave pública de confianza obtenida por separado. No acredita validez legal ni clínica.</small>
+                </>}
               <input ref={filePicker} type="file" accept=".csv,text/csv" hidden
                 aria-label="Seleccionar CSV descargado para verificar"
                 onChange={(event) => {

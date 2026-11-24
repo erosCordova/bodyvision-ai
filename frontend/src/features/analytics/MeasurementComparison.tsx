@@ -7,6 +7,7 @@ import { buildComparisonReport, type ComparisonReport } from "./comparisonReport
 import { saveComparisonPdf, verifiedComparisonPdf } from "./serverComparisonDownload";
 import type { ComparisonDownload } from "./serverComparisonDownload";
 import { verifySavedReportFile, type SavedReportReference } from "./savedReportVerification";
+import { saveReportReceipt } from "./reportReceipt";
 import { ComparisonPrintView } from "./ComparisonPrintView";
 
 const formatSigned = (value: number) =>
@@ -73,7 +74,7 @@ export function MeasurementComparison({
       const blob = await verifiedComparisonPdf(report);
       if (attempt === downloadAttempt.current) {
         saveComparisonPdf(blob, report.filename);
-        setDownloadProof({ filename: report.filename, sha256: report.sha256, format: "pdf" });
+        setDownloadProof({ filename: report.filename, sha256: report.sha256, format: "pdf", receipt: report.receipt });
         setVerifiedCopyStatus("");
       }
     } catch (error) {
@@ -179,8 +180,14 @@ export function MeasurementComparison({
                 {downloading ? "Generando PDF…" : "Descargar informe PDF"}
               </button>
               <small className="muted">El informe verifica las fuentes vigentes y registra la exportación.
-                Solo datos ficticios; sin firma digital.</small>
+                Solo datos ficticios. La firma criptográfica opcional no acredita validez legal ni clínica.</small>
               {downloadProof && <>
+                {downloadProof.receipt && <>
+                  <button type="button" onClick={() => {
+                    if (downloadProof.receipt) saveReportReceipt(downloadProof.receipt);
+                  }}>Descargar comprobante de firma (JSON)</button>
+                  <small className="muted">Verificación independiente: requiere una clave pública de confianza obtenida por separado. No acredita validez legal ni clínica.</small>
+                </>}
                 <input ref={savedFilePicker} type="file" accept=".pdf,application/pdf" hidden
                   aria-label="Seleccionar PDF descargado para verificar"
                   onChange={(event) => {

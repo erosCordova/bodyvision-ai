@@ -26,6 +26,24 @@ describe("private longitudinal CSV delivery", () => {
     expect(blob.type).toContain("text/csv");
     expect(blob.size).toBe(Buffer.byteLength(csv, "utf8"));
   });
+  it("requires the optional CSV receipt to match the verified bytes and row count", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const receipt = {
+      version: 1 as const, algorithm: "Ed25519" as const,
+      scope: "synthetic-local-test-report" as const, format: "csv" as const,
+      export_id: report.export_id, filename: report.filename,
+      generated_at: report.generated_at, sha256: report.sha256,
+      byte_count: Buffer.byteLength(csv), row_count: report.row_count,
+      key_id: "a".repeat(64), signature: "b".repeat(128),
+    };
+    await expect(verifiedLongitudinalCsv({ ...report, receipt })).resolves.toBeInstanceOf(Blob);
+    await expect(verifiedLongitudinalCsv({
+      ...report, receipt: { ...receipt, row_count: 1 },
+    })).rejects.toThrow(/comprobante/);
+    await expect(verifiedLongitudinalCsv({
+      ...report, receipt: { ...receipt, export_id: "11111111-1111-4111-8111-111111111111" },
+    })).rejects.toThrow(/comprobante/);
+  });
   it("rejects tampering, incomplete rows, unsafe filenames and invalid UTF-8", async () => {
     vi.stubGlobal("crypto", webcrypto);
     await expect(verifiedLongitudinalCsv({ ...report, sha256: "0".repeat(64) }))

@@ -109,6 +109,61 @@ def test_private_pdf_checks_scope_sources_and_committed_audit(comparison_data):
         )
 
 
+def test_optional_signed_report_receipts_are_scoped_and_independently_verifiable(
+    comparison_data, monkeypatch
+):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from pydantic import SecretStr
+
+    from app.services.report_signatures import ReportReceipt, verify_report_receipt
+
+    client, owner, profile, users, _, reader, rows = comparison_data
+    root = f"/api/v1/profiles/{profile}/reports"
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes_raw()
+    monkeypatch.setattr(
+        client.app.state.settings,
+        "report_signing_key",
+        SecretStr(private.private_bytes_raw().hex()),
+    )
+    outsider = headers(authenticate(client, users[2][0], users[2][1]).json()["token"])
+    for suffix, selection, field, id_field in (
+        (
+            "comparison",
+            {"initial_id": rows[0]["id"], "final_id": rows[1]["id"]},
+            "pdf_base64",
+            "report_id",
+        ),
+        (
+            "longitudinal",
+            {"metric_code": "weight", "period": "all"},
+            "csv_base64",
+            "export_id",
+        ),
+    ):
+        denied = client.post(root + "/" + suffix, json=selection, headers=outsider)
+        assert denied.status_code == 404
+        assert "signature" not in denied.text
+        result = client.post(root + "/" + suffix, json=selection, headers=reader)
+        assert result.status_code == 200, result.text
+        body = result.json()
+        receipt = ReportReceipt.model_validate(body["receipt"])
+        assert receipt.export_id == body[id_field]
+        assert receipt.sha256 == body["sha256"]
+        assert receipt.row_count == body.get("row_count")
+        verify_report_receipt(
+            receipt, public, base64.b64decode(body[field], validate=True), body["filename"]
+        )
+        with owner.connect() as conn:
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM security_audit_events WHERE id=:id"),
+                    {"id": body[id_field]},
+                ).scalar_one()
+                == 1
+            )
+
+
 def test_pdf_is_not_delivered_if_audit_cannot_be_committed(comparison_data):
     client, _, profile, _, _, reader, rows = comparison_data
     original = client.app.state.engine
