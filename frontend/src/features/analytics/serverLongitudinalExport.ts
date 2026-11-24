@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkReceiptBinding, reportReceiptSchema } from "./reportReceipt";
 
 export const MAX_LONGITUDINAL_BYTES = 8 * 1024 * 1024;
 
@@ -11,6 +12,7 @@ export const longitudinalDownloadSchema = z.object({
   row_count: z.number().int().min(1).max(MAX_LONGITUDINAL_BYTES),
   csv_base64: z.string().min(1).max(4 * Math.ceil(MAX_LONGITUDINAL_BYTES / 3)),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  receipt: reportReceiptSchema.nullable().optional(),
 }).refine((report) => report.filename === `bodyvision-historial-${report.export_id}.csv`, {
   message: "El nombre del archivo no corresponde a la exportación.",
   path: ["filename"],
@@ -36,6 +38,11 @@ export async function verifiedLongitudinalCsv(value: LongitudinalDownload): Prom
   const sha = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2, "0")).join("");
   if (sha !== report.sha256)
     throw new Error("No se pudo verificar la integridad del historial.");
+  checkReceiptBinding(report.receipt, {
+    format: "csv", exportId: report.export_id, filename: report.filename,
+    sha256: report.sha256, generatedAt: report.generated_at, byteCount: bytes.byteLength,
+    rowCount: report.row_count,
+  });
   return new Blob([bytes], { type: "text/csv;charset=utf-8" });
 }
 
