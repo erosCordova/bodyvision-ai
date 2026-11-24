@@ -44,7 +44,7 @@ export function ProjectProgressPage() {
         <div className="project-acceptance-heading">
           <div>
             <h2>Auditoría de cierre · fases 0–2</h2>
-            <p>Separación entre gate técnico comprobado y aceptación formal. La fase 0 tiene aceptación expresa de producto; los demás gates conservan sus aprobaciones pendientes. No equivale a firma legal ni clínica.</p>
+            <p>Separación entre gate técnico comprobado y aceptación formal. Las fases 0 y 2 tienen aceptación expresa de producto; la fase 1 tiene recepción técnica asistida. Los gates independientes conservan sus aprobaciones pendientes. No equivale a firma legal ni clínica.</p>
           </div>
           <a href="https://github.com/erosCordova/bodyvision-ai/blob/feature/phase3-auth-security/docs/qa/PHASE_0_2_ACCEPTANCE_AUDIT.md" target="_blank" rel="noopener noreferrer">
             Abrir matriz completa
