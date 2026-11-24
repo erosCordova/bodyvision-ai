@@ -13,6 +13,12 @@ import {
 } from "../../components/ui/States";
 import { Modal } from "../../components/ui/Modal";
 import { MeasurementForm } from "../measurements/MeasurementForm";
+import { MeasurementComparison } from "../analytics/MeasurementComparison";
+import { LongitudinalSummary } from "../analytics/LongitudinalSummary";
+import { validExportRange } from "../analytics/serverLongitudinalExport";
+import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { PoseSummaryArchive } from "../capture/PoseSummaryArchive";
+import { ConsentPanel } from "./ConsentPanel";
 const HistoryChart = lazy(() =>
   import("../analytics/HistoryChart").then((module) => ({
     default: module.HistoryChart,
@@ -25,9 +31,15 @@ export function ProfileDetail() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") === "measurements" ? "measurements" : "summary");
   const [metric, setMetric] = useState("weight");
   const [period, setPeriod] = useState("90d");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const customRange = { start_date: startDate, end_date: endDate };
+  const periodReady = period !== "custom" || validExportRange(customRange);
+  const periodKey = period === "custom" ? `custom-${startDate}-${endDate}` : period;
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<Measurement | "new" | null>(null);
   const [versionId, setVersionId] = useState<string | null>(null);
+  const [versionOffset, setVersionOffset] = useState(0);
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -45,12 +57,15 @@ export function ProfileDetail() {
     queryFn: () => api.derived(profileId),
   });
   const series = useQuery({
-    queryKey: ["series", id, profileId, metric, period],
-    queryFn: () => api.series(profileId, metric, period),
+    queryKey: ["series", id, profileId, metric, periodKey],
+    queryFn: () => period === "custom"
+      ? api.series(profileId, metric, period, customRange)
+      : api.series(profileId, metric, period),
+    enabled: periodReady,
   });
   const versions = useQuery({
-    queryKey: ["versions", id, versionId],
-    queryFn: () => api.versions(versionId!),
+    queryKey: ["versions", id, versionId, versionOffset],
+    queryFn: () => api.versionsPage(versionId!, versionOffset),
     enabled: !!versionId,
   });
   const update = useMutation({
@@ -99,6 +114,9 @@ export function ProfileDetail() {
                 : "Archivado"}{" "}
             · Organización ficticia
           </p>
+          <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
+            Abrir simulador 3D y escenarios ficticios →
+          </Link>
         </div>
         <button
           className="primary-button"
@@ -116,6 +134,7 @@ export function ProfileDetail() {
           ["summary", "Resumen"],
           ["measurements", "Mediciones"],
           ["analytics", "Evolución"],
+          ...(privateAuthEnabled() ? [["pose", "Resultados de pose"]] : []),
         ].map(([code, label]) => (
           <button
             key={code}
@@ -126,6 +145,8 @@ export function ProfileDetail() {
           </button>
         ))}
       </nav>
+      {tab === "pose" && privateAuthEnabled() && <PoseSummaryArchive key={profileId}
+        fixedProfileId={profileId} summary={null} runSerial={0} />}
       {tab === "summary" && (
         <>
           <div className="section-title">
@@ -174,7 +195,11 @@ export function ProfileDetail() {
           )}
           <section className="panel form-panel">
             <h2>Datos y estado del expediente</h2>
-            {editing ? (
+            {current.status === "restricted" && <p role="status">
+              Expediente restringido: las mediciones y la referencia son de solo lectura.
+              Reactiva el registro para volver a realizar cambios autorizados.
+            </p>}
+            {editing && current.status === "active" ? (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -198,7 +223,7 @@ export function ProfileDetail() {
               </form>
             ) : (
               <button
-                disabled={readOnly || current.status === "archived"}
+                disabled={readOnly || current.status !== "active" || update.isPending}
                 onClick={() => {
                   setName(current.display_name ?? "");
                   setEditing(true);
@@ -212,12 +237,15 @@ export function ProfileDetail() {
                 disabled={
                   readOnly || current.status === "archived" || update.isPending
                 }
-                onClick={() =>
-                  update.mutate({
-                    status:
-                      current.status === "restricted" ? "active" : "restricted",
-                  })
-                }
+                onClick={() => {
+                  const reactivate = current.status === "restricted";
+                  if (window.confirm(reactivate
+                    ? "¿Reactivar este expediente ficticio? Se permitirán nuevas mediciones autorizadas."
+                    : "¿Restringir este expediente ficticio? Su historial y referencia quedarán en modo de solo lectura.")) {
+                    setEditing(false);
+                    update.mutate({ status: reactivate ? "active" : "restricted" });
+                  }
+                }}
               >
                 {current.status === "restricted"
                   ? "Habilitar registro"
@@ -275,12 +303,25 @@ export function ProfileDetail() {
                   <option value="90d">90 días</option>
                   <option value="1a">1 año</option>
                   <option value="all">Todo</option>
+                  <option value="custom">Personalizado</option>
                 </select>
               </label>
             )}
+            {tab === "analytics" && period === "custom" && <>
+              <label>Fecha inicial de evolución
+                <input type="date" value={startDate}
+                  onChange={event => setStartDate(event.currentTarget.value)} />
+              </label>
+              <label>Fecha final de evolución
+                <input type="date" value={endDate}
+                  onChange={event => setEndDate(event.currentTarget.value)} />
+              </label>
+            </>}
           </div>
           {tab === "analytics" &&
-            (series.isPending ? (
+            (!periodReady ? (
+              <p role="status">Selecciona un intervalo válido de fechas (hora de Lima).</p>
+            ) : series.isPending ? (
               <LoadingState />
             ) : series.isError ? (
               <ErrorState
@@ -292,6 +333,33 @@ export function ProfileDetail() {
                 <HistoryChart
                   rows={series.data}
                   unit={selectedMetric?.unit ?? ""}
+                />
+                <LongitudinalSummary
+                  key={periodKey}
+                  rows={series.data}
+                  profileId={profileId}
+                  metricCode={metric}
+                  unit={selectedMetric?.unit ?? ""}
+                  period={period as "30d" | "90d" | "1a" | "all" | "custom"}
+                  selectedRange={period === "custom" ? customRange : undefined}
+                  exportReport={privateAuthEnabled() && current.synthetic
+                    ? (range) => api.longitudinalReport(profileId, metric,
+                        period === "custom" ? "all" : period as "30d" | "90d" | "1a" | "all",
+                        range ?? (period === "custom" ? customRange : undefined))
+                    : undefined}
+                />
+                <MeasurementComparison
+                  key={`${metric}-${periodKey}`}
+                  rows={series.data}
+                  unit={selectedMetric?.unit ?? ""}
+                  profileId={profileId}
+                  profileCode={current.display_code}
+                  synthetic={current.synthetic}
+                  metricCode={metric}
+                  metricLabel={selectedMetric?.label ?? metric}
+                  exportReport={privateAuthEnabled()
+                    ? (initial, final) => api.comparisonReport(profileId, initial, final)
+                    : undefined}
                 />
               </Suspense>
             ))}
@@ -351,7 +419,7 @@ export function ProfileDetail() {
                             )}
                           </td>
                           <td>
-                            <button onClick={() => setVersionId(row.id)}>
+                            <button onClick={() => { setVersionOffset(0); setVersionId(row.id); }}>
                               Ver versiones
                             </button>
                             <button
@@ -386,6 +454,7 @@ export function ProfileDetail() {
           )}
         </>
       )}
+      {privateAuthEnabled() && <ConsentPanel key={profileId} profileId={profileId} />}
       {form && catalog.data && (
         <MeasurementForm
           profileId={profileId}
@@ -404,7 +473,7 @@ export function ProfileDetail() {
       {versionId && (
         <Modal
           title="Versiones de la medición"
-          onClose={() => setVersionId(null)}
+          onClose={() => { setVersionId(null); setVersionOffset(0); }}
         >
           {versions.isPending ? (
             <LoadingState />
@@ -414,12 +483,14 @@ export function ProfileDetail() {
               retry={() => void versions.refetch()}
             />
           ) : (
-            <ol className="version-list">
-              {versions.data.map((row, index) => (
+            <div>
+              <p role="status">Historial de correcciones: {versions.data.total} versiones.</p>
+              <ol className="version-list" start={versionOffset + 1}>
+                {versions.data.items.map((row, index) => (
                 <li key={row.id}>
                   <DataTypeBadge type="OBSERVADO" />
                   <h3>
-                    Versión {index + 1} · {row.value} {row.unit}
+                    Versión {versionOffset + index + 1} · {row.value} {row.unit}
                   </h3>
                   <p>
                     {row.is_current ? "Vigente" : "Sustituida"} ·{" "}
@@ -432,7 +503,23 @@ export function ProfileDetail() {
                   </small>
                 </li>
               ))}
-            </ol>
+              </ol>
+              {versions.data.total > versions.data.limit && <nav
+                aria-label="Páginas de versiones de la medición"
+                className="enterprise-pagination">
+                <button type="button" disabled={versionOffset === 0}
+                  onClick={() => setVersionOffset(v => Math.max(0, v - 20))}>
+                  Versiones anteriores
+                </button>
+                <span>{versionOffset + 1}–{Math.min(versionOffset + 20, versions.data.total)}
+                  de {versions.data.total}</span>
+                <button type="button"
+                  disabled={versionOffset + 20 >= versions.data.total}
+                  onClick={() => setVersionOffset(v => v + 20)}>
+                  Más versiones
+                </button>
+              </nav>}
+            </div>
           )}
         </Modal>
       )}

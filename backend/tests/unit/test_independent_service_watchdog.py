@@ -1,0 +1,180 @@
+"""Isolated tests of optional monitoring; no HTTP network or live accounts."""
+
+import io
+import json
+from datetime import UTC, datetime, timedelta
+from urllib.error import HTTPError, URLError
+
+import pytest
+
+from app.db.session import SCHEMA_REVISION
+from app.workers.independent_service_watchdog import (
+    MAX_RESPONSE_BYTES,
+    WatchdogDenied,
+    main,
+    monitor,
+    probe_readiness,
+    require_synthetic_watchdog,
+)
+
+TARGET = "http://backend:8000/api/v1/health/ready"
+ENV = {"APP_ENV": "test", "BODYVISION_ENABLE_WATCHDOG": "synthetic-only"}
+
+
+class Response:
+    status = 200
+
+    def __init__(self, body):
+        self.data = io.BytesIO(body)
+
+    def read(self, size):
+        return self.data.read(size)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+class Opener:
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.requests = []
+
+    def open(self, request, timeout):
+        self.requests.append((request.full_url, request.get_method(), timeout))
+        if isinstance(self.outcome, BaseException):
+            raise self.outcome
+        return self.outcome
+
+
+def test_requires_explicit_synthetic_opt_in_bounded_interval_and_internal_target():
+    assert require_synthetic_watchdog(ENV) == (TARGET, 30)
+    assert require_synthetic_watchdog({**ENV, "WATCHDOG_INTERVAL_SECONDS": "10"})[1] == 10
+    for changes in (
+        {"APP_ENV": "production"},
+        {"APP_ENV": "demo"},
+        {"BODYVISION_ENABLE_WATCHDOG": "true"},
+        {"BODYVISION_ENABLE_WATCHDOG": ""},
+        {"WATCHDOG_TARGET": "http://outside.invalid/api/v1/health/ready"},
+        {"WATCHDOG_TARGET": "http://backend:8000/api/v1/auth/operations"},
+        {"WATCHDOG_TARGET": "https://backend:8000/api/v1/health/ready"},
+        {"WATCHDOG_TARGET": "http://backend:8000/api/v1/health/ready?token=secret"},
+        {"WATCHDOG_INTERVAL_SECONDS": "0"},
+        {"WATCHDOG_INTERVAL_SECONDS": "3601"},
+        {"WATCHDOG_INTERVAL_SECONDS": "bad"},
+    ):
+        with pytest.raises(WatchdogDenied):
+            require_synthetic_watchdog({**ENV, **changes})
+    with pytest.raises(WatchdogDenied):
+        probe_readiness("http://outside.invalid/")
+
+
+def test_probe_requires_ready_database_and_current_revision_without_redirects():
+    healthy = json.dumps(
+        {
+            "status": "ready",
+            "database": "connected",
+            "schema_revision": SCHEMA_REVISION,
+            "checked_at": datetime.now(UTC).isoformat(),
+        }
+    ).encode()
+    opener = Opener(Response(healthy))
+    assert probe_readiness(TARGET, opener=opener) == "ready"
+    assert opener.requests == [(TARGET, "GET", 3)]
+    for item in (
+        {"status": "ready", "database": "connected", "schema_revision": "old"},
+        {"status": "alive", "database": "connected", "schema_revision": SCHEMA_REVISION},
+        ["ready"],
+    ):
+        assert (
+            probe_readiness(TARGET, opener=Opener(Response(json.dumps(item).encode())))
+            == "degraded"
+        )
+    assert probe_readiness(TARGET, opener=Opener(Response(b"invalid json"))) == "degraded"
+    assert (
+        probe_readiness(TARGET, opener=Opener(Response(b"x" * (MAX_RESPONSE_BYTES + 1))))
+        == "degraded"
+    )
+    for status in (302, 503):
+        assert (
+            probe_readiness(TARGET, opener=Opener(HTTPError(TARGET, status, "not ready", {}, None)))
+            == "degraded"
+        )
+    assert (
+        probe_readiness(TARGET, opener=Opener(URLError("connection refused private host")))
+        == "unreachable"
+    )
+
+
+def test_probe_rejects_stale_future_and_ambiguous_ready_responses():
+    now = datetime.now(UTC)
+    valid = {
+        "status": "ready",
+        "database": "connected",
+        "schema_revision": SCHEMA_REVISION,
+        "checked_at": now.isoformat(),
+    }
+
+    def observed(payload):
+        return probe_readiness(TARGET, opener=Opener(Response(json.dumps(payload).encode("utf-8"))))
+
+    # A proper UTC/Z observation remains accepted without trusting uptime.
+    assert observed({**valid, "checked_at": now.isoformat().replace("+00:00", "Z")}) == "ready"
+    for broken in (
+        {key: value for key, value in valid.items() if key != "checked_at"},
+        {**valid, "checked_at": (now - timedelta(minutes=5)).isoformat()},
+        {**valid, "checked_at": (now + timedelta(minutes=5)).isoformat()},
+        {**valid, "checked_at": now.replace(tzinfo=None).isoformat()},
+        {**valid, "checked_at": "not-a-timestamp"},
+        {**valid, "checked_at": "9999-12-31T23:59:59-23:59"},
+        {**valid, "checked_at": "0001-01-01T00:00:00+23:59"},
+        {**valid, "checked_at": None},
+        {**valid, "unrecognized": "value"},
+    ):
+        assert observed(broken) == "degraded"
+
+    # The default JSON last-key-wins behavior must not turn a duplicated
+    # status field into a synthetic healthy observation.
+    duplicate = (
+        '{"status":"unreachable","status":"ready","database":"connected",'
+        '"schema_revision":"' + SCHEMA_REVISION + '","checked_at":"' + now.isoformat() + '"}'
+    ).encode("utf-8")
+    assert probe_readiness(TARGET, opener=Opener(Response(duplicate))) == "degraded"
+
+
+def test_outage_recovery_emits_only_transition_states_without_private_details():
+    states = iter(["unreachable", "unreachable", "degraded", "ready"])
+    records = []
+    iterations = 0
+
+    def finish(_interval):
+        nonlocal iterations
+        iterations += 1
+        if iterations == 4:
+            raise KeyboardInterrupt
+
+    assert (
+        monitor(
+            TARGET,
+            10,
+            probe=lambda _: next(states),
+            sleep=finish,
+            emit=records.append,
+        )
+        == 0
+    )
+    messages = [json.loads(line) for line in records]
+    assert [message["state"] for message in messages] == ["unreachable", "degraded", "ready"]
+    assert all(set(message) == {"event", "state", "checked_at"} for message in messages)
+    assert TARGET not in "".join(records)
+    assert "connection refused" not in "".join(records)
+
+
+def test_single_probe_exit_codes_and_disallowed_environment(capsys):
+    assert monitor(TARGET, 30, once=True, probe=lambda _: "ready", emit=lambda _: None) == 0
+    assert monitor(TARGET, 30, once=True, probe=lambda _: "unreachable", emit=lambda _: None) == 1
+    forbidden = {**ENV, "APP_ENV": "production"}
+    assert main(["--once"], forbidden) == 2
+    assert capsys.readouterr().out.strip() == '{"event":"synthetic_watchdog_disabled"}'

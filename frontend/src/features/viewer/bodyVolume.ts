@@ -27,3 +27,19 @@ export function bodyVolumeScenario(referenceKg: number, variationPercent: number
     radialVariation,
   };
 }
+
+/**
+ * Artistic rendering relative to the original 70 kg atlas. The exponent
+ * deliberately compresses large absolute-weight differences to avoid
+ * presenting a medical prediction of body composition.
+ * The existing +/-30% slider keeps its original cross-section response
+ * at the 70 kg default, while changing the reference weight is now visible.
+ */
+export function bodyVisualScenario(referenceKg: number, variationPercent: number) {
+  const scenario = bodyVolumeScenario(referenceKg, variationPercent);
+  const referenceScale = Math.pow(scenario.referenceKg / DEFAULT_REFERENCE_KG, 0.24);
+  return {
+    referenceRadialVariation: referenceScale - 1,
+    scenarioRadialVariation: referenceScale * (1 + scenario.radialVariation) - 1,
+  };
+}

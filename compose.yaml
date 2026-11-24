@@ -39,6 +39,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Run setup first}
       CORS_ORIGINS: ${CORS_ORIGINS:?Run setup first}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Run setup first}
+      PRIVACY_REVIEW_TARGET_DAYS: ${PRIVACY_REVIEW_TARGET_DAYS:-7}
       TZ: America/Lima
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -47,6 +48,44 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    networks: [private]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  capture-retention:
+    # Explicit opt-in sidecar: runs while backend is stopped, if db is still up.
+    profiles: [maintenance]
+    build: {context: ./backend, target: runtime}
+    command: [python, -m, app.workers.independent_capture_retention]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      IDENTITY_ENABLED: ${IDENTITY_ENABLED:-false}
+      BODYVISION_ENABLE_CAPTURE_RETENTION: ${BODYVISION_ENABLE_CAPTURE_RETENTION:-disabled}
+      DATABASE_URL: ${DATABASE_URL:?Run setup first}
+      CAPTURE_RETENTION_INTERVAL_SECONDS: ${CAPTURE_RETENTION_INTERVAL_SECONDS:-900}
+      TZ: America/Lima
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+    networks: [private]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  watchdog:
+    # Opt-in availability monitor; works with backend stopped, without DB secrets.
+    profiles: [watchdog]
+    build: {context: ./backend, target: runtime}
+    command: [python, -m, app.workers.independent_service_watchdog]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      BODYVISION_ENABLE_WATCHDOG: ${BODYVISION_ENABLE_WATCHDOG:-disabled}
+      WATCHDOG_TARGET: http://backend:8000/api/v1/health/ready
+      WATCHDOG_INTERVAL_SECONDS: ${WATCHDOG_INTERVAL_SECONDS:-30}
+    volumes:
+      - watchdog_history:/var/lib/bodyvision-watchdog
+    restart: unless-stopped
     networks: [private]
     read_only: true
     tmpfs: [/tmp]
@@ -81,14 +120,48 @@ services:
     profiles: [test]
     build: {context: ./backend, target: test}
     environment:
-      TEST_DATABASE_URL: ${MIGRATION_DATABASE_URL:?Run setup first}
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?Run setup first}:${POSTGRES_PASSWORD:?Run setup first}@db-test:5432/bodyvision_test
     depends_on:
-      migrate: {condition: service_completed_successfully}
-    networks: [private]
+      migrate-test: {condition: service_completed_successfully}
+    networks: [tests]
+  db-test:
+    profiles: [test]
+    image: postgres:15-bookworm@sha256:72ccb1ad4dc9d5813ea40a8c1c87af746f16658fb029c17fe570ea9b881f68b3
+    environment:
+      POSTGRES_DB: bodyvision_test
+      POSTGRES_USER: ${POSTGRES_USER:?Run setup first}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup first}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Run setup first}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      TZ: America/Lima
+    volumes:
+      - ./infra/postgres/init.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    tmpfs: ["/var/lib/postgresql/data:rw,noexec,nosuid,size=512m"]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [tests]
+  migrate-test:
+    profiles: [test]
+    build: {context: ./backend, target: runtime}
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?Run setup first}:${POSTGRES_PASSWORD:?Run setup first}@db-test:5432/bodyvision_test
+    command: [alembic, upgrade, head]
+    depends_on:
+      db-test: {condition: service_healthy}
+    networks: [tests]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
   frontend-test:
     profiles: [test]
     build: {context: ./frontend, target: test}
 networks:
   private: {}
+  tests: {internal: true}
 volumes:
   postgres_data:
+  watchdog_history:

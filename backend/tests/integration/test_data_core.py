@@ -167,6 +167,52 @@ def test_correction_preserves_values_and_history(client, database):
             conn.execute(text("DELETE FROM measurements WHERE id=:id"), {"id": corrected["id"]})
 
 
+def test_correction_is_committed_before_http_response(client, database):
+    """A second connection must see the corrected value as soon as HTTP 201 arrives."""
+    profile = new_profile(client)
+    original_data = entry(72)
+    original = post(client, profile, original_data)
+    assert original.status_code == 201, original.text
+    previous_id = original.json()["id"]
+    corrected = client.patch(
+        f"/api/v1/measurements/{previous_id}",
+        json={**original_data, "value": 71, "correction_reason": "Corrección ficticia inmediata"},
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    assert corrected.status_code == 201, corrected.text
+    new_id = corrected.json()["id"]
+    with database.connect() as conn:
+        rows = (
+            conn.execute(
+                text("SELECT id,is_current,value FROM measurements WHERE id IN (:old,:new)"),
+                {"old": previous_id, "new": new_id},
+            )
+            .mappings()
+            .all()
+        )
+    by_id = {str(row["id"]): row for row in rows}
+    assert len(rows) == 2
+    assert by_id[previous_id]["is_current"] is False
+    assert by_id[new_id]["is_current"] is True
+    assert float(by_id[new_id]["value"]) == 71
+    visible = client.get(f"/api/v1/profiles/{profile}/measurements")
+    assert visible.status_code == 200, visible.text
+    assert [row["id"] for row in visible.json()["items"]] == [new_id]
+
+
+def test_workspace_write_dependency_commits_before_response():
+    from typing import get_args
+
+    from fastapi.params import Depends
+
+    from app.api.deps import workspace
+    from app.api.routes.data_core import Scope
+
+    dependency = next(metadata for metadata in get_args(Scope)[1:] if isinstance(metadata, Depends))
+    assert dependency.dependency is workspace
+    assert dependency.scope == "function"
+
+
 def test_outlier_requires_confirmation(client):
     profile = new_profile(client)
     assert (
@@ -252,7 +298,29 @@ def test_archived_and_restricted_profiles_cannot_receive_measurements(client):
         == 200
     )
     assert post(client, profile, entry()).status_code == 409
+    # Restricting is a genuine read-only state for metadata too; activating
+    # and renaming in the same request must not bypass the boundary.
+    assert (
+        client.patch(
+            "/api/v1/profiles/" + profile, json={"display_name": "Cambio prohibido"}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.patch(
+            "/api/v1/profiles/" + profile,
+            json={"status": "active", "display_name": "Atajo prohibido"},
+        ).status_code
+        == 409
+    )
+    assert client.get("/api/v1/profiles/" + profile).json()["display_name"] == "Caso ficticio"
     assert client.patch("/api/v1/profiles/" + profile, json={"status": "active"}).status_code == 200
+    assert (
+        client.patch(
+            "/api/v1/profiles/" + profile, json={"display_name": "Permitido tras reactivar"}
+        ).status_code
+        == 200
+    )
     assert client.post("/api/v1/profiles/" + profile + "/archive").status_code == 200
     assert post(client, profile, entry()).status_code == 409
 
@@ -292,3 +360,95 @@ def test_demo_database_rejects_sql_writes_even_with_owner_connection(db_url):
             assert error.value.orig.sqlstate == "25006"
     finally:
         engine.dispose()
+
+
+def test_correction_lineage_is_paged_without_unrelated_profile_measurements(client):
+    """26 corrections are read in exact order, even from a middle version."""
+    profile = new_profile(client)
+    data = entry(72)
+    first_response = post(client, profile, data)
+    assert first_response.status_code == 201, first_response.text
+    first = first_response.json()["id"]
+    ids = [first]
+    latest = first
+    for i in range(1, 26):
+        correction = client.patch(
+            f"/api/v1/measurements/{latest}",
+            json={
+                **data,
+                "value": round(72 - i * 0.1, 2),
+                "correction_reason": "Corrección sintética paginada",
+            },
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        assert correction.status_code == 201, correction.text
+        latest = correction.json()["id"]
+        ids.append(latest)
+
+    unrelated = post(client, profile, entry(180, metric="height", unit="cm"))
+    assert unrelated.status_code == 201, unrelated.text
+
+    base = f"/api/v1/measurements/{ids[12]}/versions"
+    first_page = client.get(base + "/page?limit=20&offset=0")
+    second_page = client.get(base + "/page?limit=20&offset=20")
+    assert first_page.status_code == 200, first_page.text
+    assert second_page.status_code == 200, second_page.text
+    one = first_page.json()
+    two = second_page.json()
+    assert one["total"] == two["total"] == 26
+    assert one["limit"] == two["limit"] == 20
+    assert one["offset"] == 0 and two["offset"] == 20
+    assert [x["id"] for x in one["items"] + two["items"]] == ids
+    assert all(x["data_type"] == "OBSERVADO" for x in one["items"] + two["items"])
+    assert all(x["metric_code"] == "weight" for x in one["items"] + two["items"])
+    assert unrelated.json()["id"] not in ids
+
+    empty = client.get(base + "/page?limit=20&offset=40")
+    assert empty.status_code == 200
+    assert empty.json()["items"] == [] and empty.json()["total"] == 26
+    assert client.get(base + "/page?limit=0").status_code == 422
+    assert client.get(base + "/page?limit=51").status_code == 422
+    assert client.get(base + "/page?offset=-1").status_code == 422
+
+    # Preserve existing client contracts and allow opening from any version.
+    legacy = client.get(f"/api/v1/measurements/{ids[0]}/versions")
+    assert legacy.status_code == 200
+    assert [x["id"] for x in legacy.json()] == ids
+    latest_page = client.get(f"/api/v1/measurements/{ids[-1]}/versions/page")
+    assert [x["id"] for x in latest_page.json()["items"]] == ids[:20]
+    assert latest_page.json()["total"] == 26
+
+    # RLS + profile grant: a different test organization cannot see the chain.
+    denied = client.get(
+        base + "/page",
+        headers={"X-Workspace-ID": str(SECOND_WORKSPACE)},
+    )
+    assert denied.status_code == 404
+
+
+def test_custom_series_uses_inclusive_lima_dates_and_current_rows(client):
+    profile = new_profile(client)
+    stamps = [
+        datetime(2025, 1, 15, 4, 59, 59, 999999, tzinfo=UTC),
+        datetime(2025, 1, 15, 5, 0, tzinfo=UTC),
+        datetime(2025, 1, 16, 4, 59, 59, 999999, tzinfo=UTC),
+        datetime(2025, 1, 16, 5, 0, tzinfo=UTC),
+    ]
+    created = []
+    for index, stamp in enumerate(stamps):
+        result = post(client, profile, entry(70 + index, at=stamp))
+        assert result.status_code == 201, result.text
+        created.append(result.json()["id"])
+    path = f"/api/v1/profiles/{profile}/analytics/series"
+    params = {"period": "custom", "start_date": "2025-01-15", "end_date": "2025-01-15"}
+    result = client.get(path, params=params)
+    assert result.status_code == 200, result.text
+    assert [row["id"] for row in result.json()] == created[1:3]
+    assert all(row["is_current"] for row in result.json())
+    assert client.get(path, params={**params, "end_date": "2025-01-14"}).status_code == 422
+    assert client.get(path, params={**params, "start_date": "2025-02-30"}).status_code == 422
+    assert client.get(path, params={**params, "end_date": "9999-12-31"}).status_code == 422
+    assert client.get(path, params={"period": "custom"}).status_code == 422
+    assert client.get(path, params={**params, "period": "all"}).status_code == 422
+    foreign = client.get(path, params=params, headers={"X-Workspace-ID": str(SECOND_WORKSPACE)})
+    assert foreign.status_code == 404

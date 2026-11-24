@@ -1,0 +1,474 @@
+# BODYVISION AI — Fase 3 (fundación de identidad y consentimiento)
+
+## Objetivo y estado
+
+Esta rama contiene **solo la base segura de datos y las políticas del dominio**.
+**El nuevo API privado de login solo se activa explícitamente en local/test; no
+incorpora cuentas reales ni abre operaciones clínicas.** La demostración pública
+permanece sintética y de solo lectura. No fusionar como «seguridad completa».
+
+## Entregas de esta iteración
+
+- Migración `0003_identity_foundation`: usuarios con email y hash de contraseña
+  opcionales (los operadores de prueba existentes quedan deshabilitados para
+  autenticación), roles por organización, sesiones opacas con digest SHA-256,
+  consentimiento versionado por finalidad y auditoría mínima sin payload clínico.
+- Políticas de acceso de **denegación por defecto**: un administrador no puede
+  consultar un expediente sin un permiso explícito; los miembros no pueden
+  modificar expedientes ni ejecutar captura/IA.
+- Verificación de contraseña con PBKDF2-HMAC-SHA256 y sal aleatoria, sin guardar
+  contraseñas en texto plano. El esquema deberá revisarse frente a los
+  requisitos de seguridad vigentes antes de producción.
+- Tokens opacos con persistencia solo de hash; el API privado comprueba credenciales,
+  crea/revoca sesiones y devuelve el rol verificado. Un selector de organización
+  no se acepta como identidad en modo protegido.
+- Rol PostgreSQL separado para autenticación; el rol de datos pierde permiso
+  para consultar contraseñas cifradas.
+- Comprobación de consentimiento por finalidad, vigencia y revocación.
+- Nuevas tablas **sin permisos** para `bodyvision_app`. Se establecerá
+  posteriormente un rol de base de datos específico para autenticación y
+  consentimiento, previa revisión de privilegios.
+
+## Siguiente incremento antes de activar el login
+
+1. Provisionamiento administrativo verificado y recuperación segura de cuentas.
+2. Rate limiting distribuido, MFA, renovación y protección contra sesiones robadas.
+3. Integración de frontend autenticado y revisión de almacenamiento de sesiones.
+4. Controles por expediente en API y políticas RLS, con pruebas de acceso
+   cruzado y de consentimiento revocado.
+5. Cifrado de datos privados, almacenamiento de capturas con autorización,
+   rate limiting, auditoría verificable, revisión legal y respaldo seguro.
+
+## Regla de despliegue
+
+Los cambios se proponen en una **rama de desarrollo**, con solicitud de
+cambios en borrador. No se fusionan a `main` ni se publican en Vercel/Render
+hasta que se prueben y se apruebe un entregable suficientemente completo.
+
+**Fuente de requisitos:** documentación BODYVISION v3, Fase 3 (Seguridad e
+identidad), modelo funcional de usuarios/roles/consentimientos y criterios de
+salida; documentación v2, capítulos 4, 11 y 12.
+
+## API de pruebas, sin publicación
+
+En un entorno local o CI aislado con PostgreSQL, las variables
+IDENTITY_ENABLED=true y AUTH_DATABASE_URL habilitan un rol de autenticación
+separado. No se habilitan en demo, staging ni producción.
+
+- POST /api/v1/auth/login: sesión solo de cuentas ficticias provisionadas.
+- GET /api/v1/auth/me: identidad y rol de la sesión activa.
+- POST /api/v1/auth/logout: revocación de sesión.
+
+En modo protegido los endpoints de expedientes obtienen organización y actor
+de la sesión verificada, no de X-Workspace-ID. Las políticas PostgreSQL RLS
+y las concesiones profile_access limitan las filas; los miembros tienen
+acceso de lectura, no de edición. El resumen aplica los mismos límites.
+
+Faltan alta verificada, tasa máxima de intentos, MFA, controles del frontend,
+auditoría integral y consentimiento en futuras API de captura y pose.
+Datos reales no admitidos. No fusionar ni desplegar sin aceptación de fase 3.
+
+## Interfaz privada de pruebas (incremento posterior)
+
+El frontend dispone de formulario de sesión y navegación restringida **solo en
+un entorno Vite de desarrollo** con `VITE_ENABLE_PRIVATE_AUTH=true`. El backend
+debe ejecutarse en `APP_ENV=local` o `test`, con
+`IDENTITY_ENABLED=true` y `AUTH_DATABASE_URL` correspondiente al rol de
+autenticación de la base PostgreSQL de pruebas. Las cuentas de prueba deberán
+ser provisionadas explícitamente por el administrador de ese entorno.
+
+- El token opaco se mantiene **solo en memoria React**; no se copia a
+  almacenamiento local, sessionStorage, URL, cookies ni caché de React Query.
+- La organización y los permisos se obtienen de la sesión del servidor. Las
+  peticiones autenticadas envían `Authorization: Bearer` sin
+  `X-Workspace-ID`; el selector sintético solo sigue funcionando en demo.
+- Antes de login, las rutas de expedientes están bloqueadas y no inician
+  solicitudes privadas. Una sesión caducada se descarta también en frontend.
+- Los miembros de solo lectura no reciben controles de edición, además de
+  la comprobación de permisos obligatoria del backend.
+- El cierre de sesión revoca el token remotamente. Si falla la revocación,
+  se borra la sesión local y se informa de que el token podría seguir vigente
+  hasta caducar.
+
+La compilación pública, incluso si recibe la variable, no puede activar
+esta modalidad porque exige `import.meta.env.DEV`. El acceso público de
+demostración permanece únicamente con datos ficticios. Falta un flujo
+completo de alta controlada, MFA, recuperación y limitación de intentos, y
+la revisión integral de privacidad y seguridad antes de usar datos reales.
+
+## Restricción de proveedor de base de datos
+
+Toda base de datos **alojada** de BODYVISION debe estar en Neon. Render
+puede servir el backend, pero no PostgreSQL ni archivos de base de datos.
+El PostgreSQL de Docker en CI o desarrollo es desechable y no constituye
+un alojamiento de datos. La base persistente en Neon nunca recibe datos
+personales reales mientras no se aprueben seguridad y privacidad.
+
+
+## Límite transaccional de intentos de inicio de sesión
+
+La migración `0005_login_throttle` añade `auth_login_attempts` a la base
+PostgreSQL de pruebas. Nunca se almacena la dirección de correo en texto
+plano en esa tabla, sino un digest SHA-256 con alcance de organización;
+el digest es **seudónimo**, no una anonimización irreversible.
+
+- Se permiten cinco intentos por cuenta y organización durante una ventana
+  de quince minutos. El sexto intento recibe HTTP 429, incluso si la
+  contraseña es correcta, hasta la expiración del bloqueo.
+- Se contabilizan los intentos **antes** de verificar la contraseña mediante
+  una función PostgreSQL atómica con `SECURITY DEFINER`. El incremento
+  se confirma en una transacción distinta y no desaparece cuando falla el
+  inicio de sesión. Esto permite compartir el límite entre instancias.
+- El contador se limpia únicamente después de autenticar las credenciales,
+  comprobar un rol asignado y crear la sesión dentro de la misma transacción.
+- El rol de autenticación no puede leer ni modificar directamente la tabla:
+  solo tiene permiso para ejecutar las funciones controladas.
+- Correo u organización inexistentes reciben el mismo error de credenciales
+  inválidas que una contraseña equivocada, hasta alcanzar el umbral.
+
+**Alcance y límites:** la medida reduce ataques repetidos contra una misma
+identidad; no sustituye un límite global por dirección de origen, protección
+contra ataques distribuidos a múltiples correos, MFA ni observabilidad. Un
+tercero podría provocar bloqueos de una cuenta conocida. Es un control
+provisional para cuentas sintéticas; se requiere revisión antiautomatización
+antes de aceptar usuarios reales. No aplicar esta migración a la base
+pública de demostración de Neon sin plan de migración y aprobación.
+
+
+## Alta controlada y auditoría (incremento de fase 3)
+
+Migración `0006_private_user_admin` — **exclusiva de local/CI con cuentas y
+expedientes ficticios**. La aplicación pública continúa con `0002_data_core`
+en Neon y no expone endpoints privados.
+
+- `POST /api/v1/auth/users`: únicamente un **administrador con sesión
+  verificada** crea cuentas de tipo `member` o `specialist`, con correo del
+  dominio reservado `example.invalid`. No permite elevar a administrador,
+  no acepta identificadores de organización del cliente y no crea accesos a
+  expedientes por defecto. La contraseña se almacena exclusivamente como hash
+  con sal, no se devuelve en la respuesta.
+- `GET /api/v1/auth/audit`: exclusivamente administradores; hasta cincuenta
+  eventos, limitados a la organización derivada de su propia sesión.
+- Se registran `auth.login`, `auth.logout`, `admin.user_provisioned` y
+  denegaciones de alta o consulta de auditoría, con actor, correlación y
+  resultado, pero **sin contraseñas, tokens ni cuerpos de solicitud**.
+- Ambas operaciones acceden a PostgreSQL a través de funciones
+  `SECURITY DEFINER` de alcance restringido. Los roles de aplicación y
+  autenticación no pueden leer ni escribir directamente las tablas de
+  auditoría ni de límites de intentos.
+- Para crear el primer administrador de un entorno de pruebas hace falta un
+  procedimiento de bootstrap separado con una identidad migradora confiable.
+  No existe autorregistro de administradores ni cuentas activas por defecto.
+- Las pruebas confirman rechazo de cuentas duplicadas, correos no sintéticos,
+  elevación de rol, lectura sin permiso y aislamiento entre organizaciones.
+
+**Pendiente antes de producción:** bootstrap auditado de administradores,
+política de contraseñas revisada, MFA, protección distribuida por IP/cliente,
+revocación remota garantizada en condiciones de red adversas, verificación
+legal, consentimientos completos, auditoría de acceso a cada expediente y
+pruebas de intrusión. Este registro es una **auditoría parcial de identidad**,
+no una auditoría clínica completa. Neon sigue siendo el único proveedor
+admitido para bases alojadas; PostgreSQL de Docker/CI es de uso temporal.
+
+## Panel de administración privada (interfaz de pruebas)
+
+La ruta existente `/administration` conserva la presentación informativa
+en la demo pública; únicamente Vite en modo desarrollo con
+`VITE_ENABLE_PRIVATE_AUTH=true` muestra la pantalla funcional de pruebas.
+
+La pantalla consume `POST /api/v1/auth/users` y `GET /api/v1/auth/audit`
+mediante `Authorization: Bearer`, sin aceptar selectores de organización ni
+almacenar el token en el navegador. Solo administradores autenticados ven
+el formulario de alta y la tabla de los últimos treinta eventos. Los otros
+roles ven un aviso de acceso restringido y no solicitan datos de auditoría.
+
+Los datos de entrada se limitan a usuarios ficticios con correo
+`@example.invalid`. Tras crear la cuenta se limpia la contraseña del
+formulario y se actualiza el registro de auditoría. El frontend no puede
+sustituir la autorización del backend: las operaciones siguen verificando
+sesión, organización y rol dentro de PostgreSQL.
+
+Aún pendiente: flujo auditado de primer administrador, concesión y revocación
+de permisos por expediente, recuperación segura, MFA, auditoría de operaciones
+clínicas y conformidad de privacidad. No habilitar sobre datos personales.
+
+
+## Auditoría transaccional de expedientes (incremento 0007)
+
+La migración `0007_profile_audit` crea la función
+`record_private_profile_event`, concedida exclusivamente al rol de la API
+de datos. El backend autentica cada solicitud y configura actor y organización
+dentro de una transacción PostgreSQL. Las operaciones auditadas emiten
+un evento de acceso permitido **en esa misma transacción**; si la función de
+auditoría falla, la operación sobre el expediente no se confirma.
+
+Se registran únicamente identificador del expediente, organización, actor,
+acción, correlación, hora y resultado; nunca valores clínicos, contraseñas,
+tokens, nombres o contenido de las solicitudes. Las acciones cubiertas son:
+listado/consulta/creación/actualización/archivo de expedientes;
+listado/consulta/alta/corrección de mediciones; y lecturas analíticas.
+
+La función verifica de nuevo que se trata de una identidad ficticia activa,
+que el expediente pertenece a la organización y que existe una concesión
+vigente de acceso. Las escrituras además requieren rol administrativo o de
+especialista y acceso `write` o `manage`. Un administrador no puede consultar
+un expediente sin permiso explícito. Las pruebas comprueban que las lecturas,
+actualizaciones y consultas de métricas originan un evento, y que los
+intentos rechazados no se registran como accesos permitidos.
+
+**Limitaciones pendientes:** esta versión todavía no registra por separado
+cada acceso denegado a expedientes, cambios de permisos ni exportaciones
+de información; tampoco completa la política de retención del registro.
+Las denegaciones deben registrarse en una transacción independiente para
+que no desaparezcan con el rollback de la operación fallida. Antes de
+incorporar información personal real se requiere auditoría integral,
+consentimientos verificables, revisión independiente y medidas de privacidad.
+
+El despliegue público sobre Neon permanece en la revisión
+`0002_data_core`: esta migración está destinada únicamente a la base
+PostgreSQL desechable de desarrollo y CI. Render nunca aloja datos.
+
+## Gestión limitada de permisos por expediente (incremento 0008)
+
+La migración `0008_profile_permissions` permite a un administrador
+autenticado conceder o revocar acceso de prueba mediante funciones
+`SECURITY DEFINER` que derivan la organización y el actor de la sesión
+verificada. La cuenta administradora **no puede concederse acceso a sí
+misma** ni acceder a expedientes sin una concesión independiente.
+
+- `POST /api/v1/auth/profile-access/grant`: acepta UUID del expediente,
+  UUID de la cuenta ficticia y nivel `read`, `write` o `manage`. Las
+  concesiones caducan a los **30 días**.
+- `POST /api/v1/auth/profile-access/revoke`: revoca inmediatamente el
+  acceso existente. La sesión puede permanecer activa, pero las consultas
+  a ese expediente dejan de estar autorizadas por RLS.
+- Solo cuentas activas de la misma organización pueden recibir permisos.
+  Los miembros de consulta reciben exclusivamente `read`; las
+  modificaciones exigen roles permitidos en el backend.
+- Cada concesión y revocación se registra en
+  `security_audit_events`, con detalles adicionales de usuario afectado,
+  expediente, nivel anterior y nivel nuevo guardados en
+  `private_profile_permission_changes`. Las tablas de auditoría
+  siguen inaccesibles para los roles operativos; se escriben únicamente
+  mediante funciones autorizadas dentro de la misma transacción.
+- El panel administrativo de pruebas expone los controles de concesión
+  y revocación. No permite seleccionar otra organización ni almacenar
+  tokens en el navegador.
+
+Las pruebas abarcan revocación con sesión todavía válida, intentos de
+autoconcederse permisos, cuentas de otra organización, miembros con
+permisos incompatibles y revocaciones repetidas. Falta gestión fina
+de consentimientos, revisión de permisos por responsables separados,
+procedimiento de bootstrap administrativo y auditoría de acceso denegado.
+Los datos clínicos reales permanecen prohibidos.
+
+La base alojada de la demostración permanece **exclusivamente en Neon**,
+en el esquema `0002_data_core`; estas migraciones se validan solo en una
+base PostgreSQL desechable de CI/desarrollo.
+
+## Validación de navegador del acceso privado
+
+El pipeline ejecuta una suite independiente con FastAPI autenticado y Vite
+de desarrollo, en los puertos locales 8001 y 5174. Las peticiones llegan al
+backend real y a PostgreSQL 15; no se simulan las respuestas de identidad
+ni las decisiones de autorización.
+
+`backend/tests/browser/seed_private.py` crea dos cuentas ficticias de apoyo
+únicamente con `APP_ENV=test` y `PRIVATE_BROWSER_FIXTURES=true`, sobre una
+base `bodyvision` de loopback y usando el propietario desechable de CI.
+Rechaza proveedores externos, incluido Neon. No es un procedimiento de alta
+administrativa para usuarios reales, no se ejecuta al iniciar la aplicación
+y no concede permisos de expedientes implícitos.
+
+La suite comprueba bloqueo antes del login, alta de un usuario sin acceso,
+concesión de lectura, controles de edición bloqueados y rechazo de escritura
+en servidor, revocación con sesión todavía vigente, aislamiento entre
+organizaciones y cierre de sesión verificado remotamente. También comprueba
+que el token no se guarde en almacenamiento del navegador ni en la URL y que
+la recarga vuelva a exigir identificación. La configuración privada desactiva
+trazas y vídeo, para no guardar respuestas con tokens en los artefactos.
+
+Comando, una vez levantados los servicios privados de pruebas:
+`npx playwright test --config playwright.private.config.ts` desde `frontend`.
+La suite pública existente sigue separada. La aceptación global de fase 3
+continúa pendiente y esta incorporación no activa funcionalidades en la demo.
+
+## Consentimientos privados de prueba (incremento 0009)
+
+El expediente privado dispone de un panel de consentimientos por finalidad:
+captura de imágenes, análisis de postura, elaboración de reportes y conservación
+de imágenes. El registro es **exclusivamente ficticio**; no acredita una aceptación
+legal, no identifica a un paciente ni a su representante y no habilita capturas,
+procesamiento de IA, exportaciones ni almacenamiento de imágenes reales.
+
+- `GET /api/v1/auth/profiles/{id}/consents`: estado verificado por servidor e
+  historial. Exige sesión activa y concesión vigente sobre el expediente.
+- `POST` sobre esa misma ruta: requiere un administrador o especialista con
+  permiso de edición, expediente activo, finalidad válida, versión
+  `bv-synthetic-v1` y confirmación explícita de tipo booleano.
+- `POST /api/v1/auth/profiles/{id}/consents/{consent_id}/revoke`: revoca la
+  aceptación concreta, incluso si el expediente ya está archivado. Exige el
+  mismo permiso de edición; el rol de consulta solo puede leer.
+
+Las aceptaciones tienen una vigencia de prueba de **30 días**. Las fechas y la
+identidad del responsable se obtienen del servidor. Cada finalidad y versión
+mantiene ciclos independientes: renovar una aceptación vencida o revocada
+crea otro ciclo y conserva el anterior. Reintentar una aceptación todavía
+vigente devuelve el estado existente, sin duplicarla. La consulta incluye las
+últimas cien filas de historial y el ciclo más reciente de cada finalidad
+actual, aunque sea anterior a esas cien filas. Una versión obsoleta o una
+aceptación vencida nunca se presenta como vigente.
+
+La función PostgreSQL deriva actor y organización del token verificado,
+comprueba la concesión explícita y su vencimiento y serializa los cambios del
+mismo expediente. Los roles operativos siguen sin permiso directo sobre
+`profile_consents`. Aceptaciones, revocaciones y consultas autorizadas se
+auditan dentro de la misma transacción, sin tokens ni contenido del formulario.
+Si falla la auditoría, se revierte el cambio de consentimiento. Las denegaciones
+no generan eventos de éxito; su auditoría independiente sigue pendiente.
+
+La interfaz pide una casilla de confirmación por finalidad, muestra las
+fechas de vencimiento e historial y toma las capacidades de edición del
+servidor. El backend siempre vuelve a comprobarlas. El panel solo existe en
+la modalidad privada de desarrollo; la demostración pública y su esquema
+`0002_data_core` en Neon permanecen iguales. La migración 0009 se prueba en
+PostgreSQL desechable. Su reversión rechaza datos que contengan varias
+renovaciones de una misma versión, para no eliminar ni alterar ese historial.
+
+El cálculo manual de avance de esta rama pasa de 49% a **52%**, al evaluar
+seguridad e identidad en 40% por los incrementos probados de sesiones,
+permisos, auditoría parcial y consentimientos. Esto no cierra la fase 3:
+quedan bootstrap administrativo, recuperación de cuentas, MFA, vinculación
+con el titular o representante, evidencia y textos legales revisados,
+integración de consentimiento en futuros procesamientos y revisión de privacidad.
+
+## Restablecimiento administrado de acceso (incremento 0010)
+
+El panel privado añade un formulario de restablecimiento para cuentas
+**ficticias de consulta y especialistas**. `POST
+/api/v1/auth/users/{user_id}/reset-password` exige una sesión administradora
+vigente, confirmación de su propia contraseña y una nueva contraseña de
+12 a 128 caracteres. No permite cambiar la propia cuenta administradora,
+otras cuentas administradoras, cuentas de otra organización ni cuentas
+deshabilitadas. No hay un flujo público de recuperación ni envío de correos.
+
+La contraseña nueva se almacena mediante el hash con sal ya usado por el
+proyecto. La respuesta solo devuelve el identificador del usuario, el estado
+del restablecimiento y el número de sesiones revocadas. Contraseñas, hashes
+y tokens nunca se añaden al registro de auditoría. Los campos de contraseña
+de la interfaz se limpian después del envío, tanto al completarse como al
+fallar; la confirmación de la contraseña nueva no se envía al servidor.
+Cuando una petición privada recibe HTTP 401, se descarta la sesión
+correspondiente y su caché de datos, y la navegación protegida vuelve a
+pedir identificación. Una respuesta tardía de un token anterior no elimina
+una sesión nueva. La notificación es interna y solo en memoria.
+
+El cambio de contraseña, la revocación de todas las sesiones anteriores,
+la limpieza de su bloqueo temporal por intentos fallidos y la auditoría
+se confirman dentro de una sola transacción. Los roles y permisos de
+expedientes se conservan. Las cuentas bloqueadas administrativamente no
+se reactivan mediante este procedimiento.
+
+Los intentos de confirmar la contraseña administradora tienen un contador
+PostgreSQL independiente del inicio de sesión: cinco intentos por
+administrador en quince minutos; el sexto recibe HTTP 429. Las denegaciones
+autenticadas se registran como `admin.password_reset_denied`, sin asociar
+identificadores de destinos que no se hayan autorizado. Un restablecimiento
+correcto registra `admin.password_reset` con administrador y usuario afectado.
+Las denegaciones se confirman antes de devolver su error HTTP; un fallo de
+auditoría impide confirmar un cambio de contraseña o revocación de sesiones.
+
+Para evitar una carrera con un login simultáneo, la emisión de sesiones
+pasa por una función restringida que bloquea la fila del usuario y vuelve
+a comprobar el hash verificado. Si la contraseña cambió desde que se
+verificó, no se emite esa sesión. Si la sesión se creó primero, el
+restablecimiento posterior la revoca. El rol operativo pierde el permiso
+de insertar sesiones directamente. Las funciones participantes fijan la
+búsqueda de tablas para impedir su sustitución por tablas temporales.
+
+La modalidad sigue limitada a desarrollo y CI con datos ficticios. Neon
+conserva el esquema de demostración `0002_data_core`; estas migraciones
+solo se prueban sobre PostgreSQL desechable. Render no aloja PostgreSQL.
+No se ha habilitado esta función en la versión pública ni se ha cerrado la
+fase de seguridad. Quedan recuperación autónoma verificada, primer alta
+administrativa, MFA, política de contraseñas para uso real y revisión de
+privacidad. La estimación manual de la rama pasa a **53%** global y **50%**
+en seguridad e identidad.
+
+## Gestión administrativa integrada (incremento 0011)
+
+La administración privada incorpora un directorio paginado de cuentas
+ficticias de la organización, con búsqueda por nombre o correo, rol y estado.
+Seleccionar una cuenta alimenta los controles de permisos y restablecimiento
+de acceso: el operador trabaja con nombres y códigos de expediente. Los UUID
+siguen siendo identificadores internos del API y no se solicitan en los formularios.
+
+- `GET /api/v1/auth/users`: directorio exclusivo del administrador, hasta
+  cincuenta cuentas por página; excluye los operadores locales y otras organizaciones.
+- `GET /api/v1/auth/users/{id}/permission-catalog`: catálogo administrativo
+  filtrable por código, con estado del expediente, nivel concedido y vencimiento.
+  Devuelve únicamente esa metadata; los datos del expediente siguen requiriendo
+  la concesión explícita correspondiente. La pantalla muestra el permiso actual.
+- `POST /api/v1/auth/users/{id}/status`: suspende o reactiva cuentas ficticias
+  de consulta y especialistas. Exige confirmar la contraseña del administrador,
+  con contador PostgreSQL de intentos independiente del login y del restablecimiento.
+
+Suspender revoca las sesiones anteriores y bloquea los nuevos logins. Reactivar
+exige iniciar una nueva sesión; los tokens revocados no vuelven a servir.
+Los permisos existentes se conservan sujetos a sus vencimientos, y la pantalla
+los muestra como consulta mientras la cuenta está suspendida. Las cuentas
+administradoras, la propia cuenta y las cuentas bloqueadas no admiten estos
+cambios. Se auditan cambios, confirmaciones de estado y denegaciones. Un fallo
+de auditoría revierte tanto el cambio de estado como la revocación de sesiones.
+
+La auditoría muestra al responsable por correo y el destino por correo o código
+administrativo de expediente, siempre dentro de la organización verificada.
+Sus filtros de texto y resultado se aplican a los últimos treinta registros
+mostrados, sin prometer una búsqueda histórica completa. No devuelve contraseñas,
+hashes, tokens, nombres de pacientes ni valores de mediciones.
+
+Esta entrega agrupa directorio, ciclo de cuentas, selección de permisos y
+auditoría legible. La estimación manual de la rama es **55% global**, con
+seguridad e identidad en **65%**. Siguen pendientes MFA, alta administrativa
+inicial, recuperación autónoma y aprobación de privacidad para uso real.
+La versión pública conserva Neon en `0002_data_core`; la migración 0011 se
+valida únicamente en PostgreSQL desechable de desarrollo/CI. Render aloja
+solo el backend. La rama de trabajo conserva la condición de borrador.
+
+## Cuenta propia y auditoría verificable (incremento 0012)
+
+La pantalla **Acceso y seguridad**, con una sesión privada activa, permite:
+
+- Cambiar la contraseña propia (12–128 caracteres y distinta de la actual).
+  Tras guardar se invalidan todas las sesiones y se solicita identificación
+  nueva. Los permisos y el rol permanecen.
+- Consultar las sesiones activas propias, paginadas, con apertura y caducidad.
+  Se identifica la sesión actual sin inventar dispositivos o ubicaciones.
+- Cerrar una sesión concreta o todas, confirmando la contraseña vigente.
+  El cierre de la sesión actual descarta también su token y caché en el navegador.
+
+Endpoints nuevos: `GET /auth/sessions`, `POST /auth/sessions/{id}/revoke`,
+`POST /auth/sessions/revoke-all`, `POST /auth/password` y `POST /auth/audit/verify`,
+todos bajo `/api/v1`. Los cuerpos rechazan campos adicionales. Las confirmaciones
+tienen contador compartido de cuenta propia (cinco por quince minutos), separado
+de los intentos de login y de los controles administrativos. La contraseña se
+limpia de los formularios tras una petición exitosa o fallida. Las denegaciones
+se confirman como eventos antes de devolver el error HTTP.
+
+La migración `0012_account_security` añade una cadena SHA-256 por organización
+para todos los eventos de seguridad. Se ordena por una secuencia serializada,
+no por fecha; la cabecera independiente detecta también borrados de la cola.
+El panel administrativo incluye una comprobación explícita de la cadena completa
+y muestra el punto verificado, aunque la tabla visual continúe limitada a treinta
+eventos. La comprobación se audita después del punto informado. Un fallo al auditar
+revierte el cambio de contraseña, las revocaciones y el avance de la cadena.
+
+El encadenamiento de registros previos crea una línea base a partir de la migración;
+no acredita su integridad histórica previa. El propietario de PostgreSQL conserva
+capacidades administrativas: esta cadena no sustituye un anclaje externo ni un
+respaldo. Detalles y formato canónico: [ADR 0008](adr/0008-account-security-audit-chain.md).
+
+Estimación manual: **56% global**, **75% en seguridad e identidad**. Continúan
+pendientes MFA, alta administrativa inicial, recuperación autónoma, cobertura
+integral de denegaciones y revisión de privacidad. Los cambios siguen en la rama
+de pruebas, sin despliegue; Neon público conserva `0002_data_core`.

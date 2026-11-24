@@ -49,3 +49,23 @@
 @media(max-width:1200px){.project-progress-summary{grid-template-columns:1fr 1fr}.project-progress-action{grid-column:1/-1;justify-self:start}}
 @media(max-width:800px){.project-phase-list{grid-template-columns:1fr}.project-next-step{display:block}.project-next-step a{display:inline-block;margin-top:18px}}
 @media(max-width:560px){.project-progress-summary{grid-template-columns:1fr;gap:13px}.project-progress-action{grid-column:auto;justify-self:stretch}.project-progress-text h2{font-size:15px}.project-phase-card{padding:17px}}
+
+/* Phase-close evidence, distinct from manually estimated percentages. */
+.project-acceptance-audit{margin:0 0 24px}
+.project-acceptance-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin:0 0 12px}
+.project-acceptance-heading h2{font-size:17px;color:#e9f7ff;margin:0 0 7px}
+.project-acceptance-heading p{color:#bad0e2;font-size:11px;line-height:1.65;max-width:730px;margin:0}
+.project-acceptance-heading>a{font-size:11px;color:#aee7ff;border:1px solid #467592;border-radius:8px;padding:9px 12px;flex-shrink:0}
+.project-acceptance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.project-acceptance-card{border:1px solid #395b7a;background:#142c43;border-radius:11px;padding:17px;min-width:0}
+.project-acceptance-card h3{font-size:13px;line-height:1.5;color:#e7f7ff;margin:0 0 12px}
+.project-acceptance-card p{font-size:11px;color:#c7ddec;line-height:1.6;margin:6px 0}
+.project-acceptance-card .project-acceptance-mapping{font-size:10px;color:#b4d0e5;padding-top:7px;border-top:1px solid #34536c}
+.project-acceptance-card ul{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}
+.project-acceptance-card li{font-size:11px;color:#cfdeeb;line-height:1.6;border-top:1px solid #2c4a62;padding-top:10px}
+.project-acceptance-card li strong{color:#9ee8f0}
+.project-acceptance-card li small{display:block;color:#d0bfa9;font-size:10px;margin-top:3px}
+.project-acceptance-card li a{display:inline-block;color:#abdbf8;font-size:10px;margin-top:5px;text-underline-offset:3px}
+.project-acceptance-heading>a:focus-visible,.project-acceptance-card a:focus-visible{outline:2px solid #c3f2ff;outline-offset:3px}
+@media(max-width:1050px){.project-acceptance-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.project-acceptance-grid{grid-template-columns:1fr}.project-acceptance-heading{display:block}.project-acceptance-heading>a{display:inline-block;margin-top:12px}}

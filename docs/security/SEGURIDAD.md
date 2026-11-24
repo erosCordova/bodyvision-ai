@@ -1,13 +1,67 @@
-# Seguridad — F1
+# Seguridad — implementación y gates pendientes
 
-Implementado: roles SQL propietario/API separados, sin credencial propietaria en el contenedor de API; credenciales aleatorias locales; dependencias Python con hashes y npm con lockfile; imágenes Docker por digest consultado al registro; API/UI no root; red privada de servicios; loopback como única publicación; cabeceras de navegador en nginx; logs permitidos por lista cerrada; correlation UUID; CORS y hosts explícitos; modo debug y entornos no locales bloqueados.
+Revisión: 21 de noviembre de 2026. Acceso privado limitado a datos ficticios
+local/test. La habilitación real conserva sus criterios de salida.
 
-Pendiente de F3+: identidad/MFA, RBAC/ProfileAccess/RLS en tablas de negocio, refresh rotatorio, rate limits, auditoría append-only, pruebas IDOR/CSRF, cifrado de campos sensibles y gate granular R11. TLS, cifrado de discos/backups, gestor de secretos, WAF y revisión externa pendientes de F9. Docker local usa HTTP limitado al host y no se presenta como producción segura.
+## Controles actuales
 
-El formato de logs omite excepciones crudas porque pueden incorporar parámetros o credenciales SQL. Uvicorn se lanza sin access logs y nginx access_log está desactivado. No activar logging de SQL ni middleware que registre cuerpos. Swagger es documentación local, no un endpoint público de producción.
+- Argon2id para contraseñas nuevas y actualización transaccional de hashes
+  PBKDF2 históricos solo tras autenticación completa; códigos MFA separados.
+  Sesiones opacas revocables y token únicamente en memoria React. Véase
+  [ADR 0009](../adr/0009-argon2-password-transition.md).
+- Administrator/specialist/member, RLS, concesiones por expediente y aislamiento
+  por organización; el administrador no obtiene lectura sensible implícita.
+- MFA TOTP/códigos de un uso en modo privado habilitado; semillas cifradas con
+  clave externa, reemplazo con código y recuperación ficticia fuera de línea
+  para el migrador autorizado.
+- Consentimiento ficticio, caducidad/revocación, PNG sintéticos cifrados y
+  retención acotada; no habilitan fotografías de personas reales.
+- Auditoría append-only encadenada, comprobación administrativa y auditoría
+  transaccional en las operaciones y exportaciones implementadas.
+- Rate limits, errores/logs sin credenciales, dependencias fijadas y auditadas,
+  aislamiento de pruebas y bloqueo preventivo de staging/producción.
 
-Modelo de amenazas inicial: suplantación → identidad/MFA F3; alteración de datos → rol mínimo actual y versionado F2; repudio → auditoría F3; revelación → sin recursos personales ahora y autorización por recurso F3; denegación → timeouts actuales, rate limits/cuotas posteriores; elevación → credenciales SQL separadas y pruebas de rol. No equivale a un STRIDE completo o pentest.
+## Infraestructura y registro que se conservan
 
-## Actualización F2
+Roles SQL y credenciales de migración/API separados, dependencias con lockfiles,
+imágenes Docker fijadas, API/UI sin root y publicación local por loopback.
+El contenedor API no debe recibir la credencial propietaria. CORS y hosts son
+explícitos y debug permanece deshabilitado.
 
-Se añadieron filtros por tenant/expediente y RLS en siete tablas de negocio, con pruebas SQL directas usando rol limitado; inmutabilidad mediante privilegios y triggers; idempotencia y restricciones de catálogo. El selector local de espacios ficticios NO es autenticación y se permite exclusivamente porque no hay datos personales y staging/producción siguen bloqueados. No debe reutilizarse como mecanismo de confianza en F3.
+Los logs omiten excepciones crudas, parámetros SQL y cuerpos. Uvicorn se ejecuta
+sin access logs y el registro de acceso Nginx está desactivado. No habilitar
+logging SQL o middleware que recoja datos sensibles. Swagger es documentación
+local, no evidencia de un endpoint de producción seguro.
+
+El versionado de observaciones, la idempotencia y las restricciones de catálogo
+se conservan. El selector ficticio de organización no se reutiliza como identidad.
+
+La [CI 44982522816](https://github.com/erosCordova/bodyvision-ai/actions/runs/44982522816)
+es la evidencia integral actual: 661 pruebas de aplicación con su alcance
+ficticio. No sustituye una revisión externa de seguridad.
+
+## Diferencias y pendientes
+
+El [ADR 0002](../adr/0002-identity-tenancy.md) plantea Argon2id, JWT y refresh
+rotatorio. La contraseña ya usa Argon2id, y desde la migración
+`0026_refresh_session_families` existe un access JWT de 15 minutos verificado
+contra la sesión viva más un refresh rotatorio en cookie `HttpOnly` con
+detección de reutilización que revoca la familia comprometida
+([informe](../qa/PHASE_3_ROTATING_REFRESH.md)). Sigue siendo una implementación
+parcial, opt-in y solo local/test: "Recordarme", inactividad, adopción del
+flujo por el frontend, recuperación objetivo, invitación por email real, matriz
+completa de roles, cookie segura forzada tras terminación TLS y revisión
+externa continúan pendientes. Este documento no aprueba equivalencia con el
+objetivo real.
+
+Reescribir toda la auditoría y su cabecera requiere una referencia independiente
+para detectar la reconstrucción. Anclaje/custodia externos, claves productivas,
+borrado de copias, identidad real, privacidad y revisión independiente siguen
+abiertos. La cadena actual no es una firma externa. Véase [ADR 0008](../adr/0008-account-security-audit-chain.md). Un modelo de amenazas completo y la revisión externa siguen pendientes.
+
+TLS, cifrado/custodia de discos, backups y objetos, gestor de secretos, gate
+granular del contrato, carga y revisión especializada requieren sus pruebas.
+Bloquear preventivamente producción no implementa todos esos controles.
+
+La [propuesta de fase 0](../qa/PHASE_0_SCOPE_REVIEW.md) reúne diferencias,
+matriz de riesgos y responsables propuestos; su aceptación sigue pendiente.

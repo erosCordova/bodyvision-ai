@@ -1,0 +1,87 @@
+import { webcrypto, createHash } from "node:crypto";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  MAX_LONGITUDINAL_BYTES, longitudinalDownloadSchema, verifiedLongitudinalCsv,
+} from "../src/features/analytics/serverLongitudinalExport";
+
+const csv = "source_measurement_id,measured_at_utc,metric_code,value,unit,method,outlier_confirmed\r\n"
+  + "11111111-1111-4111-8111-111111111111,2026-11-01T10:00:00Z,weight,70,kg,manual,false\r\n"
+  + "22222222-2222-4222-8222-222222222222,2026-11-20T10:00:00Z,weight,77,kg,manual,false\r\n";
+const report = {
+  export_id: "33333333-3333-4333-8333-333333333333",
+  generated_at: "2026-11-20T10:00:00Z",
+  filename: "bodyvision-historial-33333333-3333-4333-8333-333333333333.csv",
+  metric_code: "weight",
+  period: "all" as const,
+  row_count: 2,
+  csv_base64: btoa(csv),
+  sha256: createHash("sha256").update(csv).digest("hex"),
+};
+afterEach(() => vi.unstubAllGlobals());
+
+describe("private longitudinal CSV delivery", () => {
+  it("verifies all source rows with SHA-256 before forming a downloadable blob", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const blob = await verifiedLongitudinalCsv(report);
+    expect(blob.type).toContain("text/csv");
+    expect(blob.size).toBe(Buffer.byteLength(csv, "utf8"));
+  });
+  it("requires the optional CSV receipt to match the verified bytes and row count", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const receipt = {
+      version: 1 as const, algorithm: "Ed25519" as const,
+      scope: "synthetic-local-test-report" as const, format: "csv" as const,
+      export_id: report.export_id, filename: report.filename,
+      generated_at: report.generated_at, sha256: report.sha256,
+      byte_count: Buffer.byteLength(csv), row_count: report.row_count,
+      key_id: "a".repeat(64), signature: "b".repeat(128),
+    };
+    await expect(verifiedLongitudinalCsv({ ...report, receipt })).resolves.toBeInstanceOf(Blob);
+    await expect(verifiedLongitudinalCsv({
+      ...report, receipt: { ...receipt, row_count: 1 },
+    })).rejects.toThrow(/comprobante/);
+    await expect(verifiedLongitudinalCsv({
+      ...report, receipt: { ...receipt, export_id: "11111111-1111-4111-8111-111111111111" },
+    })).rejects.toThrow(/comprobante/);
+  });
+  it("rejects tampering, incomplete rows, unsafe filenames and invalid UTF-8", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    await expect(verifiedLongitudinalCsv({ ...report, sha256: "0".repeat(64) }))
+      .rejects.toThrow(/integridad/);
+    await expect(verifiedLongitudinalCsv({ ...report, row_count: 1 }))
+      .rejects.toThrow(/número/);
+    await expect(verifiedLongitudinalCsv({ ...report, csv_base64: btoa("not a CSV") }))
+      .rejects.toThrow(/CSV válido/);
+    await expect(verifiedLongitudinalCsv({ ...report, csv_base64: btoa(String.fromCharCode(0xff)) }))
+      .rejects.toThrow();
+    expect(longitudinalDownloadSchema.safeParse({ ...report, filename: "../../bad.csv" }).success)
+      .toBe(false);
+    expect(longitudinalDownloadSchema.safeParse({
+      ...report, filename: "bodyvision-historial-22222222-2222-4222-8222-222222222222.csv",
+    }).success).toBe(false);
+    expect(longitudinalDownloadSchema.safeParse({ ...report, row_count: MAX_LONGITUDINAL_BYTES + 1 }).success)
+      .toBe(false);
+  });
+  it("verifies a complete history beyond 500 rows and the old base64 size cap", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const header = csv.split("\r\n")[0] + "\r\n";
+    const lines = Array.from({ length: 5001 }, (_, index) =>
+      `11111111-1111-4111-8111-${String(index).padStart(12, "0")},2026-11-01T10:00:00Z,weight,70,kg,manual,false\r\n`);
+    const complete = header + lines.join("");
+    const exported = { ...report, row_count: 5001, csv_base64: btoa(complete),
+      sha256: createHash("sha256").update(complete).digest("hex") };
+    expect(exported.csv_base64.length).toBeGreaterThan(200000);
+    const blob = await verifiedLongitudinalCsv(exported);
+    expect(blob.size).toBe(Buffer.byteLength(complete));
+    await expect(verifiedLongitudinalCsv({ ...exported, row_count: 5000 }))
+      .rejects.toThrow(/número/);
+    await expect(verifiedLongitudinalCsv({ ...exported, csv_base64: btoa(header + lines.slice(0, 500).join("")) }))
+      .rejects.toThrow(/número/);
+  });
+  it("rejects a decoded file one byte beyond the byte budget", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const oversized = "a".repeat(MAX_LONGITUDINAL_BYTES + 1);
+    await expect(verifiedLongitudinalCsv({ ...report, csv_base64: btoa(oversized) }))
+      .rejects.toThrow(/tamaño máximo/);
+  });
+});

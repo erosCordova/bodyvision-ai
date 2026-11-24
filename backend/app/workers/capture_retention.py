@@ -1,0 +1,77 @@
+"""Private local/test cleanup: no HTTP route, no owner credentials.
+
+Only expired ciphertext and fictional pose summaries without valid consent
+may be deleted by narrow SECURITY DEFINER functions. Bounded batches run periodically
+while the private backend is running; no public/demo task starts.
+"""
+
+import asyncio
+import logging
+
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
+from app.core.operations import OperationsMetrics
+
+logger = logging.getLogger("bodyvision")
+
+
+def purge_due(engine: Engine, batch_size: int = 100, max_batches: int = 10) -> int:
+    if not 1 <= batch_size <= 100 or not 1 <= max_batches <= 100:
+        raise ValueError("Capture retention batches are bounded")
+    removed_total = 0
+    for _ in range(max_batches):
+        with engine.begin() as connection:
+            removed = connection.execute(
+                text("SELECT purge_expired_synthetic_capture_batch(:batch)"),
+                {"batch": batch_size},
+            ).scalar_one()
+        removed_total += removed
+        if removed < batch_size:
+            break
+    return removed_total
+
+
+def purge_due_pose_summaries(engine: Engine, batch_size: int = 100, max_batches: int = 10) -> int:
+    """Erase only synthetic pose summaries without both current consents."""
+    if not 1 <= batch_size <= 100 or not 1 <= max_batches <= 100:
+        raise ValueError("Pose retention batches are bounded")
+    removed_total = 0
+    for _ in range(max_batches):
+        with engine.begin() as connection:
+            removed = connection.execute(
+                text("SELECT purge_expired_pose_summary_batch(:batch)"),
+                {"batch": batch_size},
+            ).scalar_one()
+        removed_total += removed
+        if removed < batch_size:
+            break
+    return removed_total
+
+
+async def retention_loop(
+    engine: Engine, interval_seconds: int, operations: OperationsMetrics | None = None
+) -> None:
+    if not 60 <= interval_seconds <= 86400:
+        raise ValueError("Capture retention interval is out of range")
+    while True:
+        try:
+            removed = await asyncio.to_thread(purge_due, engine)
+            pose_removed = await asyncio.to_thread(purge_due_pose_summaries, engine)
+            if operations is not None:
+                operations.retention_completed(True)
+            if removed:
+                logger.info("synthetic_capture_retention_purged", extra={"removed_count": removed})
+            if pose_removed:
+                logger.info(
+                    "synthetic_pose_retention_purged", extra={"removed_count": pose_removed}
+                )
+        except Exception as exc:
+            if operations is not None:
+                operations.retention_completed(False)
+            # Never log SQL exception strings: they can contain connection data.
+            logger.error(
+                "synthetic_retention_failed",
+                extra={"error_type": type(exc).__name__},
+            )
+        await asyncio.sleep(interval_seconds)

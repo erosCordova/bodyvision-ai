@@ -1,5 +1,8 @@
 import { z } from "zod";
+import { comparisonDownloadSchema } from "../../features/analytics/serverComparisonDownload";
+import { longitudinalDownloadSchema, type ExportDateRange } from "../../features/analytics/serverLongitudinalExport";
 import { ApiError } from "./client";
+import { withPrivateSession } from "./privateSessionRequest";
 
 export const profileSchema = z.object({
   id: z.string().uuid(),
@@ -44,6 +47,25 @@ export const measurementSchema = z.object({
   data_type: z.literal("OBSERVADO"),
 });
 export type Measurement = z.infer<typeof measurementSchema>;
+export const scenarioSchema = z.object({
+  id: z.string().uuid(),
+  profile_id: z.string().uuid(),
+  series_id: z.string().uuid(),
+  version: z.number().int().min(1),
+  prior_version_id: z.string().uuid().nullable(),
+  reference_kg: z.number(),
+  variation_percent: z.number().int(),
+  stature_cm: z.number().int(),
+  simulated_kg: z.number(),
+  model_revision: z.string(),
+  algorithm_revision: z.string(),
+  revision_note: z.string().nullable(),
+  created_by: z.string().uuid(),
+  created_at: z.string(),
+  data_type: z.literal("SIMULADO"),
+});
+export type SimulationScenario = z.infer<typeof scenarioSchema>;
+
 const pageOf = <T extends z.ZodType>(schema: T) =>
   z.object({
     items: z.array(schema),
@@ -51,6 +73,10 @@ const pageOf = <T extends z.ZodType>(schema: T) =>
     limit: z.number(),
     offset: z.number(),
   });
+const scenarioPageSchema = pageOf(scenarioSchema).extend({
+  // The demo has no PostgreSQL table; older mocks may omit the field.
+  snapshot_at: z.string().datetime({ offset: true }).nullable().optional(),
+});
 const derivedSchema = z.object({
   metric_code: z.string(),
   label: z.string(),
@@ -96,6 +122,7 @@ export async function dataRequest<T>(
   path: string,
   schema: z.ZodType<T>,
   options: RequestInit = {},
+  token?: string,
 ): Promise<T> {
   const correlationId = crypto.randomUUID();
   const controller = new AbortController();
@@ -104,17 +131,20 @@ export async function dataRequest<T>(
     import.meta.env.VITE_DEPLOYMENT_MODE === "demo" ? 90000 : 7000,
   );
   try {
-    const response = await fetch(`/api/v1${path}`, {
+    const send = (bearer?: string) => fetch(`/api/v1${path}`, {
       ...options,
       signal: controller.signal,
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         "X-Correlation-ID": correlationId,
-        "X-Workspace-ID": workspace,
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : { "X-Workspace-ID": workspace }),
         ...options.headers,
       },
     });
+    const response = token
+      ? await withPrivateSession(token, send, controller.signal)
+      : await send();
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new ApiError(
@@ -137,9 +167,9 @@ export async function dataRequest<T>(
     clearTimeout(timeout);
   }
 }
-export function recordsApi(workspace: string) {
+export function recordsApi(workspace: string, token?: string) {
   const get = <T>(path: string, schema: z.ZodType<T>) =>
-    dataRequest(workspace, path, schema);
+    dataRequest(workspace, path, schema, {}, token);
   const write = <T>(
     path: string,
     method: string,
@@ -151,8 +181,15 @@ export function recordsApi(workspace: string) {
       method,
       body: JSON.stringify(body),
       headers: key ? { "Idempotency-Key": key } : {},
-    });
+    }, token);
   return {
+    longitudinalReport: (id: string, metricCode: string, period: "30d" | "90d" | "1a" | "all", range?: ExportDateRange) =>
+      write(`/profiles/${id}/reports/longitudinal`, "POST",
+        range ? { metric_code: metricCode, period: "custom", ...range }
+          : { metric_code: metricCode, period }, longitudinalDownloadSchema),
+    comparisonReport: (id: string, initialId: string, finalId: string) =>
+      write(`/profiles/${id}/reports/comparison`, "POST",
+        { initial_id: initialId, final_id: finalId }, comparisonDownloadSchema),
     workspaces: () => get("/workspaces", workspacesSchema),
     summary: () => get("/dashboard/summary", summarySchema),
     profiles: (search = "", offset = 0) =>
@@ -185,12 +222,27 @@ export function recordsApi(workspace: string) {
       ),
     versions: (id: string) =>
       get(`/measurements/${id}/versions`, z.array(measurementSchema)),
+    versionsPage: (id: string, offset = 0) =>
+      get(`/measurements/${id}/versions/page?limit=20&offset=${offset}`,
+        pageOf(measurementSchema)),
     derived: (id: string) =>
       get(`/profiles/${id}/analytics/derived`, z.array(derivedSchema)),
-    series: (id: string, metric: string, period: string) =>
-      get(
-        `/profiles/${id}/analytics/series?metric_code=${metric}&period=${period}`,
-        z.array(measurementSchema),
-      ),
+    series: (id: string, metric: string, period: string, range?: ExportDateRange) => {
+      const query = new URLSearchParams({ metric_code: metric, period });
+      if (range) {
+        query.set("start_date", range.start_date);
+        query.set("end_date", range.end_date);
+      }
+      return get(`/profiles/${id}/analytics/series?${query.toString()}`, z.array(measurementSchema));
+    },
+    scenarios: (profileId: string, offset = 0, snapshotAt?: string) =>
+      get(`/profiles/${profileId}/scenarios?limit=20&offset=${offset}${snapshotAt
+        ? `&snapshot_at=${encodeURIComponent(snapshotAt)}` : ""}`,
+        scenarioPageSchema),
+    scenarioVersions: (profileId: string, scenarioId: string) =>
+      get(`/profiles/${profileId}/scenarios/${scenarioId}/versions`,
+        z.array(scenarioSchema)),
+    saveScenario: (profileId: string, body: unknown, key: string) =>
+      write(`/profiles/${profileId}/scenarios`, "POST", body, scenarioSchema, key),
   };
 }

@@ -1,16 +1,21 @@
 import json
 import logging
 from io import StringIO
+from pathlib import Path
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
 from app.core.config import Settings
 from app.core.logging import JsonFormatter
+from app.core.mfa import generate_mfa_encryption_key
+from app.db.session import SCHEMA_REVISION
 from app.main import create_app
 
 
@@ -18,7 +23,7 @@ from app.main import create_app
 def engine():
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
-    connection.execute.return_value.scalar_one.return_value = "0002_data_core"
+    connection.execute.return_value.scalar_one.return_value = SCHEMA_REVISION
     return engine
 
 
@@ -37,10 +42,28 @@ def test_live_does_not_require_database(client, engine):
     engine.connect.assert_not_called()
 
 
+def test_application_schema_matches_alembic_head():
+    root = Path(__file__).resolve().parents[2]
+    migrations = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+    assert migrations.get_heads() == [SCHEMA_REVISION]
+
+
 def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
-    assert response.json()["schema_revision"] == "0002_data_core"
+    assert response.json()["schema_revision"] == SCHEMA_REVISION
+
+
+def test_demo_ready_uses_data_core_revision(client, engine):
+    demo_settings = client.app.state.settings.model_copy(update={"app_env": "demo"})
+    connection = engine.connect.return_value.__enter__.return_value
+    connection.execute.return_value.scalar_one.return_value = "0002_data_core"
+    with TestClient(create_app(demo_settings, engine)) as demo:
+        response = demo.get("/api/v1/health/ready")
+        assert response.status_code == 200
+        assert response.json()["schema_revision"] == "0002_data_core"
+        connection.execute.return_value.scalar_one.return_value = SCHEMA_REVISION
+        assert demo.get("/api/v1/health/ready").status_code == 503
 
 
 def test_database_failure_returns_safe_error(client, engine):
@@ -132,6 +155,27 @@ def test_unsafe_configuration_is_rejected(override):
     config = {"database_url": "postgresql+psycopg://app:test@localhost/test", **override}
     with pytest.raises(ValidationError):
         Settings(**config)
+
+
+def test_mfa_never_starts_without_private_identity_and_a_valid_secret():
+    base = {
+        "app_env": "test",
+        "database_url": "postgresql+psycopg://app:test@localhost/test",
+        "auth_database_url": "postgresql+psycopg://auth:test@localhost/test",
+    }
+    with pytest.raises(ValidationError):
+        Settings(**base, mfa_enabled=True, identity_enabled=False)
+    with pytest.raises(ValidationError):
+        Settings(**base, mfa_enabled=True, identity_enabled=True)
+    with pytest.raises(ValidationError):
+        Settings(**base, mfa_enabled=True, identity_enabled=True, mfa_encryption_key="invalid-key")
+    config = Settings(
+        **base,
+        mfa_enabled=True,
+        identity_enabled=True,
+        mfa_encryption_key=generate_mfa_encryption_key(),
+    )
+    assert config.mfa_enabled
 
 
 def test_openapi_contains_foundation_only(client):

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -22,16 +22,36 @@ from app.schemas.core import (
     ProfileRead,
     ProfileUpdate,
 )
+from app.services.measurement_versions import correction_history
 from app.services.measurements import derived, save
+from app.services.profile_audit import record_profile_event
 
 router = APIRouter(prefix="/api/v1", tags=["Synthetic data core"])
-Scope = Annotated[Workspace, Depends(workspace)]
+Scope = Annotated[Workspace, Depends(workspace, scope="function")]
+
+
+def require_writer(scope: Workspace) -> None:
+    # Synthetic local/test behaviour is unchanged. Secure mode denies writes
+    # to members even if a stale profile_access grant exists.
+    if scope.authenticated and scope.role not in {"administrator", "specialist"}:
+        raise DomainError(403, "FORBIDDEN", "No tienes permisos de edición.")
 
 
 @router.get("/workspaces")
-def workspaces(request: Request) -> dict:
-    with request.app.state.engine.begin() as conn:
-        rows = conn.execute(text("SELECT * FROM list_local_workspaces()")).mappings().all()
+def workspaces(request: Request, scope: Scope) -> dict:
+    if scope.authenticated:
+        rows = (
+            scope.connection.execute(
+                text("SELECT id,name FROM list_local_workspaces() WHERE id=:org"),
+                {"org": scope.organization_id},
+            )
+            .mappings()
+            .all()
+        )
+    else:
+        rows = (
+            scope.connection.execute(text("SELECT * FROM list_local_workspaces()")).mappings().all()
+        )
     return {
         "items": [dict(x) for x in rows],
         "synthetic": True,
@@ -52,11 +72,18 @@ def list_profiles(
     offset: int = Query(0, ge=0),
     search: str = Query("", max_length=100),
 ):
-    condition = """organization_id=:org AND
-        (display_code ILIKE :search OR COALESCE(display_name,'') ILIKE :search)"""
+    # Defense in depth: RLS already filters profiles by the authenticated
+    # actor's unexpired grant. Apply the same predicate explicitly to BOTH
+    # rows and count so the endpoint remains scoped even if RLS changes.
+    # Escape ILIKE wildcards: search means literal substring, not a SQL pattern.
+    condition = """organization_id=:org AND has_profile_access(id) AND
+        (display_code ILIKE :search ESCAPE :escape_char OR
+         COALESCE(display_name,'') ILIKE :search ESCAPE :escape_char)"""
+    pattern = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     params = {
         "org": scope.organization_id,
-        "search": "%" + search + "%",
+        "search": "%" + pattern + "%",
+        "escape_char": "\\",
         "limit": limit,
         "offset": offset,
     }
@@ -74,11 +101,13 @@ def list_profiles(
     total = scope.connection.execute(
         text(f"SELECT count(*) FROM profiles WHERE {condition}"), params
     ).scalar_one()
+    record_profile_event(scope, "profile.list", None)
     return dict(items=[dict(x) for x in rows], total=total, limit=limit, offset=offset)
 
 
 @router.post("/profiles", response_model=ProfileRead, status_code=201)
 def create_profile(data: ProfileInput, scope: Scope):
+    require_writer(scope)
     identifier = uuid4()
     params = data.model_dump()
     params.update(
@@ -104,43 +133,71 @@ def create_profile(data: ProfileInput, scope: Scope):
             "actor": scope.actor_id,
         },
     )
-    return records.profile(scope, identifier)
+    result = records.profile(scope, identifier)
+    record_profile_event(scope, "profile.create", identifier)
+    return result
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileRead)
 def get_profile(profile_id: UUID, scope: Scope):
-    return records.profile(scope, profile_id)
+    result = records.profile(scope, profile_id)
+    record_profile_event(scope, "profile.read", profile_id)
+    return result
 
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileRead)
 def update_profile(profile_id: UUID, data: ProfileUpdate, scope: Scope):
-    current = records.profile(scope, profile_id)
-    permitted = scope.connection.execute(
-        text("SELECT has_profile_access(:id,true)"), {"id": profile_id}
-    ).scalar_one()
-    if not permitted:
-        raise DomainError(404, "NOT_FOUND", "Expediente no disponible.")
-    if current["status"] == "archived":
-        raise DomainError(409, "CONFLICT", "El expediente archivado es de solo lectura.")
+    require_writer(scope)
     fields = data.model_dump(exclude_unset=True)
     if not fields or ("status" in fields and fields["status"] is None):
         raise DomainError(422, "VALIDATION_ERROR", "Indica un cambio válido.")
+    # The status is authoritative and must be locked before inspecting any
+    # proposed write. This uses the same row lock as measurement insertion,
+    # so an in-flight restriction cannot race with an observed measurement.
+    current = (
+        scope.connection.execute(
+            text("""SELECT p.status FROM profiles p
+              WHERE p.id=:id AND p.organization_id=:org
+                AND has_profile_access(p.id,true)
+              FOR UPDATE OF p"""),
+            {"id": profile_id, "org": scope.organization_id},
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if current is None:
+        raise DomainError(404, "NOT_FOUND", "Expediente no disponible.")
+    if current["status"] == "archived":
+        raise DomainError(409, "CONFLICT", "El expediente archivado es de solo lectura.")
+    if current["status"] == "restricted":
+        # Reactivation is the ONLY write to a restricted expediente.
+        # The reference must be changed in a separate, authorized request
+        # AFTER the profile has returned to active.
+        if fields != {"status": "active"}:
+            raise DomainError(
+                409, "CONFLICT", "Reactiva el expediente antes de modificar sus datos."
+            )
     params = {"org": scope.organization_id, "id": profile_id, **fields}
     assignments = ",".join(key + "=:" + key for key in fields)
     scope.connection.execute(
         text(f"UPDATE profiles SET {assignments} WHERE id=:id AND organization_id=:org"), params
     )
-    return records.profile(scope, profile_id)
+    result = records.profile(scope, profile_id)
+    record_profile_event(scope, "profile.update", profile_id)
+    return result
 
 
 @router.post("/profiles/{profile_id}/archive", response_model=ProfileRead)
 def archive_profile(profile_id: UUID, scope: Scope):
+    require_writer(scope)
     records.profile(scope, profile_id, write=True)
     scope.connection.execute(
         text("UPDATE profiles SET status='archived' WHERE id=:id AND organization_id=:org"),
         {"id": profile_id, "org": scope.organization_id},
     )
-    return records.profile(scope, profile_id)
+    result = records.profile(scope, profile_id)
+    record_profile_event(scope, "profile.archive", profile_id)
+    return result
 
 
 @router.get("/profiles/{profile_id}/measurements", response_model=MeasurementList)
@@ -177,6 +234,7 @@ def list_measurements(
     total = scope.connection.execute(
         text(f"SELECT count(*) FROM measurements m WHERE {condition}"), params
     ).scalar_one()
+    record_profile_event(scope, "measurement.list", profile_id)
     return dict(items=[dict(x) for x in rows], total=total, limit=limit, offset=offset)
 
 
@@ -187,7 +245,10 @@ def create_measurement(
     scope: Scope,
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ):
-    return save(scope, profile_id, data, idempotency_key)
+    require_writer(scope)
+    result = save(scope, profile_id, data, idempotency_key)
+    record_profile_event(scope, "measurement.create", profile_id)
+    return result
 
 
 @router.patch("/measurements/{measurement_id}", response_model=MeasurementRead, status_code=201)
@@ -197,41 +258,40 @@ def correct_measurement(
     scope: Scope,
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ):
+    require_writer(scope)
     row = records.measurement(scope, measurement_id)
-    return save(scope, row["profile_id"], data, idempotency_key, measurement_id)
+    result = save(scope, row["profile_id"], data, idempotency_key, measurement_id)
+    record_profile_event(scope, "measurement.correct", row["profile_id"])
+    return result
 
 
 @router.get("/measurements/{measurement_id}/versions", response_model=list[MeasurementRead])
 def versions(measurement_id: UUID, scope: Scope):
-    row = records.measurement(scope, measurement_id)
-    # Build the entire linear chain, including when an older version was requested.
-    rows = [
-        dict(x)
-        for x in scope.connection.execute(
-            text("""
-      SELECT m.*,u.display_name AS responsible FROM measurements m
-      JOIN users u ON u.id=m.created_by AND u.organization_id=m.organization_id
-      WHERE m.organization_id=:org AND m.profile_id=:profile ORDER BY m.created_at,m.id
-    """),
-            {"org": scope.organization_id, "profile": row["profile_id"]},
-        ).mappings()
-    ]
-    index = {x["id"]: x for x in rows}
-    root = row
-    while root["supersedes_id"]:
-        root = index[root["supersedes_id"]]
-    chain = [root]
-    while True:
-        following = next((x for x in rows if x["supersedes_id"] == chain[-1]["id"]), None)
-        if not following:
-            break
-        chain.append(following)
-    return chain
+    """Backward-compatible response shape without scanning unrelated measurements."""
+    result = correction_history(scope, measurement_id, limit=None)
+    record_profile_event(scope, "measurement.read", result["items"][0]["profile_id"])
+    return result["items"]
+
+
+@router.get("/measurements/{measurement_id}/versions/page", response_model=MeasurementList)
+def paginated_versions(
+    measurement_id: UUID,
+    scope: Scope,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+):
+    """Bounded page and exact total of an authorized immutable correction chain."""
+    result = correction_history(scope, measurement_id, limit=limit, offset=offset)
+    anchor = records.measurement(scope, measurement_id)
+    record_profile_event(scope, "measurement.read", anchor["profile_id"])
+    return result
 
 
 @router.get("/profiles/{profile_id}/analytics/derived", response_model=list[DerivedRead])
 def get_derived(profile_id: UUID, scope: Scope, as_of: AwareDatetime | None = None):
-    return derived(scope, profile_id, as_of)
+    result = derived(scope, profile_id, as_of)
+    record_profile_event(scope, "analytics.read", profile_id)
+    return result
 
 
 @router.get("/profiles/{profile_id}/analytics/series", response_model=list[MeasurementRead])
@@ -239,13 +299,41 @@ def series(
     profile_id: UUID,
     scope: Scope,
     metric_code: str = Query("weight", max_length=40),
-    period: Literal["30d", "90d", "1a", "all"] = "90d",
+    period: Literal["30d", "90d", "1a", "all", "custom"] = "90d",
+    start_date: str | None = Query(None, max_length=10),
+    end_date: str | None = Query(None, max_length=10),
 ):
-    rows = records.history(scope, profile_id, metric_code)
+    if period == "custom":
+        # Check access before reading the database clock or any measurements.
+        records.profile(scope, profile_id)
+        try:
+            start = date.fromisoformat(start_date or "")
+            end = date.fromisoformat(end_date or "")
+            if (
+                start.isoformat() != start_date
+                or end.isoformat() != end_date
+                or not date(1900, 1, 1) <= start <= end
+            ):
+                raise ValueError("Invalid civil range")
+        except ValueError as exc:
+            raise DomainError(422, "INVALID_PERIOD", "Selecciona un intervalo válido.") from exc
+        today = scope.connection.execute(
+            text("SELECT (statement_timestamp() AT TIME ZONE 'America/Lima')::date")
+        ).scalar_one()
+        if end > today:
+            raise DomainError(422, "INVALID_PERIOD", "La fecha final no puede ser futura.")
+        rows = records.history(scope, profile_id, metric_code, start_date=start, end_date=end)
+    else:
+        if start_date is not None or end_date is not None:
+            raise DomainError(
+                422, "INVALID_PERIOD", "Las fechas requieren un periodo personalizado."
+            )
+        rows = records.history(scope, profile_id, metric_code)
     days = {"30d": 30, "90d": 90, "1a": 365}.get(period)
     if days:
         cutoff = datetime.now(UTC) - timedelta(days=days)
         rows = [row for row in rows if row["measured_at"] >= cutoff]
+    record_profile_event(scope, "analytics.read", profile_id)
     return rows
 
 
@@ -254,19 +342,23 @@ def summary(scope: Scope) -> dict:
     conn = scope.connection
     org = {"org": scope.organization_id}
     active = conn.execute(
-        text("SELECT count(*) FROM profiles WHERE organization_id=:org AND status='active'"), org
+        text(
+            "SELECT count(*) FROM profiles WHERE organization_id=:org "
+            "AND status='active' AND has_profile_access(id)"
+        ),
+        org,
     ).scalar_one()
     measured = conn.execute(
         text(
             "SELECT count(*) FROM measurements WHERE organization_id=:org AND is_current "
-            "AND measured_at>=now()-interval '30 days'"
+            "AND measured_at>=now()-interval '30 days' AND has_profile_access(profile_id)"
         ),
         org,
     ).scalar_one()
     corrections = conn.execute(
         text(
             "SELECT count(*) FROM measurements WHERE organization_id=:org "
-            "AND supersedes_id IS NOT NULL"
+            "AND supersedes_id IS NOT NULL AND has_profile_access(profile_id)"
         ),
         org,
     ).scalar_one()
@@ -278,7 +370,9 @@ def summary(scope: Scope) -> dict:
         JOIN metric_catalog c ON c.code=m.metric_code AND c.organization_id=m.organization_id
         JOIN profiles p ON p.id=m.profile_id AND p.organization_id=m.organization_id
         JOIN users u ON u.id=m.created_by AND u.organization_id=m.organization_id
-        WHERE m.organization_id=:org AND m.is_current ORDER BY m.created_at DESC,m.id LIMIT 8"""),
+        WHERE m.organization_id=:org AND m.is_current
+        AND has_profile_access(m.profile_id)
+        ORDER BY m.created_at DESC,m.id LIMIT 8"""),
             org,
         )
         .mappings()
