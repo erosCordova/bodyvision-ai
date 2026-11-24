@@ -4,9 +4,13 @@ import { longitudinalDownloadSchema, type ExportDateRange } from "../../features
 import { ApiError } from "./client";
 import { withPrivateSession } from "./privateSessionRequest";
 
+// PostgreSQL accepts any canonical 128-bit UUID, including historical synthetic fixture IDs.
+// Validate the textual shape without imposing RFC version/variant bits on database identifiers.
+const databaseId = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
 export const profileSchema = z.object({
-  id: z.string().uuid(),
-  organization_id: z.string().uuid(),
+  id: databaseId,
+  organization_id: databaseId,
   display_code: z.string(),
   display_name: z.string().nullable(),
   birth_year: z.number(),
@@ -28,8 +32,8 @@ export const metricSchema = z.object({
 });
 export type Metric = z.infer<typeof metricSchema>;
 export const measurementSchema = z.object({
-  id: z.string().uuid(),
-  profile_id: z.string().uuid(),
+  id: databaseId,
+  profile_id: databaseId,
   metric_code: z.string(),
   value: z.number(),
   unit: z.string(),
@@ -37,7 +41,7 @@ export const measurementSchema = z.object({
   method: z.enum(["manual", "device"]),
   instrument: z.string().nullable(),
   notes: z.string().nullable(),
-  created_by: z.string().uuid(),
+  created_by: databaseId,
   responsible: z.string(),
   created_at: z.string(),
   supersedes_id: z.string().nullable(),
@@ -48,11 +52,11 @@ export const measurementSchema = z.object({
 });
 export type Measurement = z.infer<typeof measurementSchema>;
 export const scenarioSchema = z.object({
-  id: z.string().uuid(),
-  profile_id: z.string().uuid(),
-  series_id: z.string().uuid(),
+  id: databaseId,
+  profile_id: databaseId,
+  series_id: databaseId,
   version: z.number().int().min(1),
-  prior_version_id: z.string().uuid().nullable(),
+  prior_version_id: databaseId.nullable(),
   reference_kg: z.number(),
   variation_percent: z.number().int(),
   stature_cm: z.number().int(),
@@ -60,7 +64,7 @@ export const scenarioSchema = z.object({
   model_revision: z.string(),
   algorithm_revision: z.string(),
   revision_note: z.string().nullable(),
-  created_by: z.string().uuid(),
+  created_by: databaseId,
   created_at: z.string(),
   data_type: z.literal("SIMULADO"),
 });
@@ -155,7 +159,11 @@ export async function dataRequest<T>(
           : "No se pudo completar la operación.",
       );
     }
-    return schema.parse(await response.json());
+    const parsed = schema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new ApiError(correlationId, "INVALID_RESPONSE", "El servicio devolvió datos con un formato inesperado.");
+    }
+    return parsed.data;
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(
