@@ -122,8 +122,11 @@ export function ProfileDetail() {
           </p>
           {privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
           {sandboxAuthEnabled() && <Link className="back-link" to={`/analysis?profile=${profileId}`}>Analizar imágenes →</Link>}
+          <Link className="back-link" to={`/body-3d?panel=grasa&profile=${profileId}`}>
+            Abrir visor 3D de este expediente →
+          </Link>
           <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
-            Abrir simulador 3D y escenarios ficticios →
+            Abrir simulador →
           </Link>
         </div>
         <button

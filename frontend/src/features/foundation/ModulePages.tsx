@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { csvPreview, ProfilePicker } from "./ModuleControls";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
 import { PoseReview } from "../capture/PoseReview";
+import { AutomaticPosePreview } from "../capture/AutomaticPosePreview";
 import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
 import { SandboxCaptureLibrary } from "../capture/SandboxCaptureLibrary";
 import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
@@ -262,6 +263,7 @@ export function CapturePage() {
               Ver control de calidad en el módulo de análisis
             </Link>
           </div>}
+          {sandboxAuthEnabled() && consent && review && !isReviewing && <AutomaticPosePreview file={file}/>}
           {privateAuthEnabled() && review && !isReviewing && <SyntheticCaptureArchive file={file} review={review}/>}
           <button className="secondary-button" onClick={() => setFile(null)}>Descartar imagen</button>
         </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>Selecciona una imagen o abre la cámara.</p></div>}
@@ -322,7 +324,7 @@ export function AnalysisPage() {
           <p className="enterprise-hint">La imagen permanece únicamente en la memoria de esta pestaña, sin subirse a la API ni guardarse en el historial del navegador. El control de calidad no confirma consentimiento clínico.</p>
         </div>}
         {localCapture && <>
-          <PoseReview file={localCapture.file} review={localCapture.review} />
+          <PoseReview file={localCapture.file} review={localCapture.review} autoRun={sandboxAuthEnabled()} />
           <button type="button" className="secondary-button" onClick={() => { generation.current+=1; setLocalCapture(null); setDiscarded(true); setDirectConsent(false); }}>
             Descartar fotografía del análisis
           </button>

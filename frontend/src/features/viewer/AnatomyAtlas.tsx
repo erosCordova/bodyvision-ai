@@ -151,18 +151,20 @@ export function AnatomyAtlas() {
   const [meshOverlay, setMeshOverlay] = useState(false);
   const [fatProfileId,setFatProfileId] = useState(() => new URLSearchParams(window.location.search).get("profile") ?? "");
   const [fatHeat,setFatHeat] = useState(true);
+  const [adipose,setAdipose] = useState(false);
+  const [adiposeOpacity,setAdiposeOpacity] = useState(1);
   const [fatEntryOpen,setFatEntryOpen] = useState(false);
   const fatCatalog=useQuery({queryKey:["catalog",workspaceId],queryFn:api.catalog,enabled:panel==="grasa"&&!readOnly});
   const [fatSimulation,setFatSimulation] = useState<number|null>(null);
   const fatProfile = useQuery({
     queryKey:["profile",workspaceId,fatProfileId],
     queryFn:()=>api.profile(fatProfileId),
-    enabled:panel==="grasa" && !!fatProfileId,
+    enabled:!!fatProfileId,
   });
   const fatMeasurements = useQuery({
     queryKey:["measurements",workspaceId,fatProfileId,"body_fat_pct",0],
     queryFn:()=>api.measurements(fatProfileId,"body_fat_pct",0),
-    enabled:panel==="grasa" && !!fatProfileId && fatProfile.isSuccess && fatProfile.data.id===fatProfileId,
+    enabled:!!fatProfileId && fatProfile.isSuccess && fatProfile.data.id===fatProfileId,
   });
   const latestFat = fatProfile.isSuccess && !fatProfile.isError && fatMeasurements.isSuccess && !fatMeasurements.isError
     ? fatMeasurements.data.items.find(row=>row.profile_id===fatProfileId && row.metric_code==="body_fat_pct" &&
@@ -173,8 +175,11 @@ export function AnatomyAtlas() {
   const weightMeasurements = useQuery({
     queryKey:["measurements",workspaceId,fatProfileId,"weight",0],
     queryFn:()=>api.measurements(fatProfileId,"weight",0),
-    enabled:panel==="grasa" && !!latestFat,
+    enabled:!!fatProfileId && fatProfile.isSuccess && fatProfile.data.id===fatProfileId,
   });
+  const heightMeasurements=useQuery({queryKey:["measurements",workspaceId,fatProfileId,"height",0],queryFn:()=>api.measurements(fatProfileId,"height",0),enabled:!!fatProfileId&&fatProfile.isSuccess&&fatProfile.data.id===fatProfileId});
+  const latestWeight=weightMeasurements.data?.items.find(row=>row.profile_id===fatProfileId&&row.is_current&&row.metric_code==="weight"&&row.unit==="kg"&&Number.isFinite(row.value)&&row.value>0);
+  const latestHeight=heightMeasurements.data?.items.find(row=>row.profile_id===fatProfileId&&row.is_current&&row.metric_code==="height"&&row.unit==="cm"&&Number.isFinite(row.value)&&row.value>0);
   const composition = latestFat && weightMeasurements.isSuccess && !weightMeasurements.isError
     ? pairedBodyComposition(latestFat,weightMeasurements.data.items) : null;
   const [referenceKg, setReferenceKg] = useState(70);
@@ -414,16 +419,19 @@ export function AnatomyAtlas() {
 
   useEffect(() => controller.current?.update(new Set(visible), opacity), [visible, opacity, restart]);
   useEffect(() => controller.current?.setRenderMode(mode), [mode, restart]);
-  const fatHeatActive = panel==="grasa" && fatHeat && mode==="realista" &&
-    visible.length===1 && visible[0]==="skin" && opacity.skin===1 && !isolated && !comparison &&
-    weightVariation===0 && statureCm===BASELINE_HEIGHT_CM && referenceKg===70;
+  const fatHeatActive = panel==="grasa" && fatHeat && !adipose && mode==="realista" &&
+    visible.length===1 && visible[0]==="skin" && opacity.skin===1 && !isolated && !comparison;
+  const linkedVisualWeight=panel!=="simulacion"?(latestWeight?.value??70):referenceKg;
+  const linkedVisualHeight=panel!=="simulacion"?(latestHeight?.value??BASELINE_HEIGHT_CM):statureCm;
+  const linkedVariation=panel==="simulacion"&&!baselinePreview?weightVariation:0;
+  useEffect(()=>controller.current?.setAdipose(adipose&&!comparison&&!isolated&&mode==="realista",displayedFat,adiposeOpacity),[adipose,comparison,isolated,mode,displayedFat,adiposeOpacity,restart]);
   useEffect(()=>controller.current?.setBodyFatThermal(fatHeatActive, displayedFat, illustrativeFat, fatScaleColor(displayedFat??25)),
     [fatHeatActive,displayedFat,illustrativeFat,restart]);
   useEffect(() => controller.current?.setQuality(quality), [quality, restart]);
   useEffect(() => controller.current?.setAutoRotate(spin), [spin, restart]);
   useEffect(() => controller.current?.setIsolated(isolated), [isolated, restart]);
-  useEffect(() => controller.current?.setWeightVariation(baselinePreview ? 0 : weightVariation, referenceKg), [weightVariation, referenceKg, baselinePreview, restart]);
-  useEffect(() => controller.current?.setStature(baselinePreview ? BASELINE_HEIGHT_CM : statureCm), [statureCm, baselinePreview, restart]);
+  useEffect(() => controller.current?.setWeightVariation(linkedVariation, linkedVisualWeight), [linkedVariation,linkedVisualWeight,restart]);
+  useEffect(() => controller.current?.setStature(panel==="simulacion"&&baselinePreview?BASELINE_HEIGHT_CM:linkedVisualHeight), [panel,linkedVisualHeight,baselinePreview,restart]);
   useEffect(() => controller.current?.setMeshOverlay(meshOverlay), [meshOverlay, restart]);
   useEffect(() => controller.current?.setComparisonBaseline(historicalBaseline ? {
     referenceKg: historicalBaseline.reference_kg,
@@ -501,10 +509,12 @@ export function AnatomyAtlas() {
     openEntry(favoriteEntries[next]);
   };
   const toggleLayer = (layer: AnatomicalLayer) => {
+    if(layer==="skin"&&adipose)setAdipose(false);
     setVisible(previous => previous.includes(layer) ? previous.filter(id => id !== layer) : [...previous, layer]);
     setTour(null);
   };
   const applyPreset = (preset: typeof quickViews[number]) => {
+    setAdipose(false);
     setVisible([...preset.layers]);
     setOpacity({ ...initialOpacity, ...preset.opacities });
     setIsolated(false);
@@ -560,6 +570,10 @@ export function AnatomyAtlas() {
   };
   const openSimulation = () => {
     setPanel("simulacion");
+    setAdipose(false);
+    if(latestWeight)setReferenceKg(Math.min(200,Math.max(40,latestWeight.value)));
+    if(latestHeight)setStatureCm(Math.min(205,Math.max(145,latestHeight.value)));
+    setWeightVariation(0);
     setTour(null);
     setVisible(["skin"]);
     setOpacity({ ...initialOpacity });
@@ -569,10 +583,11 @@ export function AnatomyAtlas() {
     controller.current?.resetCamera();
   };
   const openFat = () => {
-    setPanel("grasa");setTour(null);setVisible(["skin"]);setOpacity({...initialOpacity});
+    setPanel("grasa");setAdipose(false);setTour(null);setVisible(["skin"]);setOpacity({...initialOpacity});
     setMode("realista");setIsolated(false);setMeshOverlay(false);setFatHeat(true);
     controller.current?.clearSelection();
   };
+  const showAdipose=()=>{setPanel("grasa");setAdipose(true);setFatHeat(false);setMode("realista");setComparison(false);setIsolated(false);setTour(null);setVisible(["muscles"]);controller.current?.clearSelection();};
   useEffect(() => {
     if (panel === "grasa" && window.matchMedia("(max-width: 1050px)").matches) {
       fatPanelRef.current?.scrollIntoView({block:"start",behavior:"instant"});
@@ -759,6 +774,7 @@ export function AnatomyAtlas() {
             <span>Activa los sistemas que deseas explorar.</span>
           </div>
           <div className="studio-layer-list">
+            <div className={"studio-layer-card"+(adipose?" is-active":"")}><label><span className="studio-layer-dot" style={{background:"#e9b74b"}}/><span className="studio-layer-label"><strong>Grasa corporal</strong><small>Tejido adiposo 3D ilustrativo</small></span><input type="checkbox" checked={adipose} onChange={()=>{if(adipose){setAdipose(false);setVisible(["skin"]);}else showAdipose();}}/></label>{adipose&&<div className="studio-slider"><span>Opacidad</span><input aria-label="Opacidad de grasa corporal" type="range" min="10" max="100" step="5" value={Math.round(adiposeOpacity*100)} onChange={e=>setAdiposeOpacity(Number(e.target.value)/100)}/><output>{Math.round(adiposeOpacity*100)}%</output></div>}</div>
             {anatomicalLayers.map(layer => (
               <div className={"studio-layer-card" + (visible.includes(layer.id) ? " is-active" : "")} key={layer.id}>
                 <label>
@@ -822,8 +838,9 @@ export function AnatomyAtlas() {
           </div>
         </aside>
 
-        <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")} data-fat-heat={fatHeatActive && !error && layerStates.skin==="ready" ? "active":"inactive"}>
+        <section className="studio-viewport" aria-label="Visor anatómico 3D a pantalla completa" data-loaded={!error && visible.some(layer => layerStates[layer] === "ready")} data-fat-heat={fatHeatActive && !error && layerStates.skin==="ready" ? "active":"inactive"} data-adipose={adipose&&!error&&layerStates.skin==="ready"?"active":"inactive"}>
           <div className="studio-canvas" ref={host} />
+          {adipose&&!error&&<div className="studio-thermal-key"><strong>Tejido adiposo 3D</strong><small>ILUSTRATIVO · {displayedFat===null?"SIN MEDICIÓN":displayedFat+" % de referencia"}</small>{layerStates.skin==="loading"&&<small>Cargando capa…</small>}{layerStates.skin==="error"&&<button onClick={()=>{controller.current?.retryLayer("skin");controller.current?.setAdipose(true,displayedFat,adiposeOpacity);}}>Reintentar</button>}</div>}
           {fatHeatActive && !error && <div className="studio-thermal-key" aria-label="Vista térmica ilustrativa"><strong>{displayedFat===null?"Sin medición":displayedFat.toLocaleString("es-PE",{maximumFractionDigits:2})+" %"}</strong><small>{fatSimulation!==null?"SIMULADO":latestFat?"OBSERVADO · TOTAL":"PATRÓN VISUAL"}</small><div className="studio-thermal-ramp" style={illustrativeFat?undefined:{background:fatScaleColor(latestFat!.value)}}/><small>{illustrativeFat?"Patrón ilustrativo, no grasa localizada":"Un color para el porcentaje total"}</small></div>}
           {comparison && !error && (
             <div className="studio-compare" aria-label="Comparación dividida del mismo modelo 3D">
@@ -846,7 +863,7 @@ export function AnatomyAtlas() {
           )}
           <div className="studio-view-top">
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
-            <span>{fatHeatActive ? illustrativeFat ? "VISTA TÉRMICA ILUSTRATIVA" : "GRASA CORPORAL · TOTAL" : "MODELO EDUCATIVO"}</span>
+            <span>{adipose?"TEJIDO ADIPOSO ILUSTRATIVO":fatHeatActive ? illustrativeFat ? "VISTA TÉRMICA ILUSTRATIVA" : "GRASA CORPORAL · TOTAL" : "MODELO EDUCATIVO"}</span>
           </div>
           {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado" data-rendered-frames={renderStats.renderedFrames}>
             <strong>Diagnóstico de visualización</strong>
@@ -958,11 +975,12 @@ export function AnatomyAtlas() {
             {panel === "grasa" && <section ref={fatPanelRef} className="studio-fat-panel" aria-label="Grasa corporal">
               <h2>Grasa corporal</h2>
               <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId}
-                onChange={next=>{setFatProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>
+                onChange={next=>{setFatProfileId(next);setScenarioProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>
               {fatProfileId && (fatProfile.isPending ? <LoadingState/> : fatProfile.isError ?
                 <ErrorState error={fatProfile.error} retry={()=>void fatProfile.refetch()}/> :
                 fatMeasurements.isPending ? <LoadingState/> : fatMeasurements.isError ?
                 <ErrorState error={fatMeasurements.error} retry={()=>void fatMeasurements.refetch()}/> : null)}
+              <div className="studio-fat-reading"><strong>Mediciones del expediente</strong><dl><dt>Peso</dt><dd>{latestWeight?latestWeight.value+" kg":"Sin registro"}</dd><dt>Estatura</dt><dd>{latestHeight?latestHeight.value+" cm":"Sin registro"}</dd></dl><small>{latestWeight||latestHeight?"El atlas ajusta su forma ilustrativa a las últimas medidas disponibles.":"Se conserva la figura de referencia hasta registrar mediciones."} Rango gráfico: 40–200 kg y 145–205 cm; fuera del rango se limita la deformación.</small></div>
               <div className="studio-fat-reading">
                 <DataTypeBadge type="OBSERVADO"/>
                 <strong>{latestFat ? latestFat.value.toLocaleString("es-PE",{maximumFractionDigits:2})+" %" : "Sin registro"}</strong>
@@ -990,13 +1008,13 @@ export function AnatomyAtlas() {
                 </>}
               </div>
               {sandboxAuthEnabled() && fatProfileId && fatProfile.isSuccess && <details><summary>Imágenes de referencia del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId}/></details>}
-              <label className="studio-fat-toggle"><input type="checkbox" checked={fatHeat} onChange={event=>setFatHeat(event.target.checked)}/> Mostrar vista de calor</label>
+              <div className="studio-fat-reading"><strong>Visualización del tejido adiposo</strong><button type="button" className="primary-button" aria-pressed={adipose} onClick={showAdipose}>Mostrar grasa corporal 3D</button><button type="button" aria-pressed={fatHeat&&!adipose} onClick={openFat}>Mostrar mapa de calor</button><small>La capa dorada se genera sobre el atlas, con textura lobulada y grosor gráfico variable. Distribución ilustrativa, no medida por regiones. {displayedFat===null?"Sin porcentaje registrado: referencia visual sin valor clínico.":`Porcentaje de referencia: ${displayedFat}% (${fatSimulation!==null?"simulado":"registrado"}).`}</small></div>
               <div className="studio-fat-legend" aria-label={illustrativeFat?"Paleta térmica ilustrativa, sin valores regionales":"Escala global del porcentaje registrado"}>
                 <div className={illustrativeFat?"":"studio-fat-global-ramp"}/><span>{illustrativeFat?"Menor intensidad":"0 %"}</span><span>{illustrativeFat?"Mayor intensidad":"100 %"}</span>
               </div>
               <p>{illustrativeFat?"Vista ilustrativa: el porcentaje hipotético cambia la intensidad de todo el patrón. Los colores no indican grasa localizada ni temperatura.":"Vista observada: un único color representa el porcentaje total del expediente. No hay mediciones regionales para construir un mapa de grasa localizado."}</p>
-              {fatHeat && !fatHeatActive && <p role="status">Para ver el mapa térmico, restaura la superficie original sin comparación ni cambios de peso o estatura.</p>}
-              {fatHeat && !fatHeatActive && <button type="button" onClick={()=>{resetSimulation();openFat();}}>Restaurar superficie para mapa</button>}
+              {fatHeat && !fatHeatActive && <p role="status">Para ver el mapa térmico, activa únicamente la piel sin comparación.</p>}
+              {fatHeat && !fatHeatActive && <button type="button" onClick={()=>{setComparison(false);openFat();}}>Restaurar superficie para mapa</button>}
             </section>}
             {panel === "simulacion" && (
               <div className="studio-simulation">
@@ -1195,6 +1213,7 @@ export function AnatomyAtlas() {
                         setAllScenarioExportBusy(false);
                         setAllScenarioExportProgress("");
                         setScenarioProfileId(event.target.value);
+                        setFatProfileId(event.target.value);setFatSimulation(null);
                         setScenarioCompatibilityError("");
                         setHistoricalBaseline(null);
                         setComparison(false);

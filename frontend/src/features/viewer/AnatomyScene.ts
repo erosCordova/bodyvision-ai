@@ -258,6 +258,12 @@ export function createAnatomyScene(
   let referenceVolume = 0;
   let historicalComparison: ReturnType<typeof buildHistoricalComparisonShape> | null = null;
   const massBounds = { value: new THREE.Vector4(0, 2.5, 0, 0) };
+  // Independent illustrative adipose shell, derived from the same atlas surface.
+  let adiposeGroup: THREE.Group | null = null;
+  let adiposeMaterial: THREE.MeshPhysicalMaterial | null = null;
+  let adiposeVisible = false;
+  const adiposeFraction = { value: 0.25 };
+  let adiposeOpacity = 1;
   let showWireMesh = false;
   let comparison = false;
   let comparisonDivider = 50;
@@ -600,6 +606,7 @@ export function createAnatomyScene(
   };
   function applyAll() {
     for (const layer of anatomicalLayers) applyLayer(layer.id);
+    if (adiposeGroup) adiposeGroup.visible = adiposeVisible && !isolated && mode==="realista";
     render();
   }
 
@@ -677,6 +684,79 @@ export function createAnatomyScene(
     }
   };
 
+  const prepareAdipose = () => {
+    if (adiposeGroup || disposed || !objects.has("skin")) return;
+    const skin = objects.get("skin")!;
+    const group = new THREE.Group();
+    group.name = "Tejido adiposo ilustrativo";
+    group.visible = false;
+    const material = new THREE.MeshPhysicalMaterial({
+      color: "#e9b74b", roughness: .67, clearcoat: .12,
+      side: THREE.DoubleSide, metalness: 0,
+    });
+    attachBodyVolume(material, "skin", volume, massBounds);
+    const baseCompile = material.onBeforeCompile;
+    const mask = `
+      float adiposeMask(vec3 p) {
+        float span = max(uBVBounds.y-uBVBounds.x,.00001);
+        float h = (p.y-uBVBounds.x)/span;
+        float x = abs(p.x-uBVBounds.z)/span;
+        float torso = smoothstep(.32,.44,h)*(1.-smoothstep(.72,.84,h))*(1.-smoothstep(.12,.22,x));
+        float thighs = smoothstep(.16,.23,h)*(1.-smoothstep(.42,.53,h))*(1.-smoothstep(.10,.18,x));
+        float arms = smoothstep(.37,.48,h)*(1.-smoothstep(.70,.81,h))*smoothstep(.13,.20,x);
+        return max(torso,max(thighs*.8,arms*.65));
+      }
+    `;
+    material.onBeforeCompile = (shader,renderer) => {
+      baseCompile.call(material,shader,renderer);
+      shader.uniforms.uBVAdipose = adiposeFraction;
+      shader.vertexShader=shader.vertexShader.replace("#include <common>",
+        "#include <common>\nuniform float uBVAdipose; varying vec3 vAdiposePoint;")
+        .replace("#include <project_vertex>", `
+          vAdiposePoint=(modelMatrix*vec4(position,1.)).xyz;
+          float adiposeSpan=max(uBVBounds.y-uBVBounds.x,.00001);
+          vec3 adiposeP=vec3(vAdiposePoint.x-uBVBounds.z,vAdiposePoint.y-uBVBounds.x,vAdiposePoint.z-uBVBounds.w)/adiposeSpan;
+          float adiposeLobules=sin(adiposeP.x*151.+sin(adiposeP.y*93.))*sin(adiposeP.y*166.+sin(adiposeP.z*81.))*sin(adiposeP.z*159.);
+          float adiposeScale=max(length(modelMatrix[0].xyz),.00001);
+          // Below the reference skin; a graphical offset, not calibrated tissue thickness.
+          float adiposeOffset=(mix(-.025,-.002,uBVAdipose)+.0027*adiposeLobules)*adiposeSpan/adiposeScale;
+          transformed+=normalize(normal)*adiposeOffset;
+          #include <project_vertex>`);
+      shader.fragmentShader=shader.fragmentShader.replace("#include <common>",
+        "#include <common>\nuniform vec4 uBVBounds; uniform float uBVAdipose; varying vec3 vAdiposePoint;\n"+mask)
+        .replace("#include <color_fragment>", `
+          #include <color_fragment>
+          float tissue=adiposeMask(vAdiposePoint);
+          if(tissue<mix(.46,.12,uBVAdipose)) discard;
+          float span=max(uBVBounds.y-uBVBounds.x,.00001);
+          vec3 p=vec3(vAdiposePoint.x-uBVBounds.z,vAdiposePoint.y-uBVBounds.x,vAdiposePoint.z-uBVBounds.w)/span;
+          float lobules=sin(p.x*151.+sin(p.y*93.))*sin(p.y*166.+sin(p.z*81.))*sin(p.z*159.);
+          float lobuleShade=smoothstep(-.75,.72,lobules);
+          diffuseColor.rgb=mix(vec3(.55,.27,.045),vec3(1.,.76,.32),.24+.76*lobuleShade);
+        `);
+    };
+    material.customProgramCacheKey = () => "bodyvision-adipose-illustrative-v1";
+    skin.updateWorldMatrix(true,true);
+    const inverse = anatomical.matrixWorld.clone().invert();
+    skin.traverse(node=>{
+      if (!(node instanceof THREE.Mesh) || node.userData.bodyvisionMeshOverlay || node instanceof THREE.SkinnedMesh) return;
+      // Separate geometry ownership avoids disposing the reference skin's buffers.
+      const mesh = new THREE.Mesh(node.geometry.clone(),material);
+      mesh.name="Tejido adiposo ilustrativo";
+      mesh.matrixAutoUpdate=false;
+      mesh.matrix.copy(inverse.clone().multiply(node.matrixWorld));
+      mesh.frustumCulled=false;
+      group.add(mesh);
+    });
+    adiposeGroup=group;
+    adiposeMaterial=material;
+    anatomical.add(group);
+    material.opacity=adiposeOpacity;
+    material.transparent=adiposeOpacity<1;
+    material.depthWrite=adiposeOpacity===1;
+    group.visible=adiposeVisible&&!isolated&&mode==="realista";
+  };
+
   const load = (layer: AnatomicalLayer) => {
     if (disposed || objects.has(layer) || loading.has(layer)) return;
     const startedLoading = performance.now();
@@ -732,6 +812,7 @@ export function createAnatomyScene(
         anatomical.add(group);
         if (showWireMesh) ensureWireOverlays(layer, group);
         if (!fitted) frameBody();
+        if (layer==="skin" && adiposeVisible) prepareAdipose();
         applyLayer(layer);
         render();
         // Download + glTF/Draco decoding + CPU scene preparation and first
@@ -770,6 +851,19 @@ export function createAnatomyScene(
     thermal.illustrative.value = illustrative ? 1 : 0;
     thermal.globalColor.value.set(globalColor);
     thermal.percentage.value = percentage !== null && Number.isFinite(percentage) ? percentage : 25;
+    render();
+  };
+  const setAdipose = (enabled:boolean,percentage:number|null,opacity:number) => {
+    adiposeVisible=enabled;
+    adiposeFraction.value=percentage!==null&&Number.isFinite(percentage)?THREE.MathUtils.clamp(percentage/100,.02,.70):.25;
+    adiposeOpacity=THREE.MathUtils.clamp(opacity,.1,1);
+    if(enabled){load("skin");prepareAdipose();}
+    if(adiposeGroup)adiposeGroup.visible=enabled&&!isolated&&mode==="realista";
+    if(adiposeMaterial){
+      adiposeMaterial.opacity=adiposeOpacity;
+      const transparent=adiposeOpacity<1;
+      if(adiposeMaterial.transparent!==transparent){adiposeMaterial.transparent=transparent;adiposeMaterial.depthWrite=!transparent;adiposeMaterial.needsUpdate=true;}
+    }
     render();
   };
   const setWeightVariation = (percent: number, referenceKg = DEFAULT_REFERENCE_KG) => {
@@ -961,6 +1055,7 @@ export function createAnatomyScene(
     controls.dispose();
     restoreHighlight();
     if (dashboardHalo) releaseRoot(dashboardHalo);
+    if (adiposeGroup) releaseRoot(adiposeGroup);
     for (const group of objects.values()) releaseRoot(group);
     for (const entry of lodEntries.values()) {
       entry.high.dispose();
@@ -1080,5 +1175,5 @@ export function createAnatomyScene(
       resize();
     }
   };
-  return { update, focus, clearSelection, setRenderMode, setBodyFatThermal, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
+  return { update, focus, clearSelection, setRenderMode, setBodyFatThermal, setAdipose, setQuality, setAutoRotate, setDashboardAnimation, setIsolated, setWeightVariation, setStature, setMeshOverlay, resetCamera, view, zoom, capturePng, getPerformanceStats, setComparison, setComparisonBaseline, retryLayer, dispose };
 }

@@ -8,6 +8,7 @@ import { prepareSyntheticPng, syntheticCapturesApi, type StoredCapture } from ".
 import { reviewLocalCapture, type CaptureReview } from "./captureQuality";
 import { stageCaptureForAnalysis } from "./captureHandoff";
 import { dateTime } from "../../components/ui/States";
+import { AutomaticPosePreview } from "./AutomaticPosePreview";
 import "./sandbox-capture-library.css";
 
 export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileId,onAnalyze}:{file?:File|null;allowUpload?:boolean;fixedProfileId?:string;onAnalyze?:(file:File,review:CaptureReview)=>void|Promise<void>}){
@@ -79,6 +80,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
     {profileId&&profile.isSuccess&&profile.data.status!=="active"&&<p>Expediente restringido o archivado.</p>}
     {writable&&fixedProfileId&&allowUpload&&<label className="enterprise-upload"><strong>Seleccionar imagen</strong><small>JPG, PNG o WebP · hasta 10 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{setLocal(e.target.files?.[0]??null);setAttest(false);e.target.value="";}}/></label>}
     {writable&&effective&&allowUpload&&<div className="bv-capture-save"><p>Imagen lista: {effective.name}</p><label className="enterprise-consent"><input type="checkbox" checked={attest} disabled={busy} onChange={e=>setAttest(e.target.checked)}/> Confirmo que la imagen es ficticia y autorizo su conservación temporal.</label><button type="button" className="primary-button" disabled={!attest||busy} onClick={()=>void save()}>Guardar en expediente</button></div>}
+    {fixedProfileId&&local&&attest&&<AutomaticPosePreview file={local}/>}
     {archive.isPending&&writable&&<p role="status">Consultando imágenes…</p>}
     {archive.isError&&<p role="alert">{archive.error.message}</p>}
     {archive.data&&<><p>{archive.data.total} imágenes guardadas</p>{archive.data.items.length===0&&<p>Este expediente todavía no contiene imágenes.</p>}<div className="bv-capture-list">{archive.data.items.map((item,index)=><article key={item.id}><strong>Captura {archive.data!.total-index}</strong><small>{item.width} × {item.height} px · {dateTime(item.created_at)}</small><div><button type="button" disabled={busy} onClick={()=>void open(item,false)}>Ver imagen</button><button type="button" disabled={busy} onClick={()=>void open(item,true)}>Usar en análisis IA</button>{writable&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm("¿Eliminar esta imagen del expediente?"))void run(async()=>{await syntheticCapturesApi(session.token,profileId).remove(item.id);setPreview(null);await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});setNotice("Imagen eliminada.");});}}>Eliminar</button>}</div></article>)}</div></>}

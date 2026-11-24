@@ -18,7 +18,7 @@ import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
 
-export function PoseReview({ file, review }: { file: File; review: CaptureReview }) {
+export function PoseReview({ file, review, autoRun=false }: { file: File; review: CaptureReview; autoRun?:boolean }) {
   const alive = useRef(true);
   const requestSequence = useRef(0);
   // Prevent repeated taps from allocating overlapping MediaPipe input sessions.
@@ -103,6 +103,7 @@ export function PoseReview({ file, review }: { file: File; review: CaptureReview
       if (poseInFlight.current === requestId) poseInFlight.current = null;
     }
   };
+  useEffect(()=>{if(!autoRun)return;const timer=window.setTimeout(()=>void run(),0);return()=>window.clearTimeout(timer);},[file,autoRun]);
   const runBenchmark = async () => {
     if (!benchmarkConfirmed || benchmarkRunning || diagnosticRunning || state !== "ready") return;
     const requestId = ++requestSequence.current;
