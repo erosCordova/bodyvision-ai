@@ -366,7 +366,8 @@ export function AnalysisPage() {
 
 export function ReportsPage() {
   const {id,api} = useWorkspace();
-  const [profileId,setProfileId] = useState("");
+  const location=useLocation();
+  const [profileId,setProfileId] = useState(()=>new URLSearchParams(location.search).get("profile")??"");
   const [offset,setOffset] = useState(0);
   const [reportMetric,setReportMetric] = useState("");
   const catalog=useQuery({queryKey:["catalog",id],queryFn:api.catalog});
@@ -396,6 +397,7 @@ export function ReportsPage() {
         {privateAuthEnabled() ? <>{ready && <Link className="secondary-button" to={"/profiles/"+profileId+"?tab=analytics"}>Abrir informes con auditoría (PDF/CSV)</Link>}</> :
           <button disabled={!ready || !measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button>}
         {!privateAuthEnabled() && <button disabled={!ready} onClick={()=>window.print()}>Imprimir vista previa</button>}
+        {sandboxAuthEnabled()&&ready&&<Link className="secondary-button" to={"/profiles/"+profileId+"?tab=images"}>Imágenes de referencia del expediente</Link>}
       </div>
     </section>
     <section className="enterprise-panel enterprise-report-preview">

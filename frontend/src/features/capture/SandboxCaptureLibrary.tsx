@@ -32,32 +32,40 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
   useEffect(()=>{generation.current++;setAttest(false);setLocal(null);setNotice("");setError("");setPreview(null);return()=>{generation.current++;};},[profileId,session?.user_id]);
   useEffect(()=>{setAttest(false);},[file]);
   useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview.url);},[preview]);
-  async function run(action:()=>Promise<void>){
+  async function run(action:(isCurrent:()=>boolean)=>Promise<void>){
     if(busy)return;
     const current=++generation.current;
     setBusy(true);setError("");setNotice("");
-    try{await action();}catch(e){if(current===generation.current)setError(e instanceof Error?e.message:"No se pudo completar la operación.");}
+    try{await action(()=>current===generation.current);}catch(e){if(current===generation.current)setError(e instanceof Error?e.message:"No se pudo completar la operación.");}
     finally{setBusy(false);}
   }
   async function save(){
     if(!session||!writable||!effective||!attest||!allowUpload)return;
     const source=effective;
-    await run(async()=>{
+    await run(async(isCurrent)=>{
       const review=await reviewLocalCapture(source);
       if(!review.passed)throw new Error("La imagen no cumple las condiciones básicas de calidad.");
-      const png=await prepareSyntheticPng(source);
+      let png:Blob|null=null;
+      for(const dimension of [1000,850,720,600,480,360]){
+        try{png=await prepareSyntheticPng(source,dimension);break;}
+        catch(e){if(!(e instanceof Error)||!e.message.includes("256 KiB"))throw e;}
+      }
+      if(!png)throw new Error("No se pudo preparar una copia PNG de hasta 256 KiB.");
+      if(!isCurrent())return;
       await syntheticCapturesApi(session.token,profileId).create(png);
       await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});
-      setLocal(null);setAttest(false);setNotice("Imagen guardada en el expediente.");
+      if(isCurrent()){setLocal(null);setAttest(false);setNotice("Imagen guardada en el expediente.");}
     });
   }
   async function open(item:StoredCapture,analyze:boolean){
     if(!session)return;
-    await run(async()=>{
+    await run(async(isCurrent)=>{
       const blob=await syntheticCapturesApi(session.token,profileId).download(item.id);
+      if(!isCurrent())return;
       const image=new File([blob],"captura-ficticia.png",{type:"image/png"});
       if(analyze){
         const review=await reviewLocalCapture(image);
+        if(!isCurrent())return;
         if(onAnalyze)await onAnalyze(image,review);
         else {stageCaptureForAnalysis(image,review);navigate("/analysis?profile="+profileId,{state:{localCaptureReview:review}});}
       }else setPreview({url:URL.createObjectURL(blob),item});
@@ -76,7 +84,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
     {archive.data&&<><p>{archive.data.total} imágenes guardadas</p>{archive.data.items.length===0&&<p>Este expediente todavía no contiene imágenes.</p>}<div className="bv-capture-list">{archive.data.items.map((item,index)=><article key={item.id}><strong>Captura {archive.data!.total-index}</strong><small>{item.width} × {item.height} px · {dateTime(item.created_at)}</small><div><button type="button" disabled={busy} onClick={()=>void open(item,false)}>Ver imagen</button><button type="button" disabled={busy} onClick={()=>void open(item,true)}>Usar en análisis IA</button>{writable&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm("¿Eliminar esta imagen del expediente?"))void run(async()=>{await syntheticCapturesApi(session.token,profileId).remove(item.id);setPreview(null);await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});setNotice("Imagen eliminada.");});}}>Eliminar</button>}</div></article>)}</div></>}
     {preview&&<div className="bv-capture-preview"><img src={preview.url} alt="Imagen ficticia guardada en el expediente"/><button type="button" onClick={()=>setPreview(null)}>Cerrar vista previa</button></div>}
     {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
-    {profileId&&profile.isSuccess&&<div className="bv-capture-links"><Link to={"/profiles/"+profileId+"?tab=measurements"}>Mediciones</Link><Link to={"/body-3d?panel=grasa&profile="+profileId}>Visor 3D</Link><Link to={"/profiles/"+profileId+"?tab=analytics"}>Evolución</Link></div>}
-    <small>Solo imágenes ficticias. Hasta 20 por cuenta, cifradas y disponibles durante 7 días. El atlas utiliza mediciones, no reconstruye el cuerpo a partir de fotografías.</small>
+    {profileId&&profile.isSuccess&&<div className="bv-capture-links"><Link to={"/profiles/"+profileId+"?tab=measurements"}>Mediciones</Link><Link to={"/body-3d?panel=grasa&profile="+profileId}>Visor 3D</Link><Link to={"/profiles/"+profileId+"?tab=analytics"}>Evolución</Link><Link to={"/reports?profile="+profileId}>Reportes</Link></div>}
+    <small>Solo imágenes ficticias. Hasta 20 por cuenta, cifradas y disponibles durante 7 días. Las copias se redimensionan para el archivo; comprueba su calidad al volver a analizarlas. El atlas utiliza mediciones, no reconstruye el cuerpo a partir de fotografías.</small>
   </section>;
 }

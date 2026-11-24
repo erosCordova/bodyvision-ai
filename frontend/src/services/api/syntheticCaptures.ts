@@ -104,7 +104,7 @@ export function syntheticCapturesApi(token: string, profileId: string) {
 }
 
 /** Re-encode in-memory and omit ancillary PNG metadata before upload. */
-export async function prepareSyntheticPng(file: File): Promise<Blob> {
+export async function prepareSyntheticPng(file: File, maxDimension = 1024): Promise<Blob> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -112,7 +112,7 @@ export async function prepareSyntheticPng(file: File): Promise<Blob> {
     throw new Error("No se pudo leer la imagen ficticia.");
   }
   try {
-    const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, Math.min(1000,maxDimension) / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");
