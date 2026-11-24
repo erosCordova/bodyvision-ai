@@ -21,7 +21,7 @@ export function LongitudinalSummary({
   profileId: string;
   metricCode: string;
   unit: string;
-  period: "30d" | "90d" | "1a" | "all";
+  period: "30d" | "90d" | "1a" | "all" | "custom";
   exportReport?: (range?: ExportDateRange) => Promise<LongitudinalDownload>;
 }) {
   const [busy, setBusy] = useState(false);
