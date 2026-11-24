@@ -11,7 +11,10 @@ def test_landmark_summary_keeps_only_counts_and_model_provenance():
     result = summarize_landmarks([points])
     assert result.detected and result.visible_points == 32
     assert set(result.model_dump()) == {
-        "detected", "visible_points", "model_sha256", "model_revision"
+        "detected",
+        "visible_points",
+        "model_sha256",
+        "model_revision",
     }
     assert not summarize_landmarks([]).detected
     points[1].z = float("nan")
