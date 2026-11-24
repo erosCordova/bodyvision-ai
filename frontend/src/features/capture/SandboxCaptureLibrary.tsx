@@ -45,7 +45,8 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
     const source=effective;
     await run(async(isCurrent)=>{
       const review=await reviewLocalCapture(source);
-      if(!review.passed)throw new Error("La imagen no cumple las condiciones básicas de calidad.");
+      // reviewLocalCapture still rejects malformed or unsafe files. Lighting,
+      // contrast and resolution recommendations are not archival restrictions.
       let png:Blob|null=null;
       for(const dimension of [1000,850,720,600,480,360]){
         try{png=await prepareSyntheticPng(source,dimension);break;}
@@ -55,7 +56,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
       if(!isCurrent())return;
       await syntheticCapturesApi(session.token,profileId).create(png);
       await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});
-      if(isCurrent()){setLocal(null);setAttest(false);setNotice("Imagen guardada en el expediente.");}
+      if(isCurrent()){setLocal(null);setAttest(false);setNotice(review.passed?"Imagen guardada en el expediente.":"Imagen guardada. Se recomienda mejorar la iluminación o resolución para futuras evaluaciones.");}
     });
   }
   async function open(item:StoredCapture,analyze:boolean){

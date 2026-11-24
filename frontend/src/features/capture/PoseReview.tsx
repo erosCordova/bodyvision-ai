@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createPoseInferenceSession, detectPoseOnDevice, diagnosePoseOnDevice, POSE_EDGES,
+  createPoseInferenceSession, detectPoseOnDevice, diagnosePoseOnDevice, poseFailureMessage, POSE_EDGES,
   POSE_MODEL_VERSION, POSE_SDK_VERSION, type PoseEstimate,
 } from "./poseInference";
 import { assessPoseQuality, isPosePointVisible } from "./poseQuality";
@@ -91,13 +91,10 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
       setAnalysisSerial(previous => previous + 1);
       setElapsedMs(Math.max(0, performance.now() - start));
       setState("ready");
-    } catch {
+    } catch (cause) {
       if (!alive.current || requestId !== requestSequence.current) return;
       setState("failed");
-      setFailure(
-        "No se pudo ejecutar el detector local. Comprueba que esta versión incluya los archivos verificados, " +
-        "la compatibilidad de WebAssembly y vuelve a intentarlo. La imagen no se ha enviado a la API.",
-      );
+      setFailure(poseFailureMessage(cause));
     } finally {
       // Do not release a newer photograph's lock when an old request settles.
       if (poseInFlight.current === requestId) poseInFlight.current = null;

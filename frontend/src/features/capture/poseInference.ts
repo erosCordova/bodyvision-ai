@@ -105,6 +105,7 @@ type PoseVisionModule = {
   PoseLandmarker: {
     createFromOptions: (runtime: unknown, options: {
       baseOptions: { modelAssetPath: string; delegate: "CPU" };
+      canvas?: HTMLCanvasElement;
       runningMode: "IMAGE";
       numPoses: number;
       minPoseDetectionConfidence: number;
@@ -114,6 +115,14 @@ type PoseVisionModule = {
   };
 };
 
+type PoseStage = "imagen" | "preparación" | "recursos" | "modelo" | "detección";
+export class PoseExecutionError extends Error {
+  constructor(public readonly stage: PoseStage, message: string) { super(message); this.name = "PoseExecutionError"; }
+}
+export function poseFailureMessage(error:unknown):string {
+  if(error instanceof PoseExecutionError)return error.message;
+  return "No se pudo ejecutar la detección corporal local. Reintenta con una imagen JPG, PNG o WebP.";
+}
 let reusableLandmarker: Promise<PoseLandmarkerInstance> | null = null;
 let pageUnloadHandlerRegistered = false;
 
@@ -121,16 +130,33 @@ let pageUnloadHandlerRegistered = false;
 async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
   if (!reusableLandmarker) {
     reusableLandmarker = (async () => {
-      const vision = await import("../../vendor/vision_bundle.mjs") as unknown as PoseVisionModule;
-      const fileset = await vision.FilesetResolver.forVisionTasks(POSE_WASM_URL);
-      return vision.PoseLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" },
-        runningMode: "IMAGE",
-        numPoses: 1,
-        minPoseDetectionConfidence: 0.5,
-        minPosePresenceConfidence: 0.5,
-        outputSegmentationMasks: false,
+      let vision: PoseVisionModule;
+      try {
+        vision = await import("../../vendor/vision_bundle.mjs") as unknown as PoseVisionModule;
+      } catch {
+        throw new PoseExecutionError("recursos","No se pudo cargar el módulo de IA. Actualiza la página e inténtalo nuevamente.");
+      }
+      // Explicit, same-origin fileset fallback uses the already verified
+      // non-SIMD assets when the automatic runtime cannot initialize.
+      // A regular HTML canvas also avoids browser-specific OffscreenCanvas failures.
+      const base=new URL(POSE_WASM_URL+"/",window.location.origin).href;
+      const model=new URL(POSE_MODEL_URL,window.location.origin).href;
+      const fallback={wasmLoaderPath:base+"vision_wasm_nosimd_internal.js",wasmBinaryPath:base+"vision_wasm_nosimd_internal.wasm"};
+      const create=(fileset:unknown)=>vision.PoseLandmarker.createFromOptions(fileset,{
+        baseOptions:{modelAssetPath:model,delegate:"CPU"},
+        canvas:document.createElement("canvas"),
+        runningMode:"IMAGE",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,
+        outputSegmentationMasks:false,
       });
+      try {
+        const fileset=await vision.FilesetResolver.forVisionTasks(base.slice(0,-1));
+        return await create(fileset);
+      } catch {
+        try { return await create(fallback); }
+        catch {
+          throw new PoseExecutionError("modelo","No se pudo iniciar MediaPipe con ninguna de las dos variantes locales. Comprueba la aceleración gráfica del navegador y actualiza la página.");
+        }
+      }
     })().catch(error => {
       reusableLandmarker = null;
       throw error;
@@ -174,9 +200,10 @@ export async function createPoseInferenceSession(
   // A superseded request must not decode another image or spend CPU running
   // the model. Guard each awaited stage; the current frame always gets freed.
   requireCurrentPoseRequest(isCurrent);
-  await validatePoseImageFile(file);
+  try { await validatePoseImageFile(file); }
+  catch(error){throw new PoseExecutionError("imagen",error instanceof Error?error.message:"Formato de imagen no admitido.");}
   requireCurrentPoseRequest(isCurrent);
-  const frame = await preparePoseFrame(file);
+  const frame = await preparePoseFrame(file).catch(()=>{throw new PoseExecutionError("preparación","No se pudo preparar la imagen en el navegador. Prueba con una copia JPG o PNG.");});
   try {
     requireCurrentPoseRequest(isCurrent);
     const landmarker = await loadPoseLandmarker();
@@ -186,7 +213,8 @@ export async function createPoseInferenceSession(
       detect: () => {
         if (released) throw new Error("La sesión local de pose ya fue liberada.");
         requireCurrentPoseRequest(isCurrent);
-        return summarizePoseResult(landmarker.detect(frame.canvas));
+        try { return summarizePoseResult(landmarker.detect(frame.canvas)); }
+        catch { const previous=reusableLandmarker; reusableLandmarker=null; void previous?.then(instance=>instance.close()).catch(()=>{}); throw new PoseExecutionError("detección","El modelo se inició, pero falló al analizar la imagen. Reintenta la detección."); }
       },
       release: () => {
         if (released) return;

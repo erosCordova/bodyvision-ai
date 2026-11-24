@@ -271,7 +271,7 @@ export function CapturePage() {
         <Limitation>Solo imágenes ficticias. No apto para uso clínico.</Limitation>
       </aside>
     </div>
-    {sandboxAuthEnabled() && <SandboxCaptureLibrary file={file} allowUpload={Boolean(consent && file && review?.passed && !isReviewing)} />}
+    {sandboxAuthEnabled() && <SandboxCaptureLibrary file={file} allowUpload={Boolean(consent && file && review && !isReviewing)} />}
   </div>;
 }
 
@@ -329,7 +329,7 @@ export function AnalysisPage() {
             Descartar fotografía del análisis
           </button>
         </>}
-        {sandboxAuthEnabled() && <SandboxCaptureLibrary file={localCapture?.file??null} allowUpload={Boolean(localCapture?.review.passed)} onAnalyze={async (file,review)=>{generation.current+=1;setLocalCapture({file,review});setDiscarded(false);setDirectPending(false);setDirectError("");}}/>}
+        {sandboxAuthEnabled() && <SandboxCaptureLibrary file={localCapture?.file??null} allowUpload={Boolean(localCapture?.review)} onAnalyze={async (file,review)=>{generation.current+=1;setLocalCapture({file,review});setDiscarded(false);setDirectPending(false);setDirectError("");}}/>}
         {!localCapture && <div className="enterprise-quality-review">
           <h3>Seleccionar imagen para análisis</h3>
           <label className="enterprise-consent"><input type="checkbox" checked={directConsent} onChange={event=>{
