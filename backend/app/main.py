@@ -20,8 +20,8 @@ from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.operations import router as operations_router
 from app.api.routes.pose_summaries import router as pose_router
-from app.api.routes.server_pose import router as server_pose_router
 from app.api.routes.privacy_requests import router as privacy_router
+from app.api.routes.server_pose import router as server_pose_router
 from app.api.routes.simulation_scenarios import router as simulation_router
 from app.api.routes.synthetic_captures import router as capture_router
 from app.core.config import Settings
