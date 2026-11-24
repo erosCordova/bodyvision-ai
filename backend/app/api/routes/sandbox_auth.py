@@ -1,4 +1,4 @@
-"""Single-operator hosted sandbox. Only isolated synthetic fixtures; never private identity."""
+"""Hosted synthetic sandbox with isolated per-account workspaces."""
 import hashlib
 import hmac
 import secrets
@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.core.errors import DomainError
@@ -30,12 +31,14 @@ def check_sandbox_session(request: Request) -> str:
     digest = hashlib.sha256(token.encode()).hexdigest()
     with request.app.state.engine.connect() as connection:
         valid = connection.execute(text("""
-            SELECT 1 FROM sandbox_sessions WHERE digest=:digest AND NOT revoked
+            SELECT organization_id,user_id FROM sandbox_sessions WHERE digest=:digest AND NOT revoked
             AND expires_at>now() AND last_activity>now()-interval '15 minutes'
-        """), {"digest": digest}).scalar_one_or_none()
+        """), {"digest": digest}).mappings().one_or_none()
     if valid is None:
         raise DomainError(401, "SESSION_EXPIRED", "La sesión de pruebas caducó.")
     request.state.sandbox_verified = True
+    request.state.sandbox_org = valid["organization_id"]
+    request.state.sandbox_actor = valid["user_id"]
     return digest
 
 
@@ -51,19 +54,64 @@ def login_sandbox(request: Request, data: LoginInput):
         """)).scalar_one_or_none()
     if allowed is None:
         raise DomainError(429, "LOGIN_RATE_LIMITED", "Intenta en 15 minutos.")
-    salt, expected = request.app.state.settings.sandbox_password_hash.get_secret_value().split(":")
+    email = data.email.strip().lower()
+    org, actor = FIRST_WORKSPACE, ACTOR
+    verifier = request.app.state.settings.sandbox_password_hash.get_secret_value()
+    found = email == EMAIL
+    if not found:
+        with engine.connect() as connection:
+            row = connection.execute(text("SELECT verifier,organization_id,user_id FROM sandbox_accounts WHERE email=:email"), {"email":email}).mappings().one_or_none()
+        if row is not None:
+            verifier, org, actor = row["verifier"], row["organization_id"], row["user_id"]
+            found = True
+    salt, expected = verifier.split(":")
     actual = hashlib.pbkdf2_hmac("sha256", data.password.encode(), bytes.fromhex(salt), 600000).hex()
-    if not (hmac.compare_digest(actual, expected) and data.email.strip().lower() == EMAIL and data.organization_id == FIRST_WORKSPACE):
+    if not (hmac.compare_digest(actual, expected) and found):
         sandbox_event(request,"auth.login",401)
         raise DomainError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.")
+    return issue_sandbox_session(request, org, actor)
+
+
+def issue_sandbox_session(request: Request, org: UUID, actor: UUID) -> SessionRead:
     token = secrets.token_urlsafe(48)
     expiry = datetime.now(UTC) + timedelta(hours=4)
-    with engine.begin() as connection:
-        connection.execute(text("INSERT INTO sandbox_sessions(digest,expires_at) VALUES (:d,:e)"),
-                           {"d": hashlib.sha256(token.encode()).hexdigest(), "e": expiry})
-        connection.execute(text("UPDATE sandbox_login_limit SET attempts=0,window_start=now() WHERE singleton"))
+    with request.app.state.engine.begin() as connection:
+        connection.execute(text("INSERT INTO sandbox_sessions(digest,expires_at,organization_id,user_id) VALUES (:d,:e,:o,:u)"),
+                           {"d": hashlib.sha256(token.encode()).hexdigest(), "e": expiry,"o":org,"u":actor})
     sandbox_event(request,"auth.login",200)
-    return SessionRead(token=token, expires_at=expiry, organization_id=FIRST_WORKSPACE, user_id=ACTOR, role="specialist")
+    return SessionRead(token=token, expires_at=expiry, organization_id=org, user_id=actor, role="specialist")
+
+
+class RegistrationInput(BaseModel):
+    email: str = Field(min_length=5,max_length=254,pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=12,max_length=128)
+    synthetic_only: bool
+
+
+@router.post("/register",status_code=201)
+def register_sandbox(request: Request, data: RegistrationInput):
+    email = data.email.strip().lower()
+    if not data.synthetic_only:
+        raise DomainError(422,"SYNTHETIC_REQUIRED","Confirma el uso exclusivo de expedientes ficticios.")
+    if email == EMAIL:
+        raise DomainError(409,"REGISTRATION_UNAVAILABLE","No se pudo crear la cuenta.")
+    engine=request.app.state.engine
+    with engine.begin() as connection:
+        allowed=connection.execute(text("""
+          UPDATE sandbox_registration_limit SET attempts=CASE WHEN window_start<now()-interval '15 minutes' THEN 1 ELSE attempts+1 END,
+          window_start=CASE WHEN window_start<now()-interval '15 minutes' THEN now() ELSE window_start END
+          WHERE singleton AND (attempts<5 OR window_start<now()-interval '15 minutes') RETURNING attempts
+        """)).scalar_one_or_none()
+    if allowed is None:
+        raise DomainError(429,"REGISTRATION_RATE_LIMITED","Intenta en 15 minutos.")
+    salt=secrets.token_bytes(16)
+    verifier=salt.hex()+":"+hashlib.pbkdf2_hmac("sha256",data.password.encode(),salt,600000).hex()
+    with engine.begin() as connection:
+        row=connection.execute(text("SELECT * FROM sandbox_register_account(:email,:verifier)"),{"email":email,"verifier":verifier}).mappings().one_or_none()
+    if row is None:
+        raise DomainError(409,"REGISTRATION_UNAVAILABLE","No se pudo crear la cuenta. Si ya tienes una, inicia sesión.")
+    sandbox_event(request,"auth.register",201)
+    return {"status":"created"}
 
 
 @router.post("/logout", status_code=204)

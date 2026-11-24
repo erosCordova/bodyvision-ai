@@ -182,7 +182,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 )
             elif settings.app_env == "sandbox" and request.url.path.startswith("/api/"):
                 path = request.url.path
-                if request.method == "OPTIONS" or path in {"/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/login"}:
+                if request.method == "OPTIONS" or path in {"/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/login", "/api/v1/auth/register"}:
                     response = await call_next(request)
                 else:
                     try:

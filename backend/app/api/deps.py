@@ -58,7 +58,7 @@ def workspace(
             raise DomainError(401, "AUTH_REQUIRED", "Se requiere una sesión de pruebas.")
         if request.headers.get("X-Workspace-ID"):
             raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
-        x_workspace_id = FIRST_WORKSPACE
+        x_workspace_id = request.state.sandbox_org
     # Legacy path: synthetic local/test selector, never real authentication.
     with request.app.state.engine.begin() as conn:
         conn.execute(
@@ -73,5 +73,7 @@ def workspace(
         ).scalar_one_or_none()
         if actor is None:
             raise DomainError(404, "NOT_FOUND", "Espacio ficticio no disponible.")
+        if request.app.state.settings.app_env == "sandbox" and actor != request.state.sandbox_actor:
+            raise DomainError(401, "AUTH_REQUIRED", "Sesión de pruebas inválida.")
         conn.execute(text("SELECT set_config('app.actor_id', :id, true)"), {"id": str(actor)})
         yield Workspace(conn, x_workspace_id, actor)
