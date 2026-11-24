@@ -52,6 +52,13 @@ def workspace(
             )
         return
 
+    # Sandbox identity is checked by the API middleware, and fixes the workspace server-side.
+    if request.app.state.settings.app_env == "sandbox":
+        if not getattr(request.state, "sandbox_verified", False):
+            raise DomainError(401, "AUTH_REQUIRED", "Se requiere una sesión de pruebas.")
+        if request.headers.get("X-Workspace-ID"):
+            raise DomainError(400, "UNTRUSTED_WORKSPACE", "No envíes un selector de organización.")
+        x_workspace_id = FIRST_WORKSPACE
     # Legacy path: synthetic local/test selector, never real authentication.
     with request.app.state.engine.begin() as conn:
         conn.execute(

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../providers/WorkspaceProvider";
-import { privateAuthEnabled, usePrivateAuth } from "../providers/PrivateAuthProvider";
+import { privateAuthEnabled, sessionRequired, usePrivateAuth } from "../providers/PrivateAuthProvider";
 import "../../styles/enterprise.css";
 
 const sections = [
@@ -21,7 +21,7 @@ const sections = [
 export function DataLayout() {
   const { id, setId, api, readOnly } = useWorkspace();
   const { session, restoring, logout, idleWarning, continueWorking } = usePrivateAuth();
-  const protectedMode = privateAuthEnabled();
+  const protectedMode = sessionRequired();
   const navigate = useNavigate();
   const location = useLocation();
   const workspaces = useQuery({
@@ -46,7 +46,7 @@ export function DataLayout() {
         <p className="nav-label">ESPACIO DE TRABAJO</p>
         <nav aria-label="Navegación principal">
           {sections.filter(section => privacyOnly ? section.route === "/privacy" :
-            section.route !== "/privacy" || protectedMode).map(section => (
+            section.route !== "/privacy" || privateAuthEnabled()).map(section => (
             <NavLink to={section.route} key={section.route} end={section.route === "/"}
               className={({ isActive }) => isActive ? "active" : undefined} title={section.name}>
               <span className="enterprise-icon" aria-hidden="true">{section.icon}</span>

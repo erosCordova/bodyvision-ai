@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { recordsApi } from "../../services/api/records";
-import { privateAuthEnabled, usePrivateAuth } from "./PrivateAuthProvider";
+import { sessionRequired, usePrivateAuth } from "./PrivateAuthProvider";
 
 const initial = "10000000-0000-4000-8000-000000000001";
 
@@ -23,7 +23,7 @@ const WorkspaceContext = createContext({
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const { session } = usePrivateAuth();
-  const protectedMode = privateAuthEnabled();
+  const protectedMode = sessionRequired();
   const [demoId, setDemoId] = useState(
     () => sessionStorage.getItem("bodyvision.workspace") ?? initial,
   );

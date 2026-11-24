@@ -16,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.sandbox_auth import router as sandbox_router, check_sandbox_session, sandbox_event
 from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.operations import router as operations_router
@@ -49,6 +50,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
+        if settings.app_env == "sandbox":
+            from sqlalchemy import text
+            with database_engine.connect() as connection:
+                if not connection.execute(text("SELECT to_regclass('public.sandbox_sessions') IS NOT NULL")).scalar_one():
+                    raise RuntimeError("Isolated sandbox schema is required")
         logging.getLogger("bodyvision").info("service_started")
         retention_task = None
         if (
@@ -80,7 +86,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         title="BODYVISION AI — Synthetic data core",
         version="0.2.0",
         description="Fase 2. Núcleo de datos ficticios local; identidad y uso real aún bloqueados.",
-        docs_url=None if settings.app_env == "demo" else "/api/v1/docs",
+        docs_url=None if settings.app_env in {"demo", "sandbox"} else "/api/v1/docs",
         redoc_url=None,
         openapi_url="/api/v1/openapi.json",
         lifespan=lifespan,
@@ -108,7 +114,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             "X-Workspace-ID",
             "Idempotency-Key",
             "X-Synthetic-Only",
-            *(["Authorization"] if settings.identity_enabled else []),
+            *(["Authorization"] if settings.identity_enabled or settings.app_env == "sandbox" else []),
             *(["X-Requested-With"] if settings.jwt_access_enabled else []),
         ],
         expose_headers=["X-Correlation-ID"],
@@ -174,6 +180,27 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                     "DEMO_READ_ONLY",
                     "La demostración pública es de solo lectura y usa datos ficticios.",
                 )
+            elif settings.app_env == "sandbox" and request.url.path.startswith("/api/"):
+                path = request.url.path
+                if request.method == "OPTIONS" or path in {"/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/login"}:
+                    response = await call_next(request)
+                else:
+                    try:
+                        check_sandbox_session(request)
+                    except DomainError as exc:
+                        response = error(request, exc.status, exc.code, exc.message)
+                    else:
+                        if request.method not in {"GET", "HEAD", "OPTIONS"} and not (
+                            path in {"/api/v1/auth/logout", "/api/v1/auth/activity", "/api/v1/profiles"}
+                            or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}(?:/archive|/measurements)?", path)
+                            or __import__("re").fullmatch(r"/api/v1/measurements/[0-9a-fA-F-]{36}", path)
+                        ):
+                            response = error(request, 403, "SANDBOX_LIMIT", "Operación no habilitada en pruebas.")
+                        else:
+                            response = await call_next(request)
+                            if request.method not in {"GET", "HEAD", "OPTIONS"} and not path.startswith("/api/v1/auth/"):
+                                route = request.scope.get("route")
+                                sandbox_event(request, route.path if route else "unmatched", response.status_code)
             else:
                 response = await call_next(request)
         except Exception as exc:
@@ -222,6 +249,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(data_router)
     app.include_router(report_router)
     app.include_router(simulation_router)
+    if settings.app_env == "sandbox":
+        app.include_router(sandbox_router)
     if settings.identity_enabled:
         app.include_router(auth_router)
         app.include_router(operations_router)

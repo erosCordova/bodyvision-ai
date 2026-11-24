@@ -13,11 +13,12 @@ from app.services.report_signatures import decode_report_signing_key
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    app_env: Literal["local", "test", "demo", "staging", "production"] = "local"
+    app_env: Literal["local", "test", "demo", "sandbox", "staging", "production"] = "local"
     debug: bool = False
     database_url: SecretStr
     cors_origins: list[str] = ["http://localhost:8080"]
     allowed_hosts: list[str] = ["localhost", "127.0.0.1", "backend", "testserver"]
+    sandbox_password_hash: SecretStr | None = None
     identity_enabled: bool = False
     auth_database_url: SecretStr | None = None
     mfa_enabled: bool = False
@@ -61,6 +62,13 @@ class Settings(BaseSettings):
                 "F2 is synthetic local/test only. "
                 "Identity, privacy, legal and operational gates are pending."
             )
+        if self.app_env == "sandbox":
+            if self.identity_enabled or self.sandbox_password_hash is None:
+                raise ValueError("Sandbox requires isolated fixture credentials, not private identity")
+            if not re.fullmatch(r"[0-9a-f]{32}:[0-9a-f]{64}", self.sandbox_password_hash.get_secret_value()):
+                raise ValueError("Invalid sandbox password verifier")
+        elif self.sandbox_password_hash is not None:
+            raise ValueError("Sandbox verifier is forbidden outside sandbox")
         if self.identity_enabled:
             if self.app_env not in {"local", "test"}:
                 raise ValueError("Private authentication is local/test only")
@@ -141,7 +149,7 @@ class Settings(BaseSettings):
                     Fernet(raw.encode("ascii"))
                 except (ValueError, UnicodeError) as exc:
                     raise ValueError("Invalid previous capture decryption key") from exc
-        if self.app_env == "demo":
+        if self.app_env in {"demo", "sandbox"}:
             hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
             if hostname and re.fullmatch(r"[a-zA-Z0-9.-]+", hostname):
                 self.allowed_hosts = list(dict.fromkeys([*self.allowed_hosts, hostname]))

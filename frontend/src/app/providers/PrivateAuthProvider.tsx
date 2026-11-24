@@ -29,6 +29,14 @@ export function privateAuthEnabled(): boolean {
   return import.meta.env.DEV && import.meta.env.VITE_ENABLE_PRIVATE_AUTH === "true";
 }
 
+export function sandboxAuthEnabled(): boolean {
+  return import.meta.env.VITE_ENABLE_SANDBOX_AUTH === "true";
+}
+
+export function sessionRequired(): boolean {
+  return privateAuthEnabled() || sandboxAuthEnabled();
+}
+
 const sessionSchema = z.object({
   token: z.string().min(40),
   organization_id: z.string().uuid(),
@@ -197,7 +205,7 @@ export function PrivateAuthProvider({ children }: PropsWithChildren) {
 
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<PrivateSession> => {
-      if (!privateAuthEnabled()) {
+      if (!sessionRequired()) {
         throw new Error("El acceso privado no está disponible en la demostración.");
       }
       const ticket = ++epoch.current;

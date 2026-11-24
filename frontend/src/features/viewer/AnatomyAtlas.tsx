@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
+import { sandboxAuthEnabled } from "../../app/providers/PrivateAuthProvider";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
 import { dateTime, ErrorState, LoadingState } from "../../components/ui/States";
 import { ProfilePicker } from "../foundation/ModuleControls";
@@ -1227,7 +1228,7 @@ export function AnatomyAtlas() {
                         </label>
                       )}
                       <div className="studio-sim-actions">
-                        <button type="button" disabled={readOnly || linkedProfile.data.status !== "active" ||
+                        <button type="button" disabled={readOnly || sandboxAuthEnabled() || linkedProfile.data.status !== "active" ||
                             saveVersion.isPending || !!(scenarioParentId && scenarioRevisionNote.trim().length < 5)}
                           onClick={() => { setScenarioNotice(""); saveVersion.mutate(); }}>
                           {saveVersion.isPending ? "Guardando versión…" :
@@ -1237,7 +1238,7 @@ export function AnatomyAtlas() {
                           setScenarioParentId(""); setScenarioRevisionNote(""); setScenarioNotice("");
                         }}>Comenzar otro escenario</button>}
                       </div>
-                      {readOnly && <p className="studio-sim-lead">Solo lectura.</p>}
+                      {readOnly && <p className="studio-sim-lead">Solo lectura.</p>}{sandboxAuthEnabled() && <p className="studio-sim-lead">El guardado de escenarios todavía no está disponible en este entorno.</p>}
                       {saveVersion.isError && <p role="alert">{saveVersion.error.message}</p>}
                       {scenarioNotice && <p role="status" className="studio-sim-success">{scenarioNotice}</p>}
                       <div className="studio-scenario-records">

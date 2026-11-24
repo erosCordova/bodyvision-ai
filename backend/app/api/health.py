@@ -44,7 +44,7 @@ def ready(request: Request) -> ReadyResponse | JSONResponse:
             ).scalar_one()
             expected_revision = (
                 DEMO_SCHEMA_REVISION
-                if request.app.state.settings.app_env == "demo"
+                if request.app.state.settings.app_env in {"demo", "sandbox"}
                 else SCHEMA_REVISION
             )
             if revision != expected_revision:

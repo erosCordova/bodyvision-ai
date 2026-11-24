@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import { privateAuthEnabled, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
+import { sessionRequired, usePrivateAuth } from "../../app/providers/PrivateAuthProvider";
 import { AnatomyAtlas } from "./AnatomyAtlas";
 
 /** Immersive anatomical atlas; the original selected 3D avatar is retained.
@@ -8,7 +8,7 @@ import { AnatomyAtlas } from "./AnatomyAtlas";
  */
 export function BodyWorkspace() {
   const { session } = usePrivateAuth();
-  if (privateAuthEnabled() && !session) {
+  if (sessionRequired() && !session) {
     return <Navigate to="/access" replace />;
   }
   return <AnatomyAtlas />;

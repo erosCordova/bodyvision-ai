@@ -7,7 +7,8 @@ import { PoseReview } from "../capture/PoseReview";
 import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
 import { discardStagedCapture, peekCaptureForAnalysis, stageCaptureForAnalysis } from "../capture/captureHandoff";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
-import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { privateAuthEnabled, sandboxAuthEnabled } from "../../app/providers/PrivateAuthProvider";
+import { SandboxAccessPage } from "../access/SandboxAccessPage";
 import { PrivateAccessPage } from "../access/PrivateAccessPage";
 import { PrivateAdministrationPage } from "../access/PrivateAdministrationPage";
 import { ErrorState, LoadingState, dateTime } from "../../components/ui/States";
@@ -430,6 +431,7 @@ export function AdministrationPage() {
   </div>;
 }
 export function AccessPage() {
+  if (sandboxAuthEnabled()) return <SandboxAccessPage/>;
   if (privateAuthEnabled()) return <PrivateAccessPage />;
   return <div className="enterprise-access">
     <div className="enterprise-access-art"><span>BODYVISION AI</span><h1>Un espacio profesional para explorar el cuerpo.</h1><p>Mediciones, visión anatómica y trazabilidad en una plataforma web.</p><div className="enterprise-access-orbit" aria-hidden="true">✧</div></div>

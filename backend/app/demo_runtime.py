@@ -10,8 +10,8 @@ from urllib.parse import parse_qs, urlsplit
 
 
 def run() -> int:
-    if os.environ.get("APP_ENV") != "demo":
-        print("Demo API requires APP_ENV=demo.", flush=True)
+    if os.environ.get("APP_ENV") not in {"demo", "sandbox"}:
+        print("Synthetic API requires APP_ENV=demo or sandbox.", flush=True)
         return 1
     database_url = os.environ.get("DATABASE_URL", "")
     parsed = urlsplit(database_url)
@@ -28,7 +28,7 @@ def run() -> int:
     if not port.isdigit() or not 1 <= int(port) <= 65535:
         print("Invalid HTTP port.", flush=True)
         return 1
-    print("BODYVISION synthetic read-only API: external Neon PostgreSQL.", flush=True)
+    print("BODYVISION synthetic API: external Neon PostgreSQL.", flush=True)
     os.execvpe(
         sys.executable,
         [

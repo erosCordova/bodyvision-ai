@@ -57,7 +57,7 @@ def list_scenarios(
     records.profile(scope, profile_id)
     # Public Neon is still at revision 0002 and has no scenario table.
     # Show a truthful empty synthetic archive rather than querying a missing table.
-    if request.app.state.settings.app_env == "demo":
+    if request.app.state.settings.app_env in {"demo", "sandbox"}:
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
     # A point-in-time upper bound shared across HTTP pages. This protects
     # append-only history from ordinary new inserts shifting OFFSET positions;
@@ -117,7 +117,7 @@ def list_scenarios(
 )
 def scenario_versions(profile_id: UUID, scenario_id: UUID, scope: Scope, request: Request):
     records.profile(scope, profile_id)
-    if request.app.state.settings.app_env == "demo":
+    if request.app.state.settings.app_env in {"demo", "sandbox"}:
         raise DomainError(404, "NOT_FOUND", "Escenario ficticio no disponible.")
     selected = _scenario(scope, profile_id, scenario_id)
     versions = [

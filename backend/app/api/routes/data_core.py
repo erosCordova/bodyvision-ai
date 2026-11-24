@@ -39,7 +39,7 @@ def require_writer(scope: Workspace) -> None:
 
 @router.get("/workspaces")
 def workspaces(request: Request, scope: Scope) -> dict:
-    if scope.authenticated:
+    if scope.authenticated or request.app.state.settings.app_env == "sandbox":
         rows = (
             scope.connection.execute(
                 text("SELECT id,name FROM list_local_workspaces() WHERE id=:org"),
@@ -56,7 +56,7 @@ def workspaces(request: Request, scope: Scope) -> dict:
         "items": [dict(x) for x in rows],
         "synthetic": True,
         "read_only": request.app.state.settings.app_env == "demo",
-        "notice": "Selector local de datos ficticios. No representa autenticación.",
+        "notice": "Sesión de pruebas autenticada." if request.app.state.settings.app_env == "sandbox" else "Selector local de datos ficticios. No representa autenticación.",
     }
 
 
