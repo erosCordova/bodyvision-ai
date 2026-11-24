@@ -42,9 +42,7 @@ def summarize_landmarks(landmarks) -> PoseResult:
     for point in points:
         if not all(math.isfinite(v) for v in (point.x, point.y, point.z, point.visibility)):
             raise ValueError("Non-finite landmark")
-    visible = sum(
-        0 <= p.x <= 1 and 0 <= p.y <= 1 and p.visibility >= 0.5 for p in points
-    )
+    visible = sum(0 <= p.x <= 1 and 0 <= p.y <= 1 and p.visibility >= 0.5 for p in points)
     return PoseResult(detected=visible > 0, visible_points=visible)
 
 
