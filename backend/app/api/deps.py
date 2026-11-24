@@ -23,6 +23,7 @@ def workspace(
             "/api/v1/workspaces",
             "/api/v1/privacy-requests",
             "/api/v1/privacy-requests/{request_id}/review",
+            "/api/v1/privacy-requests/{request_id}/reject",
         }:
             raise DomainError(
                 403, "FORBIDDEN", "Tu acceso está limitado a la gestión de privacidad."

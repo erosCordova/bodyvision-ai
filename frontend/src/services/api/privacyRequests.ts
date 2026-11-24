@@ -7,7 +7,7 @@ export const privacyRequestSchema = z.object({
   id: z.string().uuid(),
   profile_id: z.string().uuid(),
   request_type: kind,
-  status: z.enum(["received", "in_review"]),
+  status: z.enum(["received", "in_review", "rejected"]),
   requested_by: z.string().uuid(),
   received_at: z.string().datetime({ offset: true }),
   review_target_at: z.string().datetime({ offset: true }),
@@ -16,6 +16,9 @@ export const privacyRequestSchema = z.object({
   profile_code: z.string().min(1),
   review_overdue: z.boolean(),
   can_review: z.boolean(),
+  rejected_at: z.string().datetime({ offset: true }).nullable().optional(),
+  rejected_by: z.string().uuid().nullable().optional(),
+  rejection_reason: z.enum(["invalid_synthetic_request", "withdrawn_by_requester", "duplicate_review"]).nullable().optional(),
 }).strict();
 export type PrivacyRequest = z.infer<typeof privacyRequestSchema>;
 const page = z.object({
@@ -24,6 +27,13 @@ const page = z.object({
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
 });
+
+export type RejectionReason = "invalid_synthetic_request" | "withdrawn_by_requester" | "duplicate_review";
+export const rejectionLabels: Record<RejectionReason, string> = {
+  invalid_synthetic_request: "Solicitud ficticia inválida",
+  withdrawn_by_requester: "Retiro comunicado por el solicitante ficticio",
+  duplicate_review: "Revisión duplicada",
+};
 
 export const kindLabels: Record<PrivacyKind, string> = {
   access: "Acceso",
@@ -44,7 +54,7 @@ export function privacyRequestsApi(workspace: string, token: string) {
       get("/profiles/" + profileId + "/privacy-requests?limit=20&offset=" + offset),
     listQueue: (
       offset = 0,
-      status: "all" | "received" | "in_review" = "all",
+      status: "all" | "received" | "in_review" | "rejected" = "all",
       overdueOnly = false,
     ) => {
       const query = new URLSearchParams({ limit: "20", offset: String(offset) });
@@ -57,5 +67,7 @@ export function privacyRequestsApi(workspace: string, token: string) {
         request_type: requestType, synthetic_confirmed: true,
       }),
     startReview: (requestId: string) => post("/privacy-requests/" + requestId + "/review", {}),
+    reject: (requestId: string, reason: RejectionReason) =>
+      post("/privacy-requests/" + requestId + "/reject", { reason, synthetic_confirmed: true }),
   };
 }
