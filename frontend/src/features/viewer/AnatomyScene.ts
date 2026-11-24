@@ -132,7 +132,9 @@ vec3 bvThermalDisplay() {
   float y = clamp((vBVThermalPosition.y - uBVBounds.x) / span, 0.0, 1.0);
   float x = abs(vBVThermalPosition.x - uBVBounds.z) / span;
   // Stylized gradient from the atlas reference composition; no local fat estimates.
-  float central = exp(-pow((y - 0.63) / 0.25, 2.0) - pow(x / 0.19, 2.0));
+  float dy = (y - 0.63) / 0.25;
+  float dx = x / 0.19;
+  float central = exp(-dy * dy - dx * dx);
   float bands = 0.10 + 0.79 * central + 0.10 * y;
   float globalShift = (clamp(uBVThermalPercentage, 0.0, 100.0) - 25.0) * 0.004;
   return bvThermalPalette(clamp(bands + globalShift, 0.0, 1.0));
