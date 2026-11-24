@@ -8,6 +8,7 @@ import { saveComparisonPdf, verifiedComparisonPdf } from "./serverComparisonDown
 import type { ComparisonDownload } from "./serverComparisonDownload";
 import { verifySavedReportFile, type SavedReportReference } from "./savedReportVerification";
 import { saveReportReceipt } from "./reportReceipt";
+import { LocalReceiptVerifier } from "./LocalReceiptVerifier";
 import { ComparisonPrintView } from "./ComparisonPrintView";
 
 const formatSigned = (value: number) =>
@@ -215,6 +216,7 @@ export function MeasurementComparison({
             onClose={() => setPrintReport(null)}/>}
         </>
       )}
+      {exportReport && synthetic && <LocalReceiptVerifier key={profileId}/>}
     </section>
   );
 }
