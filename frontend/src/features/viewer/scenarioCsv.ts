@@ -55,6 +55,13 @@ function scenarioUtcDateTime(raw: string): string {
   return instant.toISOString();
 }
 
+/** Exact ordering at PostgreSQL's six fractional digits; keep CSV format unchanged. */
+export function scenarioInstantParts(raw: string): readonly [number, number] {
+  const normalized = scenarioUtcDateTime(raw);
+  const fraction = /\.(\d{1,6})(?:Z|[+-]\d{2}:\d{2})$/.exec(raw)?.[1] ?? "";
+  return [Date.parse(normalized), Number(fraction.padEnd(6, "0").slice(3))];
+}
+
 export function buildSyntheticScenarioCsv(rows: readonly SimulationScenario[]): string {
   if (rows.length === 0 || rows.length > MAX_SCENARIO_CSV_ROWS) {
     throw new Error("La exportación debe contener una página sintética no vacía.");

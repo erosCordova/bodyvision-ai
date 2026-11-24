@@ -4,7 +4,7 @@
  * already-authenticated scenarios API; permissions are rechecked by the API.
  */
 import type { SimulationScenario } from "../../services/api/records";
-import { buildSyntheticScenarioCsv, MAX_SCENARIO_CSV_ROWS } from "./scenarioCsv";
+import { buildSyntheticScenarioCsv, MAX_SCENARIO_CSV_ROWS, scenarioInstantParts } from "./scenarioCsv";
 
 export type ScenarioHistoryPage = {
   items: SimulationScenario[];
@@ -44,6 +44,7 @@ export async function collectSyntheticScenarioHistoryCsv(
   let pageSize: number | null = null;
   let snapshotAt: string | undefined;
   let snapshotEstablished = false;
+  let cutoff: readonly [number, number] | undefined;
 
   while (total === null || rows.length < total) {
     assertActive(signal);
@@ -52,14 +53,17 @@ export async function collectSyntheticScenarioHistoryCsv(
     assertActive(signal);
 
     const reportedSnapshot = page.snapshot_at ?? undefined;
-    if (reportedSnapshot !== undefined && (
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(reportedSnapshot)
-      || !Number.isFinite(Date.parse(reportedSnapshot))
-    )) {
-      throw new Error("La API devolvió un punto de corte temporal inválido.");
+    let reportedCutoff: readonly [number, number] | undefined;
+    if (reportedSnapshot !== undefined) {
+      try {
+        reportedCutoff = scenarioInstantParts(reportedSnapshot);
+      } catch {
+        throw new Error("La API devolvió un punto de corte temporal inválido.");
+      }
     }
     if (!snapshotEstablished) {
       snapshotAt = reportedSnapshot;
+      cutoff = reportedCutoff;
       snapshotEstablished = true;
     } else if (reportedSnapshot !== snapshotAt) {
       throw new Error("La API modificó el punto de corte del historial durante la exportación.");
@@ -91,6 +95,12 @@ export async function collectSyntheticScenarioHistoryCsv(
     for (const item of page.items) {
       if (item.profile_id !== expectedProfileId || item.data_type !== "SIMULADO") {
         throw new Error("La exportación contiene un escenario ajeno o no simulado.");
+      }
+      if (cutoff) {
+        const [millis, micros] = scenarioInstantParts(item.created_at);
+        if (millis > cutoff[0] || (millis === cutoff[0] && micros > cutoff[1])) {
+          throw new Error("La API devolvió un escenario posterior al punto de corte.");
+        }
       }
       if (seen.has(item.id)) {
         throw new Error("El historial cambió durante la lectura; hay versiones duplicadas.");

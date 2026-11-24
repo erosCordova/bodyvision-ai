@@ -82,6 +82,37 @@ describe("full synthetic scenario history CSV", () => {
     }
   });
 
+  it("rejects invalid calendar days and offsets in the initial cutoff", async () => {
+    for (const snapshot_at of [
+      "2026-02-30T13:00:00Z", "2026-11-20T24:00:00Z",
+      "2026-11-20T13:00:00+14:01", "2026-11-20T13:00:00+20:00",
+    ]) {
+      const load = vi.fn(async (offset: number) => ({ ...page(offset), snapshot_at }));
+      await expect(collectSyntheticScenarioHistoryCsv(load, { expectedProfileId: PROFILE }))
+        .rejects.toThrow(/punto de corte temporal inválido/);
+      expect(load).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("enforces the cutoff to microsecond precision across pages and time zones", async () => {
+    const snapshot_at = "2026-11-20T13:00:00.123456Z";
+    const atCutoff = rows.map((item, i) => i === 44
+      ? { ...item, created_at: "2026-11-20T08:00:00.123456-05:00" }
+      : item);
+    const valid = await collectSyntheticScenarioHistoryCsv(
+      async offset => ({ ...page(offset, atCutoff), snapshot_at }),
+      { expectedProfileId: PROFILE },
+    );
+    expect(valid.split("\r\n").filter(Boolean)).toHaveLength(46);
+    const beyond = atCutoff.map((item, i) => i === 44
+      ? { ...item, created_at: "2026-11-20T08:00:00.123457-05:00" }
+      : item);
+    const load = vi.fn(async (offset: number) => ({ ...page(offset, beyond), snapshot_at }));
+    await expect(collectSyntheticScenarioHistoryCsv(load, { expectedProfileId: PROFILE }))
+      .rejects.toThrow(/posterior al punto de corte/);
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+
   it("rejects a count change without returning a partial CSV", async () => {
     const load = vi.fn(async (offset: number) => ({
       ...page(offset), total: offset === 0 ? 45 : 46,
