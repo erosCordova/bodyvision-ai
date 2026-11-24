@@ -347,11 +347,12 @@ def test_synthetic_rejection_is_authorized_terminal_and_audited(protected):
     assert queue.json()["total"] == 1
     assert client.post(base, headers=member, json=data).status_code == 201
     with owner.connect() as conn:
-        assert conn.execute(
+        count = conn.execute(
             text("""SELECT count(*) FROM security_audit_events
               WHERE resource_id=:profile AND action='privacy.request.rejected'"""),
             {"profile": profile_id},
-        ).scalar_one() == 1
+        ).scalar_one()
+        assert count == 1
         assert not conn.execute(
             text("""SELECT has_function_privilege('bodyvision_auth_app',
               'public.reject_synthetic_privacy_request(uuid,text,uuid,uuid)','EXECUTE')""")
