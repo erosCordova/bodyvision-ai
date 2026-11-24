@@ -270,3 +270,27 @@ test("long correction history is browsable in bounded pages without losing versi
   await expect(dialog.getByRole("heading", { name: "Versión 1 · 72 kg" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Versiones anteriores" })).toBeDisabled();
 });
+
+
+test("custom evolution interval queries Lima dates and restores the standard period", async ({ page }) => {
+  await page.goto("/profiles");
+  await page.getByRole("searchbox").fill("FICT-01");
+  await page.getByRole("link", { name: /Expediente ficticio 01/ }).click();
+  await page.getByRole("button", { name: "Evolución", exact: true }).click();
+  const period = page.getByRole("combobox", { name: "Periodo", exact: true });
+  await period.selectOption("custom");
+  await expect(page.getByText("Selecciona un intervalo válido de fechas (hora de Lima).")).toBeVisible();
+  await page.getByLabel("Fecha inicial de evolución").fill("2000-01-01");
+  const response = page.waitForResponse(r => {
+    const url = new URL(r.url());
+    return url.pathname.endsWith("/analytics/series") &&
+      url.searchParams.get("period") === "custom" &&
+      url.searchParams.get("start_date") === "2000-01-01" &&
+      url.searchParams.get("end_date") === "2000-01-01";
+  });
+  await page.getByLabel("Fecha final de evolución").fill("2000-01-01");
+  expect((await response).status()).toBe(200);
+  await expect(page.getByText("No hay mediciones observadas válidas en este periodo.")).toBeVisible();
+  await period.selectOption("all");
+  await expect(page.getByRole("img", { name: /Gráfico con/ })).toBeVisible();
+});
