@@ -29,7 +29,7 @@ test("create, measure, correct, inspect versions, derive and isolate workspaces"
     .getByRole("button", { name: "+ Registrar medición", exact: true })
     .click();
   await page
-    .getByRole("spinbutton", { name: "Valor (kg)", exact: true })
+    .getByRole("textbox", { name: "Valor (kg)", exact: true })
     .fill("72");
   await page
     .getByRole("button", { name: "Guardar medición", exact: true })
@@ -40,7 +40,7 @@ test("create, measure, correct, inspect versions, derive and isolate workspaces"
   ).toBeVisible();
   await page.getByRole("button", { name: "Corregir", exact: true }).click();
   await page
-    .getByRole("spinbutton", { name: "Valor (kg)", exact: true })
+    .getByRole("textbox", { name: "Valor (kg)", exact: true })
     .fill("71");
   await page
     .getByRole("textbox", { name: "Motivo de la corrección", exact: true })
@@ -71,7 +71,7 @@ test("create, measure, correct, inspect versions, derive and isolate workspaces"
     .getByRole("combobox", { name: "Métrica", exact: true })
     .selectOption("height");
   await page
-    .getByRole("spinbutton", { name: "Valor (cm)", exact: true })
+    .getByRole("textbox", { name: "Valor (cm)", exact: true })
     .fill("180");
   await page
     .getByRole("button", { name: "Guardar medición", exact: true })
@@ -114,7 +114,7 @@ test("correcting a value preserves sub-minute time unless the Lima date is expli
   await expect(page.getByRole("cell", { name: "72 kg", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Corregir", exact: true }).click();
   await expect(page.getByLabel("Fecha y hora (Lima)")).toHaveValue("2026-09-30T22:04");
-  await page.getByRole("spinbutton", { name: "Valor (kg)", exact: true }).fill("71");
+  await page.getByRole("textbox", { name: "Valor (kg)", exact: true }).fill("71");
   await page.getByRole("textbox", { name: "Motivo de la corrección", exact: true })
     .fill("Ajustar solo el valor ficticio");
   const saving = page.waitForResponse(response => response.request().method() === "PATCH"

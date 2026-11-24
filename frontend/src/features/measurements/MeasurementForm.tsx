@@ -22,9 +22,17 @@ export function limaInput(date = new Date(Date.now() - 60000)) {
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
+// Accept Spanish comma or decimal point, but never ambiguous thousands separators.
+export function parseMeasurementValue(raw: unknown): number {
+  if (typeof raw === "number") return raw;
+  if (typeof raw !== "string") return NaN;
+  const value = raw.trim();
+  if (!/^\d+(?:[.,]\d+)?$/.test(value)) return NaN;
+  return Number(value.replace(",", "."));
+}
 const schema = z.object({
   metric_code: z.string().min(1),
-  value: z.number().finite(),
+  value: z.number({ invalid_type_error: "Introduce un número válido, por ejemplo 80,5." }).finite(),
   measured_at: z
     .string()
     .min(1)
@@ -211,22 +219,27 @@ export function MeasurementForm({
         </label>
         <p className="muted">{metric?.instructions}</p>
         <div className="form-grid">
-          <label>
-            Valor ({metric?.unit})
+          <div className="measurement-value-field">
+            <label htmlFor="measurement-value">Valor ({metric?.unit})</label>
             <input
-              type="number"
-              step={10 ** -Math.max(0, Math.min(2, metric?.precision ?? 2))}
-              min={metric?.min_value}
-              max={metric?.max_value}
-              {...form.register("value", { valueAsNumber: true })}
+              id="measurement-value"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              maxLength={16}
+              placeholder={metricCode === "weight" ? "Ej. 80,5" : "Introduce el valor"}
+              aria-describedby="measurement-value-range"
+              aria-invalid={Boolean(form.formState.errors.value)}
+              {...form.register("value", { setValueAs: parseMeasurementValue })}
             />
+            <small id="measurement-value-range" className="muted">{metric ? `Rango permitido: ${metric.min_value}–${metric.max_value} ${metric.unit}` : "Selecciona una métrica."}</small>
             {form.formState.errors.value && (
               <small role="alert">
                 {form.formState.errors.value.message ??
                   "Introduce un número válido."}
               </small>
             )}
-          </label>
+          </div>
           <label>
             Fecha y hora (Lima)
             <input
