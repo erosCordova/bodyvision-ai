@@ -1,6 +1,7 @@
 """Opt-in local/test worker; it never receives production or auth-owner credentials."""
 
 import hashlib
+import json
 import logging
 import os
 import time
@@ -8,11 +9,10 @@ from pathlib import Path
 from subprocess import TimeoutExpired
 from uuid import uuid4
 
-from cryptography.fernet import InvalidToken
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from app.core.config import Settings
 from app.core.errors import DomainError
 from app.services.capture_crypto import CaptureCipher
 from app.services.server_pose_inference import run_inference
@@ -69,20 +69,14 @@ def run_once(engine: Engine, cipher: CaptureCipher, model: Path) -> bool:
 
 
 def main() -> None:
-    settings = Settings()
+    environment = os.environ.get("APP_ENV")
     url = os.environ.get("POSE_WORKER_DATABASE_URL", "")
     model = os.environ.get("POSE_WORKER_MODEL_PATH", "")
     if (
-        settings.app_env not in {"local", "test"}
-        or not settings.identity_enabled
-        or not settings.capture_encryption_key
+        environment not in {"local", "test"}
         or not url.startswith("postgresql+psycopg://")
         or not model
-        or url == settings.database_url.get_secret_value()
-        or (
-            settings.auth_database_url is not None
-            and url == settings.auth_database_url.get_secret_value()
-        )
+        or not os.environ.get("CAPTURE_ENCRYPTION_KEY")
     ):
         raise SystemExit("Dedicated synthetic worker settings required")
     engine = create_engine(url, pool_pre_ping=True, hide_parameters=True)
@@ -94,7 +88,16 @@ def main() -> None:
             ).scalar_one()
             if privileged:
                 raise SystemExit("Worker login cannot have elevated database privileges")
-        cipher = CaptureCipher.from_settings(settings)
+            forbidden = conn.execute(
+                text("""SELECT pg_has_role(session_user,'bodyvision_app','MEMBER')
+                    OR pg_has_role(session_user,'bodyvision_auth_app','MEMBER')""")
+            ).scalar_one()
+            if forbidden:
+                raise SystemExit("Worker must not inherit API or authentication permissions")
+            conn.execute(text("SET LOCAL ROLE bodyvision_pose_worker"))
+        active = Fernet(os.environ["CAPTURE_ENCRYPTION_KEY"].encode("ascii"))
+        old_keys = json.loads(os.environ.get("CAPTURE_DECRYPTION_KEYS", "[]"))
+        cipher = CaptureCipher(active, MultiFernet([active, *[Fernet(k) for k in old_keys]]))
         while True:
             try:
                 worked = run_once(engine, cipher, Path(model))
