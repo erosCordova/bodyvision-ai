@@ -34,7 +34,7 @@ describe("BODYVISION project progress assessment", () => {
     for (const pr of ["#65", "#67", "#69", "#71", "#73"]) {
       expect(production.completed).toContain(pr);
     }
-    expect(overallProgress).toBe(93);
+    expect(overallProgress).toBe(94);
     expect(production.pending).toContain("respaldos productivos/PITR");
 
   });
@@ -44,12 +44,13 @@ describe("phase 0–2 acceptance gates", () => {
   it("requires separate technical and human acceptance instead of changing percentages", () => {
     expect(phaseClosureAudit.map(entry => entry.phaseId)).toEqual([0, 1, 2]);
     expect(phaseClosureAudit.map(entry => entry.technical)).toEqual([
-      "pending", "verified", "verified",
+      "verified", "verified", "verified",
     ]);
-    expect(closedWithFormalAcceptance).toBe(0);
-    expect(phaseClosureAudit.every(entry => entry.formalAcceptance === "pending")).toBe(true);
-    expect(phaseClosureAudit.filter(entry => entry.phaseId !== 1)
-      .every(entry => entry.owner.includes("por confirmar"))).toBe(true);
+    expect(closedWithFormalAcceptance).toBe(1);
+    expect(phaseClosureAudit[0].formalAcceptance).toBe("product-approved");
+    expect(phaseAssessment[0].progress).toBe(100);
+    expect(phaseClosureAudit.slice(1).every(entry => entry.formalAcceptance === "pending")).toBe(true);
+    expect(phaseClosureAudit[2].owner).toContain("por confirmar");
     expect(phaseClosureAudit[1].operationalReception).toBe("assisted");
     expect(phaseAssessment.find(phase => phase.id === 1)?.progress).toBe(100);
     expect(phaseClosureAudit[0].mappedExecutionPhase).toContain("F1–F10");
@@ -61,7 +62,7 @@ describe("phase 0–2 acceptance gates", () => {
     const checks = phaseClosureAudit.flatMap(entry => entry.checks);
     expect(new Set(checks.map(entry => entry.id)).size).toBe(checks.length);
     for (const gate of phaseClosureAudit) {
-      if (gate.operationalReception === "assisted") {
+      if (gate.operationalReception === "assisted" || gate.formalAcceptance === "product-approved") {
         expect(gate.checks.every(entry => entry.state === "verified")).toBe(true);
       } else {
         expect(gate.checks.some(entry => entry.state === "pending")).toBe(true);
