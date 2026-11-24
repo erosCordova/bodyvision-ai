@@ -760,10 +760,10 @@ export function AnatomyAtlas() {
                 Vaciar favoritos
               </button>
             )}
-            <small className="studio-favorites-note">Se conservan al recargar esta pestaña. No se guardan en expedientes ni se envían al servidor; puedes vaciarlos cuando quieras.</small>
+            <small className="studio-favorites-note">Favoritos guardados en este navegador.</small>
           </section>
           <div className="studio-left-section studio-left-footer">
-            <p>Modelo anatómico de referencia. No corresponde a pacientes ni expedientes clínicos.</p>
+            <p>Atlas de referencia · No clínico.</p>
             <button onClick={() => { applyPreset(quickViews[0]); setMode("realista"); setSpin(false); resetSimulation(); setMeshOverlay(false); }}>↺ Restaurar visualización</button>
           </div>
         </aside>
@@ -791,7 +791,7 @@ export function AnatomyAtlas() {
           )}
           <div className="studio-view-top">
             <span><i /> {weightVariation !== 0 || statureCm !== BASELINE_HEIGHT_CM ? (baselinePreview ? "REFERENCIA CORPORAL ORIGINAL" : "SIMULACIÓN DE PESO Y ESTATURA · MISMO MODELO 3D") : "EXPLORACIÓN ANATÓMICA EN TIEMPO REAL"}</span>
-            <span>CUERPO HUMANO · MODELO EDUCATIVO</span>
+            <span>MODELO EDUCATIVO</span>
           </div>
           {renderStats && <aside className="studio-render-info" aria-label="Diagnóstico de renderizado" data-rendered-frames={renderStats.renderedFrames}>
             <strong>Diagnóstico de visualización</strong>
@@ -899,7 +899,7 @@ export function AnatomyAtlas() {
               <div className="studio-simulation">
                 <p className="studio-eyebrow">SIMULACIÓN · SOBRE EL MODELO 3D</p>
                 <h2>Simulador de peso y estatura</h2>
-                <p className="studio-sim-lead">Modifica la estatura y el peso hipotéticos sobre el mismo cuerpo anatómico 3D. La malla, las capas y la navegación permanecen integradas.</p>
+                <p className="studio-sim-lead">Ajusta el peso y la estatura del modelo.</p>
                 <div className="studio-sim-values">
                   <div><span>REFERENCIA ILUSTRATIVA</span><strong>{referenceKg} <small>kg</small></strong></div>
                   <div><span>PESO HIPOTÉTICO</span><strong>{simulatedWeight} <small>kg</small></strong></div>
@@ -1022,7 +1022,7 @@ export function AnatomyAtlas() {
               <div className="studio-sim-state">
                   <span className="studio-sim-state-icon">{weightVariation > 0 ? "↗" : weightVariation < 0 ? "↘" : "◈"}</span>
                   <div><strong>{weightVariation === 0 ? "Modelo corporal de referencia" : weightVariation > 0 ? "Incremento visual de volumen" : "Reducción visual de volumen"}</strong>
-                    <p>El volumen cambia suavemente en abdomen, pecho, caderas y piernas; el rostro, las manos y los pies mantienen su forma original. La estatura escala verticalmente el mismo atlas. Son efectos gráficos ilustrativos, no clínicos.</p></div>
+                    <p>Cambios visuales de volumen y estatura. No clínicos.</p></div>
                 </div>
                 <div className="studio-sim-mesh">
                   <label><input type="checkbox" checked={meshOverlay} onChange={toggleMesh} />
@@ -1068,7 +1068,7 @@ export function AnatomyAtlas() {
                 </label>}
                 {comparison && <p className="studio-sim-disclaimer">Para analizar esta vista con IA, cierra la comparación dividida: el detector local debe recibir una sola figura.</p>}
                 {captureError && <p role="alert" className="studio-sim-disclaimer">{captureError}</p>}
-                <p className="studio-sim-lead">Esta prueba utiliza exclusivamente una imagen del cuerpo anatómico ficticio del atlas. La copia local para IA lleva un fondo neutro opaco para evitar que la transparencia se interprete como oscuridad; el visor original no cambia. No identifica personas ni reconstruye cuerpos reales.</p>
+                <p className="studio-sim-lead">Analiza una captura del atlas para identificar puntos corporales.</p>
                 {savedScenario && <div className="studio-sim-saved" role="status">
                   <strong>Referencia visual guardada</strong>
                   <p>Base {savedScenario.baseKg} kg / {BASELINE_HEIGHT_CM} cm → escenario {Math.round(savedScenario.baseKg * (1 + savedScenario.delta / 100) * 10) / 10} kg / {savedScenario.statureCm} cm.</p>
@@ -1082,7 +1082,7 @@ export function AnatomyAtlas() {
                     </div>
                     <DataTypeBadge type="SIMULADO" />
                   </div>
-                  <p>Las versiones se guardan por separado de las mediciones observadas. Cada versión conserva su autor, fecha y relación con la anterior.</p>
+                  <p>Consulta y guarda escenarios por expediente.</p>
                   <label className="studio-sim-number">
                     Expediente de prueba
                     <select aria-label="Expediente ficticio para escenarios" value={scenarioProfileId}
@@ -1135,7 +1135,7 @@ export function AnatomyAtlas() {
                           setScenarioParentId(""); setScenarioRevisionNote(""); setScenarioNotice("");
                         }}>Comenzar otro escenario</button>}
                       </div>
-                      {readOnly && <p className="studio-sim-lead">La demostración pública permite consultar el historial, pero no registrar cambios.</p>}
+                      {readOnly && <p className="studio-sim-lead">Solo lectura.</p>}
                       {saveVersion.isError && <p role="alert">{saveVersion.error.message}</p>}
                       {scenarioNotice && <p role="status" className="studio-sim-success">{scenarioNotice}</p>}
                       <div className="studio-scenario-records">
@@ -1238,7 +1238,7 @@ export function AnatomyAtlas() {
                     </>
                   )}
                 </section>
-                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los kg y los cm son valores hipotéticos; la deformación 3D no calcula grasa, masa muscular, proporciones anatómicas reales ni predice la apariencia de una persona. No modifica mediciones, expedientes ni reportes.</p>
+                <p className="studio-sim-disclaimer"><strong>SIMULACIÓN NO VALIDADA.</strong> Los cambios son ilustrativos; no predicen la apariencia ni la composición corporal real.</p>
               </div>
             )}
             {panel === "informacion" && (
@@ -1270,7 +1270,7 @@ export function AnatomyAtlas() {
                 </div>
               ) : selected ? (
                 <div className="studio-info"><p className="studio-eyebrow">ESTRUCTURA 3D</p><h2>{anatomyDisplayName(cleanMesh(selected.name))}</h2>
-                  <p className="studio-subtitle">La malla se encuentra disponible, pero no tiene una ficha descriptiva asociada en el catálogo.</p>
+                  <p className="studio-subtitle">Sin descripción disponible.</p>
                   <button onClick={() => setIsolated(value => !value)}>{isolated ? "Mostrar todas" : "Aislar estructura"}</button>
                 </div>
               ) : (

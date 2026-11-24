@@ -1,5 +1,6 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { FoundationPage } from "../../features/foundation/FoundationPage";
 import { DataLayout } from "../layouts/DataLayout";
 import { Dashboard } from "../../features/dashboard/Dashboard";
@@ -23,9 +24,10 @@ function VisualAccess({ children }: PropsWithChildren) {
   if (privateAuthEnabled() && restoring) return loading;
   return session?.role === "privacy_officer" ? <Navigate to="/privacy" replace /> : children;
 }
-export function AppRouter() {
+function ApplicationRoutes() {
+  const location = useLocation();
   return (
-    <BrowserRouter>
+    <RouteErrorBoundary routeKey={location.key}>
       <Routes>
         <Route path="/system" element={<FoundationPage />} />
         <Route path="/access" element={<Suspense fallback={loading}><AccessPage /></Suspense>} />
@@ -45,6 +47,9 @@ export function AppRouter() {
           <Route path="*" element={<><h1>Página no disponible</h1><Link to="/">Volver al dashboard</Link></>} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </RouteErrorBoundary>
   );
+}
+export function AppRouter() {
+  return <BrowserRouter><ApplicationRoutes /></BrowserRouter>;
 }

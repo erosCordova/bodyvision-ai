@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -61,7 +61,8 @@ describe("Synthetic data core", () => {
       vi.fn(() => new Promise(() => undefined)),
     );
     show();
-    expect(screen.getByRole("status")).toHaveTextContent("Cargando");
+    const indicators = screen.getByRole("region", { name: "Indicadores reales de la organización ficticia" });
+    expect(within(indicators).getByRole("status")).toHaveTextContent("Cargando");
   });
   it("shows a recoverable API error with reference", async () => {
     vi.stubGlobal(

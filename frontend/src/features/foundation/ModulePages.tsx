@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
+import { csvPreview, ProfilePicker } from "./ModuleControls";
 import { reviewLocalCapture, type CaptureReview } from "../capture/captureQuality";
 import { PoseReview } from "../capture/PoseReview";
 import { SyntheticCaptureArchive } from "../capture/SyntheticCaptureArchive";
@@ -15,29 +16,33 @@ function PageTitle({ eyebrow, title, description }: { eyebrow: string; title: st
   return <div className="enterprise-page-head"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div></div>;
 }
 function Limitation({ children }: { children: ReactNode }) {
-  return <div className="enterprise-limit"><strong>ESTADO DEL MÓDULO</strong><p>{children}</p></div>;
+  return <div className="enterprise-limit"><strong>Información</strong><p>{children}</p></div>;
 }
 export function MeasurementsPage() {
   const { id, api } = useWorkspace();
-  const profiles = useQuery({ queryKey: ["profiles", id, "measurements"], queryFn: () => api.profiles("", 0) });
+  const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const profiles = useQuery({ queryKey: ["profiles", id, "measurements", search, offset], queryFn: () => api.profiles(search, offset) });
   const metrics = useQuery({ queryKey: ["catalog", id], queryFn: api.catalog });
   return <div className="enterprise-module">
-    <PageTitle eyebrow="MEDICIONES OBSERVADAS" title="Registro de mediciones" description="Consulta y añade valores con fecha, unidad, método y responsable. Las correcciones se versionan." />
+    <PageTitle eyebrow="MEDICIONES" title="Registro de mediciones" description="Consulta y registra medidas corporales." />
     <div className="enterprise-module-columns">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Selecciona un expediente</h2><Link to="/profiles">Ver todos →</Link></div>
+        <label className="search-label">Buscar expediente<input value={search} maxLength={100} onChange={e => { setSearch(e.target.value); setOffset(0); }} /></label>
         {profiles.isPending ? <LoadingState/> : profiles.isError ? <ErrorState error={profiles.error} retry={() => void profiles.refetch()}/> :
           profiles.data.items.length ? <div className="enterprise-record-links">
             {profiles.data.items.map(profile => <Link to={"/profiles/" + profile.id + "?tab=measurements"} key={profile.id}>
               <span className="enterprise-mini-avatar">◉</span><span><strong>{profile.display_name || profile.display_code}</strong><small>{profile.display_code} · {profile.status === "active" ? "Activo" : "Consulta restringida"}</small></span><span>Continuar →</span>
             </Link>)}
-          </div> : <p className="enterprise-hint">No hay expedientes disponibles. Crea un expediente ficticio antes de registrar medidas.</p>}
+          </div> : <p className="enterprise-hint">No hay expedientes disponibles para esta búsqueda.</p>}
+        {profiles.data && <ProfilePicker.Pagination page={profiles.data} onChange={setOffset} label="Páginas de expedientes de mediciones" />}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
         <h2>Catálogo de medición</h2>
         {metrics.isPending ? <p className="enterprise-hint">Cargando métricas…</p> : metrics.isError ? <p className="enterprise-hint">Catálogo no disponible.</p> :
         <div className="enterprise-metric-list">{metrics.data.map(metric=><div key={metric.code}><strong>{metric.label}</strong><span>{metric.unit} · {metric.allowed_methods.join(", ")}</span></div>)}</div>}
-        <Limitation>Las mediciones se introducen en cada expediente, no sobre el modelo anatómico genérico.</Limitation>
+        <Limitation>Selecciona un expediente para registrar mediciones.</Limitation>
       </aside>
     </div>
   </div>;
@@ -48,6 +53,8 @@ export function CapturePage() {
   const cameraStream = useRef<MediaStream | null>(null);
   const cameraRequest = useRef(0);
   const [cameraOn, setCameraOn] = useState(false);
+  const [cameraPending, setCameraPending] = useState(false);
+  const [photoPending, setPhotoPending] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -63,6 +70,8 @@ export function CapturePage() {
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
     setCameraReady(false);
+    setCameraPending(false);
+    setPhotoPending(false);
   };
   useEffect(() => {
     return () => {
@@ -80,13 +89,14 @@ export function CapturePage() {
   }, [cameraOn]);
 
   const openCamera = async () => {
-    if (!consent) return;
+    if (!consent || cameraPending || cameraOn) return;
     setValidationError("");
     if (!navigator.mediaDevices?.getUserMedia) {
       setValidationError("Este navegador no permite la cámara. Usa una conexión HTTPS o localhost.");
       return;
     }
     const pending = ++cameraRequest.current;
+    setCameraPending(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -103,12 +113,15 @@ export function CapturePage() {
       if (pending === cameraRequest.current) {
         setValidationError("No se pudo acceder a la cámara. Revisa el permiso y el dispositivo.");
       }
+    } finally {
+      if (pending === cameraRequest.current) setCameraPending(false);
     }
   };
 
   const takePhoto = async () => {
     const video = videoRef.current;
-    if (!video || !cameraReady || !video.videoWidth || !video.videoHeight) return;
+    if (!video || !cameraReady || photoPending || !video.videoWidth || !video.videoHeight) return;
+    const generation = cameraRequest.current;
     const canvas = document.createElement("canvas");
     const factor = Math.min(1, 1920 / Math.max(video.videoWidth, video.videoHeight));
     canvas.width = Math.round(video.videoWidth * factor);
@@ -118,8 +131,15 @@ export function CapturePage() {
       setValidationError("No se pudo preparar la fotografía.");
       return;
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const photo = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.87));
+    setPhotoPending(true);
+    let photo: Blob | null = null;
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      photo = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.87));
+    } catch { /* handled as an unsuccessful capture below */ }
+    finally { canvas.width = canvas.height = 0; }
+    if (generation !== cameraRequest.current) return;
+    setPhotoPending(false);
     if (!photo || photo.size > 10 * 1024 * 1024) {
       setValidationError("No se pudo capturar la fotografía dentro del límite de 10 MB.");
       return;
@@ -172,15 +192,15 @@ export function CapturePage() {
     event.target.value = "";
   };
   return <div className="enterprise-module">
-    <PageTitle eyebrow="CAPTURA GUIADA · PRIVACIDAD PRIMERO" title="Captura corporal" description="Selecciona una imagen ficticia o autorizada y revisa resolución, luz, contraste y orientación en tu navegador, sin cargarla al servidor."/>
+    <PageTitle eyebrow="CAPTURA GUIADA" title="Captura corporal" description="Selecciona una imagen ficticia y revisa su calidad."/>
     <div className="enterprise-capture-grid">
       <section className="enterprise-panel enterprise-module-main">
-        <div className="enterprise-panel-title"><h2>Guía de toma fotográfica</h2><span>ANTES DE PROCESAR</span></div>
+        <div className="enterprise-panel-title"><h2>Guía de toma fotográfica</h2><span>RECOMENDACIONES</span></div>
         <div className="enterprise-capture-steps">
-          <article><span>01</span><div><h3>Consentimiento</h3><p>Informa del propósito, uso, protección y periodo de conservación. Confirma autorización para tratar las imágenes.</p></div></article>
-          <article><span>02</span><div><h3>Postura y encuadre</h3><p>De pie, cuerpo entero visible, brazos ligeramente separados y fondo despejado. Toma vistas frontal y lateral cuando corresponda.</p></div></article>
-          <article><span>03</span><div><h3>Iluminación y resolución</h3><p>Evita contraluz, sombras duras, filtros y recortes. Comprueba que pies, cabeza y extremidades estén dentro del encuadre.</p></div></article>
-          <article><span>04</span><div><h3>Revisión y trazabilidad</h3><p>Asocia la captura a un expediente autorizado y conserva fuente, fecha, método y resultado de calidad.</p></div></article>
+          <article><span>01</span><div><h3>Consentimiento</h3><p>Utiliza imágenes ficticias y confirma tu consentimiento.</p></div></article>
+          <article><span>02</span><div><h3>Postura y encuadre</h3><p>Cuerpo entero, brazos separados y fondo despejado.</p></div></article>
+          <article><span>03</span><div><h3>Iluminación y resolución</h3><p>Buena iluminación, sin filtros ni recortes.</p></div></article>
+          <article><span>04</span><div><h3>Revisión y trazabilidad</h3><p>Revisa la calidad antes de continuar.</p></div></article>
         </div>
         <label className="enterprise-consent"><input type="checkbox" checked={consent} onChange={e => {
           setConsent(e.target.checked);
@@ -190,30 +210,31 @@ export function CapturePage() {
             setValidationError("");
           }
         }} />
-          <span>Confirmo que utilizaré exclusivamente imágenes ficticias o expresamente autorizadas. En esta fase solo se previsualizarán en mi navegador.</span>
+          <span>Confirmo que utilizaré exclusivamente imágenes ficticias. La revisión es local.</span>
         </label>
         <label className={"enterprise-upload" + (consent ? "" : " disabled")}>
-          <span>＋</span><strong>Seleccionar imagen para revisión local</strong><small>JPG, PNG o WebP · máximo 10 MB · sin subida al servidor</small>
+          <span>＋</span><strong>Seleccionar imagen para revisión local</strong><small>JPG, PNG o WebP · hasta 10 MB</small>
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!consent} onChange={fileChange}/>
         </label>
         <div className="enterprise-camera-controls">
           {!cameraOn ? (
-            <button type="button" className="secondary-button" disabled={!consent}
-              onClick={() => void openCamera()}>Abrir cámara local</button>
+            <button type="button" className="secondary-button" disabled={!consent || cameraPending}
+              onClick={() => void openCamera()}>{cameraPending ? "Solicitando permiso…" : "Abrir cámara local"}</button>
           ) : (
             <div className="enterprise-camera-session">
               <video ref={videoRef} playsInline muted autoPlay
                 aria-label="Vista en vivo de la cámara sin transmisión"
                 onLoadedMetadata={() => setCameraReady(true)} />
-              <p>La cámara funciona únicamente en este dispositivo; no se transmite video.</p>
+              <p>Vista privada en este dispositivo.</p>
               <div className="enterprise-camera-buttons">
-                <button type="button" className="primary-button" disabled={!cameraReady}
-                  onClick={() => void takePhoto()}>Tomar fotografía</button>
+                <button type="button" className="primary-button" disabled={!cameraReady || photoPending}
+                  onClick={() => void takePhoto()}>{photoPending ? "Preparando fotografía…" : "Tomar fotografía"}</button>
                 <button type="button" className="secondary-button"
                   onClick={closeCamera}>Cerrar cámara</button>
               </div>
             </div>
           )}
+          {cameraPending && <button type="button" className="secondary-button" onClick={closeCamera}>Cancelar solicitud de cámara</button>}
         </div>
       </section>
       <aside className="enterprise-panel enterprise-module-side">
@@ -240,9 +261,9 @@ export function CapturePage() {
           </div>}
           {privateAuthEnabled() && review && <SyntheticCaptureArchive file={file} review={review}/>}
           <button className="secondary-button" onClick={() => setFile(null)}>Descartar imagen</button>
-        </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>La vista previa aparecerá aquí sin enviar archivos a la API.</p></div>}
+        </> : <div className="enterprise-capture-placeholder"><span>◫</span><strong>Sin imagen seleccionada</strong><p>Selecciona una imagen o abre la cámara.</p></div>}
         {!file && validationError && <p role="alert" className="enterprise-quality-note">{validationError}</p>}
-        <Limitation>La revisión de calidad y la IA de pose se ejecutan localmente y no permiten uso clínico. El archivo cifrado opcional admite exclusivamente PNG ficticios en modo privado de pruebas, con aceptaciones verificadas. No introduzcas fotografías médicas reales.</Limitation>
+        <Limitation>Solo imágenes ficticias. No apto para uso clínico.</Limitation>
       </aside>
     </div>
   </div>;
@@ -253,19 +274,20 @@ export function AnalysisPage() {
   const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis());
   useEffect(() => { discardStagedCapture(); }, []);
   const state = location.state as { localCaptureReview?: CaptureReview } | null;
-  const localReview = localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
+  const [discarded, setDiscarded] = useState(false);
+  const localReview = discarded ? null : localCapture?.review ?? (state?.localCaptureReview?.checks?.length === 4
     ? state.localCaptureReview : null);
   const stages = [
-    { name:"Autorización", detail:"Verificación documental de consentimiento por expediente", status:"Pendiente para uso real" },
+    { name:"Autorización", detail:"Consentimiento para la imagen", status:"Pendiente para uso real" },
     { name:"Control de calidad", detail:"Resolución, orientación, contraste e iluminación", status:"Revisión local disponible" },
-    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker con 33 landmarks posibles", status:"Local bajo demanda · requiere internet inicial" },
-    { name:"Revisión humana", detail:"Validación profesional de resultados y trazabilidad", status:"Pendiente para uso real" },
+    { name:"Detección de pose", detail:"Hasta 33 puntos corporales", status:"Disponible" },
+    { name:"Revisión humana", detail:"Revisión de resultados", status:"Pendiente para uso real" },
   ];
   return <div className="enterprise-module">
-    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="Revisa capturas ficticias localmente con MediaPipe Pose Landmarker. La detección de 33 puntos es experimental y no genera mediciones clínicas."/>
+    <PageTitle eyebrow="VISIÓN POR COMPUTADORA" title="Análisis corporal con IA" description="Evalúa la postura y los puntos corporales de una imagen ficticia."/>
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
-        <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>{localCapture ? "IA LOCAL · RESULTADOS REALES" : "ESQUEMA EXPLICATIVO"}</span></div>
+        <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>{localCapture ? "CAPTURA SELECCIONADA" : "REFERENCIA VISUAL"}</span></div>
         {localReview && <div className="enterprise-quality-review enterprise-review-handoff" role="region" aria-label="Control de calidad recibido">
           <h3>Control técnico de la captura</h3>
           <p>{localReview.width} × {localReview.height} px · {localReview.checks.filter(item => item.passed).length} de 4 criterios cumplidos.</p>
@@ -276,7 +298,7 @@ export function AnalysisPage() {
         </div>}
         {localCapture && <>
           <PoseReview file={localCapture.file} review={localCapture.review} />
-          <button type="button" className="secondary-button" onClick={() => setLocalCapture(null)}>
+          <button type="button" className="secondary-button" onClick={() => { setLocalCapture(null); setDiscarded(true); }}>
             Descartar fotografía del análisis
           </button>
         </>}
@@ -292,13 +314,13 @@ export function AnalysisPage() {
             </svg>
             <span>ILUSTRACIÓN · SIN DATOS DE PERSONAS</span>
           </div>
-          <div><p className="enterprise-hint">Los colores y puntos son únicamente una referencia de interfaz. No se han detectado landmarks ni calculado composición corporal.</p><Link className="primary-button" to="/capture">Preparar captura ↗</Link></div>
+          <div><p className="enterprise-hint">Prepara una captura para detectar puntos corporales.</p><Link className="primary-button" to="/capture">Preparar captura ↗</Link></div>
         </div>}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
-        <h2>Flujo de análisis esperado</h2>
+        <h2>Etapas del análisis</h2>
         <div className="enterprise-stage-list">{stages.map((stage,index)=><div key={stage.name}><span>{String(index+1).padStart(2,"0")}</span><div><strong>{stage.name}</strong><p>{stage.detail}</p><small>{stage.status}</small></div></div>)}</div>
-        <Limitation>No se deben mostrar IMC estimado, grasa corporal, masa muscular ni mapas térmicos como resultados de IA sin un modelo ejecutado y validación apropiada.</Limitation>
+        <Limitation>La detección de pose no mide composición corporal ni realiza diagnósticos.</Limitation>
       </aside>
     </div>
   </div>;
@@ -307,70 +329,76 @@ export function AnalysisPage() {
 export function ReportsPage() {
   const {id,api} = useWorkspace();
   const [profileId,setProfileId] = useState("");
-  const profiles=useQuery({queryKey:["profiles",id,"reports"],queryFn:()=>api.profiles("",0)});
-  const measurements=useQuery({queryKey:["report-measurements",id,profileId],queryFn:()=>api.measurements(profileId),enabled:!!profileId});
+  const [offset,setOffset] = useState(0);
+  const selected=useQuery({queryKey:["report-profile",id,profileId],queryFn:()=>api.profile(profileId),enabled:!!profileId});
+  const measurements=useQuery({queryKey:["report-measurements",id,profileId,offset],queryFn:()=>api.measurements(profileId,"",offset),enabled:!!profileId});
   const derived=useQuery({queryKey:["report-derived",id,profileId],queryFn:()=>api.derived(profileId),enabled:!!profileId});
-  const current=profiles.data?.items.find(profile=>profile.id===profileId);
+  const current=selected.data;
+  const ready=selected.isSuccess && measurements.isSuccess && derived.isSuccess &&
+    !selected.isFetching && !measurements.isFetching && !derived.isFetching;
   const exportCsv=()=>{
-    const rows=measurements.data?.items || [];
-    const head=["fecha","metrica","valor","unidad","metodo","responsable","tipo"];
-    const csv=[head,...rows.map(m=>[m.measured_at,m.metric_code,String(m.value),m.unit,m.method,m.responsible,m.data_type])]
-      .map(row=>row.map(value=>'"'+value.replaceAll('"','""')+'"').join(",")).join("\n");
-    const url=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+    if (!ready || privateAuthEnabled() || !measurements.data?.items.length) return;
+    const url=URL.createObjectURL(new Blob([csvPreview(measurements.data.items)],{type:"text/csv;charset=utf-8"}));
     const anchor=document.createElement("a");
-    anchor.href=url;anchor.download="bodyvision_mediciones_ficticias.csv";anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.href=url;anchor.download="bodyvision_mediciones_ficticias.csv";
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   return <div className="enterprise-module">
-    <PageTitle eyebrow="INFORMES Y TRAZABILIDAD" title="Reportes corporales" description="Vista previa y exportación de mediciones ficticias con fecha, método, procedencia y límites interpretativos."/>
+    <PageTitle eyebrow="INFORMES" title="Reportes corporales" description="Consulta y exporta mediciones corporales."/>
     <section className="enterprise-panel enterprise-report-builder">
-      <div><h2>Preparar informe</h2><label>Expediente ficticio<select value={profileId} onChange={e=>setProfileId(e.target.value)}>
-        <option value="">Seleccionar expediente</option>{profiles.data?.items.map(p=><option key={p.id} value={p.id}>{p.display_name||p.display_code} · {p.display_code}</option>)}
-      </select></label></div>
-      <div className="enterprise-report-actions"><button disabled={!measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button><button disabled={!profileId || measurements.isPending} onClick={()=>window.print()}>Imprimir vista previa</button></div>
+      <div><h2>Preparar informe</h2><ProfilePicker selected={current ?? null} selectedId={profileId}
+        onChange={next=>{setProfileId(next);setOffset(0);}} /></div>
+      <div className="enterprise-report-actions">
+        {privateAuthEnabled() ? <>{ready && <Link className="secondary-button" to={"/profiles/"+profileId+"?tab=analytics"}>Abrir informes con auditoría (PDF/CSV)</Link>}</> :
+          <button disabled={!ready || !measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button>}
+        {!privateAuthEnabled() && <button disabled={!ready} onClick={()=>window.print()}>Imprimir vista previa</button>}
+      </div>
     </section>
     <section className="enterprise-panel enterprise-report-preview">
       <div className="enterprise-panel-title"><h2>Vista previa del informe</h2><span>FICTICIO · NO MÉDICO</span></div>
       {!profileId ? <p className="enterprise-hint">Selecciona un expediente para generar una vista previa con datos existentes del servicio.</p> :
-        measurements.isPending || derived.isPending ? <LoadingState/> :
-        measurements.isError || derived.isError ? <p className="enterprise-hint">No se pudieron obtener todos los registros. Revisa la conexión.</p> :
+        selected.isError || measurements.isError || derived.isError ? <ErrorState error={selected.error ?? measurements.error ?? derived.error} retry={()=>{void selected.refetch();void measurements.refetch();void derived.refetch();}}/> :
+        !ready ? <LoadingState/> :
         <><h3>{current?.display_name || current?.display_code || "Expediente"}</h3>
-          <p className="enterprise-hint">Código: {current?.display_code} · Fecha del informe: {new Date().toLocaleDateString("es-PE")}. Fuente: registros observados y cálculos derivados de la API.</p>
+          <p className="enterprise-hint">Código: {current?.display_code} · Fecha del informe: {new Date().toLocaleDateString("es-PE")}. Mediciones registradas y cálculos derivados.</p>
           <h4>Mediciones observadas</h4>
+          {measurements.data && <ProfilePicker.Pagination page={measurements.data} onChange={setOffset} label="Páginas de mediciones del informe" />}
+          {measurements.data?.items.length === 0 && <p className="enterprise-hint">No hay mediciones observadas para mostrar.</p>}
           <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Métrica</th><th>Valor</th><th>Método</th><th>Responsable</th></tr></thead><tbody>
             {measurements.data?.items.map(m=><tr key={m.id}><td>{dateTime(m.measured_at)}</td><td>{m.metric_code}</td><td>{m.value} {m.unit}</td><td>{m.method}</td><td>{m.responsible}</td></tr>)}
           </tbody></table></div>
           <h4>Cálculos derivados</h4>
           <div className="enterprise-derived-row">{derived.data?.map(d=><div key={d.metric_code}><span>{d.label}</span><strong>{d.value===null?"Sin datos":d.value.toFixed(2)+" "+d.unit}</strong><small>{d.formula}</small></div>)}</div>
         </>}
-      <Limitation>Este reporte es una vista preliminar de datos ficticios. El informe PDF certificado, firmas, control de permisos y auditoría deben implementarse en las fases posteriores.</Limitation>
+      <Limitation>Vista de la página seleccionada. Informes completos en Evolución del expediente.</Limitation>
     </section>
   </div>;
 }
 export function AdministrationPage() {
   if (privateAuthEnabled()) return <PrivateAdministrationPage />;
   return <div className="enterprise-module">
-    <PageTitle eyebrow="GOBIERNO DE LA PLATAFORMA" title="Administración y seguridad" description="El documento exige roles, consentimiento, auditoría, retención, privacidad y controles de acceso antes de trabajar con datos reales."/>
+    <PageTitle eyebrow="ADMINISTRACIÓN" title="Administración y seguridad" description="Gestiona el acceso y la privacidad."/>
     <div className="enterprise-admin-grid">
       {[
-        ["Usuarios y roles","Administrador, especialista y usuario final. Permisos granulares por expediente.","PENDIENTE"],
-        ["Consentimiento informado","Versión, propósito, fecha, revocación y bloqueo de procesamiento.","PENDIENTE"],
-        ["Auditoría","Eventos de lectura, edición, consulta, exportación e incidencias de acceso.","PENDIENTE"],
-        ["Privacidad y retención","Cifrado, almacenamiento privado, políticas de borrado y autorización.","PENDIENTE"],
+        ["Usuarios y roles","Administrador, especialista y usuario final. Permisos granulares por expediente.","SOLO ACCESO PRIVADO"],
+        ["Consentimiento informado","Versión, propósito, fecha, revocación y bloqueo de procesamiento.","SOLO ACCESO PRIVADO"],
+        ["Auditoría","Eventos de lectura, edición, consulta, exportación e incidencias de acceso.","SOLO ACCESO PRIVADO"],
+        ["Privacidad y retención","Cifrado, almacenamiento privado, políticas de borrado y autorización.","SOLO ACCESO PRIVADO"],
       ].map(([title,description,status])=><article className="enterprise-panel" key={title}><span>◈</span><h2>{title}</h2><p>{description}</p><small>{status}</small></article>)}
     </div>
-    <div className="enterprise-panel enterprise-admin-note"><strong>Seguridad actual</strong><p>La página publicada utiliza una demostración con datos ficticios; el selector de organización no equivale a un sistema de autenticación. Para uso real deben completarse las fases de identidad, consentimiento y control de acceso.</p><Link to="/system">Consultar estado técnico ↗</Link></div>
+    <div className="enterprise-panel enterprise-admin-note"><strong>Seguridad actual</strong><p>Los ajustes de seguridad están disponibles en el espacio privado.</p><Link to="/access">Consultar acceso ↗</Link></div>
   </div>;
 }
 export function AccessPage() {
   if (privateAuthEnabled()) return <PrivateAccessPage />;
   return <div className="enterprise-access">
     <div className="enterprise-access-art"><span>BODYVISION AI</span><h1>Un espacio profesional para explorar el cuerpo.</h1><p>Mediciones, visión anatómica y trazabilidad en una plataforma web.</p><div className="enterprise-access-orbit" aria-hidden="true">✧</div></div>
-    <section className="enterprise-access-card"><span className="eyebrow">ACCESO PROFESIONAL</span><h2>Identificación de usuario</h2><p>La autenticación con usuarios y roles es un requisito crítico pendiente de implementar en el backend.</p>
+    <section className="enterprise-access-card"><span className="eyebrow">ACCESO PROFESIONAL</span><h2>Identificación de usuario</h2><p>Acceso privado no disponible en esta demostración.</p>
       <label>Correo electrónico<input type="email" placeholder="usuario@organizacion.com" disabled/></label>
       <label>Contraseña<input type="password" placeholder="••••••••" disabled/></label>
-      <button disabled>Inicio de sesión aún no disponible</button>
-      <p>Actualmente solo está habilitada la demostración con registros ficticios; no introduzcas credenciales personales.</p>
+      <button disabled>Inicio de sesión deshabilitado en demostración</button>
+      <p>Explora la plataforma con datos ficticios.</p>
       <Link to="/">Entrar a la demostración →</Link>
     </section>
   </div>;

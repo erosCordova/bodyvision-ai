@@ -85,12 +85,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    rejected_exists = op.get_bind().execute(
-        text(
-            "SELECT EXISTS(SELECT 1 FROM public.synthetic_privacy_requests "
-            "WHERE status='rejected')"
+    rejected_exists = (
+        op.get_bind()
+        .execute(
+            text(
+                "SELECT EXISTS(SELECT 1 FROM public.synthetic_privacy_requests "
+                "WHERE status='rejected')"
+            )
         )
-    ).scalar_one()
+        .scalar_one()
+    )
     if rejected_exists:
         raise RuntimeError("Rejected privacy requests remain; refusing destructive downgrade")
     op.execute("""

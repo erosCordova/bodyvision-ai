@@ -6,7 +6,6 @@ import "../../styles/enterprise.css";
 
 const sections = [
   { route: "/", name: "Dashboard", icon: "▦", short: "Inicio" },
-  { route: "/progress", name: "Avance del proyecto", icon: "◷", short: "Progreso" },
   { route: "/profiles", name: "Expedientes", icon: "▤", short: "Expedientes" },
   { route: "/measurements", name: "Mediciones", icon: "▥", short: "Mediciones" },
   { route: "/capture", name: "Captura corporal", icon: "◫", short: "Captura" },
@@ -24,12 +23,12 @@ export function DataLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const workspaces = useQuery({
-    queryKey: ["workspaces", protectedMode ? session?.user_id : "demo"],
+    queryKey: ["workspaces", protectedMode ? session?.organization_id : "demo", protectedMode ? session?.user_id : "demo"],
     queryFn: api.workspaces,
     enabled: !protectedMode || Boolean(session),
   });
-  const current = sections.find(section => section.route === location.pathname) ||
-    (location.pathname.startsWith("/profiles/") ? sections[2] : sections[0]);
+  const current = location.pathname === "/progress" ? { name: "Estado del proyecto" } : sections.find(section => section.route === location.pathname) ||
+    (location.pathname.startsWith("/profiles/") ? sections.find(section => section.route === "/profiles")! : sections[0]);
   if (protectedMode && restoring) return <p role="status">Restaurando sesión privada de pruebas…</p>;
   if (protectedMode && !session) return <Navigate to="/access" replace />;
   const privacyOnly = protectedMode && session?.role === "privacy_officer";
@@ -60,14 +59,14 @@ export function DataLayout() {
             <small>{protectedMode ? "Sesión privada de pruebas" : readOnly ? "Consulta de demostración" : "Operación local de prueba"}</small>
           </div>
           <Link to="/access" className="enterprise-security-link">♙ Acceso y seguridad</Link>
-          <p>Los datos médicos reales requieren autenticación, autorización y consentimiento.</p>
+          
         </div>
       </aside>
       <div className="data-workspace enterprise-workspace">
         <header className="data-topbar enterprise-topbar">
           <div className="enterprise-crumbs"><span>BODYVISION AI</span><span>›</span><strong>{current.name}</strong></div>
           <div className="enterprise-topbar-end">
-            <span className="enterprise-phase-tag">VERSIÓN DE DESARROLLO</span>
+
             <label>
               <span className="sr-only">Organización ficticia</span>
               <select aria-label="Organización ficticia" value={id}
@@ -79,6 +78,7 @@ export function DataLayout() {
                 {workspaces.data?.items.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </label>
+            {!protectedMode && <Link to="/access" className="enterprise-mobile-access">Acceso</Link>}
             {protectedMode && session && (
               <button type="button" className="enterprise-logout-button"
                 onClick={() => { void logout().then(revoked => navigate(revoked ? "/access" : "/access?logout=unconfirmed", { replace: true })); }}>
@@ -92,26 +92,25 @@ export function DataLayout() {
           </div>
         </header>
         <div className="enterprise-demo-banner">
-          <strong>{protectedMode ? "PRUEBAS CON SESIÓN VERIFICADA · DATOS FICTICIOS" : readOnly ? "DEMOSTRACIÓN · SOLO LECTURA" : "DATOS FICTICIOS DE DESARROLLO"}</strong>
+          <strong>{protectedMode ? "DATOS FICTICIOS · SESIÓN PRIVADA" : readOnly ? "DEMOSTRACIÓN · SOLO LECTURA" : "DATOS FICTICIOS"}</strong>
           <span>
-            {protectedMode ? "El acceso depende de tu usuario y permisos por expediente. No utilices información real." : readOnly ? "Información sintética. Sin acceso a pacientes reales ni procesamiento de imágenes." :
-              "Se usan datos sintéticos: no introduzcas información de personas reales."}
+            {protectedMode ? "No introduzcas información personal real." : readOnly ? "Consulta de ejemplo. No apta para uso clínico." :
+              "No introduzcas información personal real."}
           </span>
           {workspaces.isError && <button onClick={() => void workspaces.refetch()}>Reintentar conexión</button>}
         </div>
         {protectedMode && session && idleWarning && <div className="enterprise-idle-warning"
           role="status" aria-live="polite">
           <strong>Tu sesión de pruebas se cerrará pronto por inactividad.</strong>
-          <span>Quedan menos de 2 minutos. Si continúas trabajando, el servidor comprobará
-            que tu sesión todavía esté vigente.</span>
+          <span>Quedan menos de 2 minutos.</span>
           <button type="button" onClick={continueWorking}>Continuar trabajando</button>
         </div>}
         <main id="main-content" className="data-main enterprise-main" key={id}>
           <Outlet />
         </main>
         <footer className="enterprise-footer">
-          <span>© BODYVISION AI · Plataforma de referencia</span>
-          <span>{protectedMode ? "Acceso privado solo para pruebas. Uso médico no autorizado." : "No es un dispositivo médico. Autenticación y privacidad: implementación pendiente."}</span>
+          <span>© BODYVISION AI</span>
+          <span>No apto para uso clínico.</span>
         </footer>
       </div>
     </div>

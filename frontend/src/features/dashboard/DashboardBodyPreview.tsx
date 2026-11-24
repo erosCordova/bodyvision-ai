@@ -1,66 +1,45 @@
 import { useEffect, useRef, useState } from "react";
-import { initialShape } from "../viewer/bodyShape";
+import type { LayerOpacity } from "../viewer/AnatomyScene";
 
-/**
- * Reuses the licensed, textured MakeHuman/MPFB body already shipped by BODYVISION.
- * No SVG silhouette or duplicate proxy figure is rendered in the dashboard.
- */
+const opacity: LayerOpacity = {skin:1,muscles:1,skeleton:1,arteries:1,veins:1,nerves:1};
+
 export function DashboardBodyPreview() {
   const host = useRef<HTMLDivElement>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
-  const [progress, setProgress] = useState("Preparando modelo humano…");
+  const [ready,setReady] = useState(false);
+  const [error,setError] = useState(false);
+  const [attempt,setAttempt] = useState(0);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    const element = host.current;
-    if (!element) return;
-    let release: (() => void) | undefined;
+  useEffect(()=>{
+    let active=true;
+    let dispose: (()=>void) | undefined;
+    const element=host.current;
+    setReady(false);
+    setError(false);
+    if(!element) return;
+    void import("../viewer/AnatomyScene").then(({createAnatomyScene})=>{
+      if(!active) return;
+      const controller=createAnatomyScene(element,()=>{},()=>{},(layer,state)=>{
+        if(!active || layer!=="skin") return;
+        setReady(state==="ready");
+        setError(state==="error");
+      },()=>{if(active) setError(true);});
+      dispose=controller.dispose;
+      // Reuse the atlas exterior geometry, but render ONLY its cyan wireframe.
+      // Set mode before loading to avoid ever displaying the solid skin.
+      controller.setQuality("fluida");
+      controller.setRenderMode("holograma");
+      controller.setAutoRotate(false);
+      controller.update(new Set(["skin"]),opacity);
+    }).catch(()=>{if(active) setError(true);});
+    return ()=>{active=false;dispose?.();};
+  },[attempt]);
 
-    const start = async () => {
-      const { createBodyScene } = await import("../viewer/BodyScene");
-      if (abort.signal.aborted) return;
-      const scene = await createBodyScene(
-        element,
-        abort.signal,
-        message => { if (!abort.signal.aborted) setProgress(message); },
-        message => { if (!abort.signal.aborted) setError(message); },
-      );
-      release = scene.cleanup;
-      if (abort.signal.aborted) {
-        scene.cleanup();
-        return;
-      }
-      scene.apply({
-        shape: initialShape,
-        wireframe: false,
-        rotate: false,
-        view: "perspective",
-      });
-      scene.setView("perspective");
-      setLoaded(true);
-    };
-
-    void start().catch(() => {
-      if (!abort.signal.aborted) setError("No se pudo cargar la vista previa 3D.");
-    });
-    return () => {
-      abort.abort();
-      release?.();
-    };
-  }, []);
-
-  return (
-    <div className="enterprise-realbody-preview" data-loaded={loaded && !error}>
-      <div ref={host} className="enterprise-realbody-canvas" />
-      <div className="enterprise-realbody-tag">MODELO HUMANO 3D</div>
-      <div className="enterprise-realbody-foot">MakeHuman / MPFB · superficie con textura realista</div>
-      {!loaded && (
-        <div className="enterprise-realbody-status" role={error ? "alert" : "status"}>
-          <strong>{error ? "Vista previa no disponible" : "Cargando figura humana"}</strong>
-          <span>{error || progress}</span>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="enterprise-realbody-preview product-atlas dashboard-hologram" data-loaded={ready&&!error} data-model="anatomy-atlas" data-render-mode="holograma">
+    <div ref={host} className="enterprise-realbody-canvas" />
+    {(!ready||error) && <div className="enterprise-realbody-status" role={error?"alert":"status"}>
+      <strong>{error?"Modelo 3D no disponible":"Cargando modelo anatómico…"}</strong>
+      {error && <button type="button" onClick={()=>setAttempt(n=>n+1)}>Reintentar</button>}
+    </div>}
+    <div className="atlas-credit"><a href="https://www.z-anatomy.com/" target="_blank" rel="noreferrer">Z-Anatomy (CC BY-SA 4.0)</a> · <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/" target="_blank" rel="noreferrer">BodyParts3D (CC BY-SA 2.1 JP)</a> · <a href="https://github.com/SeemaBansal1/3d-human-body-anatomy" target="_blank" rel="noreferrer">Fuente del atlas</a></div>
+  </div>;
 }

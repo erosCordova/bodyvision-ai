@@ -15,6 +15,7 @@ import { Modal } from "../../components/ui/Modal";
 import { MeasurementForm } from "../measurements/MeasurementForm";
 import { MeasurementComparison } from "../analytics/MeasurementComparison";
 import { LongitudinalSummary } from "../analytics/LongitudinalSummary";
+import { validExportRange } from "../analytics/serverLongitudinalExport";
 import { privateAuthEnabled } from "../../app/providers/PrivateAuthProvider";
 import { PoseSummaryArchive } from "../capture/PoseSummaryArchive";
 import { ConsentPanel } from "./ConsentPanel";
@@ -27,9 +28,17 @@ export function ProfileDetail() {
   const { profileId = "" } = useParams();
   const { id, api, readOnly } = useWorkspace();
   const cache = useQueryClient();
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") === "measurements" ? "measurements" : "summary");
+  const [tab, setTab] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return requested === "measurements" || requested === "analytics" ? requested : "summary";
+  });
   const [metric, setMetric] = useState("weight");
   const [period, setPeriod] = useState("90d");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const customRange = { start_date: startDate, end_date: endDate };
+  const periodReady = period !== "custom" || validExportRange(customRange);
+  const periodKey = period === "custom" ? `custom-${startDate}-${endDate}` : period;
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<Measurement | "new" | null>(null);
   const [versionId, setVersionId] = useState<string | null>(null);
@@ -51,8 +60,11 @@ export function ProfileDetail() {
     queryFn: () => api.derived(profileId),
   });
   const series = useQuery({
-    queryKey: ["series", id, profileId, metric, period],
-    queryFn: () => api.series(profileId, metric, period),
+    queryKey: ["series", id, profileId, metric, periodKey],
+    queryFn: () => period === "custom"
+      ? api.series(profileId, metric, period, customRange)
+      : api.series(profileId, metric, period),
+    enabled: periodReady,
   });
   const versions = useQuery({
     queryKey: ["versions", id, versionId, versionOffset],
@@ -294,12 +306,25 @@ export function ProfileDetail() {
                   <option value="90d">90 días</option>
                   <option value="1a">1 año</option>
                   <option value="all">Todo</option>
+                  <option value="custom">Personalizado</option>
                 </select>
               </label>
             )}
+            {tab === "analytics" && period === "custom" && <>
+              <label>Fecha inicial de evolución
+                <input type="date" value={startDate}
+                  onChange={event => setStartDate(event.currentTarget.value)} />
+              </label>
+              <label>Fecha final de evolución
+                <input type="date" value={endDate}
+                  onChange={event => setEndDate(event.currentTarget.value)} />
+              </label>
+            </>}
           </div>
           {tab === "analytics" &&
-            (series.isPending ? (
+            (!periodReady ? (
+              <p role="status">Selecciona un intervalo válido de fechas (hora de Lima).</p>
+            ) : series.isPending ? (
               <LoadingState />
             ) : series.isError ? (
               <ErrorState
@@ -313,18 +338,21 @@ export function ProfileDetail() {
                   unit={selectedMetric?.unit ?? ""}
                 />
                 <LongitudinalSummary
+                  key={periodKey}
                   rows={series.data}
                   profileId={profileId}
                   metricCode={metric}
                   unit={selectedMetric?.unit ?? ""}
-                  period={period as "30d" | "90d" | "1a" | "all"}
+                  period={period as "30d" | "90d" | "1a" | "all" | "custom"}
+                  selectedRange={period === "custom" ? customRange : undefined}
                   exportReport={privateAuthEnabled() && current.synthetic
                     ? (range) => api.longitudinalReport(profileId, metric,
-                        period as "30d" | "90d" | "1a" | "all", range)
+                        period === "custom" ? "all" : period as "30d" | "90d" | "1a" | "all",
+                        range ?? (period === "custom" ? customRange : undefined))
                     : undefined}
                 />
                 <MeasurementComparison
-                  key={`${metric}-${period}`}
+                  key={`${metric}-${periodKey}`}
                   rows={series.data}
                   unit={selectedMetric?.unit ?? ""}
                   profileId={profileId}

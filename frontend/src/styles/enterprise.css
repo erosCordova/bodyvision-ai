@@ -377,3 +377,82 @@
 .enterprise-idle-warning button{background:#f8dfac;border:1px solid #d4a856;
   color:#3d2a11;border-radius:7px;padding:9px 12px;font-weight:750;cursor:pointer}
 .enterprise-idle-warning button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+
+/* Shared functional navigation and bounded report selectors. */
+.enterprise-mobile-access{display:none}
+.module-profile-picker{display:grid;gap:12px;min-width:0}
+.module-profile-picker label{display:grid;gap:7px;min-width:0}
+.module-profile-picker input,.module-profile-picker select{width:100%;min-width:0}
+.module-pagination{align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:8px;margin:12px 0}
+.module-pagination span{font-size:12px;color:#a7bed8}
+@media(max-width:700px){
+  .enterprise-mobile-access{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:7px 10px;border:1px solid #345677;border-radius:7px;font-size:11px;color:#d9e8f6}
+  .enterprise-topbar{flex-wrap:wrap}
+  .enterprise-topbar-end{flex-wrap:wrap;max-width:100%}
+  .enterprise-report-builder{min-width:0}
+}
+@media print{
+  .module-pagination,.module-profile-picker{display:none!important}
+}
+
+/* Product-facing visual system — anatomy is the primary workspace. */
+.enterprise-shell{background:#080f1e;color:#eaf2ff}
+.enterprise-sidebar{background:#0a1222;border-right:1px solid #253348;padding:28px 17px}
+.enterprise-brand .brand-mark{background:linear-gradient(145deg,#1f5070,#253b66);border-color:#5080a2}
+.enterprise-sidebar nav a{font-size:12px;padding:13px 12px;border:1px solid transparent}
+.enterprise-sidebar nav a.active{background:linear-gradient(100deg,#15364d,#1c2b48);border-color:#386483;color:#c9f2ff;box-shadow:none}
+.enterprise-topbar{background:#0c1526;border-color:#26364c}
+.enterprise-demo-banner{background:#131d30;border-color:#253348;padding-block:7px}
+.enterprise-main{max-width:1600px}
+.enterprise-panel{border-radius:18px;border-color:#283b56;background:#101d31;box-shadow:0 12px 35px #03081330}
+.product-heading{margin-bottom:25px}
+.product-heading h1{font-size:clamp(26px,3vw,38px);font-weight:650}
+.product-dashboard-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;align-items:start}
+.product-dashboard-side{display:grid;gap:18px;min-width:0}
+.product-hero{overflow:hidden;min-width:0;background:radial-gradient(ellipse at 45% 46%,#233c56 0%,#111e32 48%,#0b1526 80%);border-color:#39526d;box-shadow:0 20px 55px #02071465}
+.product-hero-head,.product-hero-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:23px 24px}
+.product-hero-head h2{margin:0;color:#f3f7ff;font-size:clamp(19px,2vw,26px);letter-spacing:-.035em}
+.product-live-label{font-size:11px;color:#a8eaf8;background:#123c51;border:1px solid #38677c;padding:7px 11px;border-radius:20px;white-space:nowrap}
+.product-atlas.enterprise-realbody-preview{min-height:580px;position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 50% 46%,#35506c55 0%,transparent 65%)}
+.product-atlas.enterprise-realbody-preview::before{background:linear-gradient(transparent 49.8%,#87a8ca13 50%,transparent 50.2%),linear-gradient(90deg,transparent 49.8%,#87a8ca13 50%,transparent 50.2%);opacity:.8}
+.product-atlas .enterprise-realbody-canvas{inset:55px 10px 42px}
+.product-atlas .enterprise-realbody-canvas canvas{touch-action:none}
+.atlas-layer-controls{position:absolute;top:12px;left:16px;right:16px;z-index:3;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.atlas-view-controls{position:absolute;bottom:46px;right:14px;z-index:3;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.product-atlas .atlas-layer-controls button,.product-atlas .atlas-view-controls button{background:#0c192ddd;border:1px solid #3c5672;color:#d1e3f4;padding:9px 11px;border-radius:9px;font-size:11px}
+.product-atlas .atlas-layer-controls button[aria-pressed=true]{background:#194960;color:#e2faff;border-color:#72d4e7}
+.product-atlas .enterprise-realbody-status{z-index:2;pointer-events:auto}
+.atlas-credit{position:absolute;z-index:3;bottom:13px;left:16px;right:16px;text-align:center;color:#a6bbd1;font-size:10px}
+.atlas-credit a{text-decoration:underline;text-underline-offset:3px}
+.product-hero-bottom{border-top:1px solid #2a4059;background:#0d182ab0}
+.product-hero-bottom>span{font-size:12px;color:#acc1da}
+.product-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.product-metrics>.state{grid-column:1/-1}
+.product-metric.enterprise-kpi{min-height:140px;padding:16px 13px;border-radius:14px;background:linear-gradient(155deg,#182a40,#101b2e);box-shadow:none}
+.product-metric .enterprise-kpi-icon{position:static;margin-bottom:12px}
+.product-metric p{margin:0 0 8px;font-size:11px;line-height:1.4}
+.product-metric strong{font-size:clamp(24px,2.8vw,36px)}
+.product-metric small{font-size:10px}
+.product-shortcut-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 17px 18px}
+.product-shortcut-grid a{display:flex;align-items:center;gap:10px;padding:13px 10px;background:#15263c;border:1px solid #30465f;border-radius:12px;min-width:0}
+.product-shortcut-grid a:hover{border-color:#74b6dd;background:#20364e}
+.product-shortcut-grid a>span:first-child{color:#9ee5f5;font-size:22px}
+.product-shortcut-grid a>div{flex:1;min-width:0}
+.product-shortcut-grid strong,.product-shortcut-grid small{display:block}
+.product-shortcut-grid strong{font-size:12px;color:#edf4ff}
+.product-shortcut-grid small{font-size:10px;color:#a8bed5;margin-top:4px}
+.product-shortcut-grid a>span:last-child{font-size:12px;color:#9cb6cf}
+.product-recent .enterprise-activity-item{min-width:0}
+@media(max-width:1250px){.product-dashboard-grid{grid-template-columns:minmax(0,1fr)}.product-dashboard-side{grid-template-columns:1fr 1fr}.product-metrics{grid-column:1/-1}.product-atlas.enterprise-realbody-preview{min-height:590px}}
+@media(max-width:850px){.product-dashboard-side{grid-template-columns:1fr}.product-atlas.enterprise-realbody-preview{min-height:500px}}
+@media(max-width:700px){.enterprise-sidebar{padding:12px}.enterprise-sidebar nav a{font-size:11px;padding:10px}.product-dashboard-grid{gap:14px}.product-hero-head,.product-hero-bottom{padding:16px 14px}.product-hero-bottom{flex-wrap:wrap}.product-atlas.enterprise-realbody-preview{min-height:470px}.product-atlas .enterprise-realbody-canvas{inset:86px 0 45px}.atlas-layer-controls{left:8px;right:8px}.product-metric.enterprise-kpi{padding:12px 9px;min-height:135px}.product-shortcut-grid{padding:0 12px 14px}.product-metric strong{font-size:24px}}
+@media(max-width:400px){.product-shortcut-grid{grid-template-columns:1fr}.product-metrics{grid-template-columns:1fr}.product-metric.enterprise-kpi{min-height:96px}.product-metric .enterprise-kpi-icon{position:absolute;right:12px;top:12px}.product-atlas.enterprise-realbody-preview{min-height:430px}.product-atlas .atlas-layer-controls button{padding:7px 8px}}
+@media(prefers-reduced-motion:reduce){.enterprise-shell *{scroll-behavior:auto}}
+
+/* Dashboard hologram: an unobstructed view of the original atlas geometry. */
+.dashboard-hologram.product-atlas{background:radial-gradient(ellipse at 50% 48%,#123f5b80 0%,#10253844 40%,transparent 72%)}
+.dashboard-hologram.product-atlas .enterprise-realbody-canvas{inset:0 6px 32px}
+.dashboard-hologram.product-atlas::before{background:linear-gradient(transparent 49.8%,#63b8d91a 50%,transparent 50.2%),linear-gradient(90deg,transparent 49.8%,#63b8d91a 50%,transparent 50.2%);pointer-events:none}
+.dashboard-hologram .atlas-credit{font-size:9px;line-height:1.5;bottom:8px}
+.product-hero-bottom{justify-content:flex-end}
+@media(max-width:700px){.dashboard-hologram.product-atlas .enterprise-realbody-canvas{inset:0 0 40px}}
