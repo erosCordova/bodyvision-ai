@@ -450,4 +450,5 @@ def test_custom_series_uses_inclusive_lima_dates_and_current_rows(client):
     assert client.get(path, params={**params, "end_date": "9999-12-31"}).status_code == 422
     assert client.get(path, params={"period": "custom"}).status_code == 422
     assert client.get(path, params={**params, "period": "all"}).status_code == 422
-    assert client.get(path, params=params, headers={"X-Workspace-ID": str(SECOND_WORKSPACE)}).status_code == 404
+    foreign = client.get(path, params=params, headers={"X-Workspace-ID": str(SECOND_WORKSPACE)})
+    assert foreign.status_code == 404
