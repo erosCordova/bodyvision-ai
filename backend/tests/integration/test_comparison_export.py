@@ -153,10 +153,13 @@ def test_optional_signed_report_receipts_are_scoped_and_independently_verifiable
             receipt, public, base64.b64decode(body[field], validate=True), body["filename"]
         )
         with owner.connect() as conn:
-            assert conn.execute(
-                text("SELECT count(*) FROM security_audit_events WHERE id=:id"),
-                {"id": body[id_field]},
-            ).scalar_one() == 1
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM security_audit_events WHERE id=:id"),
+                    {"id": body[id_field]},
+                ).scalar_one()
+                == 1
+            )
 
 
 def test_pdf_is_not_delivered_if_audit_cannot_be_committed(comparison_data):
