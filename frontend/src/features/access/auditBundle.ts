@@ -31,6 +31,7 @@ export async function auditBytesHash(bytes: Uint8Array<ArrayBuffer>): Promise<st
 /** Hashes prove internal consistency; a separately trusted head is still required for authorship. */
 export async function verifyAuditBytes(
   bytes: Uint8Array<ArrayBuffer>, expectedOrganization?: string,
+  trustedPrior?: Pick<AuditFileSummary, "organizationId" | "sequence" | "hash">,
 ): Promise<AuditFileSummary> {
   if (bytes.length < 1 || bytes.length > MAX_AUDIT_BYTES)
     throw new Error("El archivo está vacío o supera 8 MiB.");
@@ -41,6 +42,11 @@ export async function verifyAuditBytes(
   if ((expectedOrganization && bundle.organization_id !== expectedOrganization)
     || bundle.events.length !== bundle.checkpoint_sequence)
     throw new Error("El alcance o el número de eventos de la auditoría no coincide.");
+  if (trustedPrior && (trustedPrior.organizationId !== bundle.organization_id
+    || !Number.isSafeInteger(trustedPrior.sequence) || trustedPrior.sequence < 1
+    || !/^[0-9a-f]{64}$/.test(trustedPrior.hash)
+    || trustedPrior.sequence > bundle.checkpoint_sequence))
+    throw new Error("La auditoría actual no conserva el alcance o la longitud de la referencia anterior.");
   let prior = "0".repeat(64);
   // Batches keep CPU/crypto work bounded without starting 10,000 operations at once.
   for (let offset = 0; offset < bundle.events.length; offset += 50) {
@@ -57,6 +63,8 @@ export async function verifyAuditBytes(
         || payload.data[2] !== prior || payload.data[4] !== bundle.organization_id)
         throw new Error("La cadena de auditoría tiene una inconsistencia.");
       prior = row.event_hash;
+      if (trustedPrior?.sequence === position && trustedPrior.hash !== prior)
+        throw new Error("La cadena actual no conserva el punto de control anterior.");
     }
   }
   if (prior !== bundle.checkpoint_hash)
@@ -66,4 +74,18 @@ export async function verifyAuditBytes(
     sequence: bundle.checkpoint_sequence, hash: bundle.checkpoint_hash,
     sha256: await auditBytesHash(bytes),
   };
+}
+
+/** The older export must have been retained independently and trusted by the
+ * operator. Matching its prefix detects history changes, not authorship.
+ */
+export async function compareAuditContinuity(
+  older: Uint8Array<ArrayBuffer>, newer: Uint8Array<ArrayBuffer>, organizationId: string,
+): Promise<{ previous: number; current: number; added: number }> {
+  const previous = await verifyAuditBytes(older, organizationId);
+  if (previous.sequence === 0)
+    throw new Error("La referencia anterior vacía no demuestra continuidad.");
+  const current = await verifyAuditBytes(newer, organizationId, previous);
+  return { previous: previous.sequence, current: current.sequence,
+    added: current.sequence - previous.sequence };
 }
