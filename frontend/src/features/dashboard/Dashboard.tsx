@@ -29,11 +29,11 @@ export function Dashboard() {
       </header>
       <div className="product-dashboard-grid">
         <section className="enterprise-panel enterprise-anatomy-promo product-hero" aria-label="Exploración anatómica">
-          <div className="product-hero-head"><div><p className="eyebrow">ANATOMÍA INTERACTIVA</p><h2>Visión corporal 3D</h2></div><span className="product-live-label">6 capas</span></div>
+          <div className="product-hero-head"><h2>Visión corporal 3D</h2></div>
           <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
             <DashboardBodyPreview />
           </Suspense>
-          <div className="product-hero-bottom"><span>Atlas anatómico de referencia</span><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link></div>
+          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link></div>
         </section>
         <div className="product-dashboard-side">
           <section className="product-metrics" aria-label="Indicadores reales de la organización ficticia">
