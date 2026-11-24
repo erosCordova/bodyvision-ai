@@ -221,7 +221,8 @@ export function SyntheticCaptureArchive({
                   </button>}
                 </div>
                 {poseConsent && poseCapture === item.id && <ServerPosePanel
-                  key={`${profileId}-${item.id}`} token={session.token} profileId={profileId}
+                  key={`${session.user_id}-${profileId}-${item.id}`} token={session.token} profileId={profileId}
+                  organizationId={session.organization_id} actorId={session.user_id}
                   captureId={item.id} canWrite={canWrite} />}
               </li>
             ))}
