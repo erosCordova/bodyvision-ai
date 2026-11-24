@@ -24,7 +24,7 @@ export function DataLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const workspaces = useQuery({
-    queryKey: ["workspaces", protectedMode ? session?.user_id : "demo"],
+    queryKey: ["workspaces", protectedMode ? session?.organization_id : "demo", protectedMode ? session?.user_id : "demo"],
     queryFn: api.workspaces,
     enabled: !protectedMode || Boolean(session),
   });
@@ -79,6 +79,7 @@ export function DataLayout() {
                 {workspaces.data?.items.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </label>
+            {!protectedMode && <Link to="/access" className="enterprise-mobile-access">Acceso</Link>}
             {protectedMode && session && (
               <button type="button" className="enterprise-logout-button"
                 onClick={() => { void logout().then(revoked => navigate(revoked ? "/access" : "/access?logout=unconfirmed", { replace: true })); }}>
@@ -111,7 +112,7 @@ export function DataLayout() {
         </main>
         <footer className="enterprise-footer">
           <span>© BODYVISION AI · Plataforma de referencia</span>
-          <span>{protectedMode ? "Acceso privado solo para pruebas. Uso médico no autorizado." : "No es un dispositivo médico. Autenticación y privacidad: implementación pendiente."}</span>
+          <span>{protectedMode ? "Acceso privado solo para pruebas. Uso médico no autorizado." : "No es un dispositivo médico. La identidad privada está deshabilitada en esta demostración."}</span>
         </footer>
       </div>
     </div>
