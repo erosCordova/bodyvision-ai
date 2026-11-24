@@ -16,7 +16,7 @@ export type PhaseClosureAudit = {
   phaseId: 0 | 1 | 2;
   title: string;
   technical: "verified" | "pending";
-  formalAcceptance: "pending";
+  formalAcceptance: "pending" | "product-approved";
   operationalReception?: "assisted";
   mappedExecutionPhase: string;
   owner: string;
@@ -30,9 +30,9 @@ const doc = (path: string): string =>
 export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
   {
     phaseId: 0, title: "Descubrimiento y diseño",
-    technical: "pending", formalAcceptance: "pending",
+    technical: "verified", formalAcceptance: "product-approved",
     mappedExecutionPhase: "Preparatoria del tablero 0–9; sin equivalente F0 explícito en la especificación F1–F10.",
-    owner: "Responsable de producto por confirmar",
+    owner: "Responsable de producto: usuario del proyecto (aprobación expresa del 23-11-2026)",
     checks: [
       {
         id: "F0-SCOPE", requirement: "Alcance, limitaciones médicas y reglas de privacidad documentados.",
@@ -45,13 +45,14 @@ export const phaseClosureAudit: readonly PhaseClosureAudit[] = [
         evidence: { label: "Arquitectura y ADR", url: doc("docs/architecture/ARQUITECTURA.md") },
       },
       {
-        id: "F0-RISK", requirement: "Matriz de riesgos revisada, con responsables y medidas aprobadas.",
-        state: "pending", pendingReason: "Propuesta revisable de alcance, diferencias, riesgos y responsables preparada; falta confirmar responsables y aceptación del producto.",
+        id: "F0-RISK", requirement: "Planificación y tratamiento de riesgos aceptados como plan de trabajo; revisiones especializadas pendientes en sus fases.",
+        state: "verified",
         evidence: { label: "Propuesta de cierre y matriz de riesgos", url: doc("docs/qa/PHASE_0_SCOPE_REVIEW.md") },
       },
       {
         id: "F0-APPROVAL", requirement: "Aceptación explícita del alcance y criterios de salida por producto.",
-        state: "pending", pendingReason: "Nadie ha autorizado ni firmado una aceptación formal.",
+        state: "verified",
+        evidence: { label: "Registro de aprobación expresa de producto", url: doc("docs/qa/PHASE_0_PRODUCT_ACCEPTANCE_2026_11_23.md") },
       },
     ],
   },
