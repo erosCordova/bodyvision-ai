@@ -319,8 +319,8 @@ export function ProfileDetail() {
                   unit={selectedMetric?.unit ?? ""}
                   period={period as "30d" | "90d" | "1a" | "all"}
                   exportReport={privateAuthEnabled() && current.synthetic
-                    ? () => api.longitudinalReport(profileId, metric,
-                        period as "30d" | "90d" | "1a" | "all")
+                    ? (range) => api.longitudinalReport(profileId, metric,
+                        period as "30d" | "90d" | "1a" | "all", range)
                     : undefined}
                 />
                 <MeasurementComparison
