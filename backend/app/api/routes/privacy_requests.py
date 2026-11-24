@@ -1,6 +1,6 @@
 """Private synthetic intake and safe review queue for subject-rights requests.
 
-This only records requests. It never exports, erases, or claims legal fulfillment.
+Records requests and synthetic administrative rejection; never claims legal fulfillment.
 """
 
 from datetime import datetime
@@ -26,6 +26,7 @@ OVERDUE = "(r.status IN ('received','in_review') AND r.review_target_at <= now()
 FIELDS = (
     """r.id,r.profile_id,r.request_type,r.status,r.requested_by,r.received_at,
  r.review_target_at,r.review_started_at,r.reviewed_by,p.display_code AS profile_code,p.can_review,
+ r.rejected_at,r.rejected_by,r.rejection_reason,
  """
     + OVERDUE
     + " AS review_overdue"
@@ -45,7 +46,7 @@ class PrivacyRequestRead(BaseModel):
     id: UUID
     profile_id: UUID
     request_type: Literal["access", "rectification", "cancellation", "opposition", "export"]
-    status: Literal["received", "in_review"]
+    status: Literal["received", "in_review", "rejected"]
     requested_by: UUID
     received_at: datetime
     review_target_at: datetime
@@ -54,6 +55,11 @@ class PrivacyRequestRead(BaseModel):
     profile_code: str
     review_overdue: bool
     can_review: bool
+    rejected_at: datetime | None
+    rejected_by: UUID | None
+    rejection_reason: Literal[
+        "invalid_synthetic_request", "withdrawn_by_requester", "duplicate_review"
+    ] | None
 
 
 class PrivacyRequestPage(BaseModel):
@@ -176,7 +182,7 @@ def review_queue(
     scope: Scope,
     limit: int = Query(20, ge=1, le=50),
     offset: int = Query(0, ge=0, le=10000),
-    status: Literal["received", "in_review"] | None = Query(None),
+    status: Literal["received", "in_review", "rejected"] | None = Query(None),
     overdue_only: bool = Query(False),
 ):
     _require_administrator(scope)
@@ -206,7 +212,7 @@ def review_queue(
     rows = (
         scope.connection.execute(
             text(f"""SELECT {FIELDS} FROM {TABLE} {where}
-        ORDER BY CASE WHEN r.status='received' THEN 0 ELSE 1 END,
+        ORDER BY CASE r.status WHEN 'received' THEN 0 WHEN 'in_review' THEN 1 ELSE 2 END,
           r.review_target_at,r.id LIMIT :limit OFFSET :offset"""),
             params,
         )
@@ -241,4 +247,33 @@ def start_review(request_id: UUID, scope: Scope):
     ).scalar_one()
     if not changed:
         raise DomainError(409, "CONFLICT", "La solicitud cambió. Actualiza la consulta.")
+    return _read(scope, request_id)
+
+
+class PrivacyRejectionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Literal["invalid_synthetic_request", "withdrawn_by_requester", "duplicate_review"]
+    synthetic_confirmed: Literal[True]
+
+
+@router.post("/privacy-requests/{request_id}/reject", response_model=PrivacyRequestRead)
+def reject_request(request_id: UUID, data: PrivacyRejectionInput, scope: Scope):
+    _require_administrator(scope)
+    row = _read(scope, request_id)
+    if not row["can_review"]:
+        raise DomainError(404, "NOT_FOUND", "Solicitud no disponible.")
+    if row["status"] != "in_review":
+        raise DomainError(409, "CONFLICT", "Solo se rechazan solicitudes en revisión.")
+    changed = scope.connection.execute(
+        text("SELECT reject_synthetic_privacy_request(:id,:reason,:event,:correlation)"),
+        {
+            "id": request_id,
+            "reason": data.reason,
+            "event": uuid4(),
+            "correlation": scope.correlation_id,
+        },
+    ).scalar_one()
+    if not changed:
+        raise DomainError(404, "NOT_FOUND", "Solicitud no disponible.")
     return _read(scope, request_id)
