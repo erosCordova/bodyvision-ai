@@ -69,9 +69,7 @@ def _validate_metadata(receipt: ReportReceipt) -> None:
     )
     if receipt.filename != expected:
         raise ValueError("Invalid report filename")
-    if re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", receipt.generated_at
-    ) is None:
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", receipt.generated_at) is None:
         raise ValueError("Invalid report timestamp")
     datetime.fromisoformat(receipt.generated_at)
     if receipt.format == "pdf":
@@ -102,9 +100,9 @@ def sign_report(
         format=format_name,
         export_id=str(export_id),
         filename=filename,
-        generated_at=generated_at.astimezone(UTC).isoformat(timespec="microseconds").replace(
-            "+00:00", "Z"
-        ),
+        generated_at=generated_at.astimezone(UTC)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z"),
         sha256=hashlib.sha256(content).hexdigest(),
         byte_count=len(content),
         row_count=row_count,
