@@ -21,6 +21,16 @@ test("expired administrative JWT renews once and preserves the created invitatio
   await panel.getByLabel("Correo ficticio del invitado").fill(email);
   await panel.getByLabel("Confirmar contraseña del administrador").fill(password);
 
+  // Observe browser responses before external rotation: a pending browser read
+  // can renew while the explicit old-token rejection is still being checked.
+  // page.request is a separate APIRequestContext, not a page response.
+  const statuses: number[] = [];
+  let refreshes = 0;
+  page.on("response", response => {
+    if (response.url().endsWith("/auth/invitations") && response.request().method() === "POST") statuses.push(response.status());
+    if (response.url().endsWith("/auth/access/refresh")) refreshes += 1;
+  });
+
   // Real backend rotation invalidates the browser's in-memory JWT without
   // intercepting HTTP or changing the database clock. The next POST must fail
   // authorization before any mutation, refresh once, then create exactly once.
@@ -32,12 +42,6 @@ test("expired administrative JWT renews once and preserves the created invitatio
     headers: { Authorization: `Bearer ${oldToken}` },
   })).status()).toBe(401);
 
-  const statuses: number[] = [];
-  let refreshes = 0;
-  page.on("response", response => {
-    if (response.url().endsWith("/auth/invitations") && response.request().method() === "POST") statuses.push(response.status());
-    if (response.url().endsWith("/auth/access/refresh")) refreshes += 1;
-  });
   await panel.getByRole("button", { name: "Crear invitación ficticia" }).click();
   const code = panel.getByLabel("Código de invitación de un solo uso");
   await expect(code).toBeVisible();

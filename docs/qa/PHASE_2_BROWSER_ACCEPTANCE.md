@@ -70,9 +70,13 @@ Chromium privado, Docker + restauración aislada, sin fallo. Los ensayos son
 repetibles en PostgreSQL **efímero** de GitHub Actions. No se borran datos
 del usuario y ninguna base productiva se conecta a esta suite.
 
-### Pendiente de recepción independiente
+### Actualización 23-11-2026 — recepción de producto
 
-- Aprobación funcional final de producto/QA de flujos, textos y permisos.
+El usuario aceptó expresamente el flujo ficticio descrito. Véase el [registro de aceptación](PHASE_2_PRODUCT_ACCEPTANCE_2026_11_23.md). La aceptación técnica automatizada y de producto no constituye una prueba manual independiente ni autorización para datos reales.
+
+### Pendiente de revisión independiente
+
+- QA independiente de flujos, textos y permisos antes de uso real.
 - Responsables reales de custodia, privacidad, seguridad y control de identidad.
 - Dispositivos físicos objetivo y revisión clínica; no se autorizan datos reales.
 - Verificación del flujo de usuario en equipos fuera del ambiente CI.

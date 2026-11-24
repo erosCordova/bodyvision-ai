@@ -1,6 +1,7 @@
 # BodyVision — propuesta de cierre de fase 0
 
-**Estado: preparada para revisión; pendiente de aceptación.**
+**Estado actualizado 23-11-2026: planificación aprobada expresamente por producto.**
+La propuesta original del 21-11 se conserva como historial. Véase el [registro de aprobación](PHASE_0_PRODUCT_ACCEPTANCE_2026_11_23.md); las afirmaciones de aceptación pendiente del texto histórico quedan sustituidas únicamente respecto a la planificación. No se aprueban riesgos residuales ni uso real.
 Fecha: 21 de noviembre de 2026 (America/Lima).
 Base revisada: d85c29270935db4d9637d3a149f1a2065347f0d4, rama feature/phase3-auth-security.
 
