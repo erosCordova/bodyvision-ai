@@ -424,3 +424,31 @@ def test_correction_lineage_is_paged_without_unrelated_profile_measurements(clie
         headers={"X-Workspace-ID": str(SECOND_WORKSPACE)},
     )
     assert denied.status_code == 404
+
+
+def test_custom_series_uses_inclusive_lima_dates_and_current_rows(client):
+    profile = new_profile(client)
+    stamps = [
+        datetime(2025, 1, 15, 4, 59, 59, 999999, tzinfo=UTC),
+        datetime(2025, 1, 15, 5, 0, tzinfo=UTC),
+        datetime(2025, 1, 16, 4, 59, 59, 999999, tzinfo=UTC),
+        datetime(2025, 1, 16, 5, 0, tzinfo=UTC),
+    ]
+    created = []
+    for index, stamp in enumerate(stamps):
+        result = post(client, profile, entry(70 + index, at=stamp))
+        assert result.status_code == 201, result.text
+        created.append(result.json()["id"])
+    path = f"/api/v1/profiles/{profile}/analytics/series"
+    params = {"period": "custom", "start_date": "2025-01-15", "end_date": "2025-01-15"}
+    result = client.get(path, params=params)
+    assert result.status_code == 200, result.text
+    assert [row["id"] for row in result.json()] == created[1:3]
+    assert all(row["is_current"] for row in result.json())
+    assert client.get(path, params={**params, "end_date": "2025-01-14"}).status_code == 422
+    assert client.get(path, params={**params, "start_date": "2025-02-30"}).status_code == 422
+    assert client.get(path, params={**params, "end_date": "9999-12-31"}).status_code == 422
+    assert client.get(path, params={"period": "custom"}).status_code == 422
+    assert client.get(path, params={**params, "period": "all"}).status_code == 422
+    foreign = client.get(path, params=params, headers={"X-Workspace-ID": str(SECOND_WORKSPACE)})
+    assert foreign.status_code == 404

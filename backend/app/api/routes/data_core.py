@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
@@ -299,9 +299,36 @@ def series(
     profile_id: UUID,
     scope: Scope,
     metric_code: str = Query("weight", max_length=40),
-    period: Literal["30d", "90d", "1a", "all"] = "90d",
+    period: Literal["30d", "90d", "1a", "all", "custom"] = "90d",
+    start_date: str | None = Query(None, max_length=10),
+    end_date: str | None = Query(None, max_length=10),
 ):
-    rows = records.history(scope, profile_id, metric_code)
+    if period == "custom":
+        # Check access before reading the database clock or any measurements.
+        records.profile(scope, profile_id)
+        try:
+            start = date.fromisoformat(start_date or "")
+            end = date.fromisoformat(end_date or "")
+            if (
+                start.isoformat() != start_date
+                or end.isoformat() != end_date
+                or not date(1900, 1, 1) <= start <= end
+            ):
+                raise ValueError("Invalid civil range")
+        except ValueError as exc:
+            raise DomainError(422, "INVALID_PERIOD", "Selecciona un intervalo válido.") from exc
+        today = scope.connection.execute(
+            text("SELECT (statement_timestamp() AT TIME ZONE 'America/Lima')::date")
+        ).scalar_one()
+        if end > today:
+            raise DomainError(422, "INVALID_PERIOD", "La fecha final no puede ser futura.")
+        rows = records.history(scope, profile_id, metric_code, start_date=start, end_date=end)
+    else:
+        if start_date is not None or end_date is not None:
+            raise DomainError(
+                422, "INVALID_PERIOD", "Las fechas requieren un periodo personalizado."
+            )
+        rows = records.history(scope, profile_id, metric_code)
     days = {"30d": 30, "90d": 90, "1a": 365}.get(period)
     if days:
         cutoff = datetime.now(UTC) - timedelta(days=days)

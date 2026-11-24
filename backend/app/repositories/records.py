@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import text
@@ -66,7 +67,14 @@ def measurement(scope: Workspace, measurement_id: UUID, lock: bool = False) -> d
     return dict(row)
 
 
-def history(scope: Workspace, profile_id: UUID, metric_code: str | None = None) -> list[dict]:
+def history(
+    scope: Workspace,
+    profile_id: UUID,
+    metric_code: str | None = None,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[dict]:
     profile(scope, profile_id)
     return [
         dict(x)
@@ -76,8 +84,18 @@ def history(scope: Workspace, profile_id: UUID, metric_code: str | None = None) 
         JOIN users u ON u.id=m.created_by AND u.organization_id=m.organization_id
         WHERE m.organization_id=:org AND m.profile_id=:id AND m.is_current
           AND (CAST(:metric AS text) IS NULL OR m.metric_code=:metric)
+          AND (CAST(:start_date AS date) IS NULL OR m.measured_at >=
+               (CAST(CAST(:start_date AS date) AS timestamp) AT TIME ZONE 'America/Lima'))
+          AND (CAST(:end_date AS date) IS NULL OR m.measured_at <
+               (CAST(CAST(:end_date AS date) + 1 AS timestamp) AT TIME ZONE 'America/Lima'))
         ORDER BY m.measured_at,m.created_at,m.id
     """),
-            {"org": scope.organization_id, "id": profile_id, "metric": metric_code},
+            {
+                "org": scope.organization_id,
+                "id": profile_id,
+                "metric": metric_code,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
         ).mappings()
     ]

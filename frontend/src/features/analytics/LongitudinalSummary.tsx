@@ -15,13 +15,14 @@ const signed = (value: number) => new Intl.NumberFormat("es-PE", {
 }).format(value);
 
 export function LongitudinalSummary({
-  rows, profileId, metricCode, unit, period, exportReport,
+  rows, profileId, metricCode, unit, period, selectedRange, exportReport,
 }: {
   rows: Measurement[];
   profileId: string;
   metricCode: string;
   unit: string;
-  period: "30d" | "90d" | "1a" | "all";
+  period: "30d" | "90d" | "1a" | "all" | "custom";
+  selectedRange?: ExportDateRange;
   exportReport?: (range?: ExportDateRange) => Promise<LongitudinalDownload>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -146,7 +147,7 @@ export function LongitudinalSummary({
         </>
       )}
           {exportReport && <div className="record-report-actions">
-            <button type="button" onClick={() => void exportCsv()} disabled={busy}>
+            <button type="button" onClick={() => void exportCsv(selectedRange)} disabled={busy}>
               {busy ? "Preparando historial…" : "Descargar historial observado (CSV)"}
             </button>
             <small className="muted">Historial completo del periodo, hasta 8 MiB por archivo,
