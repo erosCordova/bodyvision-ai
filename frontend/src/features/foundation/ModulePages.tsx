@@ -280,7 +280,7 @@ export function AnalysisPage() {
   const stages = [
     { name:"Autorización", detail:"Verificación documental de consentimiento por expediente", status:"Pendiente para uso real" },
     { name:"Control de calidad", detail:"Resolución, orientación, contraste e iluminación", status:"Revisión local disponible" },
-    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker con 33 landmarks posibles", status:"Local bajo demanda · requiere internet inicial" },
+    { name:"Detección de pose", detail:"MediaPipe Pose Landmarker con 33 landmarks posibles", status:"Local bajo demanda · recursos incluidos en la aplicación" },
     { name:"Revisión humana", detail:"Validación profesional de resultados y trazabilidad", status:"Pendiente para uso real" },
   ];
   return <div className="enterprise-module">
@@ -352,7 +352,7 @@ export function ReportsPage() {
       <div className="enterprise-report-actions">
         {privateAuthEnabled() ? <>{ready && <Link className="secondary-button" to={"/profiles/"+profileId+"?tab=analytics"}>Abrir informes con auditoría (PDF/CSV)</Link>}</> :
           <button disabled={!ready || !measurements.data?.items.length} onClick={exportCsv}>Exportar registros visibles (CSV)</button>}
-        <button disabled={!ready} onClick={()=>window.print()}>Imprimir vista previa</button>
+        {!privateAuthEnabled() && <button disabled={!ready} onClick={()=>window.print()}>Imprimir vista previa</button>}
       </div>
     </section>
     <section className="enterprise-panel enterprise-report-preview">
