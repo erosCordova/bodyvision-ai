@@ -1,10 +1,20 @@
-# BODYVISION AI — Núcleo ficticio y desarrollo privado F3
+# BODYVISION AI — Plataforma de análisis corporal 3D
+
+## Aplicación web y arquitectura tecnológica
+
+- [Entorno de pruebas con registro e inicio de sesión](https://bodyvision-ai-pruebas.onrender.com/access): expedientes ficticios aislados, mediciones editables, imágenes temporales cifradas y análisis local de pose.
+- [Demostración pública de solo lectura](https://bodyvision-ai-interfaz.onrender.com).
+- [Tecnologías y APIs implementadas](docs/architecture/TECHNOLOGIES_AND_APIS.md).
+
+El registro alojado es exclusivamente sintético, sin verificación de propiedad del correo ni habilitación clínica. Las funciones privadas local/test mantienen sus propios controles. No se autoriza el uso de datos reales.
+
+## Desarrollo privado y local
 
 La rama de identidad añade administración de cuentas, consentimientos, permisos,
 cambio de contraseña propia, cierre de sesiones y auditoría encadenada verificable.
 Es una modalidad optativa de desarrollo/CI, distinta de la demostración pública.
 Su configuración y límites están en [fundación de identidad F3](docs/phase3_identity_foundation.md).
-No hay cuentas públicas ni habilitación de datos reales. El responsable ficticio
+La modalidad privada local/test no admite cuentas públicas ni datos reales. El responsable ficticio
 de privacidad gestiona solicitudes y revocación de consentimientos con MFA y
 permisos explícitos, sin acceso clínico. Su alcance está en
 [privacidad y mínimo dato](docs/qa/PHASE_3_PRIVACY_OFFICER.md). MFA TOTP y recuperación
@@ -48,7 +58,7 @@ git pull --ff-only
 Sustituye la ruta por la de tu carpeta real. Si `git pull --ff-only` falla
 o ves cambios propios en `git status`, conserva todo y revisa antes de
 modificarlo; nunca uses `git reset --hard` para forzar la actualizacion.
-La rama de este iniciador es `feature/phase3-auth-security`, no `main`.
+El iniciador se conserva en `main`; actualiza únicamente la rama de tu instalación.
 Este proceso no se conecta a Neon ni habilita usuarios reales.
 
 ## Inicio desde cero (Git Bash, macOS o Linux)
@@ -76,7 +86,7 @@ docker compose down
 
 Las pruebas Docker usan `db-test` y una red interna separada; no ejecutan migraciones ni limpiezas sobre la base de la aplicación. Su almacenamiento temporal se descarta al detener `db-test`. Consulta [aislamiento y verificación de conservación](docs/operations/LOCAL_TEST_DATABASE_ISOLATION.md).
 
-`down` conserva los datos. **No uses `down -v` salvo que quieras destruir la base local.** No hay registro público. Las cuentas ficticias de las pruebas privadas se preparan solo en CI descartable; esta receta no abre el login privado.
+`down` conserva los datos. **No uses `down -v` salvo que quieras destruir la base local.** Esta receta local no habilita registro público. Las cuentas ficticias de las pruebas privadas se preparan solo en CI descartable; esta receta no abre el login privado.
 
 ## Desarrollo nativo (alternativa)
 
