@@ -87,6 +87,22 @@ describe("Synthetic data core", () => {
     );
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeVisible();
   });
+  it("accepts canonical historical PostgreSQL UUIDs without RFC variant bits", () => {
+    const fixture = {
+      id: "30000000-0000-0000-0000-000000000001",
+      organization_id: "10000000-0000-4000-8000-000000000001",
+      display_code: "FICT-01", display_name: null, birth_year: 1990,
+      sex: null, status: "active", created_at: "2026-01-01T00:00:00Z",
+      synthetic: true,
+    };
+    expect(profileSchema.safeParse(fixture).success).toBe(true);
+    expect(profileSchema.safeParse({ ...fixture, id: "not-an-id" }).success).toBe(false);
+  });
+  it("distinguishes invalid successful responses from network failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ invalid: true }))));
+    await expect(dataRequest("workspace", "/test", z.object({ required: z.string() })))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
   it("does not accept a simulated profile contract as genuine data", () => {
     expect(
       profileSchema.safeParse({ id: "fake", status: "active" }).success,
