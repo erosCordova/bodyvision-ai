@@ -68,6 +68,7 @@ def upgrade() -> None:
             JOIN public.users u ON u.organization_id=o.id AND u.id=actor
             WHERE p.id=subject AND p.organization_id=tenant AND p.status='active'
               AND o.synthetic AND u.account_status='active' AND NOT u.is_local_operator
+              AND p.birth_year <= extract(year FROM now() AT TIME ZONE 'America/Lima')-19
               AND EXISTS (SELECT 1 FROM public.profile_access a
                 WHERE a.organization_id=tenant AND a.profile_id=subject AND a.user_id=actor
                   AND a.access_level IN ('write','manage')
@@ -162,17 +163,17 @@ def upgrade() -> None:
         CREATE FUNCTION public.finish_server_pose(job uuid,token uuid,output jsonb,problem text)
           RETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER
           SET search_path=pg_catalog,public,pg_temp AS $$
-        DECLARE changed uuid;
+        DECLARE changed uuid; entry public.server_pose_jobs%ROWTYPE;
         BEGIN
           IF (output IS NULL)=(problem IS NULL) THEN
             RAISE EXCEPTION 'Exactly one pose outcome required' USING ERRCODE='22023';
           END IF;
           IF output IS NOT NULL AND (jsonb_typeof(output)<>'object'
-            OR NOT output ?& ARRAY['detected','visible_points','model_sha256','model_revision']
+            OR NOT (output ?& ARRAY['detected','visible_points','model_sha256','model_revision'])
             OR (output-ARRAY['detected','visible_points','model_sha256','model_revision'])<>'{}'
-            OR output->>'model_sha256'<>
+            OR output->>'model_sha256' IS DISTINCT FROM
               '59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a'
-            OR output->>'model_revision'<>'pose_landmarker_lite/float16/1'
+            OR output->>'model_revision' IS DISTINCT FROM'pose_landmarker_lite/float16/1'
             OR jsonb_typeof(output->'detected')<>'boolean'
             OR jsonb_typeof(output->'visible_points')<>'number'
             OR (output->>'visible_points') !~ '^([0-9]|[12][0-9]|3[0-3])$'
@@ -181,6 +182,15 @@ def upgrade() -> None:
           IF problem IS NOT NULL AND problem NOT IN
             ('MODEL_UNAVAILABLE','INFERENCE_FAILED','CAPTURE_INVALID','CONSENT_REQUIRED','TIMEOUT')
           THEN RAISE EXCEPTION 'Invalid pose failure' USING ERRCODE='22023'; END IF;
+          IF output IS NOT NULL THEN
+            SELECT * INTO entry FROM public.server_pose_jobs j WHERE j.id=job
+              AND j.status='processing' AND j.lease_token=token;
+            IF NOT FOUND OR NOT public.server_pose_authorized(
+              entry.organization_id,entry.profile_id,entry.requested_by) THEN RETURN false; END IF;
+            PERFORM 1 FROM public.synthetic_capture_objects c WHERE c.id=entry.capture_id
+              AND c.expires_at>clock_timestamp() FOR SHARE OF c;
+            IF NOT FOUND THEN RETURN false; END IF;
+          END IF;
           UPDATE public.server_pose_jobs j SET
             status=CASE WHEN output IS NOT NULL THEN 'needs_review'
               WHEN problem IN ('INFERENCE_FAILED','TIMEOUT') AND attempts<3 THEN 'queued'
