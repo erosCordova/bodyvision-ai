@@ -216,7 +216,7 @@ def upgrade() -> None:
               FROM public.server_pose_jobs j WHERE j.id=changed;
           END IF;
           RETURN changed IS NOT NULL;
-        END $;
+        END $$;
 
         CREATE FUNCTION public.review_server_pose(
           job uuid,decision text,event_id uuid,correlation uuid
