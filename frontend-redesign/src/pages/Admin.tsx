@@ -67,6 +67,10 @@ const TEMPLATES = [
   ["Consentimientos del paciente","Estado de solicitudes vinculadas al expediente."],
 ];
 export function Reportes(){
+  const {patient}=useStore();
+  return <PatientReports key={patient.id}/>;
+}
+function PatientReports(){
   const {toast,mediciones,patient,consents,reports,setReports}=useStore();
   const [open,setOpen]=useState(false);
   const [tpl,setTpl]=useState(TEMPLATES[0][0]);
@@ -96,6 +100,7 @@ const INTEGR = [["API FastAPI (Python)", "Operativa", "42 ms"], ["PostgreSQL", "
 const AUDIT = ["Dr. Martínez inició sesión", "Se exportó mediciones.csv", "Consentimiento revocado · Sergio Vidal", "Nuevo expediente creado", "Reporte generado · Resumen de cohorte"];
 
 export function Administracion() {
+  const {patients}=useStore();
   const [tab, setTab] = useState<"u" | "s" | "i" | "a">("u");
   const [sec, setSec] = useState({ twofa: true, ip: false, enc: true, timeout: true, audit: true });
   return (
@@ -104,7 +109,7 @@ export function Administracion() {
       {tab === "u" && (
         <Panel pad={false}><table className="w-full text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Usuario</th><th>Rol</th><th>Estado</th></tr></thead><tbody>
           {USERS.map(([n, r, s]) => <tr key={n} className="border-t border-white/5 [&>td]:px-4 [&>td]:py-3"><td><div className="flex items-center gap-3"><Avatar name={n} size={32} /><span className="font-medium text-white">{n}</span></div></td><td className="text-slate-300">{r}</td><td><Badge tone={s === "Activo" ? "ok" : "warn"}>{s}</Badge></td></tr>)}
-        </tbody></table><div className="border-t border-white/5 p-3 text-xs text-slate-500">{PATIENTS.length} expedientes asociados a esta organización.</div></Panel>
+        </tbody></table><div className="border-t border-white/5 p-3 text-xs text-slate-500">{patients.length} expedientes asociados a esta organización.</div></Panel>
       )}
       {tab === "s" && (
         <Panel><div className="divide-y divide-white/5">

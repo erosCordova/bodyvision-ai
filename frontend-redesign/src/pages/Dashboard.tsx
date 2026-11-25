@@ -2,28 +2,25 @@ import { useNavigate } from "react-router-dom";
 import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Activity, ArrowRight, CheckCircle2, ClipboardList, FilePlus2, Ruler, Sparkles, Target } from "lucide-react";
 import { Avatar, Badge, Btn, Panel, chartTip, estadoTone } from "../ui";
-import { bodyParams, historial, imcOf, useStore } from "../store";
+import { bodyParams, imcOf, useStore } from "../store";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
 
-const STATS = [
-  { icon: ClipboardList, value: "247", label: "Expedientes Activos", c: "text-cyan-300 bg-cyan-400/10 border-cyan-400/30" },
-  { icon: Ruler, value: "1,428", label: "Mediciones", c: "text-emerald-300 bg-emerald-400/10 border-emerald-400/30" },
-  { icon: Sparkles, value: "892", label: "Análisis IA", c: "text-violet-300 bg-violet-400/10 border-violet-400/30" },
-  { icon: Target, value: "98.7%", label: "Precisión", c: "text-amber-300 bg-amber-400/10 border-amber-400/30" },
-];
-
-const ACT = [
-  { i: CheckCircle2, t: "Nuevo análisis completado", s: "Hace 2 min", c: "text-sky-300 bg-sky-400/15" },
-  { i: Ruler, t: "Medición registrada", s: "Hace 5 min", c: "text-emerald-300 bg-emerald-400/15" },
-  { i: FilePlus2, t: "Expediente actualizado", s: "Hace 10 min", c: "text-amber-300 bg-amber-400/15" },
-  { i: Activity, t: "Simulación de cambios generada", s: "Hace 24 min", c: "text-violet-300 bg-violet-400/15" },
-];
-
 export default function Dashboard() {
   const nav = useNavigate();
-  const { patient, patients, user } = useStore();
-  const data = historial(patient);
+  const { patient, patients, user, mediciones, reports, consents, select } = useStore();
+  const data = [{mes:"Inicial",peso:patient.peso,imc:imcOf(patient.peso,patient.altura),grasa:patient.grasa},...mediciones.filter(m=>m.patientId===patient.id).slice().reverse().map((m,i)=>({mes:"M"+(i+1),peso:m.peso,imc:imcOf(m.peso,patient.altura),grasa:m.grasa}))];
+  const STATS=[
+    {icon:ClipboardList,value:String(patients.filter(p=>p.estado!=="Alta").length),label:"Expedientes activos",c:"text-cyan-300 bg-cyan-400/10 border-cyan-400/30"},
+    {icon:Ruler,value:String(mediciones.length),label:"Mediciones",c:"text-emerald-300 bg-emerald-400/10 border-emerald-400/30"},
+    {icon:Sparkles,value:String(reports.length),label:"Reportes",c:"text-violet-300 bg-violet-400/10 border-violet-400/30"},
+    {icon:Target,value:String(consents.filter(c=>c.estado==="Pendiente").length),label:"Consentimientos pendientes",c:"text-amber-300 bg-amber-400/10 border-amber-400/30"},
+  ];
+  const ACT=[
+    ...reports.slice(0,2).map(r=>({i:FilePlus2,t:r.title,s:r.date,c:"text-sky-300 bg-sky-400/15"})),
+    ...mediciones.slice(0,2).map(m=>({i:Ruler,t:"Medición · "+m.paciente,s:m.fecha,c:"text-emerald-300 bg-emerald-400/15"})),
+    ...patients.filter(p=>p.ultima==="Ahora").slice(0,2).map(p=>({i:CheckCircle2,t:"Expediente actualizado · "+p.nombre,s:p.ultima,c:"text-amber-300 bg-amber-400/15"})),
+  ].slice(0,4);
   const { fat, mus } = bodyParams(patient);
   const magra = +(100 - patient.grasa).toFixed(1);
   const pie = [
@@ -114,6 +111,7 @@ export default function Dashboard() {
 
         <Panel title="Actividad Reciente" className="xl:col-span-5" action={<button onClick={() => nav("/app/analitica")} className="text-xs text-cyan-300 hover:underline">Ver todas →</button>}>
           <ul className="space-y-3">
+            {!ACT.length&&<li className="py-4 text-center text-sm text-slate-400">Sin registros recientes</li>}
             {ACT.map((a) => (
               <li key={a.t} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3">
                 <span className={`grid h-9 w-9 place-items-center rounded-lg ${a.c}`}>
@@ -139,7 +137,7 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {patients.slice(0, 5).map((p) => (
-                  <tr key={p.id} onClick={() => nav(`/app/expedientes/${p.id}`)} className="cursor-pointer border-t border-white/5 hover:bg-white/[0.03]">
+                  <tr key={p.id} onClick={() => {select(p.id);nav(`/app/expedientes/${p.id}`);}} className="cursor-pointer border-t border-white/5 hover:bg-white/[0.03]">
                     <td className="py-2.5">
                       <div className="flex items-center gap-3">
                         <Avatar name={p.nombre} size={32} photo={p.foto} />
