@@ -840,3 +840,35 @@
   .dashboard-preview-note { grid-template-columns: 1fr; }
   .dashboard-preview-note > small { grid-column: auto; }
 }
+
+
+/* Dashboard layout and surfaces adapted from the supplied BodyVision redesign.
+   Existing data, access controls and anatomy viewer are deliberately retained. */
+.dashboard-redesign .enterprise-panel,
+.dashboard-redesign .enterprise-kpi {
+  background: linear-gradient(180deg, rgba(15,32,56,.85), rgba(8,19,36,.92));
+  border: 1px solid rgba(56,130,190,.22);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.35), 0 12px 40px -18px rgba(0,0,0,.8);
+}
+.dashboard-redesign .dashboard-main-grid { align-items: start; gap: 20px; }
+.dashboard-redesign .dashboard-redesign-secondary { display: grid; gap: 20px; margin-top: 20px; grid-template-columns: minmax(0,5fr) minmax(0,7fr); }
+.dashboard-redesign .dashboard-redesign-secondary > * { min-width: 0; margin-top: 0; }
+.dashboard-redesign .dashboard-redesign-profiles .enterprise-panel-title { padding: 18px 20px 13px; }
+.dashboard-redesign .dashboard-redesign-profiles .enterprise-activity-list { padding-bottom: 12px; }
+@media (min-width: 1321px) {
+  .dashboard-redesign .dashboard-main-grid { grid-template-columns: minmax(0,5fr) minmax(0,3fr) minmax(0,4fr); }
+  .dashboard-redesign .dashboard-hero { grid-row: auto; grid-column: auto; }
+  .dashboard-redesign .dashboard-composition { grid-column: auto; }
+}
+@media (min-width: 901px) and (max-width: 1320px) {
+  .dashboard-redesign .dashboard-main-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .dashboard-redesign .dashboard-hero { grid-column: 1; grid-row: 1 / span 2; }
+  .dashboard-redesign .dashboard-evolution { grid-column: 2; grid-row: 1; }
+  .dashboard-redesign .dashboard-composition { grid-column: 2; grid-row: 2; }
+}
+@media (max-width: 900px) {
+  .dashboard-redesign .dashboard-redesign-secondary { grid-template-columns: minmax(0,1fr); gap: 14px; }
+  .dashboard-redesign .dashboard-main-grid { gap: 14px; }
+  .dashboard-redesign .dashboard-hero { grid-row: 1; }
+}

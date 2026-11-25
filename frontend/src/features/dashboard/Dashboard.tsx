@@ -220,9 +220,9 @@ export function Dashboard() {
     : weight || height ? "Representación ilustrativa ajustada con peso y estatura registrados."
     : "Sin peso ni estatura registrados; se muestra el modelo anatómico de referencia.";
 
-  return <div className="enterprise-dashboard product-dashboard">
+  return <div className="enterprise-dashboard product-dashboard dashboard-redesign">
     <header className="enterprise-page-head product-heading">
-      <div><h1>Dashboard</h1><p>Actividad, evolución y visualización corporal</p></div>
+      <div><h1>Dashboard</h1><p>Tu plataforma de análisis corporal inteligente</p></div>
       <Link className="primary-button" to={readOnly ? "/profiles" : "/profiles?new=1"}>
         <Icon name={readOnly ? "folder" : "plus"} size={17} />{readOnly ? "Ver expedientes" : "Nuevo expediente"}
       </Link>
@@ -269,6 +269,7 @@ export function Dashboard() {
     </section>
 
     <div className="dashboard-main-grid">
+      <DashboardEvolution profileId={profileId} profile={selectedProfile} initiallyOpen />
       <section className="enterprise-panel enterprise-anatomy-promo product-hero dashboard-hero" aria-label="Exploración anatómica">
         <div className="product-hero-head">
           <div><h2>Visión corporal 3D</h2><p>Modelo anatómico interactivo</p></div>
@@ -290,7 +291,6 @@ export function Dashboard() {
         </div>
       </section>
 
-      <DashboardEvolution profileId={profileId} profile={selectedProfile} initiallyOpen />
       <DashboardComposition
         profileId={profileId}
         measurements={bodyMeasurements}
@@ -300,6 +300,7 @@ export function Dashboard() {
       />
     </div>
 
+    <div className="dashboard-redesign-secondary">
     <section className="enterprise-panel enterprise-recent dashboard-activity" aria-label="Actividad reciente">
       <div className="enterprise-panel-title"><h2>Actividad reciente</h2><Link to="/measurements">Ver mediciones <Icon name="arrow-right" size={13} /></Link></div>
       {query.isPending ? <LoadingState /> : query.isError ? <p className="enterprise-hint">Actividad no disponible.</p> :
@@ -311,5 +312,17 @@ export function Dashboard() {
           </Link>)}
         </div> : <EmptyState text="Aún no hay mediciones recientes." />}
     </section>
+      <section className="enterprise-panel enterprise-recent dashboard-redesign-profiles" aria-label="Expedientes recientes">
+        <div className="enterprise-panel-title"><h2>Expedientes recientes</h2><Link to="/profiles">Ver todos <Icon name="arrow-right" size={13} /></Link></div>
+        {query.isPending ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> :
+          data?.recent_profiles?.length ? <div className="enterprise-activity-list">
+            {data.recent_profiles.slice(0, 5).map(row => <Link key={row.id} to={"/profiles/" + row.id} className="enterprise-activity-item">
+              <span aria-hidden="true"><Icon name="folder" size={16} /></span>
+              <div><strong>{row.display_code}</strong><small>{row.status === "active" ? "Activo" : row.status === "restricted" ? "Restringido" : "Archivado"}</small></div>
+              <time>{dateTime(row.created_at)}</time>
+            </Link>)}
+          </div> : <EmptyState text="No hay expedientes recientes disponibles." />}
+      </section>
+    </div>
   </div>;
 }
