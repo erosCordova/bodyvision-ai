@@ -1,7 +1,0 @@
-export { AnatomyViewer } from './AnatomyViewer'
-export type { AnatomyPin, AnatomyViewerProps } from './AnatomyViewer'
-export { AnatomyModel, DEFAULT_LAYERS, preloadAnatomy } from './AnatomyModel'
-export type { AnatomyModelProps, LayerVisibility, ProjectedAnchor } from './AnatomyModel'
-export { CalloutOverlay } from './CalloutOverlay'
-export type { Callout, CalloutOverlayHandle } from './CalloutOverlay'
-export { RotateArcControl } from './RotateArcControl'

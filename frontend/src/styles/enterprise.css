@@ -293,11 +293,6 @@
 .enterprise-realbody-loading { display: grid; place-items: center; color: var(--text-2); font-size: 12px; }
 .atlas-credit { position: absolute; z-index: 3; bottom: 11px; left: 16px; right: 16px; text-align: center; color: var(--text-3); font-size: 9px; letter-spacing: 0.02em; }
 .atlas-credit a { text-decoration: underline; text-underline-offset: 3px; color: var(--text-2); }
-.atlas-attribution { left: 12px; right: auto; bottom: 8px; width: min(420px, calc(100% - 24px)); text-align: left; pointer-events: auto; letter-spacing: normal; }
-.atlas-attribution summary { display: inline-block; padding: 5px 9px; color: #b8eaff; background: rgba(9, 20, 36, 0.82); border: 1px solid rgba(98, 196, 232, 0.28); border-radius: 8px; cursor: pointer; }
-.atlas-attribution[open] { padding: 8px 10px; border: 1px solid rgba(98, 196, 232, 0.24); border-radius: 10px; background: rgba(8, 19, 34, 0.96); line-height: 1.45; }
-.atlas-attribution p { margin: 7px 0; }
-.atlas-attribution a { color: #9fe4ff; }
 .atlas-layer-controls { position: absolute; top: 14px; left: 14px; right: 14px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .atlas-view-controls { position: absolute; bottom: 44px; right: 14px; z-index: 3; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .product-atlas .atlas-layer-controls button, .product-atlas .atlas-view-controls button {
@@ -314,41 +309,6 @@
   backdrop-filter: blur(8px); transition: all var(--t-fast);
 }
 .dashboard-animation-toggle:hover { border-color: var(--cyan); background: rgba(58, 226, 251, 0.14); }
-
-/* BodyVision presentation of the upstream Open Anatomy React viewer. */
-.dashboard-hologram .bv-open-anatomy-viewer.oa3d-viewer {
-  --oa3d-accent: #32d8f4; --oa3d-accent-deep: #1296bf; --oa3d-on-accent: #061827;
-  --oa3d-surface: rgba(13, 29, 48, 0.96); --oa3d-surface-sunken: rgba(7, 18, 32, 0.88);
-  --oa3d-border: rgba(105, 200, 236, 0.28); --oa3d-text: #dff7ff; --oa3d-text-muted: #a5c8da;
-  --oa3d-shadow: rgba(0, 5, 14, 0.6); --oa3d-radius: 0;
-  position: absolute; inset: 0; z-index: 1; display: block; width: auto; height: auto;
-  color: #dff7ff; pointer-events: none;
-}
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-canvas {
-  position: absolute; inset: 0 0 34px; width: auto; height: auto; min-height: 0; aspect-ratio: auto;
-  border-radius: 0; overflow: visible; background: transparent; pointer-events: auto;
-}
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-canvas canvas { touch-action: pan-y; }
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-zoom,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-reset {
-  bottom: 42px; color: #dff7ff; background: rgba(8, 21, 37, 0.9); border: 1px solid rgba(105, 200, 236, 0.34);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24); pointer-events: auto;
-}
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-hover-tag {
-  top: 60px; background: rgba(7, 22, 39, 0.9); color: #dff7ff; border: 1px solid rgba(105, 200, 236, 0.3);
-}
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-skin,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-muscles,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-skeleton,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-joints,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-organs,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-vessels,
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-swatch-nerves { background: #63e4ff; }
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-callout-card {
-  color: #dff7ff; background: rgba(7, 20, 36, 0.96); border-color: rgba(105, 200, 236, 0.55);
-  box-shadow: 0 8px 24px rgba(0, 6, 15, 0.4); pointer-events: auto;
-}
-.dashboard-hologram .bv-open-anatomy-viewer .oa3d-callout-subtitle { color: #9fdaf0; }
 
 /* Metric tiles on dashboard */
 .product-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
