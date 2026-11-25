@@ -258,10 +258,10 @@ export function Dashboard() {
       <section className="enterprise-panel enterprise-anatomy-promo product-hero dashboard-hero" aria-label="Exploración anatómica">
         <div className="product-hero-head">
           <div><h2>Visión corporal 3D</h2><p>Modelo anatómico interactivo</p></div>
-          <span className="product-live-label">ATLAS 3D</span>
+          <span className="product-live-label">ANATOMY 3D</span>
         </div>
         <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
-          <DashboardBodyPreview bodyWeightKg={weight?.value} statureCm={height?.value} />
+          <DashboardBodyPreview bodyWeightKg={weight?.value} statureCm={height?.value} sex={selectedProfile?.sex} />
         </Suspense>
         <div className="dashboard-preview-note" aria-live="polite">
           {weight && <span>Peso registrado: {measurementText(weight)}</span>}
