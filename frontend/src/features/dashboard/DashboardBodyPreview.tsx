@@ -8,8 +8,8 @@ import { bodyVisualScenario, DEFAULT_REFERENCE_KG } from "../viewer/bodyVolume";
 import { BASELINE_HEIGHT_CM, heightScale } from "../viewer/bodyStature";
 
 const MODEL_URLS = {
-  male: "https://cdn.jsdelivr.net/npm/open-anatomy-3d@0.1.0/models/anatomy-male.glb",
-  female: "https://cdn.jsdelivr.net/npm/open-anatomy-3d@0.1.0/models/anatomy-female.glb",
+  male: "/models/anatomy-male.glb",
+  female: "/models/anatomy-female.glb",
 } as const;
 
 const SYSTEMS = [
@@ -83,6 +83,7 @@ export function DashboardBodyPreview({ bodyWeightKg, statureCm, sex }: Anthropom
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const anthropometryRef = useRef({ bodyWeightKg, statureCm });
   const modelSex = modelSexFromProfile(sex);
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export function DashboardBodyPreview({ bodyWeightKg, statureCm, sex }: Anthropom
   }, [visibleSystems]);
 
   useEffect(() => {
+    anthropometryRef.current = { bodyWeightKg, statureCm };
     controller.current?.setAnthropometry(bodyWeightKg, statureCm);
   }, [bodyWeightKg, statureCm]);
 
@@ -264,9 +266,10 @@ export function DashboardBodyPreview({ bodyWeightKg, statureCm, sex }: Anthropom
         group.visible = systemsRef.current[system.id];
       }
       originalMaterials.forEach(material => material.dispose());
+      const currentAnthropometry = anthropometryRef.current;
       scene.add(modelRoot);
-      applyAnthropometry(bodyWeightKg, statureCm);
-      controls.target.set(0, 0.9 * heightScale(statureCm ?? BASELINE_HEIGHT_CM), 0);
+      applyAnthropometry(currentAnthropometry.bodyWeightKg, currentAnthropometry.statureCm);
+      controls.target.set(0, 0.9 * heightScale(currentAnthropometry.statureCm ?? BASELINE_HEIGHT_CM), 0);
       controls.update();
       renderer.render(scene, camera);
       setReady(true);
