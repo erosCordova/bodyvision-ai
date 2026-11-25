@@ -18,7 +18,7 @@ import "./pose-review.css";
 
 type PoseState = "idle" | "running" | "ready" | "failed";
 
-export function PoseReview({ file, review, autoRun=false }: { file: File; review: CaptureReview; autoRun?:boolean }) {
+export function PoseReview({ file, review, autoRun=false, fixedProfileId }: { file: File; review: CaptureReview; autoRun?:boolean; fixedProfileId?:string }) {
   const alive = useRef(true);
   const requestSequence = useRef(0);
   // Prevent repeated taps from allocating overlapping MediaPipe input sessions.
@@ -334,7 +334,7 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
         <label><input type="checkbox" checked={showConnections}
           onChange={event => setShowConnections(event.target.checked)}/> Mostrar conexiones</label>
       </div>}
-      {privateAuthEnabled() && <PoseSummaryArchive runSerial={analysisSerial}
+      {privateAuthEnabled() && <PoseSummaryArchive fixedProfileId={fixedProfileId} runSerial={analysisSerial}
         summary={state === "ready" && estimate && quality ? {
           model_revision: POSE_MODEL_VERSION, detected: estimate.found,
           threshold: visibilityThreshold, visible_points: quality.visiblePoints,

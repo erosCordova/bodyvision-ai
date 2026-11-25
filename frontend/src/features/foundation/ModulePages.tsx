@@ -52,6 +52,8 @@ export function MeasurementsPage() {
 }
 
 export function CapturePage() {
+  const location=useLocation();
+  const scopedId=new URLSearchParams(location.search).get("profile")??"";
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraStream = useRef<MediaStream | null>(null);
   const cameraRequest = useRef(0);
@@ -270,12 +272,13 @@ export function CapturePage() {
         <Limitation>Solo imágenes ficticias. No apto para uso clínico.</Limitation>
       </aside>
     </div>
-    {sandboxAuthEnabled() && <SandboxCaptureLibrary file={file} allowUpload={Boolean(consent && file && review && !isReviewing)} />}
+    {sandboxAuthEnabled() && <SandboxCaptureLibrary fixedProfileId={scopedId||undefined} file={file} allowUpload={Boolean(consent && file && review && !isReviewing)} />}
   </div>;
 }
 
 export function AnalysisPage() {
   const location = useLocation();
+  const scopedId=new URLSearchParams(location.search).get("profile")??"";
   const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis());
   useEffect(() => { discardStagedCapture(); }, []);
   const state = location.state as { localCaptureReview?: CaptureReview } | null;
@@ -314,21 +317,21 @@ export function AnalysisPage() {
     <div className="enterprise-module-columns enterprise-analysis-layout">
       <section className="enterprise-panel enterprise-module-main">
         <div className="enterprise-panel-title"><h2>Revisión visual de postura</h2><span>{localCapture ? "CAPTURA SELECCIONADA" : "REFERENCIA VISUAL"}</span></div>
-        {localReview && <div className="enterprise-quality-review enterprise-review-handoff" role="region" aria-label="Control de calidad recibido">
+        {localReview && <details className="enterprise-quality-review enterprise-review-handoff" aria-label="Control de calidad recibido"><summary>Calidad de la captura</summary>
           <h3>Control técnico de la captura</h3>
           <p>{localReview.width} × {localReview.height} px · {localReview.checks.filter(item => item.passed).length} de 4 criterios cumplidos.</p>
           <ul>{localReview.checks.map(check => <li key={check.id}>
             <strong>{check.passed ? "✓" : "!"} {check.label}</strong><span>{check.detail}</span>
           </li>)}</ul>
           <p className="enterprise-hint">Análisis local. Guarda solo imágenes ficticias autorizadas.</p>
-        </div>}
+        </details>}
         {localCapture && <>
-          <PoseReview file={localCapture.file} review={localCapture.review} autoRun={sandboxAuthEnabled()} />
+          <PoseReview file={localCapture.file} review={localCapture.review} autoRun={sandboxAuthEnabled()} fixedProfileId={scopedId||undefined} />
           <button type="button" className="secondary-button" onClick={() => { generation.current+=1; setLocalCapture(null); setDiscarded(true); setDirectConsent(false); }}>
             Descartar fotografía del análisis
           </button>
         </>}
-        {sandboxAuthEnabled() && <SandboxCaptureLibrary file={localCapture?.file??null} allowUpload={Boolean(localCapture?.review)} onAnalyze={async (file,review)=>{generation.current+=1;setLocalCapture({file,review});setDiscarded(false);setDirectPending(false);setDirectError("");}}/>}
+        {sandboxAuthEnabled() && <SandboxCaptureLibrary fixedProfileId={scopedId||undefined} file={localCapture?.file??null} allowUpload={Boolean(localCapture?.review)} onAnalyze={async (file,review)=>{generation.current+=1;setLocalCapture({file,review});setDiscarded(false);setDirectPending(false);setDirectError("");}}/>}
         {!localCapture && <div className="enterprise-quality-review">
           <h3>Seleccionar imagen para análisis</h3>
           <label className="enterprise-consent"><input type="checkbox" checked={directConsent} onChange={event=>{
@@ -353,10 +356,11 @@ export function AnalysisPage() {
             </svg>
             <span>ILUSTRACIÓN · SIN DATOS DE PERSONAS</span>
           </div>
-          <div><p className="enterprise-hint">Prepara una captura para detectar puntos corporales.</p><Link className="primary-button" to="/capture">Preparar captura ↗</Link></div>
+          <div><p className="enterprise-hint">Prepara una captura para detectar puntos corporales.</p><Link className="primary-button" to={"/capture"+location.search}>Preparar captura ↗</Link></div>
         </div>}
       </section>
       <aside className="enterprise-panel enterprise-module-side">
+        {scopedId&&<div className="bv-context-actions"><Link to={"/body-3d?panel=grasa&profile="+scopedId}>Abrir visor 3D</Link><Link to={"/profiles/"+scopedId+"?tab=images"}>Volver a imágenes</Link></div>}
         <details><summary>Etapas del análisis</summary>
         <div className="enterprise-stage-list">{stages.map((stage,index)=><div key={stage.name}><span>{String(index+1).padStart(2,"0")}</span><div><strong>{stage.name}</strong><p>{stage.detail}</p><small>{stage.status}</small></div></div>)}</div>
         </details><Limitation>La IA detecta pose, no grasa corporal.</Limitation>

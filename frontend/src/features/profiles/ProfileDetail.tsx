@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Icon, type IconName } from "../../components/ui/Icon";
 import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { type Measurement } from "../../services/api/records";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
@@ -25,14 +26,15 @@ const HistoryChart = lazy(() =>
     default: module.HistoryChart,
   })),
 );
+const HistoricalBodyComparison=lazy(()=>import("../viewer/HistoricalBodyComparison").then(m=>({default:m.HistoricalBodyComparison})));
 export function ProfileDetail() {
   const { profileId = "" } = useParams();
   const { id, api, readOnly } = useWorkspace();
   const cache = useQueryClient();
-  const [tab, setTab] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get("tab");
-    return requested === "measurements" || requested === "analytics" || (requested==="images" && sandboxAuthEnabled()) ? requested : "summary";
-  });
+  const [params,setParams]=useSearchParams();
+  const requested=params.get("tab");
+  const tab=requested==="measurements"||requested==="analytics"||(requested==="images"&&sandboxAuthEnabled())||(requested==="pose"&&privateAuthEnabled())?requested:"summary";
+  const setTab=(next:string)=>setParams(previous=>{const result=new URLSearchParams(previous);if(next==="summary")result.delete("tab");else result.set("tab",next);return result;},{replace:true});
   const [metric, setMetric] = useState(()=>new URLSearchParams(window.location.search).get("metric")==="body_fat_pct"?"body_fat_pct":"weight");
   const [period, setPeriod] = useState("90d");
   const [startDate, setStartDate] = useState("");
@@ -42,6 +44,7 @@ export function ProfileDetail() {
   const periodKey = period === "custom" ? `custom-${startDate}-${endDate}` : period;
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<Measurement | "new" | null>(null);
+  const [formMetric,setFormMetric]=useState<string|undefined>(undefined);
   const [versionId, setVersionId] = useState<string | null>(null);
   const [versionOffset, setVersionOffset] = useState(0);
   const [notice, setNotice] = useState("");
@@ -52,6 +55,11 @@ export function ProfileDetail() {
     queryFn: () => api.profile(profileId),
   });
   const catalog = useQuery({ queryKey: ["catalog", id], queryFn: api.catalog });
+  const w=useQuery({queryKey:["measurements",id,profileId,"weight",0],queryFn:()=>api.measurements(profileId,"weight",0),enabled:profile.isSuccess&&tab==="summary"});
+  const h=useQuery({queryKey:["measurements",id,profileId,"height",0],queryFn:()=>api.measurements(profileId,"height",0),enabled:profile.isSuccess&&tab==="summary"});
+  const f=useQuery({queryKey:["measurements",id,profileId,"body_fat_pct",0],queryFn:()=>api.measurements(profileId,"body_fat_pct",0),enabled:profile.isSuccess&&tab==="summary"});
+  const latest=(rows:Measurement[]|undefined,code:string,unit:string)=>rows?.filter(r=>r.profile_id===profileId&&r.metric_code===code&&r.unit===unit&&r.is_current&&(code!=="body_fat_pct"||(r.method==="device"&&!!r.instrument?.trim()))).sort((a,b)=>Date.parse(b.measured_at)-Date.parse(a.measured_at))[0];
+  const measures=[{code:"weight",label:"Peso",unit:"kg",row:latest(w.data?.items,"weight","kg"),query:w},{code:"height",label:"Estatura",unit:"cm",row:latest(h.data?.items,"height","cm"),query:h},{code:"body_fat_pct",label:"Grasa corporal",unit:"%",row:latest(f.data?.items,"body_fat_pct","%"),query:f}];
   const measurements = useQuery({
     queryKey: ["measurements", id, profileId, metric, offset],
     queryFn: () => api.measurements(profileId, metric, offset),
@@ -120,46 +128,43 @@ export function ProfileDetail() {
                 : "Archivado"}{" "}
             
           </p>
-          <div className="bv-context-actions">{privateAuthEnabled() && <Link className="back-link" to={`/consents?profile=${profileId}`}>Gestionar consentimientos →</Link>}
-          {sandboxAuthEnabled() && <Link className="back-link" to={`/analysis?profile=${profileId}`}>Analizar imágenes →</Link>}
-          <Link className="back-link" to={`/body-3d?panel=grasa&profile=${profileId}`}>
-            Visor 3D →
-          </Link>
-          <Link className="back-link" to={`/body-3d?panel=simulacion&profile=${profileId}`}>
-            Simular →
-          </Link></div>
+
         </div>
         <button
           className="primary-button"
           disabled={readOnly || current.status !== "active" || !catalog.data}
-          onClick={() => setForm("new")}
+          onClick={() => {setFormMetric(undefined);setForm("new");}}
         >
           + Registrar medición
         </button>
       </div>
       {notice&&<p className="success-notice" role="status" aria-live="polite">{notice}</p>}
-      <nav className="record-tabs" aria-label="Secciones del expediente">
-        {[
-          ["summary", "Resumen"],
-          ["measurements", "Mediciones"],
-          ["analytics", "Evolución"],
-          ...(sandboxAuthEnabled() ? [["images","Imágenes"]] : []),
-          ...(privateAuthEnabled() ? [["pose", "Resultados de pose"]] : []),
-        ].map(([code, label]) => (
-          <button
-            key={code}
-            aria-pressed={tab === code}
-            onClick={() => setTab(code)}
-          >
-            {label}
-          </button>
-        ))}
+      <nav className="record-tabs bv-evaluation-tabs" aria-label="Secciones del expediente">
+        {([
+          ["summary","Resumen","home"],["measurements","Mediciones","ruler"],
+          ...(sandboxAuthEnabled()?[["images","Imágenes","camera"]]:[]),
+          ["analysis","Análisis IA","sparkles"],["viewer","Visor 3D","box"],["analytics","Evolución","pulse"],["simulation","Simulación","layers"],["reports","Reportes","file-text"],
+          ...(privateAuthEnabled()?[["pose","Resultados de pose","scan"]]:[]),
+        ] as [string,string,IconName][]).map(([code,label,icon])=>{
+          const path=code==="analysis"?"/analysis?profile="+profileId:code==="viewer"?"/body-3d?panel=grasa&profile="+profileId:code==="simulation"?"/body-3d?panel=simulacion&profile="+profileId:code==="reports"?"/reports?profile="+profileId:null;
+          return path?<Link key={code} to={path}><Icon name={icon} size={16}/>{label}</Link>:<button key={code} type="button" aria-pressed={tab===code} onClick={()=>setTab(code)}><Icon name={icon} size={16}/>{label}</button>;
+        })}
       </nav>
+
       {tab === "pose" && privateAuthEnabled() && <PoseSummaryArchive key={profileId}
         fixedProfileId={profileId} summary={null} runSerial={0} />}
       {tab === "images" && sandboxAuthEnabled() && <SandboxCaptureLibrary key={profileId} fixedProfileId={profileId} allowUpload={current.status==="active"} />}
       {tab === "summary" && (
         <>
+          <div className="bv-evaluation-summary">
+            <div className="bv-evaluation-metrics">{measures.map(m=><article key={m.code} className="panel bv-measure-card"><div><span>{m.label}</span><Icon name={m.code==="weight"?"activity":m.code==="height"?"ruler":"pulse"} size={19}/></div><strong>{m.query.isPending?"…":m.query.isError?"—":m.row?.value.toLocaleString("es-PE",{maximumFractionDigits:2})??"—"} <small>{m.unit}</small></strong><span>{m.row?dateTime(m.row.measured_at):m.query.isError?"No disponible":"Sin registro"}</span>{m.query.isError?<button type="button" onClick={()=>void m.query.refetch()}>Reintentar</button>:!readOnly&&current.status==="active"&&catalog.data?.some(c=>c.code===m.code)&&<button type="button" onClick={()=>{setFormMetric(m.code);setForm("new");}}>+ Registrar</button>}</article>)}</div>
+            <section className="panel bv-quick-evaluation"><h2>Acciones rápidas</h2><div className="bv-evaluation-action-grid">
+              <button type="button" disabled={readOnly||current.status!=="active"||!catalog.data} onClick={()=>{setFormMetric(undefined);setForm("new");}}><Icon name="ruler" size={21}/><span>Registrar medición</span><Icon name="chevron-right" size={15}/></button>
+              <Link to={sandboxAuthEnabled()?"/profiles/"+profileId+"?tab=images":"/capture?profile="+profileId}><Icon name="camera" size={21}/><span>Añadir imagen</span><Icon name="chevron-right" size={15}/></Link>
+              <Link to={"/body-3d?panel=grasa&profile="+profileId}><Icon name="box" size={21}/><span>Ver cuerpo 3D</span><Icon name="chevron-right" size={15}/></Link>
+              <Link to={"/profiles/"+profileId+"?tab=analytics&metric=body_fat_pct"}><Icon name="pulse" size={21}/><span>Ver evolución</span><Icon name="chevron-right" size={15}/></Link>
+            </div></section>
+          </div>
           <div className="section-title">
             <h2>Composición corporal</h2>
             <DataTypeBadge type="DERIVADO" />
@@ -284,6 +289,7 @@ export function ProfileDetail() {
           </section>
         </>
       )}
+      {tab==="analytics"&&<Suspense fallback={<LoadingState/>}><HistoricalBodyComparison profileId={profileId}/></Suspense>}
       {(tab === "measurements" || tab === "analytics") && (
         <>
           <div className="record-filters">
@@ -465,15 +471,18 @@ export function ProfileDetail() {
           )}
         </>
       )}
-      {privateAuthEnabled() && <ConsentPanel key={profileId} profileId={profileId} />}
+      {privateAuthEnabled() && !sandboxAuthEnabled() && <details className="panel bv-secondary-details"><summary>Consentimiento del expediente</summary><ConsentPanel key={profileId} profileId={profileId} /></details>}
       {form && catalog.data && (
         <MeasurementForm
           profileId={profileId}
           metrics={catalog.data}
           correction={form === "new" ? undefined : form}
+          initialMetricCode={form==="new"?formMetric:undefined}
           onClose={() => setForm(null)}
           onSaved={() => {
             setForm(null);
+            if(formMetric)setMetric(formMetric);
+            setFormMetric(undefined);
             setTab("measurements");
             setNotice(
               "Medición guardada. El historial y los cálculos se han actualizado.",

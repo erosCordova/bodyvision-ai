@@ -29,7 +29,10 @@ export function DataLayout() {
   const location = useLocation();
   const [mobileMenu, setMobileMenu] = useState(false);
   const selectedProfile = location.pathname.match(/^\/profiles\/([^/]+)$/)?.[1] ?? new URLSearchParams(location.search).get("profile") ?? "";
-  const scopedPath = (route: string) => selectedProfile && ["/capture", "/analysis", "/analytics", "/reports", "/body-3d"].includes(route) ? route + "?" + new URLSearchParams({ profile: selectedProfile, ...(route === "/body-3d" ? { panel: "grasa" } : {}) }) : route;
+  const profile=useQuery({queryKey:["profile",id,selectedProfile],queryFn:()=>api.profile(selectedProfile),enabled:!!selectedProfile&&(!protectedMode||!!session)&&session?.role!=="privacy_officer"});
+  const activeProfile=profile.isSuccess&&profile.data.id===selectedProfile?profile.data:null;
+  const profileUrl=activeProfile?"/profiles/"+encodeURIComponent(activeProfile.id):"";
+  const scoped=(route:string,extra:Record<string,string>={})=>route+"?"+new URLSearchParams({profile:selectedProfile,...extra});
   const workspaces = useQuery({
     queryKey: ["workspaces", protectedMode ? session?.organization_id : "demo", protectedMode ? session?.user_id : "demo"],
     queryFn: api.workspaces,
@@ -57,20 +60,25 @@ export function DataLayout() {
           {mobileMenu ? "Cerrar menú" : "Menú"}
         </button>
         <nav id="bv-main-nav" aria-label="Navegación principal">
-          {[
-            { label: "Seguimiento", routes: ["/", "/profiles", "/measurements", "/analytics"] },
-            { label: "Evaluación", routes: ["/capture", "/analysis", "/body-3d", "/reports"] },
-            { label: "Configuración", routes: ["/consents", "/privacy", "/administration"] },
-          ].map(group => {
-            const items = group.routes.map(route => sections.find(s => s.route === route)!).filter(section => privacyOnly ? section.route === "/privacy" : (section.route !== "/privacy" || privateAuthEnabled()) && (section.route !== "/consents" || !sandboxAuthEnabled()));
-            return items.length > 0 && <div className="bv-nav-group" key={group.label}><p className="nav-label">{group.label}</p>{items.map(section =>
-              <NavLink to={scopedPath(section.route)} key={section.route} end={section.route === "/"} onClick={() => setMobileMenu(false)} className={({ isActive }) => isActive ? "active" : undefined}>
-                <span className="enterprise-icon" aria-hidden="true"><Icon name={section.icon} size={18} /></span>
-                <span className="enterprise-nav-label">{section.name}</span>
-                <Icon name="chevron-right" size={15} className="enterprise-nav-caret" />
-              </NavLink>
-            )}</div>;
-          })}
+          {privacyOnly?<NavLink to="/privacy"><Icon name="lock" size={18}/> Privacidad</NavLink>:<>
+            <div className="bv-nav-group"><NavLink to="/" end onClick={()=>setMobileMenu(false)}><Icon name="home" size={18}/> <span>Inicio</span></NavLink>
+            <NavLink to="/profiles" end onClick={()=>setMobileMenu(false)}><Icon name="folder" size={18}/> <span>Expedientes</span></NavLink></div>
+            {activeProfile&&<div className="bv-nav-group bv-record-nav"><p className="nav-label">EXPEDIENTE ACTUAL</p><Link className="bv-record-name" to={profileUrl}><Icon name="user" size={17}/><span>{activeProfile.display_name||activeProfile.display_code}</span></Link>
+              {([
+                ["Resumen",profileUrl,"home"],["Mediciones",profileUrl+"?tab=measurements","ruler"],
+                ["Imágenes",sandboxAuthEnabled()?profileUrl+"?tab=images":scoped("/capture"),"camera"],
+                ["Análisis IA",scoped("/analysis"),"sparkles"],["Visor 3D",scoped("/body-3d",{panel:"grasa"}),"box"],
+                ["Evolución",profileUrl+"?tab=analytics&metric=body_fat_pct","pulse"],
+                ["Simulación",scoped("/body-3d",{panel:"simulacion"}),"layers"],["Reportes",scoped("/reports"),"file-text"],
+              ] as [string,string,IconName][]).map(([label,to,icon])=>{const target=new URL(to,window.location.origin);const currentTab=new URLSearchParams(location.search).get("tab")??"summary";const selected=location.pathname===target.pathname&&(target.pathname===profileUrl?currentTab===(target.searchParams.get("tab")??"summary"):true);return <Link key={label} to={to} className={selected?"active":undefined} aria-current={selected?"page":undefined} onClick={()=>setMobileMenu(false)}><Icon name={icon} size={16}/><span>{label}</span></Link>})}
+            </div>}
+            <div className="bv-nav-group"><p className="nav-label">GENERAL</p>
+              <NavLink to="/body-3d" end onClick={()=>setMobileMenu(false)}><Icon name="box" size={18}/> Atlas 3D</NavLink>
+              <NavLink to="/reports" end onClick={()=>setMobileMenu(false)}><Icon name="file-text" size={18}/> Reportes generales</NavLink>
+              {sections.filter(section=>["/consents","/privacy","/administration"].includes(section.route)&&(section.route!=="/privacy"||privateAuthEnabled())&&(section.route!=="/consents"||!sandboxAuthEnabled())).map(section=><NavLink key={section.route} to={section.route} onClick={()=>setMobileMenu(false)}><Icon name={section.icon} size={18}/>{section.name}</NavLink>)}
+            </div>
+          </>}
+
         </nav>
         <div className="enterprise-sidebar-bottom">
           <div className="enterprise-workspace-hint">
@@ -115,7 +123,7 @@ export function DataLayout() {
         <div className="enterprise-demo-banner" role="note">
           <Icon name="info" size={15} />
           <strong>{readOnly ? "Solo lectura" : "Datos ficticios"}</strong>
-          <span>No introducir datos personales reales.</span>
+          <span>Solo evaluaciones de prueba.</span>
           {workspaces.isError && <button onClick={() => void workspaces.refetch()}>Reintentar conexión</button>}
         </div>
         {protectedMode && session && idleWarning && <div className="enterprise-idle-warning"

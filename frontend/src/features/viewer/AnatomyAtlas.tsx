@@ -663,7 +663,7 @@ export function AnatomyAtlas() {
       captureStage = "handoff";
       stageCaptureForAnalysis(file, review);
       setCaptureBusy(false);
-      navigate("/analysis", { state: { localCaptureReview: review, source: "atlas-synthetic" } });
+      navigate("/analysis"+(fatProfileId?"?profile="+encodeURIComponent(fatProfileId):""), { state: { localCaptureReview: review, source: "atlas-synthetic" } });
     } catch (cause) {
       const code = captureStage === "render" ? "BV-3D-CAPTURE" :
         captureStage === "validate" ? "BV-3D-VALIDATION" : "BV-3D-HANDOFF";
@@ -720,7 +720,7 @@ export function AnatomyAtlas() {
     <div className="studio-root" ref={root}>
       <header className="studio-header">
         <div className="studio-brand">
-          <Link to="/" className="studio-back" title="Volver al resumen">←</Link>
+          <Link to={fatProfileId?"/profiles/"+fatProfileId:"/"} className="studio-back" title={fatProfileId?"Volver al expediente":"Volver al resumen"}>←</Link>
           <span className="studio-brand-mark">B</span>
           <div><strong>BODYVISION <em>AI</em></strong><small>COMPOSICIÓN CORPORAL</small></div>
         </div>
@@ -762,7 +762,7 @@ export function AnatomyAtlas() {
         <div className="studio-header-actions">
           <span className="studio-online"><i /> Referencia 3D</span>
           <button onClick={toggleFullscreen} title="Pantalla completa">{isFullscreen ? "Salir de pantalla completa" : "⛶ Pantalla completa"}</button>
-          <Link to="/" className="studio-to-dashboard">Panel principal</Link>
+          <Link to={fatProfileId?"/profiles/"+fatProfileId:"/"} className="studio-to-dashboard">{fatProfileId?"Volver al expediente":"Inicio"}</Link>
         </div>
       </header>
 
@@ -968,7 +968,7 @@ export function AnatomyAtlas() {
           </div>
           <div className="studio-right-content">
             {panel === "grasa" && <section ref={fatPanelRef} className="studio-fat-panel" aria-label="Grasa corporal">
-              <ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId} onChange={next=>{setFatProfileId(next);setScenarioProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>
+              {fatProfile.isSuccess&&fatProfileId?<div className="studio-record-context"><strong>{fatProfile.data.display_name||fatProfile.data.display_code}</strong><Link to="/profiles">Cambiar expediente</Link></div>:<ProfilePicker selected={fatProfile.data??null} selectedId={fatProfileId} onChange={next=>{setFatProfileId(next);setScenarioProfileId(next);setFatSimulation(null);setFatEntryOpen(false);}}/>}
               {fatProfileId && (fatProfile.isPending ? <LoadingState/> : fatProfile.isError ?
                 <ErrorState error={fatProfile.error} retry={()=>void fatProfile.refetch()}/> :
                 fatMeasurements.isPending ? <LoadingState/> : fatMeasurements.isError ?
@@ -1001,7 +1001,7 @@ export function AnatomyAtlas() {
                   <button type="button" onClick={()=>setFatSimulation(null)}>Restaurar</button>
                   <small>No modifica las mediciones.</small></>}
               </details>
-              {fatProfileId&&fatProfile.isSuccess&&<div className="studio-profile-actions"><Link to={"/profiles/"+fatProfileId+"?tab=measurements"}>Mediciones</Link><Link to={"/profiles/"+fatProfileId+"?tab=analytics&metric=body_fat_pct"}>Evolución</Link>{sandboxAuthEnabled()&&<Link to={"/profiles/"+fatProfileId+"?tab=images"}>Imágenes</Link>}</div>}
+              {fatProfileId&&fatProfile.isSuccess&&<div className="studio-profile-actions"><Link to={"/profiles/"+fatProfileId+"?tab=measurements"}>Mediciones</Link><Link to={"/profiles/"+fatProfileId+"?tab=analytics&metric=body_fat_pct"}>Evolución y comparación</Link>{sandboxAuthEnabled()&&<Link to={"/profiles/"+fatProfileId+"?tab=images"}>Imágenes</Link>}</div>}
               {sandboxAuthEnabled()&&fatProfileId&&fatProfile.isSuccess&&<details className="studio-compact-details"><summary>Imágenes del expediente</summary><SandboxCaptureLibrary key={fatProfileId} fixedProfileId={fatProfileId} allowUpload={fatProfile.data?.status==="active"}/></details>}
               <details className="studio-compact-details"><summary>Acerca de esta vista</summary><small>El atlas se ajusta a las últimas medidas disponibles; su rango gráfico es 40–200 kg y 145–205 cm. No es una reconstrucción clínica. La vista térmica observada representa el porcentaje total.</small></details>
             </section>}

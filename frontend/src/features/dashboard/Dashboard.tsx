@@ -63,7 +63,7 @@ export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: 
 }
 
 export function Dashboard() {
-  const { id, api } = useWorkspace();
+  const { id, api, readOnly } = useWorkspace();
   const query = useQuery({ queryKey: ["summary", id], queryFn: api.summary });
   const data = query.data;
   const metrics: { label: string; value: number; detail: string; icon: IconName; tone: string }[] = data ? [
@@ -75,28 +75,28 @@ export function Dashboard() {
     <div className="enterprise-dashboard product-dashboard">
       <header className="enterprise-page-head product-heading">
         <div>
-          <p className="eyebrow">Panel de control</p>
-          <h1>Resumen</h1>
+          <h1>Resumen general</h1>
           <p>Seguimiento de la composición corporal</p>
         </div>
-        <Link className="primary-button" to="/profiles">Ver expedientes <Icon name="arrow-up-right" size={16} /></Link>
+        <Link className="primary-button" to={readOnly?"/profiles":"/profiles?new=1"}><Icon name={readOnly?"folder":"plus"} size={17}/>{readOnly?"Ver expedientes":"Nuevo expediente"}</Link>
       </header>
-      <div className="product-dashboard-grid">
-        <section className="enterprise-panel enterprise-anatomy-promo product-hero" aria-label="Exploración anatómica">
-          <div className="product-hero-head"><h2>Visión corporal 3D</h2><span className="product-live-label"><span className="live-dot" aria-hidden="true" />Atlas anatómico en vivo</span></div>
-          <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
-            <DashboardBodyPreview />
-          </Suspense>
-          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo <Icon name="arrow-up-right" size={16} /></Link><Link className="secondary-button dashboard-fat-link" to="/body-3d?panel=grasa">Grasa corporal <Icon name="arrow-up-right" size={15} /></Link></div>
-        </section>
-        <div className="product-dashboard-side">
-          <section className="product-metrics" aria-label="Indicadores reales de la organización ficticia">
+          <section className="product-metrics bv-dashboard-kpis" aria-label="Indicadores reales de la organización ficticia">
             {query.isPending ? <LoadingState/> : query.isError ? <ErrorState error={query.error} retry={()=>void query.refetch()}/> :
               metrics.map(metric=><article key={metric.label} className="enterprise-kpi product-metric">
                 <span className={"enterprise-kpi-icon "+metric.tone} aria-hidden="true"><Icon name={metric.icon} size={20} /></span>
                 <p>{metric.label}</p><strong>{metric.value.toLocaleString("es-PE")}</strong><small>{metric.detail}</small>
               </article>)}
           </section>
+      <div className="product-dashboard-grid">
+        <section className="enterprise-panel enterprise-anatomy-promo product-hero" aria-label="Exploración anatómica">
+          <div className="product-hero-head"><h2>Visión corporal 3D</h2></div>
+          <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
+            <DashboardBodyPreview />
+          </Suspense>
+          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo <Icon name="arrow-up-right" size={16} /></Link></div>
+        </section>
+        <div className="product-dashboard-side">
+
           <section className="enterprise-panel dashboard-alerts" aria-label="Alertas de seguimiento">
             <div className="enterprise-panel-title"><h2>Alertas de seguimiento</h2></div>
             {query.isPending ? <LoadingState/> : query.isError || data?.outliers_30d === undefined || data.restricted_profiles === undefined ? <p className="enterprise-hint">Alertas no disponibles.</p> :

@@ -56,7 +56,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
       if(!isCurrent())return;
       await syntheticCapturesApi(session.token,profileId).create(png);
       await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});
-      if(isCurrent()){setLocal(null);setAttest(false);setNotice(review.passed?"Imagen guardada en el expediente.":"Imagen guardada. Se recomienda mejorar la iluminación o resolución para futuras evaluaciones.");}
+      if(isCurrent()){setLocal(null);setAttest(false);setNotice("Imagen guardada en el expediente.");if(!file&&!onAnalyze){stageCaptureForAnalysis(source,review);navigate("/analysis?profile="+encodeURIComponent(profileId),{state:{localCaptureReview:review}});}}
     });
   }
   async function open(item:StoredCapture,analyze:boolean){
@@ -75,11 +75,11 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
   }
   if(!session)return null;
   return <section className="enterprise-panel bv-capture-library" aria-label="Imágenes del expediente">
-    <div className="enterprise-panel-title"><h2>Imágenes del expediente</h2><span>FICTICIO</span></div>
+    <div className="enterprise-panel-title"><h2>Imágenes del expediente</h2>{profileId&&<Link to={"/capture?profile="+profileId}>Cámara y captura guiada →</Link>}</div>
     {!fixedProfileId&&<fieldset disabled={busy}><ProfilePicker selected={profile.data??null} selectedId={profileId} onChange={setChosen}/></fieldset>}
     {profile.isError&&profileId&&<p role="alert">No se pudo acceder al expediente.</p>}
     {profileId&&profile.isSuccess&&profile.data.status!=="active"&&<p>Expediente restringido o archivado.</p>}
-    {writable&&fixedProfileId&&allowUpload&&<label className="enterprise-upload"><strong>Seleccionar imagen</strong><small>JPG, PNG o WebP · hasta 10 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{setLocal(e.target.files?.[0]??null);setAttest(false);e.target.value="";}}/></label>}
+    {writable&&fixedProfileId&&allowUpload&&!file&&<label className="enterprise-upload"><strong>Seleccionar imagen</strong><small>JPG, PNG o WebP · hasta 10 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{setLocal(e.target.files?.[0]??null);setAttest(false);e.target.value="";}}/></label>}
     {writable&&effective&&allowUpload&&<div className="bv-capture-save"><p>Imagen lista: {effective.name}</p><label className="enterprise-consent"><input type="checkbox" checked={attest} disabled={busy} onChange={e=>setAttest(e.target.checked)}/> Confirmo que la imagen es ficticia y autorizo su conservación temporal.</label><button type="button" className="primary-button" disabled={!attest||busy} onClick={()=>void save()}>Guardar en expediente</button></div>}
     {fixedProfileId&&local&&attest&&<AutomaticPosePreview file={local}/>}
     {archive.isPending&&writable&&<p role="status">Consultando imágenes…</p>}
