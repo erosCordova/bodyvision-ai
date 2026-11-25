@@ -4,6 +4,11 @@ import { Badge, Btn, PageHead, Panel } from "../ui";
 import { imcOf, useStore } from "../store";
 
 export default function Mediciones() {
+  const { patient } = useStore();
+  return <PatientMeasurements key={patient.id} />;
+}
+
+function PatientMeasurements() {
   const { patient, mediciones, addMedicion, toast } = useStore();
   const [f, setF] = useState({ peso: patient.peso, cintura: 88, cadera: 98, pecho: 100, brazo: 33, muslo: 58 });
   const imc = imcOf(f.peso, patient.altura);
@@ -12,7 +17,7 @@ export default function Mediciones() {
   const grasaEst = patient.sexo === "male" ? 1.2 * imc + 0.23 * patient.edad - 16.2 : 1.2 * imc + 0.23 * patient.edad - 5.4;
 
   const save = () => {
-    addMedicion({ paciente: patient.nombre, fecha: "Hoy", ...f, grasa: +grasaEst.toFixed(1), fuente: "Manual" });
+    addMedicion({ patientId: patient.id, paciente: patient.nombre, fecha: "Hoy", ...f, grasa: +grasaEst.toFixed(1), fuente: "Manual" });
     toast("Medición registrada");
   };
   const csv = () => {

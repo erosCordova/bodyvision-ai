@@ -60,6 +60,7 @@ export function historial(p: Patient) {
 
 export interface Medicion {
   id: string;
+  patientId?: string;
   paciente: string;
   fecha: string;
   peso: number;
