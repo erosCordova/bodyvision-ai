@@ -201,11 +201,6 @@ export function Dashboard() {
     { label: "Expedientes activos", value: data.active_profiles, detail: "Registros vigentes", icon: "users", tone: "aqua" },
     { label: "Mediciones recientes", value: data.measurements_30d, detail: "Últimos 30 días", icon: "ruler", tone: "blue" },
     { label: "Correcciones", value: data.corrections, detail: "Cambios registrados", icon: "pen-line", tone: "violet" },
-    ...(data.outliers_30d !== undefined
-      ? [{ label: "Valores atípicos", value: data.outliers_30d, detail: "Confirmados · 30 días", icon: "activity" as IconName, tone: "amber" }]
-      : data.restricted_profiles !== undefined
-        ? [{ label: "Expedientes restringidos", value: data.restricted_profiles, detail: "Acceso limitado", icon: "users" as IconName, tone: "amber" }]
-        : []),
   ] : [];
   const selectedProfile = profileQuery.data ?? null;
   const bodyMeasurements = measurementsQuery.data;
@@ -246,12 +241,31 @@ export function Dashboard() {
       </div>
     </section>
 
-    <section className="product-metrics bv-dashboard-kpis" aria-label="Indicadores del dashboard">
+    <section className="product-metrics bv-dashboard-kpis" aria-label="Indicadores reales de la organización ficticia">
       {query.isPending ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> :
         metrics.map(metric => <article key={metric.label} className="enterprise-kpi product-metric">
           <span className={"enterprise-kpi-icon " + metric.tone} aria-hidden="true"><Icon name={metric.icon} size={20} /></span>
           <p>{metric.label}</p><strong>{metric.value.toLocaleString("es-PE")}</strong><small>{metric.detail}</small>
         </article>)}
+    </section>
+
+    <section className="enterprise-panel dashboard-alerts" aria-label="Alertas de seguimiento">
+      <div className="enterprise-panel-title"><h2>Alertas de seguimiento</h2></div>
+      {query.isPending ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> :
+        <>
+          <div className="dashboard-alert-items">
+            <Link to="/measurements" aria-label={`Valores atípicos confirmados en los últimos 30 días: ${data?.outliers_30d ?? "sin dato"}`}>
+              <span>Valores atípicos confirmados<small>Últimos 30 días</small></span>
+              <strong>{data?.outliers_30d === undefined ? "—" : data.outliers_30d.toLocaleString("es-PE")}</strong>
+            </Link>
+            <Link to="/profiles" aria-label={`Expedientes restringidos: ${data?.restricted_profiles ?? "sin dato"}`}>
+              <span>Expedientes restringidos<small>Acceso limitado</small></span>
+              <strong>{data?.restricted_profiles === undefined ? "—" : data.restricted_profiles.toLocaleString("es-PE")}</strong>
+            </Link>
+          </div>
+          {data?.outliers_30d === 0 && data?.restricted_profiles === 0 &&
+            <p className="enterprise-hint">Sin alertas confirmadas en este momento.</p>}
+        </>}
     </section>
 
     <div className="dashboard-main-grid">
