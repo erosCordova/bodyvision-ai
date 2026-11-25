@@ -303,3 +303,13 @@ export function irisTexture(base: string, ring = "#241a12") {
   t.anisotropy = 4;
   return t;
 }
+
+// Visual age styling, not a prediction of the patient's biological age or face.
+export function ageSkinMaterial(tone: string, years: number) {
+  const aging = THREE.MathUtils.clamp((years - 25) / 50, 0, 1);
+  const m = new THREE.MeshPhysicalMaterial({color: new THREE.Color(tone), roughness: .52 + .30 * aging, metalness: 0, clearcoat: .12 * (1-aging)});
+  patch(m, { key: "atlas-age-skin", uniforms: { uAge: { value: aging } }, uniformDecl: "uniform float uAge;",
+    albedo: `float face = smoothstep(1.53,1.67,p.y); float lines = pow(0.5+0.5*sin(p.y*760.0+vn(p*vec3(48.0,20.0,48.0))*5.0),12.0); diffuseColor.rgb *= 1.0 - uAge*(0.11*face*lines + 0.05*vn(p*38.0));`,
+    height: `float face = smoothstep(1.53,1.67,p.y); float lines = pow(0.5+0.5*sin(p.y*760.0+vn(p*vec3(48.0,20.0,48.0))*5.0),12.0); float h = vn(p*240.0)*0.015 + uAge*(0.055*face*lines + 0.025*vn(p*85.0));`, bump: 0.85 });
+  return m;
+}

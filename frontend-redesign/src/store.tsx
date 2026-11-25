@@ -15,6 +15,7 @@ export interface Patient {
   estado: "Activo" | "En seguimiento" | "Nuevo" | "Alta";
   ultima: string;
   email: string;
+  foto?: string;
 }
 
 const base: Omit<Patient, "id">[] = [
@@ -85,7 +86,7 @@ interface Store {
   login: (email: string) => void;
   logout: () => void;
   patients: Patient[];
-  addPatient: (p: Omit<Patient, "id" | "ultima">) => void;
+  addPatient: (p: Omit<Patient, "id" | "ultima">) => boolean;
   selectedId: string;
   select: (id: string) => void;
   patient: Patient;
@@ -123,6 +124,16 @@ const initialConsents: Consent[] = PATIENTS.slice(0, 8).map((p, i) => ({
   estado: (["Vigente", "Vigente", "Pendiente", "Por vencer", "Vigente", "Revocado", "Vigente", "Pendiente"] as const)[i],
 }));
 
+const SESSION_KEY = "bv_demo_expedientes_v1";
+function restorePatients(): Patient[] {
+  try {
+    const user = JSON.parse(localStorage.getItem("bv_user") || "null");
+    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
+    if (user && saved?.email === user.email && Array.isArray(saved.patients) && saved.patients.length) return saved.patients;
+  } catch { /* session storage unavailable */ }
+  return PATIENTS;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Store["user"]>(() => {
     try {
@@ -131,7 +142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
   });
-  const [patients, setPatients] = useState(PATIENTS);
+  const [patients, setPatients] = useState<Patient[]>(restorePatients);
   const [selectedId, setSelectedId] = useState(PATIENTS[0].id);
   const [mediciones, setMediciones] = useState(initialMed);
   const [consents, setConsents] = useState(initialConsents);
@@ -148,18 +159,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user,
       login: (email) => {
         const u = { nombre: "Dr. Martínez", email };
+        sessionStorage.removeItem(SESSION_KEY);
+        setPatients(PATIENTS);
+        setSelectedId(PATIENTS[0].id);
         localStorage.setItem("bv_user", JSON.stringify(u));
         setUser(u);
       },
       logout: () => {
+        sessionStorage.removeItem(SESSION_KEY);
+        setPatients(PATIENTS);
+        setSelectedId(PATIENTS[0].id);
         localStorage.removeItem("bv_user");
         setUser(null);
       },
       patients,
       addPatient: (p) => {
         const np = { ...p, id: `EXP-${2401 + patients.length}`, ultima: "Ahora" } as Patient;
-        setPatients((l) => [np, ...l]);
+        const next = [np, ...patients];
+        try {
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify({ email: user?.email, patients: next }));
+        } catch { return false; }
+        setPatients(next);
         setSelectedId(np.id);
+        return true;
       },
       selectedId,
       select: setSelectedId,

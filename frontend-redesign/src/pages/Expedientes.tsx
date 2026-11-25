@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowLeft, Box, Plus, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowLeft, Box, Plus, Search, SlidersHorizontal, Sparkles, ImagePlus } from "lucide-react";
 import { Avatar, Badge, Btn, Modal, PageHead, Panel, Segmented, chartTip, estadoTone } from "../ui";
-import { bodyParams, historial, idealWeight, imcOf, useStore, type Patient } from "../store";
+import { bodyParams, historial, idealWeight, imcOf, useStore } from "../store";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
 import type { Sex } from "../three/assets";
@@ -17,6 +17,44 @@ export function Expedientes() {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ nombre: "", edad: 30, sexo: "male" as Sex, altura: 175, peso: 75, grasa: 20, musculo: 38, objetivo: "Salud general" });
 
+  const [foto, setFoto] = useState<string | undefined>();
+  const [reading, setReading] = useState(false);
+  const photoRequest = useRef(0);
+  const reset = () => {
+    photoRequest.current++;
+    setFoto(undefined);
+    setReading(false);
+    setF({ nombre: "", edad: 30, sexo: "male", altura: 175, peso: 75, grasa: 20, musculo: 38, objetivo: "Salud general" });
+  };
+  const close = () => { reset(); setOpen(false); };
+  const pickPhoto = async (file?: File) => {
+    const request = ++photoRequest.current;
+    setReading(false);
+    if (!file) return;
+    if (!["image/jpeg","image/png","image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      toast("Selecciona una imagen JPG, PNG o WEBP de hasta 10 MB");
+      return;
+    }
+    setReading(true);
+    try {
+      const bitmap = await createImageBitmap(file);
+      try {
+        const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("No se pudo leer la imagen");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL("image/jpeg", 0.8);
+        if (photoRequest.current === request) setFoto(data);
+      } finally { bitmap.close(); }
+    } catch { if (photoRequest.current === request) toast("No se pudo abrir la imagen"); }
+    finally { if (photoRequest.current === request) setReading(false); }
+  };
+
   const list = useMemo(
     () => patients.filter((p) => (sex === "all" || p.sexo === sex) && (estado === "Todos" || p.estado === estado) && (p.nombre + p.id).toLowerCase().includes(q.toLowerCase())),
     [patients, q, sex, estado]
@@ -24,8 +62,11 @@ export function Expedientes() {
 
   const create = () => {
     if (!f.nombre.trim()) return toast("Indica el nombre del paciente");
-    addPatient({ ...f, tono: "medio", estado: "Nuevo", email: "nuevo@correo.com" } as Omit<Patient, "id" | "ultima">);
-    setOpen(false);
+    if (reading) return;
+    if (!Number.isInteger(f.edad) || f.edad < 18 || f.edad > 100) return toast("El atlas de demostración admite edades de 18 a 100 años");
+    if (![f.altura, f.peso, f.grasa, f.musculo].every(Number.isFinite) || f.altura < 100 || f.altura > 230 || f.peso < 25 || f.peso > 350 || f.grasa < 0 || f.grasa > 70 || f.musculo < 0 || f.musculo > 100 || f.grasa + f.musculo > 100) return toast("Revisa las medidas corporales y los porcentajes");
+    if (!addPatient({ ...f, nombre: f.nombre.trim(), foto, tono: "medio", estado: "Nuevo", email: "nuevo@correo.com" })) return toast("No hay espacio para guardar el expediente en esta sesión");
+    close();
     toast("Expediente creado correctamente");
   };
 
@@ -34,7 +75,7 @@ export function Expedientes() {
       <PageHead
         title="Expedientes"
         sub={`${list.length} pacientes · selecciona uno para ver su gemelo digital`}
-        actions={<Btn variant="primary" onClick={() => setOpen(true)}><Plus size={16} /> Nuevo expediente</Btn>}
+        actions={<Btn variant="primary" onClick={() => { reset(); setOpen(true); }}><Plus size={16} /> Nuevo expediente</Btn>}
       />
       <Panel pad={false}>
         <div className="flex flex-wrap items-center gap-3 border-b border-white/5 p-4">
@@ -61,7 +102,7 @@ export function Expedientes() {
                   <tr key={p.id} onClick={() => { select(p.id); nav(`/app/expedientes/${p.id}`); }} className="cursor-pointer border-t border-white/5 transition hover:bg-cyan-400/[0.04] [&>td]:px-4 [&>td]:py-3">
                     <td>
                       <div className="flex items-center gap-3">
-                        <Avatar name={p.nombre} size={34} />
+                        <Avatar name={p.nombre} size={34} photo={p.foto} />
                         <div>
                           <div className="font-medium text-white">{p.nombre}</div>
                           <div className="text-xs text-slate-500">{p.sexo === "male" ? "Hombre" : "Mujer"} · {p.altura} cm · {p.peso} kg</div>
@@ -83,8 +124,20 @@ export function Expedientes() {
           </table>
         </div>
       </Panel>
-      <Modal open={open} onClose={() => setOpen(false)} title="Nuevo expediente" wide>
+      <Modal open={open} onClose={close} title="Nuevo expediente" wide>
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2 rounded-xl border border-white/10 p-3">
+            <div className="flex items-center gap-4">
+              {foto ? <img src={foto} alt="Vista previa de la fotografía" className="h-24 w-24 shrink-0 rounded-xl object-cover" /> : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-xl bg-white/5 text-cyan-300"><ImagePlus size={30}/></div>}
+              <div className="min-w-0 flex-1">
+                <label className="block text-sm font-medium text-white" htmlFor="patient-photo">Fotografía del paciente (opcional)</label>
+                <input id="patient-photo" type="file" accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs text-slate-300" onChange={e => { void pickPhoto(e.target.files?.[0]); e.currentTarget.value = ""; }}/>
+                {reading && <span className="text-xs text-cyan-300">Procesando imagen…</span>}
+                {foto && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(undefined); setReading(false); }}>Quitar fotografía</button>}
+                <p className="mt-2 text-xs text-slate-400">Solo imágenes ficticias o sintéticas. Se guardan en esta sesión del navegador, no en el servidor.</p>
+              </div>
+            </div>
+          </div>
           <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Nombre completo</span><input className="field" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} /></label>
           <label><span className="mb-1 block text-xs text-slate-400">Sexo</span>
             <select className="field" value={f.sexo} onChange={(e) => setF({ ...f, sexo: e.target.value as Sex })}><option value="male" className="bg-slate-900">Hombre</option><option value="female" className="bg-slate-900">Mujer</option></select></label>
@@ -94,7 +147,7 @@ export function Expedientes() {
           ))}
           <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Objetivo</span><input className="field" value={f.objetivo} onChange={(e) => setF({ ...f, objetivo: e.target.value })} /></label>
         </div>
-        <div className="mt-6 flex justify-end gap-2"><Btn onClick={() => setOpen(false)}>Cancelar</Btn><Btn variant="primary" onClick={create}>Crear expediente</Btn></div>
+        <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading}>Crear expediente</Btn></div>
       </Modal>
     </div>
   );
@@ -122,13 +175,13 @@ export function ExpedienteDetalle() {
       <div className="grid gap-5 xl:grid-cols-[1.05fr_1fr]">
         <Panel pad={false}>
           <BodyScene className="h-[560px] rounded-2xl" distance={4.5} rotateSpeed={1.2}>
-            <BodyModel sex={p.sexo} fat={fat} mus={mus} tone={p.tono} />
+            <BodyModel sex={p.sexo} heightCm={p.altura} weightKg={p.peso} ageYears={p.edad} fat={fat} mus={mus} tone={p.tono} />
           </BodyScene>
         </Panel>
         <div className="space-y-5">
           <Panel>
             <div className="flex flex-wrap items-center gap-4">
-              <Avatar name={p.nombre} size={60} />
+              <Avatar name={p.nombre} size={60} photo={p.foto} />
               <div className="flex-1">
                 <h1 className="font-display text-2xl font-bold text-white">{p.nombre}</h1>
                 <div className="text-sm text-slate-400">{p.id} · {p.edad} años · {p.sexo === "male" ? "Hombre" : "Mujer"} · {p.email}</div>

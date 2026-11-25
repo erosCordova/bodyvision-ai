@@ -128,7 +128,8 @@ export function PageHead({ title, sub, actions }: { title: string; sub?: string;
   );
 }
 
-export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 36, photo }: { name: string; size?: number; photo?: string }) {
+  if (photo) return <img src={photo} alt={name} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
   const ini = name.split(" ").map((w) => w[0]).slice(0, 2).join("");
   const hue = (name.charCodeAt(0) * 37 + name.length * 19) % 360;
   return (

@@ -72,7 +72,7 @@ export default function Dashboard() {
         <Panel title="Gemelo digital" className="xl:col-span-3" pad={false}>
           <div className="p-3">
             <BodyScene className="h-[320px] rounded-xl" distance={5.2} sparkles={false} rotateSpeed={2}>
-              <BodyModel sex={patient.sexo} fat={fat} mus={mus} mode="holo" />
+              <BodyModel sex={patient.sexo} heightCm={patient.altura} weightKg={patient.peso} ageYears={patient.edad} fat={fat} mus={mus} mode="holo" />
             </BodyScene>
             <Btn variant="outline" className="mt-3 w-full !py-2 text-xs" onClick={() => nav("/app/vision-3d")}>
               Abrir visor 3D <ArrowRight size={14} />
@@ -142,7 +142,7 @@ export default function Dashboard() {
                   <tr key={p.id} onClick={() => nav(`/app/expedientes/${p.id}`)} className="cursor-pointer border-t border-white/5 hover:bg-white/[0.03]">
                     <td className="py-2.5">
                       <div className="flex items-center gap-3">
-                        <Avatar name={p.nombre} size={32} />
+                        <Avatar name={p.nombre} size={32} photo={p.foto} />
                         <div>
                           <div className="font-medium text-white">{p.nombre}</div>
                           <div className="text-xs text-slate-500">{p.ultima}</div>

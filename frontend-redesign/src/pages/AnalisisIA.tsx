@@ -49,7 +49,7 @@ export default function AnalisisIA() {
         </Panel>
         <Panel pad={false}>
           <BodyScene className="h-[600px] rounded-2xl" distance={4.6} ring="#f59e0b" rotateSpeed={1}>
-            <BodyModel sex={p.sexo} fat={fat} mus={mus} mode="thermal" />
+            <BodyModel sex={p.sexo} heightCm={p.altura} weightKg={p.peso} ageYears={p.edad} fat={fat} mus={mus} mode="thermal" />
             <Annotation position={[0.0 * sc, 1.69 * sc, 0.1 * sc]} label="Cabeza" value="36.8 °C" color="#fb923c" align="left" />
             <Annotation position={[0.1 * sc, 1.3 * sc, 0.1 * sc]} label="Masa muscular" value={`${p.musculo}%`} color="#22d3ee" />
             <Annotation position={[0.05 * sc, 1.08 * sc, 0.13 * sc]} label="Grasa visceral" value={`${(p.grasa * 0.32).toFixed(1)}%`} color="#facc15" align="left" />

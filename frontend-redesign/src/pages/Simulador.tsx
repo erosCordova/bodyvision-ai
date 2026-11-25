@@ -47,8 +47,8 @@ export default function Simulador() {
           <Panel pad={false}>
             <div className="relative">
               <BodyScene className="h-[560px] rounded-2xl" distance={5.6} autoRotate={false} view="front" sparkles>
-                <BodyModel sex={p.sexo} fat={base.fat} mus={base.mus} tone={p.tono} position={[-0.75 * sc, 0, 0]} />
-                <BodyModel sex={p.sexo} fat={base.fat + dfat * prog} mus={base.mus + dmus * prog} tone={p.tono} position={[0.75 * sc, 0, 0]} />
+                <BodyModel sex={p.sexo} heightCm={p.altura} weightKg={p.peso} ageYears={p.edad} fat={base.fat} mus={base.mus} tone={p.tono} position={[-0.75 * sc, 0, 0]} />
+                <BodyModel sex={p.sexo} heightCm={p.altura} weightKg={Math.max(25,p.peso + (dfat * .9 + dmus * .5) * prog)} ageYears={p.edad} fat={base.fat + dfat * prog} mus={base.mus + dmus * prog} tone={p.tono} position={[0.75 * sc, 0, 0]} />
               </BodyScene>
               <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-around px-10 text-center">
                 <div className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 backdrop-blur"><div className="text-[11px] uppercase tracking-wider text-slate-400">Actual</div><div className="font-display text-lg font-bold text-white">{p.peso} kg · {p.grasa}%</div></div>

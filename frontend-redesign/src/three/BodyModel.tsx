@@ -11,6 +11,7 @@ export const ReadyContext = createContext<(() => void) | null>(null);
 export const TONES: Record<string, string> = { claro:"#e2b79c", medio:"#c68a64", trigueño:"#a96f4c", oscuro:"#6f4630" };
 export interface BodyModelProps {
   sex: Sex; fat?:number; mus?:number; mode?:Mode; tone?:string; garments?:boolean;
+  heightCm?:number; weightKg?:number; ageYears?:number;
   position?:[number,number,number]; rotationY?:number; highlight?:boolean;
 }
 
@@ -50,7 +51,7 @@ function geometryFor(root:THREE.Object3D, transform:THREE.Matrix4, layer:Layer){
   return merged;
 }
 
-export function BodyModel({sex,fat=0,mus=0,mode="skin",tone="medio",garments=true,position=[0,0,0],rotationY=0}:BodyModelProps){
+export function BodyModel({sex,fat=0,mus=0,mode="skin",tone="medio",garments=true,heightCm=175,weightKg,ageYears=30,position=[0,0,0],rotationY=0}:BodyModelProps){
   const wanted=VIEWS[mode];
   const keys=useMemo(()=>Array.from(new Set<Layer>(["skin","skeleton",...VIEWS[mode]])),[mode]);
   const gltfs=useGLTF(keys.map(url),draco);
@@ -69,17 +70,24 @@ export function BodyModel({sex,fat=0,mus=0,mode="skin",tone="medio",garments=tru
   },[gltfs,keys]);
   const materials=useMemo(()=>{
     const standard=Object.fromEntries(LAYERS.map(layer=>[layer,new THREE.MeshStandardMaterial({color:layer==="skin"?(TONES[tone]||tone):COLORS[layer],roughness:layer==="skin"?.78:layer==="skeleton"?.8:.5,metalness:.02,emissive:new THREE.Color(COLORS[layer]).multiplyScalar(.06),emissiveIntensity:.35})])) as Record<Layer,THREE.MeshStandardMaterial>;
+    standard.skin.dispose();
+    standard.skin = M.ageSkinMaterial(TONES[tone] || tone, ageYears);
     return {standard,thermal:M.thermalMaterial(),holo:new THREE.MeshBasicMaterial({color:"#63e4ff",wireframe:true,transparent:true,opacity:.72,depthWrite:false,side:THREE.DoubleSide}),xray:new THREE.MeshBasicMaterial({color:"#63e4ff",wireframe:true,transparent:true,opacity:.23,depthWrite:false,side:THREE.DoubleSide}),bottom:M.garmentMaterial(sex==="male"?"shorts":"bikini",1,"#12161d"),bra:M.garmentMaterial("bra",1,"#12161d")};
-  },[tone,sex]);
+  },[tone,sex,ageYears]);
   useEffect(()=>{ready?.();},[ready,parts]);
   useEffect(()=>()=>parts.forEach(p=>p.geometry.dispose()),[parts]);
   useEffect(()=>()=>{Object.values(materials.standard).forEach(m=>m.dispose());materials.thermal.dispose();materials.holo.dispose();materials.xray.dispose();materials.bottom.dispose();materials.bra.dispose();},[materials]);
   useFrame((state,dt)=>{
     materials.thermal.uniforms.uTime.value=state.clock.elapsedTime;
     if(group.current){
-      const radial=THREE.MathUtils.clamp(1+fat*.006+mus*.003,.8,1.25), k=1-Math.exp(-dt*4.5);
-      group.current.scale.x=THREE.MathUtils.lerp(group.current.scale.x,radial,k);
-      group.current.scale.z=THREE.MathUtils.lerp(group.current.scale.z,radial,k);
+      const height = THREE.MathUtils.clamp(heightCm,100,230);
+      const stature = height / 175;
+      const bmi = weightKg !== undefined && weightKg > 0 ? weightKg / (height/100)**2 : 23;
+      const radial = THREE.MathUtils.clamp(Math.sqrt(bmi/23) * (1+fat*.004+mus*.002), .65, 1.65);
+      const k = 1-Math.exp(-dt*4.5);
+      group.current.scale.x = THREE.MathUtils.lerp(group.current.scale.x, stature*radial, k);
+      group.current.scale.y = THREE.MathUtils.lerp(group.current.scale.y, stature, k);
+      group.current.scale.z = THREE.MathUtils.lerp(group.current.scale.z, stature*radial, k);
     }
   });
   return <group position={position} rotation={[0,rotationY,0]}>

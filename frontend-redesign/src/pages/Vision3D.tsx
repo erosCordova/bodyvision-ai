@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Eye, RotateCw, Shirt } from "lucide-react";
-import { Panel, PageHead, Range, Toggle } from "../ui";
+import { Avatar, Panel, PageHead, Range, Toggle } from "../ui";
 import { bodyParams, idealWeight, imcOf, useStore } from "../store";
 import { BodyScene, type ViewPreset } from "../three/BodyScene";
 import { BodyModel, TONES, type Mode } from "../three/BodyModel";
@@ -24,6 +24,11 @@ const VIEWS: { id: ViewPreset; label: string }[] = [
 ];
 
 export default function Vision3D() {
+  const { patient } = useStore();
+  return <PatientVision key={patient.id} />;
+}
+
+function PatientVision() {
   const { patient: p } = useStore();
   const base = bodyParams(p);
   const [mode, setMode] = useState<Mode>("skin");
@@ -42,8 +47,8 @@ export default function Vision3D() {
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
         <Panel pad={false} className="overflow-hidden">
           <div className="relative">
-            <BodyScene className="h-[calc(100vh-190px)] min-h-[560px]" autoRotate={rot} view={view} viewTick={tick} distance={4.5}>
-              <BodyModel sex={p.sexo} fat={base.fat + dfat} mus={base.mus + dmus} mode={mode} tone={tone} garments={garm} />
+            <BodyScene className="h-[calc(100vh-190px)] min-h-[560px]" autoRotate={rot} view={view} viewTick={tick} distance={4.5 * Math.max(1, p.altura / 175)}>
+              <BodyModel sex={p.sexo} heightCm={p.altura} weightKg={p.peso} ageYears={p.edad} fat={base.fat + dfat} mus={base.mus + dmus} mode={mode} tone={tone} garments={garm} />
             </BodyScene>
             <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5 rounded-2xl border border-white/10 bg-slate-950/70 p-1.5 backdrop-blur">
               {MODES.map((m) => (
@@ -59,6 +64,17 @@ export default function Vision3D() {
           </div>
         </Panel>
         <div className="space-y-5">
+          <Panel title="Paciente seleccionado">
+            <div className="flex items-center gap-3">
+              <Avatar name={p.nombre} size={44} photo={p.foto} />
+              <div><div className="font-semibold text-white">{p.nombre}</div><div className="text-xs text-slate-400">{p.id} · {p.edad} años</div></div>
+            </div>
+            {p.foto ? <img src={p.foto} alt={`Fotografía de referencia de ${p.nombre}`} className="mt-3 max-h-64 w-full rounded-xl border border-white/10 object-contain bg-slate-950" /> : <p className="mt-3 text-xs text-slate-500">Sin fotografía registrada</p>}
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
+              {[["Edad", `${p.edad} años`], ["Altura", `${p.altura} cm`], ["Peso", `${p.peso} kg`]].map(([label,value]) => <div key={label} className="rounded-lg bg-white/5 p-2"><dt className="text-xs text-slate-400">{label}</dt><dd className="font-semibold text-white">{value}</dd></div>)}
+            </dl>
+            <p className="mt-3 text-xs text-slate-400">Atlas ajustado de forma orientativa; la fotografía es una referencia, no una reconstrucción facial.</p>
+          </Panel>
           <Panel title="Controles">
             <div className="space-y-4 text-sm">
               <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-slate-300"><RotateCw size={15} /> Rotación 360° automática</span><Toggle checked={rot} onChange={setRot} label="rotar" /></div>
@@ -84,7 +100,7 @@ export default function Vision3D() {
           </Panel>
           <Panel title="Capacidades del visor">
             <ul className="space-y-2 text-sm text-slate-300">
-              {["Modelo 3D realista de alta resolución (≈250 000 polígonos)", "Esqueleto anatómico interactivo", "Rotación 360° y vistas anatómicas", "Mapa térmico con IA y holograma clínico", "Deformación en vivo de grasa y músculo"].map((t) => (
+              {["Atlas anatómico Z-Anatomy", "Rotación 360° y vistas anatómicas", "Escala según la estatura y proporciones orientativas según el peso", "Textura de piel orientativa según la edad", "Simulación ilustrativa de composición corporal"].map((t) => (
                 <li key={t} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />{t}</li>
               ))}
             </ul>

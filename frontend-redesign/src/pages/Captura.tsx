@@ -64,7 +64,7 @@ export default function Captura() {
         <Panel pad={false}>
           {done ? (
             <BodyScene className="h-[600px] rounded-2xl" distance={4.5} ring="#34d399">
-              <BodyModel sex={patient.sexo} fat={fat} mus={mus} tone={patient.tono} mode="holo" />
+              <BodyModel sex={patient.sexo} heightCm={patient.altura} weightKg={patient.peso} ageYears={patient.edad} fat={fat} mus={mus} tone={patient.tono} mode="holo" />
             </BodyScene>
           ) : (
             <div className="relative grid h-[600px] place-items-center overflow-hidden rounded-2xl bg-black">
