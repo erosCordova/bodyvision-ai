@@ -661,7 +661,7 @@ export function AnatomyAtlas() {
       const file = new File([snapshot], "modelo-3d-sintetico.png", { type: "image/png" });
       const review = await reviewLocalCapture(file);
       captureStage = "handoff";
-      stageCaptureForAnalysis(file, review);
+      stageCaptureForAnalysis(file, review, fatProfileId);
       setCaptureBusy(false);
       navigate("/analysis"+(fatProfileId?"?profile="+encodeURIComponent(fatProfileId):""), { state: { localCaptureReview: review, source: "atlas-synthetic" } });
     } catch (cause) {

@@ -260,7 +260,7 @@ export function CapturePage() {
               <span>{check.detail}</span>
             </li>)}</ul></details>
             <Link className="secondary-button" to={"/analysis"+window.location.search} state={{ localCaptureReview: review }}
-              onClick={() => stageCaptureForAnalysis(file, review)}>
+              onClick={() => stageCaptureForAnalysis(file, review, scopedId)}>
               Abrir análisis IA
             </Link>
           </div>}
@@ -279,7 +279,7 @@ export function CapturePage() {
 export function AnalysisPage() {
   const location = useLocation();
   const scopedId=new URLSearchParams(location.search).get("profile")??"";
-  const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis());
+  const [localCapture, setLocalCapture] = useState(() => peekCaptureForAnalysis(scopedId));
   useEffect(() => { discardStagedCapture(); }, []);
   const state = location.state as { localCaptureReview?: CaptureReview } | null;
   const [discarded, setDiscarded] = useState(false);

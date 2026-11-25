@@ -35,7 +35,7 @@ export function ProfileDetail() {
   const requested=params.get("tab");
   const tab=requested==="measurements"||requested==="analytics"||(requested==="images"&&sandboxAuthEnabled())||(requested==="pose"&&privateAuthEnabled())?requested:"summary";
   const setTab=(next:string)=>setParams(previous=>{const result=new URLSearchParams(previous);if(next==="summary")result.delete("tab");else result.set("tab",next);return result;},{replace:true});
-  const [metric, setMetric] = useState(()=>new URLSearchParams(window.location.search).get("metric")==="body_fat_pct"?"body_fat_pct":"weight");
+  const [metric, setMetric] = useState(()=>params.get("metric")==="body_fat_pct"?"body_fat_pct":"weight");
   const [period, setPeriod] = useState("90d");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");

@@ -74,7 +74,7 @@ export function DataLayout() {
             </div>}
             <div className="bv-nav-group"><p className="nav-label">GENERAL</p>
               <NavLink to="/body-3d" end onClick={()=>setMobileMenu(false)}><Icon name="box" size={18}/> Atlas 3D</NavLink>
-              <NavLink to="/reports" end onClick={()=>setMobileMenu(false)}><Icon name="file-text" size={18}/> Reportes generales</NavLink>
+              <Link to="/reports" className={location.pathname==="/reports"&&!selectedProfile?"active":undefined} onClick={()=>setMobileMenu(false)}><Icon name="file-text" size={18}/> Reportes generales</Link>
               {sections.filter(section=>["/consents","/privacy","/administration"].includes(section.route)&&(section.route!=="/privacy"||privateAuthEnabled())&&(section.route!=="/consents"||!sandboxAuthEnabled())).map(section=><NavLink key={section.route} to={section.route} onClick={()=>setMobileMenu(false)}><Icon name={section.icon} size={18}/>{section.name}</NavLink>)}
             </div>
           </>}

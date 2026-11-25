@@ -56,7 +56,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
       if(!isCurrent())return;
       await syntheticCapturesApi(session.token,profileId).create(png);
       await cache.invalidateQueries({queryKey:["sandbox-images",id,profileId]});
-      if(isCurrent()){setLocal(null);setAttest(false);setNotice("Imagen guardada en el expediente.");if(!file&&!onAnalyze){stageCaptureForAnalysis(source,review);navigate("/analysis?profile="+encodeURIComponent(profileId),{state:{localCaptureReview:review}});}}
+      if(isCurrent()){setLocal(null);setAttest(false);setNotice("Imagen guardada en el expediente.");if(!file&&!onAnalyze){stageCaptureForAnalysis(source,review,profileId);navigate("/analysis?profile="+encodeURIComponent(profileId),{state:{localCaptureReview:review}});}}
     });
   }
   async function open(item:StoredCapture,analyze:boolean){
@@ -69,7 +69,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
         const review=await reviewLocalCapture(image);
         if(!isCurrent())return;
         if(onAnalyze)await onAnalyze(image,review);
-        else {stageCaptureForAnalysis(image,review);navigate("/analysis?profile="+profileId,{state:{localCaptureReview:review}});}
+        else {stageCaptureForAnalysis(image,review,profileId);navigate("/analysis?profile="+profileId,{state:{localCaptureReview:review}});}
       }else setPreview({url:URL.createObjectURL(blob),item});
     });
   }

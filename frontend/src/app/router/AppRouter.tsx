@@ -27,24 +27,26 @@ function VisualAccess({ children }: PropsWithChildren) {
 }
 function ApplicationRoutes() {
   const location = useLocation();
+  const scope=location.pathname.match(/^\/profiles\/([^/]+)$/)?.[1]??new URLSearchParams(location.search).get("profile")??"";
+  const atlasPanel=new URLSearchParams(location.search).get("panel")??"";
   return (
     <RouteErrorBoundary routeKey={location.key}>
       <Routes>
         <Route path="/system" element={<FoundationPage />} />
         <Route path="/access" element={<Suspense fallback={loading}><AccessPage /></Suspense>} />
-        <Route path="/body-3d" element={<VisualAccess><Suspense fallback={loading}><BodyWorkspace /></Suspense></VisualAccess>} />
+        <Route path="/body-3d" element={<VisualAccess><Suspense fallback={loading}><BodyWorkspace key={scope+"|"+atlasPanel} /></Suspense></VisualAccess>} />
         <Route path="/simulation" element={<Navigate to="/body-3d?panel=simulacion" replace />} />
         <Route element={<DataLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/progress" element={<Suspense fallback={loading}><ProjectProgressPage /></Suspense>} />
           <Route path="/profiles" element={<ProfilesPage />} />
-          <Route path="/profiles/:profileId" element={<ProfileDetail />} />
+          <Route path="/profiles/:profileId" element={<ProfileDetail key={scope} />} />
           <Route path="/measurements" element={<Suspense fallback={loading}><MeasurementsPage /></Suspense>} />
-          <Route path="/capture" element={<Suspense fallback={loading}><CapturePage /></Suspense>} />
-          <Route path="/analysis" element={<Suspense fallback={loading}><AnalysisPage /></Suspense>} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/consents" element={<ConsentsPage />} />
-          <Route path="/reports" element={<Suspense fallback={loading}><ReportsPage /></Suspense>} />
+          <Route path="/capture" element={<Suspense fallback={loading}><CapturePage key={scope} /></Suspense>} />
+          <Route path="/analysis" element={<Suspense fallback={loading}><AnalysisPage key={scope} /></Suspense>} />
+          <Route path="/analytics" element={<AnalyticsPage key={scope} />} />
+          <Route path="/consents" element={<ConsentsPage key={scope} />} />
+          <Route path="/reports" element={<Suspense fallback={loading}><ReportsPage key={scope} /></Suspense>} />
           <Route path="/privacy" element={<Suspense fallback={loading}><PrivacyRequestsPage /></Suspense>} />
           <Route path="/administration" element={<Suspense fallback={loading}><AdministrationPage /></Suspense>} />
           <Route path="*" element={<><h1>Página no disponible</h1><Link to="/">Volver al dashboard</Link></>} />
