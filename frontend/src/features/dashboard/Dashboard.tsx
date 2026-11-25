@@ -30,19 +30,31 @@ function measurementText(row: Measurement | null): string {
 }
 
 export function DashboardEvolution({
-  profileId,
-  profile,
+  profileId: suppliedProfileId,
+  profile: suppliedProfile,
+  initiallyOpen = false,
 }: {
-  profileId: string;
-  profile: Profile | null;
+  profileId?: string;
+  profile?: Profile | null;
+  initiallyOpen?: boolean;
 }) {
   const { id, api } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [open, setOpen] = useState(initiallyOpen);
+  const standalone = suppliedProfileId === undefined;
+  const profileId = suppliedProfileId ?? searchParams.get("profile") ?? "";
+  const profileQuery = useQuery({
+    queryKey: ["dashboard-profile", id, profileId],
+    queryFn: () => api.profile(profileId),
+    enabled: standalone && open && Boolean(profileId),
+  });
+  const profile = suppliedProfile ?? profileQuery.data ?? null;
   const [metric, setMetric] = useState("weight");
   const [period, setPeriod] = useState("90d");
   const catalog = useQuery({
     queryKey: ["dashboard-catalog", id],
     queryFn: api.catalog,
-    enabled: Boolean(profileId),
+    enabled: open && Boolean(profileId),
   });
   const options = catalog.data ?? [];
   const chosen = options.find(item => item.code === metric)
@@ -51,39 +63,53 @@ export function DashboardEvolution({
   const series = useQuery({
     queryKey: ["dashboard-series", id, profileId, chosen?.code, period],
     queryFn: () => api.series(profileId, chosen!.code, period),
-    enabled: Boolean(profileId) && catalog.isSuccess && Boolean(chosen),
+    enabled: open && Boolean(profileId) && catalog.isSuccess && Boolean(chosen),
   });
+  const chooseProfile = (nextId: string) => {
+    if (!standalone) return;
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      if (nextId) next.set("profile", nextId);
+      else next.delete("profile");
+      return next;
+    });
+  };
 
   return <section className="enterprise-panel product-evolution dashboard-evolution" aria-label="Evolución corporal">
     <div className="enterprise-panel-title">
       <h2>Evolución corporal</h2>
       {profileId && <DataTypeBadge type="OBSERVADO" />}
+      <button type="button" className="secondary-button dashboard-evolution-toggle" aria-expanded={open}
+        onClick={() => setOpen(value => !value)}>{open ? "Ocultar gráfica" : "Explorar evolución"}</button>
     </div>
-    {!profileId ? <div className="dashboard-panel-empty"><EmptyState text="Selecciona un expediente para consultar sus mediciones a lo largo del tiempo." /></div> :
-      catalog.isPending ? <LoadingState /> :
-      catalog.isError ? <ErrorState error={catalog.error} retry={() => void catalog.refetch()} /> :
-      !chosen ? <EmptyState text="No hay métricas disponibles." /> :
+    {!open ? null :
       <div className="product-evolution-body">
-        <div className="dashboard-series-controls">
-          <label>Métrica<select value={chosen.code} onChange={e => setMetric(e.target.value)}>
-            {options.map(item => <option key={item.code} value={item.code}>{item.label} ({item.unit})</option>)}
-          </select></label>
-          <label>Periodo<select value={period} onChange={e => setPeriod(e.target.value)}>
-            <option value="30d">30 días</option><option value="90d">90 días</option><option value="1a">1 año</option>
-          </select></label>
-        </div>
-        {series.isPending ? <LoadingState /> :
-          series.isError ? <ErrorState error={series.error} retry={() => void series.refetch()} /> :
-          series.data.length === 0 ? <EmptyState text="Este expediente aún no tiene mediciones para el periodo seleccionado." /> :
-          <Suspense fallback={<LoadingState />}><HistoryChart rows={series.data} unit={chosen.unit} /></Suspense>}
-        {profile && <div className="bv-context-actions">
-          <Link to={"/profiles/" + profileId + "?tab=analytics&metric=" + chosen.code}>Ver historial <Icon name="arrow-right" size={13} /></Link>
-          <Link to={"/body-3d?panel=grasa&profile=" + profileId}>Abrir visor 3D <Icon name="arrow-right" size={13} /></Link>
-        </div>}
+        {standalone && <ProfilePicker selected={profile} selectedId={profileId} onChange={chooseProfile} />}
+        {!profileId ? <EmptyState text="Selecciona un expediente para consultar sus mediciones a lo largo del tiempo." /> :
+          catalog.isPending ? <LoadingState /> :
+          catalog.isError ? <ErrorState error={catalog.error} retry={() => void catalog.refetch()} /> :
+          !chosen ? <EmptyState text="No hay métricas disponibles." /> :
+          <>
+            <div className="dashboard-series-controls">
+              <label>Métrica<select value={chosen.code} onChange={e => setMetric(e.target.value)}>
+                {options.map(item => <option key={item.code} value={item.code}>{item.label} ({item.unit})</option>)}
+              </select></label>
+              <label>Periodo<select value={period} onChange={e => setPeriod(e.target.value)}>
+                <option value="30d">30 días</option><option value="90d">90 días</option><option value="1a">1 año</option>
+              </select></label>
+            </div>
+            {series.isPending ? <LoadingState /> :
+              series.isError ? <ErrorState error={series.error} retry={() => void series.refetch()} /> :
+              series.data.length === 0 ? <EmptyState text="Este expediente aún no tiene mediciones para el periodo seleccionado." /> :
+              <Suspense fallback={<LoadingState />}><HistoryChart rows={series.data} unit={chosen.unit} /></Suspense>}
+            {profile && <div className="bv-context-actions">
+              <Link to={"/profiles/" + profileId + "?tab=analytics&metric=" + chosen.code}>Ver historial <Icon name="arrow-right" size={13} /></Link>
+              <Link to={"/body-3d?panel=grasa&profile=" + profileId}>Abrir visor 3D <Icon name="arrow-right" size={13} /></Link>
+            </div>}
+          </>}
       </div>}
   </section>;
 }
-
 function DashboardComposition({
   profileId,
   measurements,
@@ -250,7 +276,7 @@ export function Dashboard() {
         </div>
       </section>
 
-      <DashboardEvolution profileId={profileId} profile={selectedProfile} />
+      <DashboardEvolution profileId={profileId} profile={selectedProfile} initiallyOpen />
       <DashboardComposition
         profileId={profileId}
         measurements={bodyMeasurements}
