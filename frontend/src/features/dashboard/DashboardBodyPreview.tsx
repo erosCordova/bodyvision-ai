@@ -1,13 +1,31 @@
 import { useEffect, useRef, useState } from "react";
+import { DEFAULT_REFERENCE_KG } from "../viewer/bodyVolume";
 import type { LayerOpacity, createAnatomyScene } from "../viewer/AnatomyScene";
 
 const opacity: LayerOpacity = {skin:1,muscles:1,skeleton:1,arteries:1,veins:1,nerves:1};
+const DEFAULT_STATURE_CM = 175;
 
-export function DashboardBodyPreview() {
+type Anthropometry = { bodyWeightKg?: number; statureCm?: number };
+
+export function DashboardBodyPreview({ bodyWeightKg, statureCm }: Anthropometry) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createAnatomyScene> | null>(null);
+  const anthropometry = useRef<Anthropometry>({ bodyWeightKg, statureCm });
   const [reducedMotion,setReducedMotion] = useState(()=>window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const [playing,setPlaying] = useState(true);
+  const [ready,setReady] = useState(false);
+  const [error,setError] = useState(false);
+  const [attempt,setAttempt] = useState(0);
+
+  useEffect(()=>{
+    anthropometry.current = { bodyWeightKg, statureCm };
+    const current = scene.current;
+    if (!current) return;
+    // The atlas deformation is an illustrative visualization. It never edits
+    // the stored measurements or claims to reconstruct a patient's anatomy.
+    current.setWeightVariation(0, bodyWeightKg ?? DEFAULT_REFERENCE_KG);
+    current.setStature(statureCm ?? DEFAULT_STATURE_CM);
+  },[bodyWeightKg,statureCm]);
 
   useEffect(()=>{
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -15,9 +33,6 @@ export function DashboardBodyPreview() {
     preference.addEventListener("change",update);
     return ()=>preference.removeEventListener("change",update);
   },[]);
-  const [ready,setReady] = useState(false);
-  const [error,setError] = useState(false);
-  const [attempt,setAttempt] = useState(0);
 
   useEffect(()=>{
     let active=true;
@@ -35,6 +50,9 @@ export function DashboardBodyPreview() {
       },()=>{if(active) setError(true);});
       scene.current=controller;
       dispose=controller.dispose;
+      const current = anthropometry.current;
+      controller.setWeightVariation(0, current.bodyWeightKg ?? DEFAULT_REFERENCE_KG);
+      controller.setStature(current.statureCm ?? DEFAULT_STATURE_CM);
       // Reuse the atlas exterior geometry, but render ONLY its cyan wireframe.
       // Set mode before loading to avoid ever displaying the solid skin.
       controller.setQuality("fluida");
@@ -49,9 +67,12 @@ export function DashboardBodyPreview() {
     scene.current?.setDashboardAnimation(ready && !error && playing && !reducedMotion);
   },[ready,error,playing,reducedMotion,attempt]);
 
-  return <div className="enterprise-realbody-preview product-atlas dashboard-hologram" data-loaded={ready&&!error} data-model="anatomy-atlas" data-render-mode="holograma" data-animation={ready&&!error&&playing&&!reducedMotion?"running":"paused"}>
+  return <div className="enterprise-realbody-preview product-atlas dashboard-hologram"
+    data-loaded={ready&&!error} data-model="anatomy-atlas" data-render-mode="holograma"
+    data-animation={ready&&!error&&playing&&!reducedMotion?"running":"paused"}>
     <div ref={host} className="enterprise-realbody-canvas" />
-    {ready && !error && !reducedMotion && <button type="button" className="dashboard-animation-toggle" onClick={()=>setPlaying(value=>!value)} aria-label={playing?"Pausar animación del atlas":"Reanudar animación del atlas"}>{playing?"Ⅱ":"▷"}</button>}
+    {ready && !error && !reducedMotion && <button type="button" className="dashboard-animation-toggle" onClick={()=>setPlaying(value=>!value)}
+      aria-label={playing?"Pausar animación del atlas":"Reanudar animación del atlas"}>{playing?"Ⅱ":"▷"}</button>}
     {(!ready||error) && <div className="enterprise-realbody-status" role={error?"alert":"status"}>
       <strong>{error?"Modelo 3D no disponible":"Cargando modelo anatómico…"}</strong>
       {error && <button type="button" onClick={()=>setAttempt(n=>n+1)}>Reintentar</button>}
