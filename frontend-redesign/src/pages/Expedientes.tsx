@@ -1,31 +1,36 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowLeft, Box, Plus, Search, SlidersHorizontal, Sparkles, ImagePlus } from "lucide-react";
+import { ArrowLeft, Box, Plus, Search, SlidersHorizontal, Sparkles, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { Avatar, Badge, Btn, Modal, PageHead, Panel, Segmented, chartTip, estadoTone } from "../ui";
-import { bodyParams, historial, idealWeight, imcOf, useStore } from "../store";
+import { bodyParams, historial, idealWeight, imcOf, useStore, type Patient } from "../store";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
 import type { Sex } from "../three/assets";
 
 export function Expedientes() {
   const nav = useNavigate();
-  const { patients, addPatient, select, toast } = useStore();
+  const { patients, addPatient, updatePatient, deletePatient, select, toast } = useStore();
   const [q, setQ] = useState("");
   const [sex, setSex] = useState<"all" | Sex>("all");
   const [estado, setEstado] = useState("Todos");
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ nombre: "", edad: 30, sexo: "male" as Sex, altura: 175, peso: 75, grasa: 20, musculo: 38, objetivo: "Salud general" });
 
+  const [editing, setEditing] = useState<Patient | null>(null);
+  const [deleting, setDeleting] = useState<Patient | null>(null);
+  const [status, setStatus] = useState<Patient["estado"]>("Nuevo");
   const [foto, setFoto] = useState<string | undefined>();
   const [reading, setReading] = useState(false);
   const photoRequest = useRef(0);
   const reset = () => {
     photoRequest.current++;
+    setEditing(null); setStatus("Nuevo");
     setFoto(undefined);
     setReading(false);
     setF({ nombre: "", edad: 30, sexo: "male", altura: 175, peso: 75, grasa: 20, musculo: 38, objetivo: "Salud general" });
   };
+  const edit = (p: Patient) => { reset(); setEditing(p); setStatus(p.estado); setF({nombre:p.nombre,edad:p.edad,sexo:p.sexo,altura:p.altura,peso:p.peso,grasa:p.grasa,musculo:p.musculo,objetivo:p.objetivo}); setFoto(p.foto); setOpen(true); };
   const close = () => { reset(); setOpen(false); };
   const pickPhoto = async (file?: File) => {
     const request = ++photoRequest.current;
@@ -65,9 +70,10 @@ export function Expedientes() {
     if (reading) return;
     if (!Number.isInteger(f.edad) || f.edad < 18 || f.edad > 100) return toast("El atlas de demostración admite edades de 18 a 100 años");
     if (![f.altura, f.peso, f.grasa, f.musculo].every(Number.isFinite) || f.altura < 100 || f.altura > 230 || f.peso < 25 || f.peso > 350 || f.grasa < 0 || f.grasa > 70 || f.musculo < 0 || f.musculo > 100 || f.grasa + f.musculo > 100) return toast("Revisa las medidas corporales y los porcentajes");
-    if (!addPatient({ ...f, nombre: f.nombre.trim(), foto, tono: "medio", estado: "Nuevo", email: "nuevo@correo.com" })) return toast("No hay espacio para guardar el expediente en esta sesión");
-    close();
-    toast("Expediente creado correctamente");
+    const record={...f,nombre:f.nombre.trim(),foto,estado:status};
+    const saved=editing?updatePatient(editing.id,record):addPatient({...record,tono:"medio",email:"nuevo@correo.com"});
+    if(!saved)return toast("No se pudo guardar el expediente");
+    toast(editing?"Expediente actualizado":"Expediente creado correctamente");close();
   };
 
   return (
@@ -92,7 +98,7 @@ export function Expedientes() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="text-xs uppercase tracking-wider text-slate-500">
               <tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium">
-                <th>Paciente</th><th>ID</th><th>Edad</th><th>IMC</th><th>% Grasa</th><th>Objetivo</th><th>Estado</th><th>Última</th>
+                <th>Paciente</th><th>ID</th><th>Edad</th><th>IMC</th><th>% Grasa</th><th>Objetivo</th><th>Estado</th><th>Última</th><th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -115,16 +121,16 @@ export function Expedientes() {
                     <td className="text-slate-300">{p.grasa}%</td>
                     <td className="text-slate-300">{p.objetivo}</td>
                     <td><Badge tone={estadoTone(p.estado)}>{p.estado}</Badge></td>
-                    <td className="text-slate-500">{p.ultima}</td>
+                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2"><button type="button" title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" title="Eliminar expediente" aria-label={`Eliminar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
                   </tr>
                 );
               })}
-              {!list.length && <tr><td colSpan={8} className="py-12 text-center text-slate-500">Sin resultados</td></tr>}
+              {!list.length && <tr><td colSpan={9} className="py-12 text-center text-slate-500">Sin resultados</td></tr>}
             </tbody>
           </table>
         </div>
       </Panel>
-      <Modal open={open} onClose={close} title="Nuevo expediente" wide>
+      <Modal open={open} onClose={close} title={editing?"Editar expediente":"Nuevo expediente"} wide>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2 rounded-xl border border-white/10 p-3">
             <div className="flex items-center gap-4">
@@ -145,9 +151,15 @@ export function Expedientes() {
             <label key={k}><span className="mb-1 block text-xs capitalize text-slate-400">{k === "musculo" ? "Masa muscular (%)" : k === "grasa" ? "Grasa corporal (%)" : k === "altura" ? "Altura (cm)" : k === "peso" ? "Peso (kg)" : "Edad"}</span>
               <input type="number" className="field" value={f[k]} onChange={(e) => setF({ ...f, [k]: +e.target.value })} /></label>
           ))}
+          <label><span className="mb-1 block text-xs text-slate-400">Estado</span><select className="field" value={status} onChange={e=>setStatus(e.target.value as Patient["estado"])}>{["Nuevo","Activo","En seguimiento","Alta"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
           <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Objetivo</span><input className="field" value={f.objetivo} onChange={(e) => setF({ ...f, objetivo: e.target.value })} /></label>
         </div>
-        <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading}>Crear expediente</Btn></div>
+        <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
+      </Modal>
+      <Modal open={!!deleting} onClose={()=>setDeleting(null)} title="Eliminar expediente">
+        <p className="text-sm text-slate-300">¿Eliminar el expediente de <strong>{deleting?.nombre}</strong>, su fotografía y los registros de demostración vinculados (mediciones, consentimientos y reportes)? Esta acción no se puede deshacer.</p>
+        {patients.length<=1&&<p className="mt-3 text-sm text-amber-300">Debe quedar al menos un expediente activo en la demostración. Crea otro antes de eliminar este.</p>}
+        <div className="mt-5 flex justify-end gap-2"><Btn onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={patients.length<=1} onClick={()=>{if(deleting&&deletePatient(deleting.id)){setDeleting(null);toast("Expediente eliminado");}}}>Eliminar</Btn></div>
       </Modal>
     </div>
   );

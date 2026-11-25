@@ -75,6 +75,7 @@ export interface Medicion {
 
 export interface Consent {
   id: string;
+  patientId?: string;
   paciente: string;
   tipo: string;
   fecha: string;
@@ -82,19 +83,26 @@ export interface Consent {
   estado: "Vigente" | "Pendiente" | "Revocado" | "Por vencer";
 }
 
+export interface ReportRecord { id: string; patientId: string; title: string; date: string; content: string; }
 interface Store {
   user: { nombre: string; email: string } | null;
   login: (email: string) => void;
   logout: () => void;
   patients: Patient[];
   addPatient: (p: Omit<Patient, "id" | "ultima">) => boolean;
+  updatePatient: (id: string, p: Partial<Omit<Patient, "id">>) => boolean;
+  deletePatient: (id: string) => boolean;
   selectedId: string;
   select: (id: string) => void;
   patient: Patient;
   mediciones: Medicion[];
-  addMedicion: (m: Omit<Medicion, "id">) => void;
+  addMedicion: (m: Omit<Medicion, "id">) => boolean;
+  updateMedicion: (id: string, m: Omit<Medicion, "id">) => boolean;
+  deleteMedicion: (id: string) => boolean;
   consents: Consent[];
-  setConsents: (c: Consent[]) => void;
+  setConsents: (c: Consent[]) => boolean;
+  reports: ReportRecord[];
+  setReports: (r: ReportRecord[]) => boolean;
   toast: (msg: string) => void;
   toasts: { id: number; msg: string }[];
 }
@@ -104,6 +112,7 @@ export const useStore = () => useContext(Ctx);
 
 const initialMed: Medicion[] = PATIENTS.slice(0, 6).map((p, i) => ({
   id: `MED-${1428 - i}`,
+  patientId: p.id,
   paciente: p.nombre,
   fecha: `${20 - i * 2} jun 2025`,
   peso: p.peso,
@@ -118,6 +127,7 @@ const initialMed: Medicion[] = PATIENTS.slice(0, 6).map((p, i) => ({
 
 const initialConsents: Consent[] = PATIENTS.slice(0, 8).map((p, i) => ({
   id: `CON-${300 + i}`,
+  patientId: p.id,
   paciente: p.nombre,
   tipo: ["Tratamiento de imágenes corporales", "Reconstrucción 3D", "Uso de IA en análisis", "Compartir con especialista"][i % 4],
   fecha: `${3 + i} may 2025`,
@@ -126,27 +136,25 @@ const initialConsents: Consent[] = PATIENTS.slice(0, 8).map((p, i) => ({
 }));
 
 const SESSION_KEY = "bv_demo_expedientes_v1";
-function restorePatients(): Patient[] {
+type DemoData = { patients: Patient[]; mediciones: Medicion[]; consents: Consent[]; reports: ReportRecord[]; selectedId: string };
+const defaults = (): DemoData => ({patients:PATIENTS, mediciones:initialMed, consents:initialConsents, reports:[], selectedId:PATIENTS[0].id});
+function restoreData(): DemoData {
   try {
     const user = JSON.parse(localStorage.getItem("bv_user") || "null");
     const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
-    if (user && saved?.email === user.email && Array.isArray(saved.patients) && saved.patients.length) return saved.patients;
-  } catch { /* session storage unavailable */ }
-  return PATIENTS;
+    if (user && saved?.email === user.email && Array.isArray(saved.patients) && saved.patients.length) {
+      const ids = new Set(saved.patients.map((p:Patient)=>p.id));
+      return {patients:saved.patients, mediciones:(Array.isArray(saved.mediciones)?saved.mediciones:initialMed).filter((m:Medicion)=>m.patientId && ids.has(m.patientId)), consents:(Array.isArray(saved.consents)?saved.consents:initialConsents).filter((c:Consent)=>c.patientId && ids.has(c.patientId)), reports:Array.isArray(saved.reports)?saved.reports:[],selectedId:ids.has(saved.selectedId)?saved.selectedId:saved.patients[0].id};
+    }
+  } catch {}
+  return defaults();
 }
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Store["user"]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("bv_user") || "null");
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(localStorage.getItem("bv_user") || "null"); } catch { return null; }
   });
-  const [patients, setPatients] = useState<Patient[]>(restorePatients);
-  const [selectedId, setSelectedId] = useState(PATIENTS[0].id);
-  const [mediciones, setMediciones] = useState(initialMed);
-  const [consents, setConsents] = useState(initialConsents);
+  const [data, setData] = useState<DemoData>(restoreData);
+  const {patients,mediciones,consents,reports,selectedId}=data;
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
 
   const toast = useCallback((msg: string) => {
@@ -155,46 +163,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   }, []);
 
-  const value = useMemo<Store>(
-    () => ({
+  const value = useMemo<Store>(() => {
+    const save = (next:DemoData) => {
+      try { sessionStorage.setItem(SESSION_KEY,JSON.stringify({...next,email:user?.email})); } catch { toast("No se pudo guardar en esta sesión"); return false; }
+      setData(next); return true;
+    };
+    return {
       user,
-      login: (email) => {
-        const u = { nombre: "Dr. Martínez", email };
-        sessionStorage.removeItem(SESSION_KEY);
-        setPatients(PATIENTS);
-        setSelectedId(PATIENTS[0].id);
-        localStorage.setItem("bv_user", JSON.stringify(u));
-        setUser(u);
+      login: (email) => {const u={nombre:"Dr. Martínez",email};sessionStorage.removeItem(SESSION_KEY);setData(defaults());localStorage.setItem("bv_user",JSON.stringify(u));setUser(u);},
+      logout: () => {sessionStorage.removeItem(SESSION_KEY);setData(defaults());localStorage.removeItem("bv_user");setUser(null);},
+      patients, mediciones, consents, reports, selectedId,
+      select: id => {if(patients.some(p=>p.id===id))save({...data,selectedId:id});},
+      patient: patients.find(p=>p.id===selectedId)||patients[0],
+      addPatient: p => {const np:Patient={...p,id:"EXP-"+crypto.randomUUID().slice(0,8),ultima:"Ahora"};return save({...data,patients:[np,...patients],selectedId:np.id});},
+      updatePatient: (id,p) => {
+        if(!patients.some(x=>x.id===id))return false;
+        return save({...data,patients:patients.map(x=>x.id===id?{...x,...p,id,ultima:"Ahora"}:x),mediciones:mediciones.map(m=>m.patientId===id?{...m,paciente:p.nombre??m.paciente}:m),consents:consents.map(c=>c.patientId===id?{...c,paciente:p.nombre??c.paciente}:c)});
       },
-      logout: () => {
-        sessionStorage.removeItem(SESSION_KEY);
-        setPatients(PATIENTS);
-        setSelectedId(PATIENTS[0].id);
-        localStorage.removeItem("bv_user");
-        setUser(null);
+      deletePatient: id => {
+        if(patients.length<=1||!patients.some(p=>p.id===id))return false;
+        const next=patients.filter(p=>p.id!==id);
+        return save({...data,patients:next,selectedId:selectedId===id?next[0].id:selectedId,mediciones:mediciones.filter(m=>m.patientId!==id),consents:consents.filter(c=>c.patientId!==id),reports:reports.filter(r=>r.patientId!==id)});
       },
-      patients,
-      addPatient: (p) => {
-        const np = { ...p, id: `EXP-${2401 + patients.length}`, ultima: "Ahora" } as Patient;
-        const next = [np, ...patients];
-        try {
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify({ email: user?.email, patients: next }));
-        } catch { return false; }
-        setPatients(next);
-        setSelectedId(np.id);
-        return true;
-      },
-      selectedId,
-      select: setSelectedId,
-      patient: patients.find((p) => p.id === selectedId) || patients[0],
-      mediciones,
-      addMedicion: (m) => setMediciones((l) => [{ ...m, id: `MED-${1429 + l.length - 5}` }, ...l]),
-      consents,
-      setConsents,
-      toast,
-      toasts,
-    }),
-    [user, patients, selectedId, mediciones, consents, toast, toasts]
-  );
+      addMedicion: m => !!m.patientId&&patients.some(p=>p.id===m.patientId)&&save({...data,mediciones:[{...m,id:"MED-"+crypto.randomUUID().slice(0,8)},...mediciones]}),
+      updateMedicion: (id,m) => mediciones.some(x=>x.id===id&&x.patientId===m.patientId)&&save({...data,mediciones:mediciones.map(x=>x.id===id?{...m,id}:x)}),
+      deleteMedicion: id => save({...data,mediciones:mediciones.filter(m=>m.id!==id)}),
+      setConsents: c => save({...data,consents:c}),
+      setReports: r => save({...data,reports:r}),
+      toast,toasts,
+    };
+  },[user,data,toast,toasts]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
