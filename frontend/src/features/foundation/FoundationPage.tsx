@@ -6,6 +6,8 @@ import {
   type LiveStatus,
   type ReadyStatus,
 } from "../../services/api/client";
+import { Icon } from "../../components/ui/Icon";
+import { Logo } from "../../components/ui/Logo";
 
 function ServiceCheck({
   name,
@@ -22,7 +24,7 @@ function ServiceCheck({
     <article className="service-card" aria-label={name}>
       <div className="card-heading">
         <span className="service-icon" aria-hidden="true">
-          {kind === "live" ? "↗" : "▤"}
+          <Icon name={kind === "live" ? "activity" : "database"} size={19} />
         </span>
         <h3>{name}</h3>
       </div>
@@ -84,7 +86,7 @@ export function FoundationPage() {
       <aside className="sidebar" aria-label="Navegación principal">
         <Link className="brand" to="/" aria-label="BODYVISION AI — Inicio">
           <span className="brand-mark" aria-hidden="true">
-            B
+            <Logo size={30} />
           </span>
           <span>
             BODYVISION <strong>AI</strong>
@@ -93,7 +95,7 @@ export function FoundationPage() {
         </Link>
         <p className="nav-label">ESPACIO DE TRABAJO</p>
         <Link className="nav-item active" to="/" aria-current="page">
-          <span aria-hidden="true">◫</span> Estado del entorno
+          <span aria-hidden="true"><Icon name="scan" size={17} /></span> Estado del entorno
         </Link>
         <div className="sidebar-note">
           <span className="phase-label">FASE 2 / NÚCLEO DE DATOS</span>
@@ -126,11 +128,11 @@ export function FoundationPage() {
                 registro y seguimiento corporal.
               </p>
             </div>
-            <span className="version-label">v0.2.0</span>
+            <span className="version-label">v0.3.0</span>
           </div>
           <section className="notice" aria-label="Alcance de esta entrega">
             <span className="notice-icon" aria-hidden="true">
-              i
+              <Icon name="info" size={13} />
             </span>
             <div>
               <h2>Entorno técnico de desarrollo</h2>
@@ -153,7 +155,7 @@ export function FoundationPage() {
           </section>
           <section className="empty-panel" aria-labelledby="records-title">
             <div className="empty-icon" aria-hidden="true">
-              ▱
+              <Icon name="inbox" size={36} strokeWidth={1.3} />
             </div>
             <div>
               <h2 id="records-title">El espacio de trabajo está disponible</h2>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePrivateAuth, waitForSandboxReady, PrivateAuthError } from "../../app/providers/PrivateAuthProvider";
+import { Logo } from "../../components/ui/Logo";
 import "./sandbox-access.css";
 
 const AtlasPreview = lazy(() => import("../dashboard/DashboardBodyPreview").then(module => ({default:module.DashboardBodyPreview})));
@@ -61,7 +62,7 @@ export function SandboxAccessPage() {
   }
   return <div className="bv-access">
     <header className="bv-access-top">
-      <div className="bv-access-brand"><span className="bv-access-mark"><AccessIcon name="scan"/></span><div>BODYVISION <strong>AI</strong><small>Plataforma de análisis corporal</small></div></div>
+      <div className="bv-access-brand"><span className="bv-access-mark"><Logo size={30}/></span><div>BODYVISION <strong>AI</strong><small>Plataforma de análisis corporal</small></div></div>
       <span className="bv-access-environment"><i/> Entorno de pruebas</span>
     </header>
     <div className="bv-access-layout">

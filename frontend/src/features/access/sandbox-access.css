@@ -1,49 +1,162 @@
-/* Standalone access screen: keep all rules scoped away from the clinical workspace. */
-.bv-access,.bv-access *{box-sizing:border-box}
-.bv-access{min-height:100svh;display:flex;flex-direction:column;padding:clamp(20px,3.4vw,56px) clamp(20px,5vw,90px) 20px;color:#e8f3ff;font-family:Inter,system-ui,sans-serif;background:radial-gradient(ellipse at 15% 45%,#123b57 0%,#0b2039 33%,transparent 65%),radial-gradient(ellipse at 88% 10%,#283455 0%,transparent 42%),#071222;isolation:isolate}
-.bv-access-top,.bv-access-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;max-width:1440px;margin:0 auto}
-.bv-access-brand{display:flex;align-items:center;gap:13px;font-size:18px;font-weight:750;letter-spacing:.085em;line-height:1.25}
-.bv-access-brand strong{color:#67e8f9}.bv-access-brand small{display:block;margin-top:4px;font-size:10px;letter-spacing:0;font-weight:500;color:#9db7ce}
-.bv-access-mark,.bv-access-card-icon{display:grid;place-items:center;border:1px solid #397891;background:linear-gradient(145deg,#173d53,#10253e);color:#75e9ff;border-radius:13px;width:46px;height:46px;box-shadow:0 0 24px #33c8e217}
-.bv-access svg{width:20px;height:20px;flex-shrink:0}.bv-access-mark svg{width:26px;height:26px}
-.bv-access-environment{display:flex;align-items:center;gap:8px;font-size:11px;white-space:nowrap;background:#10283b;border:1px solid #31526b;border-radius:30px;padding:8px 12px;color:#bddceb}.bv-access-environment i{width:7px;height:7px;border-radius:50%;background:#62e7d1;box-shadow:0 0 9px #62e7d17a}
-.bv-access-layout{width:100%;max-width:1440px;margin:auto;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(340px,470px);gap:clamp(30px,6vw,100px);align-items:center;padding:24px 0}
-.bv-access-showcase{min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;text-align:center}
-.bv-access-hero-copy{position:relative;z-index:2}.bv-access-kicker{margin:0 0 10px;font-size:10px;letter-spacing:.23em;font-weight:650;color:#87e7fb}
-.bv-access h1{font-size:clamp(32px,3.8vw,56px);line-height:1.05;letter-spacing:-.055em;margin:0;color:#f4f9ff;font-weight:750}.bv-access h1 span{color:#69e5fa}
-.bv-access-hero-copy>p:last-child{font-size:14px;line-height:1.7;max-width:480px;margin:14px auto 0;color:#b6cbde}
-.bv-access-visual{position:relative;isolation:isolate;width:100%;height:clamp(300px,45vh,480px);margin-top:8px}
-.bv-access-orbits{position:absolute;inset:5% 8%;pointer-events:none;display:grid;place-items:center;z-index:0}
-.bv-access-orbits i{position:absolute;aspect-ratio:1;width:62%;max-width:390px;border:1px solid #70ddf321;border-radius:50%;transform:rotateX(58deg);bottom:3%}.bv-access-orbits i:nth-child(2){width:80%;border-style:dashed;opacity:.7}.bv-access-orbits i:nth-child(3){width:96%;opacity:.6}
-.bv-access-visual .dashboard-hologram.product-atlas.enterprise-realbody-preview{height:100%;min-height:0;position:relative;background:radial-gradient(ellipse at 50% 48%,#16496b70,transparent 68%);border:0;box-shadow:none;border-radius:24px;overflow:hidden}
-.bv-access-visual .dashboard-hologram.product-atlas .enterprise-realbody-canvas{position:absolute;inset:0 8px 31px;z-index:1}
-.bv-access-visual .enterprise-realbody-canvas canvas{width:100%;height:100%;display:block;touch-action:pan-y}
-.bv-access-visual .atlas-credit{position:absolute;bottom:5px;left:10px;right:10px;color:#9cb4cc;font-size:9px;line-height:1.5;z-index:3}
-.bv-access-visual .atlas-credit a{color:#a7c7db}
-.bv-access-visual .enterprise-realbody-status,.bv-access-model-status{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#a8c5da;font-size:12px;gap:10px}
-.bv-access-visual .enterprise-realbody-status button{border:1px solid #53798b;border-radius:8px;background:#112d42;color:#dcf7ff;padding:8px 12px;cursor:pointer}
-.bv-access-visual-caption{display:flex;justify-content:space-between;align-items:center;width:100%;padding:10px 0;border-top:1px solid #284b61;color:#a9c7d9;font-size:10px;letter-spacing:.06em;gap:12px}
-.bv-access-visual-caption span:first-child{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:0}.bv-access-visual-caption svg{color:#7ce3f5;width:16px;height:16px}
-.bv-access-card{position:relative;background:linear-gradient(145deg,#172e49ee,#0c1b30f5 70%);border:1px solid #365674;border-radius:24px;padding:clamp(24px,3.1vw,42px);box-shadow:0 28px 90px #0009,inset 0 1px 0 #a2d8f51a;min-width:0}
-.bv-access-card::before{content:"";position:absolute;top:0;left:18%;right:18%;height:1px;background:linear-gradient(90deg,transparent,#6ce7ff,transparent);pointer-events:none}
-.bv-access-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1px solid #29465f;background:#08182b;border-radius:12px;padding:4px;margin-bottom:24px}
-.bv-access-tabs button{border:0;border-radius:8px;background:transparent;color:#b2c9dd;font:inherit;font-size:12px;font-weight:650;padding:10px 7px;cursor:pointer}.bv-access-tabs button[aria-pressed=true]{color:#e5fbff;background:#234761;box-shadow:0 2px 10px #0003}
-.bv-access-card-icon{width:44px;height:44px;margin-bottom:15px}.bv-access-card h2{font-size:clamp(24px,2.4vw,32px);letter-spacing:-.045em;line-height:1.15;margin:0;font-weight:750;color:#f6faff}
-.bv-access-subtitle{font-size:13px;color:#a9bed4;line-height:1.6;margin:9px 0 24px}
-.bv-access-form{display:flex;flex-direction:column;gap:8px}.bv-access-form>label:not(.bv-access-consent){font-size:12px;color:#d7e9f5;font-weight:650;margin-top:7px}
-.bv-access-field{display:flex;align-items:center;gap:10px;border:1px solid #3b5570;background:#091a2d;border-radius:10px;min-height:49px;padding:0 12px;color:#8da9c2;transition:border-color .15s,box-shadow .15s}
-.bv-access-field:focus-within{border-color:#62dff4;box-shadow:0 0 0 3px #55d9f21a}.bv-access-field>input{min-width:0;flex:1;width:100%;background:transparent;color:#f1f8ff;border:0;outline:0;font:inherit;font-size:13px;padding:13px 0;margin:0}.bv-access-field input::placeholder{color:#8097af}
-.bv-access-eye{display:grid;place-items:center;border:0;background:transparent;color:#a0bbd1;padding:6px;cursor:pointer;border-radius:6px}.bv-access-eye:hover{color:#fff;background:#24415b}
-.bv-access-password-rule{font-size:11px;color:#9fb6cb}.bv-access-password-rule span{display:flex;align-items:center;gap:5px}.bv-access-password-rule svg{width:15px;height:15px}.bv-access-password-rule .valid{color:#78e6c9}
-.bv-access-consent{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#c4d8e7;line-height:1.5;margin:8px 0 0;cursor:pointer}.bv-access-consent input{width:17px;height:17px;flex:0 0 17px;accent-color:#65dcef;margin:1px 0 0}
-.bv-access-primary{display:flex;justify-content:center;align-items:center;gap:10px;width:100%;min-height:49px;border:0;border-radius:10px;background:linear-gradient(100deg,#67e8f9,#4db6fa);color:#07253c;font:inherit;font-size:14px;font-weight:750;text-decoration:none;cursor:pointer;box-shadow:0 9px 26px #14b8e52a;margin-top:13px;padding:12px 16px;transition:filter .15s,transform .15s}.bv-access-primary:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}.bv-access-primary:disabled,.bv-access-tabs button:disabled,.bv-access-switch:disabled{opacity:.65;cursor:wait}
-.bv-access-bottom{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;font-size:12px;color:#a9bfd4;margin:20px 0}
-.bv-access-switch{border:0;background:transparent;color:#82e5fb;font:inherit;font-weight:700;cursor:pointer;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
-.bv-access-security{display:flex;align-items:flex-start;gap:8px;border-top:1px solid #294359;padding-top:17px;margin-top:16px;font-size:11px;line-height:1.6;color:#a2bbd0}.bv-access-security svg{width:16px;height:16px;color:#71d5e8}
-.bv-access-message{margin:6px 0;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.5}.bv-access-message.error{background:#482638;color:#ffd7dd;border:1px solid #ac6175}.bv-access-message.success{background:#153c3d;color:#bdf5df;border:1px solid #3a806b}
-.bv-access-footer{border-top:1px solid #263d53;padding-top:15px;color:#8da5bd;font-size:10px;line-height:1.5}
-.bv-access button:focus-visible,.bv-access a:focus-visible,.bv-access input[type=checkbox]:focus-visible{outline:2px solid #8ceaff;outline-offset:3px}
-.bv-access-spinner{width:16px;height:16px;border:2px solid #07344a44;border-top-color:#07344a;border-radius:50%;animation:bv-spin .8s linear infinite}@keyframes bv-spin{to{transform:rotate(360deg)}}
-@media(max-width:900px){.bv-access-layout{grid-template-columns:minmax(0,1fr);gap:24px;max-width:500px;padding:35px 0}.bv-access-showcase{display:none}.bv-access-card{padding:28px}.bv-access-top,.bv-access-footer{max-width:500px}}
-@media(max-width:450px){.bv-access{padding:18px 14px}.bv-access-brand{font-size:14px;gap:8px}.bv-access-brand small{font-size:9px}.bv-access-mark{width:38px;height:38px}.bv-access-environment{font-size:9px;padding:7px 9px}.bv-access-card{padding:20px;border-radius:18px}.bv-access-footer{align-items:flex-start;font-size:9px}.bv-access-footer span:last-child{text-align:right}}
-@media(prefers-reduced-motion:reduce){.bv-access *, .bv-access *::before,.bv-access *::after{animation:none!important;transition:none!important}}
+/* BODYVISION AI — Standalone access experience (sandbox).
+   Scoped fully to .bv-access: it never bleeds into the workspace. */
+.bv-access, .bv-access * { box-sizing: border-box; }
+.bv-access {
+  min-height: 100svh; display: flex; flex-direction: column;
+  padding: clamp(18px, 3vw, 46px) clamp(18px, 5vw, 84px) 18px;
+  color: var(--text-1); font-family: var(--font-sans);
+  background:
+    radial-gradient(58rem 40rem at 12% 42%, rgba(24, 68, 102, 0.5) 0%, transparent 62%),
+    radial-gradient(48rem 36rem at 88% 8%, rgba(88, 70, 160, 0.42) 0%, transparent 58%),
+    radial-gradient(50rem 44rem at 60% 115%, rgba(23, 90, 120, 0.32) 0%, transparent 60%),
+    var(--bg-deep);
+  isolation: isolate; position: relative;
+}
+.bv-access::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(120, 200, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 200, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 90% 90% at 30% 40%, #000 25%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 90% at 30% 40%, #000 25%, transparent 75%);
+}
+.bv-access > * { position: relative; z-index: 1; }
+
+.bv-access-top, .bv-access-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; max-width: 1460px; margin: 0 auto; }
+.bv-access-brand { display: flex; align-items: center; gap: 14px; font-size: 17px; font-weight: 700; letter-spacing: 0.16em; line-height: 1.3; }
+.bv-access-brand strong { background: var(--grad-brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bv-access-brand small { display: block; margin-top: 5px; font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; color: var(--text-3); }
+.bv-access-mark {
+  display: grid; place-items: center; border: 1px solid var(--line-strong);
+  background: #0b1424; border-radius: 14px; width: 48px; height: 48px;
+  box-shadow: var(--glow-cyan); flex-shrink: 0;
+}
+.bv-access svg { width: 20px; height: 20px; flex-shrink: 0; }
+.bv-access-mark svg { width: 30px; height: 30px; }
+.bv-access-environment {
+  display: flex; align-items: center; gap: 9px; font-size: 10px; white-space: nowrap;
+  background: rgba(52, 211, 153, 0.09); border: 1px solid rgba(52, 211, 153, 0.32);
+  border-radius: var(--r-pill); padding: 9px 14px; color: #8ff0c6;
+  letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700;
+}
+.bv-access-environment i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 9px rgba(52, 211, 153, 0.8); animation: pulse-dot 2.4s infinite; }
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+.bv-access-layout { width: 100%; max-width: 1460px; margin: auto; display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(360px, 480px); gap: clamp(28px, 5.5vw, 96px); align-items: center; padding: 26px 0; }
+
+/* Showcase (left) */
+.bv-access-showcase { min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.bv-access-hero-copy { position: relative; z-index: 2; }
+.bv-access h1 {
+  font-size: clamp(34px, 4.1vw, 58px); line-height: 1.02; letter-spacing: -0.055em;
+  margin: 0; color: var(--text-1); font-weight: 710; text-wrap: balance;
+}
+.bv-access h1 span { background: var(--grad-brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bv-access-hero-copy > p:last-child { font-size: 14px; line-height: 1.7; max-width: 470px; margin: 16px auto 0; color: var(--text-2); }
+.bv-access-visual { position: relative; isolation: isolate; width: 100%; height: clamp(310px, 46vh, 490px); margin-top: 6px; }
+.bv-access-orbits { position: absolute; inset: 6% 8%; pointer-events: none; display: grid; place-items: center; z-index: 0; }
+.bv-access-orbits i { position: absolute; aspect-ratio: 1; width: 62%; max-width: 400px; border: 1px solid rgba(112, 221, 243, 0.14); border-radius: 50%; transform: rotateX(58deg); bottom: 2%; }
+.bv-access-orbits i:nth-child(2) { width: 81%; border-style: dashed; border-color: rgba(112, 221, 243, 0.2); }
+.bv-access-orbits i:nth-child(3) { width: 98%; border-color: rgba(167, 139, 250, 0.16); }
+.bv-access-visual .dashboard-hologram.product-atlas.enterprise-realbody-preview { height: 100%; min-height: 0; position: relative; background: radial-gradient(ellipse at 50% 48%, rgba(22, 73, 107, 0.42), transparent 68%); border: 0; box-shadow: none; border-radius: 26px; overflow: hidden; }
+.bv-access-visual .dashboard-hologram.product-atlas .enterprise-realbody-canvas { position: absolute; inset: 0 8px 31px; z-index: 1; }
+.bv-access-visual .enterprise-realbody-canvas canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
+.bv-access-visual .atlas-credit { position: absolute; bottom: 6px; left: 12px; right: 12px; color: var(--text-3); font-size: 9px; line-height: 1.55; z-index: 3; }
+.bv-access-visual .atlas-credit a { color: var(--text-2); }
+.bv-access-visual .enterprise-realbody-status, .bv-access-model-status { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-2); font-size: 12px; gap: 11px; }
+.bv-access-visual .enterprise-realbody-status button { border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface-2); color: #dcf7ff; padding: 9px 13px; cursor: pointer; }
+.bv-access-visual-caption { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 11px 4px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 10px; letter-spacing: 0.05em; gap: 12px; }
+.bv-access-visual-caption span:first-child { display: flex; align-items: center; gap: 9px; font-size: 11.5px; letter-spacing: 0; font-weight: 550; color: var(--text-1); }
+.bv-access-visual-caption svg { color: var(--cyan); width: 16px; height: 16px; }
+
+/* Card (right) */
+.bv-access-card {
+  position: relative; min-width: 0;
+  background: linear-gradient(155deg, rgba(19, 31, 53, 0.92), rgba(11, 18, 32, 0.96) 68%);
+  border: 1px solid var(--line-strong); border-radius: 26px;
+  padding: clamp(26px, 3vw, 42px);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(16px);
+}
+.bv-access-card::before {
+  content: ""; position: absolute; top: 0; left: 14%; right: 14%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(108, 231, 255, 0.85), rgba(167, 139, 250, 0.85), transparent);
+  pointer-events: none;
+}
+.bv-access-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border: 1px solid var(--line); background: #080f1d; border-radius: var(--r-md); padding: 4px; margin-bottom: 22px; }
+.bv-access-tabs button { border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; font-size: 12px; font-weight: 650; padding: 11px 8px; cursor: pointer; transition: all var(--t-fast); }
+.bv-access-tabs button[aria-pressed="true"] { color: #04121a; background: var(--grad-brand); box-shadow: 0 6px 18px rgba(58, 226, 251, 0.32); }
+.bv-access-card-icon {
+  width: 46px; height: 46px; margin-bottom: 16px; display: grid; place-items: center;
+  border: 1px solid rgba(58, 226, 251, 0.4); border-radius: 13px; color: #79e9ff;
+  background: linear-gradient(160deg, rgba(58, 226, 251, 0.16), rgba(58, 226, 251, 0.04));
+  box-shadow: 0 0 26px rgba(51, 200, 226, 0.14);
+}
+.bv-access-card h2 { font-size: clamp(23px, 2.3vw, 30px); letter-spacing: -0.045em; line-height: 1.12; margin: 0; font-weight: 720; color: var(--text-1); }
+.bv-access-subtitle { font-size: 12.5px; color: var(--text-2); line-height: 1.65; margin: 10px 0 22px; max-width: 40ch; }
+.bv-access-form { display: flex; flex-direction: column; gap: 9px; }
+.bv-access-form > label:not(.bv-access-consent) { font-size: 11.5px; color: #d7e9f5; font-weight: 600; margin-top: 6px; letter-spacing: 0.01em; }
+.bv-access-field {
+  display: flex; align-items: center; gap: 11px;
+  border: 1px solid var(--line-strong); background: #0a1120; border-radius: var(--r-md);
+  min-height: 51px; padding: 0 13px; color: #8da9c2;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.bv-access-field:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(58, 226, 251, 0.14); }
+.bv-access-field > input { min-width: 0; flex: 1; width: 100%; background: transparent; color: var(--text-1); border: 0; outline: 0; font: inherit; font-size: 13.5px; padding: 13px 0; margin: 0; }
+.bv-access-field input::placeholder { color: var(--text-3); }
+.bv-access-eye { display: grid; place-items: center; border: 0; background: transparent; color: #a0bbd1; padding: 7px; cursor: pointer; border-radius: var(--r-sm); transition: color var(--t-fast), background var(--t-fast); }
+.bv-access-eye:hover { color: #fff; background: var(--surface-3); }
+.bv-access-password-rule { font-size: 11px; color: var(--text-2); }
+.bv-access-password-rule span { display: flex; align-items: center; gap: 6px; }
+.bv-access-password-rule svg { width: 15px; height: 15px; }
+.bv-access-password-rule .valid { color: var(--success); }
+.bv-access-consent { display: flex; align-items: flex-start; gap: 11px; font-size: 12px; color: #c4d8e7; line-height: 1.55; margin: 9px 0 0; cursor: pointer; }
+.bv-access-consent input { width: 17px; height: 17px; flex: 0 0 17px; accent-color: var(--cyan); margin: 1px 0 0; }
+.bv-access-primary {
+  display: flex; justify-content: center; align-items: center; gap: 11px; width: 100%;
+  min-height: 51px; border: 0; border-radius: var(--r-md);
+  background: var(--grad-brand); color: #05141d; font: inherit; font-size: 14px; font-weight: 750;
+  text-decoration: none; cursor: pointer; letter-spacing: 0.01em;
+  box-shadow: 0 12px 34px rgba(24, 187, 221, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  margin-top: 14px; padding: 13px 16px; transition: filter var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
+}
+.bv-access-primary:hover:not(:disabled) { filter: brightness(1.07); transform: translateY(-1.5px); box-shadow: 0 18px 44px rgba(48, 205, 230, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.55); }
+.bv-access-primary:disabled, .bv-access-tabs button:disabled, .bv-access-switch:disabled { opacity: 0.65; cursor: wait; }
+.bv-access-bottom { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); margin: 19px 0 0; }
+.bv-access-switch { border: 0; background: transparent; color: var(--cyan-soft); font: inherit; font-weight: 700; cursor: pointer; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(103, 232, 249, 0.4); }
+.bv-access-switch:hover { color: #a5edfa; text-decoration-color: currentColor; }
+.bv-access-security { display: flex; align-items: flex-start; gap: 9px; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 17px; font-size: 10.5px; line-height: 1.65; color: var(--text-3); }
+.bv-access-security svg { width: 15px; height: 15px; color: var(--success); margin-top: 1px; }
+.bv-access-message { margin: 6px 0; padding: 11px 13px; border-radius: var(--r-sm); font-size: 12px; line-height: 1.6; }
+.bv-access-message.error { background: var(--danger-soft); color: #ffd7dd; border: 1px solid rgba(251, 113, 133, 0.4); }
+.bv-access-message.success { background: rgba(52, 211, 153, 0.1); color: #bdf5df; border: 1px solid rgba(52, 211, 153, 0.35); }
+.bv-access-footer { border-top: 1px solid var(--line); padding-top: 14px; color: var(--text-3); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
+.bv-access button:focus-visible, .bv-access a:focus-visible, .bv-access input[type="checkbox"]:focus-visible { outline: none; box-shadow: var(--ring); }
+.bv-access-spinner { width: 17px; height: 17px; border: 2.2px solid rgba(5, 20, 29, 0.35); border-top-color: #05141d; border-radius: 50%; animation: bv-spin 0.8s linear infinite; }
+@keyframes bv-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1024px) { .bv-access-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); } }
+@media (max-width: 900px) {
+  .bv-access-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: 520px; padding: 30px 0; }
+  .bv-access-showcase { display: none; }
+  .bv-access-card { padding: 26px; }
+  .bv-access-top, .bv-access-footer { max-width: 520px; }
+}
+@media (max-width: 450px) {
+  .bv-access { padding: 16px 13px; }
+  .bv-access-brand { font-size: 13px; gap: 9px; letter-spacing: 0.1em; }
+  .bv-access-brand small { font-size: 8px; }
+  .bv-access-mark { width: 40px; height: 40px; border-radius: 11px; }
+  .bv-access-mark svg { width: 25px; height: 25px; }
+  .bv-access-environment { font-size: 8px; padding: 8px 10px; letter-spacing: 0.1em; }
+  .bv-access-card { padding: 20px; border-radius: 20px; }
+  .bv-access-footer { align-items: flex-start; font-size: 8px; }
+  .bv-access-footer span:last-child { text-align: right; }
+}
+@media (prefers-reduced-motion: reduce) { .bv-access *, .bv-access *::before, .bv-access *::after { animation: none !important; transition: none !important; } }

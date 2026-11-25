@@ -48,7 +48,7 @@ describe("observed measurement correction time", () => {
   ])("retains the exact original timestamp when editing only the value: %s", async measured_at => {
     const done = show({ ...observation, measured_at });
     expect(screen.getByLabelText("Fecha y hora (Lima)")).toHaveValue("2026-09-30T22:04");
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Valor (kg)" }), { target: { value: "71" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Valor (kg)" }), { target: { value: "71" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Motivo de la corrección" }), {
       target: { value: "Corrección ficticia del valor" },
     });
@@ -74,7 +74,7 @@ describe("observed measurement correction time", () => {
 
   it("keeps minute-based input for a new observation", async () => {
     const done = show();
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Valor (kg)" }), { target: { value: "70" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Valor (kg)" }), { target: { value: "70" } });
     fireEvent.change(screen.getByLabelText("Fecha y hora (Lima)"), {
       target: { value: "2026-10-02T10:20" },
     });

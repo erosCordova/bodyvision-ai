@@ -5,14 +5,15 @@ import { useWorkspace } from "../../app/providers/WorkspaceProvider";
 import { EmptyState, ErrorState, LoadingState, dateTime } from "../../components/ui/States";
 import { ProfilePicker } from "../foundation/ModuleControls";
 import { DataTypeBadge } from "../../components/ui/DataTypeBadge";
+import { Icon, type IconName } from "../../components/ui/Icon";
 const HistoryChart = lazy(() => import("../analytics/HistoryChart").then(m => ({ default: m.HistoryChart })));
 
 const DashboardBodyPreview = lazy(() => import("./DashboardBodyPreview").then(m => ({ default: m.DashboardBodyPreview })));
-const shortcuts=[
-  {to:"/capture",symbol:"◫",title:"Captura corporal",detail:"Preparar imagen"},
-  {to:"/analysis",symbol:"✧",title:"Análisis IA",detail:"Evaluar postura"},
-  {to:"/simulation",symbol:"⬡",title:"Simulación 3D",detail:"Peso y estatura"},
-  {to:"/reports",symbol:"▧",title:"Reportes",detail:"Consultar informes"},
+const shortcuts: { to: string; icon: IconName; title: string; detail: string }[] = [
+  { to: "/capture", icon: "camera", title: "Captura corporal", detail: "Preparar imagen" },
+  { to: "/analysis", icon: "sparkles", title: "Análisis IA", detail: "Evaluar postura" },
+  { to: "/body-3d?panel=simulacion", icon: "box", title: "Simulación 3D", detail: "Peso y estatura" },
+  { to: "/reports", icon: "file-text", title: "Reportes", detail: "Consultar informes" },
 ];
 
 export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
@@ -55,7 +56,7 @@ export function DashboardEvolution({ initiallyOpen = false }: { initiallyOpen?: 
               <label>Periodo<select value={period} onChange={e=>setPeriod(e.target.value)}><option value="30d">30 días</option><option value="90d">90 días</option><option value="1a">1 año</option></select></label>
             </div>
             {series.isPending ? <LoadingState/> : series.isError ? <ErrorState error={series.error} retry={()=>void series.refetch()}/> : <Suspense fallback={<LoadingState/>}><HistoryChart rows={series.data} unit={chosen.unit}/></Suspense>}
-            <div className="bv-context-actions"><Link to={"/profiles/"+profileId+"?tab=analytics&metric=body_fat_pct"}>Historial →</Link><Link to={"/body-3d?panel=grasa&profile="+profileId}>Visor 3D →</Link></div>
+            <div className="bv-context-actions"><Link to={"/profiles/"+profileId+"?tab=analytics&metric=body_fat_pct"}>Historial <Icon name="arrow-right" size={13} /></Link><Link to={"/body-3d?panel=grasa&profile="+profileId}>Visor 3D <Icon name="arrow-right" size={13} /></Link></div>
           </>}
       </div>}
   </section>;
@@ -65,30 +66,34 @@ export function Dashboard() {
   const { id, api } = useWorkspace();
   const query = useQuery({ queryKey: ["summary", id], queryFn: api.summary });
   const data = query.data;
-  const metrics = data ? [
-    {label:"Expedientes activos",value:data.active_profiles,detail:"Registros vigentes",icon:"♙",tone:"aqua"},
-    {label:"Mediciones recientes",value:data.measurements_30d,detail:"Últimos 30 días",icon:"▥",tone:"blue"},
-    {label:"Correcciones",value:data.corrections,detail:"Historial de cambios",icon:"◇",tone:"violet"},
+  const metrics: { label: string; value: number; detail: string; icon: IconName; tone: string }[] = data ? [
+    { label: "Expedientes activos", value: data.active_profiles, detail: "Registros vigentes", icon: "users", tone: "aqua" },
+    { label: "Mediciones recientes", value: data.measurements_30d, detail: "Últimos 30 días", icon: "ruler", tone: "blue" },
+    { label: "Correcciones", value: data.corrections, detail: "Historial de cambios", icon: "pen-line", tone: "violet" },
   ] : [];
   return (
     <div className="enterprise-dashboard product-dashboard">
       <header className="enterprise-page-head product-heading">
-        <div><h1>Resumen</h1><p>Seguimiento de la composición corporal</p></div>
-        <Link className="primary-button" to="/profiles">Ver expedientes <span aria-hidden="true">↗</span></Link>
+        <div>
+          <p className="eyebrow">Panel de control</p>
+          <h1>Resumen</h1>
+          <p>Seguimiento de la composición corporal</p>
+        </div>
+        <Link className="primary-button" to="/profiles">Ver expedientes <Icon name="arrow-up-right" size={16} /></Link>
       </header>
       <div className="product-dashboard-grid">
         <section className="enterprise-panel enterprise-anatomy-promo product-hero" aria-label="Exploración anatómica">
-          <div className="product-hero-head"><h2>Visión corporal 3D</h2></div>
+          <div className="product-hero-head"><h2>Visión corporal 3D</h2><span className="product-live-label"><span className="live-dot" aria-hidden="true" />Atlas anatómico en vivo</span></div>
           <Suspense fallback={<div className="enterprise-realbody-preview enterprise-realbody-loading" role="status">Cargando modelo anatómico…</div>}>
             <DashboardBodyPreview />
           </Suspense>
-          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo ↗</Link><Link className="secondary-button dashboard-fat-link" to="/body-3d?panel=grasa">Grasa corporal ↗</Link></div>
+          <div className="product-hero-bottom"><Link className="primary-button" to="/body-3d">Abrir visor completo <Icon name="arrow-up-right" size={16} /></Link><Link className="secondary-button dashboard-fat-link" to="/body-3d?panel=grasa">Grasa corporal <Icon name="arrow-up-right" size={15} /></Link></div>
         </section>
         <div className="product-dashboard-side">
           <section className="product-metrics" aria-label="Indicadores reales de la organización ficticia">
             {query.isPending ? <LoadingState/> : query.isError ? <ErrorState error={query.error} retry={()=>void query.refetch()}/> :
               metrics.map(metric=><article key={metric.label} className="enterprise-kpi product-metric">
-                <span className={"enterprise-kpi-icon "+metric.tone} aria-hidden="true">{metric.icon}</span>
+                <span className={"enterprise-kpi-icon "+metric.tone} aria-hidden="true"><Icon name={metric.icon} size={20} /></span>
                 <p>{metric.label}</p><strong>{metric.value.toLocaleString("es-PE")}</strong><small>{metric.detail}</small>
               </article>)}
           </section>
@@ -104,21 +109,21 @@ export function Dashboard() {
           <section className="enterprise-panel product-shortcuts">
             <div className="enterprise-panel-title"><h2>Accesos rápidos</h2></div>
             <div className="product-shortcut-grid">{shortcuts.map(item=><Link to={item.to} key={item.to}>
-              <span aria-hidden="true">{item.symbol}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div><span aria-hidden="true">↗</span>
+              <span aria-hidden="true"><Icon name={item.icon} size={19} /></span><div><strong>{item.title}</strong><small>{item.detail}</small></div><span aria-hidden="true"><Icon name="arrow-up-right" size={16} /></span>
             </Link>)}</div>
           </section>
           <section className="enterprise-panel enterprise-recent" aria-label="Expedientes recientes">
-            <div className="enterprise-panel-title"><h2>Expedientes recientes</h2><Link to="/profiles">Ver expedientes →</Link></div>
+            <div className="enterprise-panel-title"><h2>Expedientes recientes</h2><Link to="/profiles">Ver expedientes <Icon name="arrow-right" size={13} /></Link></div>
             {query.isPending ? <LoadingState/> : query.isError || !data?.recent_profiles ? <p className="enterprise-hint">Expedientes recientes no disponibles.</p> : data.recent_profiles.length === 0 ? <EmptyState text="Aún no hay expedientes."/> :
               <div className="enterprise-activity-list">{data.recent_profiles.map(row=><Link key={row.id} to={"/profiles/"+row.id} className="enterprise-activity-item">
-                <span aria-hidden="true">◉</span><div><strong>{row.display_code}</strong><small>{row.status==="active"?"Activo":row.status==="restricted"?"Restringido":"Archivado"}</small></div><time>{dateTime(row.created_at)}</time>
+                <span aria-hidden="true"><Icon name="user" size={16} /></span><div><strong>{row.display_code}</strong><small>{row.status==="active"?"Activo":row.status==="restricted"?"Restringido":"Archivado"}</small></div><time>{dateTime(row.created_at)}</time>
               </Link>)}</div>}
           </section>
           <section className="enterprise-panel enterprise-recent product-recent">
-            <div className="enterprise-panel-title"><h2>Actividad reciente</h2><Link to="/measurements">Ver todo →</Link></div>
+            <div className="enterprise-panel-title"><h2>Actividad reciente</h2><Link to="/measurements">Ver todo <Icon name="arrow-right" size={13} /></Link></div>
             {query.isPending ? <LoadingState/> : query.isError ? <p className="enterprise-hint">Actividad no disponible.</p> : data?.recent_measurements.length ?
               <div className="enterprise-activity-list">{data.recent_measurements.slice(0,5).map(row=><Link key={row.id} to={"/profiles/"+row.profile_id+"?tab=measurements"} className="enterprise-activity-item">
-                <span aria-hidden="true">▥</span><div><strong>{row.metric_label} · {row.value} {row.unit}</strong><small>{row.display_code} · {row.responsible}</small></div><time>{dateTime(row.measured_at)}</time>
+                <span aria-hidden="true"><Icon name="activity" size={16} /></span><div><strong>{row.metric_label} · {row.value} {row.unit}</strong><small>{row.display_code} · {row.responsible}</small></div><time>{dateTime(row.measured_at)}</time>
               </Link>)}</div> : <EmptyState text="Aún no hay mediciones recientes."/>}
           </section>
         </div>

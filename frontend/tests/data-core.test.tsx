@@ -58,7 +58,10 @@ describe("Synthetic data core", () => {
     const alerts = screen.getByRole("region", { name: "Alertas de seguimiento" });
     expect(within(alerts).getByText("2")).toBeVisible();
     expect(within(alerts).getByText("1")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Explorar evolución" })).toBeVisible();
+    // The evolution panel is intentionally open by default on the dashboard
+    // (see commit d16e995); the collapsed "Explorar evolución" affordance only
+    // renders when explicitly mounted with initiallyOpen={false}.
+    expect(screen.getByRole("region", { name: "Evolución corporal" })).toBeVisible();
     expect(screen.getByText("Aún no hay mediciones recientes.")).toBeVisible();
   });
   it("shows loading while waiting for summary", () => {
@@ -86,12 +89,15 @@ describe("Synthetic data core", () => {
       ),
     );
     show();
+    // The summary and the module catalog both fail with the same stubbed 503;
+    // scope the assertion to the KPI region, which owns the summary error.
+    const indicators = screen.getByRole("region", { name: "Indicadores reales de la organización ficticia" });
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(
+      expect(within(indicators).getByRole("alert")).toHaveTextContent(
         "Servicio no disponible.",
       ),
     );
-    expect(screen.getByRole("button", { name: "Reintentar" })).toBeVisible();
+    expect(within(indicators).getByRole("button", { name: "Reintentar" })).toBeVisible();
   });
   it("accepts canonical historical PostgreSQL UUIDs without RFC variant bits", () => {
     const fixture = {

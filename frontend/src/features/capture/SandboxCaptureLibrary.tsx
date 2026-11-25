@@ -30,7 +30,7 @@ export function SandboxCaptureLibrary({file=null,allowUpload=false,fixedProfileI
   const profile=useQuery({queryKey:["profile",id,profileId],queryFn:()=>api.profile(profileId),enabled:!!session&&!!profileId});
   const archive=useQuery({queryKey:["sandbox-images",id,profileId],queryFn:()=>syntheticCapturesApi(session!.token,profileId).list(),enabled:!!session&&profile.isSuccess&&profile.data.status==="active"});
   const writable=!!session&&!readOnly&&profile.data?.status==="active";
-  useEffect(()=>{generation.current++;setAttest(false);setLocal(null);setNotice("");setError("");setPreview(null);return()=>{generation.current++;};},[profileId,session?.user_id]);
+  useEffect(()=>{const tracked=generation;tracked.current++;setAttest(false);setLocal(null);setNotice("");setError("");setPreview(null);return()=>{tracked.current++;};},[profileId,session?.user_id]);
   useEffect(()=>{setAttest(false);},[file]);
   useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview.url);},[preview]);
   async function run(action:(isCurrent:()=>boolean)=>Promise<void>){
