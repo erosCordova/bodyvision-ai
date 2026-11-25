@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail, ShieldCheck, User } from "lucide-react";
 import { Logo, Btn } from "../ui";
 import { useStore } from "../store";
-import man from "../assets/img/man.jpg";
+import { BodyScene } from "../three/BodyScene";
+import { BodyModel } from "../three/BodyModel";
 
 type Mode = "login" | "register" | "recover";
 
@@ -120,9 +121,9 @@ export default function Login() {
         </div>
       </div>
       <div className="relative hidden overflow-hidden lg:block">
-        <img src={man} alt="Atleta analizado con BodyVision AI" className="absolute inset-0 h-full w-full object-cover object-top" />
-        <div className="absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/20 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-transparent to-transparent" />
+        <BodyScene className="absolute inset-0 h-full w-full" distance={5.4} autoRotate rotateSpeed={1.2} sparkles={false}><BodyModel sex="male" mode="holo" /></BodyScene>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/90 via-transparent to-transparent" />
         <div className="absolute bottom-14 left-12 right-12">
           <div className="panel panel-glow max-w-md p-5">
             <div className="text-xs uppercase tracking-widest text-cyan-300">Análisis · Simulación · Transformación</div>

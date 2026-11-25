@@ -2,126 +2,96 @@ import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Sex } from "./assets";
 import * as M from "./materials";
 
-export type Mode = "skin" | "muscle" | "skeleton" | "xray" | "thermal" | "holo";
+export type Mode = "skin" | "muscle" | "skeleton" | "xray" | "thermal" | "holo" | "organs" | "arteries" | "veins" | "nerves" | "all";
 export const ReadyContext = createContext<(() => void) | null>(null);
-export const TONES: Record<string, string> = {
-  claro: "#e2b79c", medio: "#c68a64", trigueño: "#a96f4c", oscuro: "#6f4630",
-};
-
+export const TONES: Record<string, string> = { claro:"#e2b79c", medio:"#c68a64", trigueño:"#a96f4c", oscuro:"#6f4630" };
 export interface BodyModelProps {
-  sex: Sex;
-  fat?: number;
-  mus?: number;
-  mode?: Mode;
-  tone?: keyof typeof TONES | string;
-  garments?: boolean;
-  position?: [number, number, number];
-  rotationY?: number;
-  highlight?: boolean;
+  sex: Sex; fat?:number; mus?:number; mode?:Mode; tone?:string; garments?:boolean;
+  position?:[number,number,number]; rotationY?:number; highlight?:boolean;
 }
 
-// Open Anatomy 3D / BodyParts3D (CC BY 4.0). Same pinned atlas as BodyVision's current viewer.
-// The build prepares the original GLBs; no synthetic fallback geometry is used.
-const URLS: Record<Sex, string> = {
-  male: import.meta.env.BASE_URL + "models/anatomy-male.glb",
-  female: import.meta.env.BASE_URL + "models/anatomy-female.glb",
+const COLORS = {skeleton:"#e8dfc9",muscles:"#c94f45",organs:"#d9725f",arteries:"#ef4444",veins:"#3b82f6",nerves:"#f5c542",skin:"#eab391"} as const;
+type Layer = keyof typeof COLORS;
+const LAYERS = Object.keys(COLORS) as Layer[];
+const VIEWS:Record<Mode,Layer[]> = {
+ skin:["skin"], muscle:["muscles"], skeleton:["skeleton"], xray:["skeleton","organs","arteries","veins","skin"],
+ thermal:["skin"], holo:["skin"], organs:["organs"], arteries:["arteries"], veins:["veins"], nerves:["nerves"], all:LAYERS,
 };
-type Layer = "skin" | "muscles" | "skeleton";
-type AtlasPart = { layer: Layer; geometry: THREE.BufferGeometry; key: string };
-function atlasParts(root: THREE.Object3D, sex: Sex): AtlasPart[] {
+const url=(layer:Layer)=>import.meta.env.BASE_URL+"models/zanatomy/"+layer+".glb";
+const draco=import.meta.env.BASE_URL+"draco/";
+
+// Flatten the original exported meshes in world coordinates, using one shared
+// anatomical reference for every layer. Merge only for preview performance.
+function geometryFor(root:THREE.Object3D, transform:THREE.Matrix4, layer:Layer){
+  const pieces:THREE.BufferGeometry[]=[];
   root.updateMatrixWorld(true);
-  const bounds = new THREE.Box3().setFromObject(root);
-  const center = bounds.getCenter(new THREE.Vector3());
-  const height = bounds.getSize(new THREE.Vector3()).y;
-  if (!Number.isFinite(height) || height <= 0) throw new Error("Atlas anatómico sin dimensiones válidas");
-  const scale = (sex === "female" ? 1.75 * 0.935 : 1.75) / height;
-  const normalization = new THREE.Matrix4().makeScale(scale, scale, scale)
-    .multiply(new THREE.Matrix4().makeTranslation(-center.x, -bounds.min.y, -center.z));
-  const parts: AtlasPart[] = [];
-  root.traverse(group => {
-    const layer = group.name.trim().toLowerCase();
-    if (layer !== "skin" && layer !== "muscles" && layer !== "skeleton") return;
-    group.traverse(object => {
-      if (!(object instanceof THREE.Mesh)) return;
-      const geometry = object.geometry.clone().applyMatrix4(
-        normalization.clone().multiply(object.matrixWorld),
-      );
-      if (layer === "skin") {
-        const p = geometry.getAttribute("position");
-        const heat = new Float32Array(p.count);
-        for (let i = 0; i < p.count; i++) {
-          // Illustrative color ramp only; not a thermal measurement or clinical estimate.
-          const y = p.getY(i) / (sex === "female" ? 0.935 : 1);
-          const x = p.getX(i);
-          heat[i] = THREE.MathUtils.clamp(0.23 + 0.65 * Math.exp(-((y - 1.24) ** 2 / 0.19 + x ** 2 / 0.07)), 0, 1);
-        }
-        geometry.setAttribute("aHeat", new THREE.BufferAttribute(heat, 1));
-      }
-      parts.push({ layer, geometry, key: object.uuid });
-    });
+  root.traverse(object=>{
+    if(!(object instanceof THREE.Mesh)||!object.geometry?.getAttribute("position"))return;
+    let g=object.geometry.clone();
+    if(g.index){const unindexed=g.toNonIndexed();g.dispose();g=unindexed;}
+    for(const key of Object.keys(g.attributes))if(key!=="position"&&key!=="normal")g.deleteAttribute(key);
+    if(!g.getAttribute("normal"))g.computeVertexNormals();
+    g.clearGroups();
+    g.applyMatrix4(transform.clone().multiply(object.matrixWorld));
+    pieces.push(g);
   });
-  if (!parts.some(p => p.layer === "skin")) throw new Error("Atlas sin capa de piel");
-  return parts;
+  const merged=mergeGeometries(pieces,false);
+  pieces.forEach(g=>g.dispose());
+  if(!merged)throw new Error("Capa anatómica vacía: "+layer);
+  if(layer==="skin"){
+    const p=merged.getAttribute("position"), heat=new Float32Array(p.count);
+    for(let i=0;i<p.count;i++)heat[i]=THREE.MathUtils.clamp(.23+.65*Math.exp(-((p.getY(i)-1.24)**2/.19+p.getX(i)**2/.07)),0,1);
+    merged.setAttribute("aHeat",new THREE.BufferAttribute(heat,1));
+  }
+  return merged;
 }
 
-export function BodyModel({
-  sex, fat = 0, mus = 0, mode = "skin", tone = "medio", garments = true,
-  position = [0, 0, 0], rotationY = 0,
-}: BodyModelProps) {
-  const { scene } = useGLTF(URLS[sex], true);
-  const parts = useMemo(() => atlasParts(scene, sex), [scene, sex]);
-  const ready = useContext(ReadyContext);
-  const group = useRef<THREE.Group>(null);
-  const sc = sex === "female" ? 0.935 : 1;
-  const skin = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: TONES[tone] || tone, roughness: 0.72, metalness: 0.02,
-  }), [tone]);
-  const materials = useMemo(() => ({
-    muscle: new THREE.MeshPhysicalMaterial({color: "#a84b47", roughness: 0.65}),
-    skeleton: new THREE.MeshPhysicalMaterial({color: "#e2dfcd", roughness: 0.65}),
-    holo: new THREE.MeshBasicMaterial({color: "#63e4ff", wireframe: true, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide}),
-    xray: new THREE.MeshBasicMaterial({color: "#63e4ff", wireframe: true, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide}),
-    thermal: M.thermalMaterial(),
-    bottom: M.garmentMaterial(sex === "male" ? "shorts" : "bikini", sc, "#12161d"),
-    bra: M.garmentMaterial("bra", sc, "#12161d"),
-  }), [sex, sc]);
-  useEffect(() => { ready?.(); }, [ready, parts]);
-  useEffect(() => () => parts.forEach(p => p.geometry.dispose()), [parts]);
-  useEffect(() => () => skin.dispose(), [skin]);
-  useEffect(() => () => Object.values(materials).forEach(m => m.dispose()), [materials]);
-  useFrame((state, dt) => {
-    materials.thermal.uniforms.uTime.value = state.clock.elapsedTime;
-    if (group.current) {
-      // Atlas has no patient-specific morph targets. Smooth radial change is illustrative.
-      const radial = THREE.MathUtils.clamp(1 + fat * 0.006 + mus * 0.003, 0.8, 1.25);
-      const k = 1 - Math.exp(-dt * 4.5);
-      group.current.scale.x = THREE.MathUtils.lerp(group.current.scale.x, radial, k);
-      group.current.scale.z = THREE.MathUtils.lerp(group.current.scale.z, radial, k);
+export function BodyModel({sex,fat=0,mus=0,mode="skin",tone="medio",garments=true,position=[0,0,0],rotationY=0}:BodyModelProps){
+  const wanted=VIEWS[mode];
+  const keys=useMemo(()=>Array.from(new Set<Layer>(["skin","skeleton",...VIEWS[mode]])),[mode]);
+  const gltfs=useGLTF(keys.map(url),draco);
+  const ready=useContext(ReadyContext);
+  const group=useRef<THREE.Group>(null);
+  const parts=useMemo(()=>{
+    const roots=new Map(keys.map((key,i)=>[key,gltfs[i].scene]));
+    const skin=roots.get("skin")!;
+    const box=new THREE.Box3().setFromObject(skin);
+    const height=box.getSize(new THREE.Vector3()).y;
+    if(!(height>0))throw Error("Atlas sin dimensiones válidas");
+    const center=box.getCenter(new THREE.Vector3());
+    const s=1.75/height;
+    const transform=new THREE.Matrix4().makeScale(s,s,s).multiply(new THREE.Matrix4().makeTranslation(-center.x,-box.min.y,-center.z));
+    return keys.map(layer=>({layer,geometry:geometryFor(roots.get(layer)!,transform,layer)}));
+  },[gltfs,keys]);
+  const materials=useMemo(()=>{
+    const standard=Object.fromEntries(LAYERS.map(layer=>[layer,new THREE.MeshStandardMaterial({color:layer==="skin"?(TONES[tone]||tone):COLORS[layer],roughness:layer==="skin"?.78:layer==="skeleton"?.8:.5,metalness:.02,emissive:new THREE.Color(COLORS[layer]).multiplyScalar(.06),emissiveIntensity:.35})])) as Record<Layer,THREE.MeshStandardMaterial>;
+    return {standard,thermal:M.thermalMaterial(),holo:new THREE.MeshBasicMaterial({color:"#63e4ff",wireframe:true,transparent:true,opacity:.72,depthWrite:false,side:THREE.DoubleSide}),xray:new THREE.MeshBasicMaterial({color:"#63e4ff",wireframe:true,transparent:true,opacity:.23,depthWrite:false,side:THREE.DoubleSide}),bottom:M.garmentMaterial(sex==="male"?"shorts":"bikini",1,"#12161d"),bra:M.garmentMaterial("bra",1,"#12161d")};
+  },[tone,sex]);
+  useEffect(()=>{ready?.();},[ready,parts]);
+  useEffect(()=>()=>parts.forEach(p=>p.geometry.dispose()),[parts]);
+  useEffect(()=>()=>{Object.values(materials.standard).forEach(m=>m.dispose());materials.thermal.dispose();materials.holo.dispose();materials.xray.dispose();materials.bottom.dispose();materials.bra.dispose();},[materials]);
+  useFrame((state,dt)=>{
+    materials.thermal.uniforms.uTime.value=state.clock.elapsedTime;
+    if(group.current){
+      const radial=THREE.MathUtils.clamp(1+fat*.006+mus*.003,.8,1.25), k=1-Math.exp(-dt*4.5);
+      group.current.scale.x=THREE.MathUtils.lerp(group.current.scale.x,radial,k);
+      group.current.scale.z=THREE.MathUtils.lerp(group.current.scale.z,radial,k);
     }
   });
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <group ref={group}>
-        {parts.map(part => {
-          const layer = part.layer;
-          if (layer === "muscles" && mode !== "muscle") return null;
-          if (layer === "skeleton" && mode !== "skeleton" && mode !== "xray") return null;
-          if (layer === "skin" && (mode === "skeleton" || mode === "muscle")) return null;
-          const material = layer === "muscles" ? materials.muscle : layer === "skeleton" ? materials.skeleton
-            : mode === "holo" ? materials.holo : mode === "xray" ? materials.xray : mode === "thermal" ? materials.thermal : skin;
-          const wire = layer === "skin" && (mode === "holo" || mode === "xray");
-          return <group key={part.key}>
-            <mesh geometry={part.geometry} material={material} castShadow={!wire} receiveShadow={!wire} renderOrder={wire ? 8 : 0} />
-            {layer === "skin" && mode === "skin" && garments && <>
-              <mesh geometry={part.geometry} material={materials.bottom} castShadow receiveShadow />
-              {sex === "female" && <mesh geometry={part.geometry} material={materials.bra} castShadow receiveShadow />}
-            </>}
-          </group>;
-        })}
-      </group>
+  return <group position={position} rotation={[0,rotationY,0]}>
+    <group ref={group}>
+      {parts.filter(p=>wanted.includes(p.layer)).map(({layer,geometry})=>{
+        const wire=layer==="skin"&&(mode==="holo"||mode==="xray"||mode==="all");
+        const material=layer==="skin"?(mode==="holo"?materials.holo:wire?materials.xray:mode==="thermal"?materials.thermal:materials.standard.skin):materials.standard[layer];
+        return <group key={layer}>
+          <mesh geometry={geometry} material={material} castShadow={!wire} receiveShadow={!wire} renderOrder={wire?8:0}/>
+          {layer==="skin"&&mode==="skin"&&garments&&<><mesh geometry={geometry} material={materials.bottom} castShadow receiveShadow/>{sex==="female"&&<mesh geometry={geometry} material={materials.bra} castShadow receiveShadow/>}</>}
+        </group>;
+      })}
     </group>
-  );
+  </group>;
 }

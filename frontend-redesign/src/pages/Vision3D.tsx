@@ -11,7 +11,12 @@ const MODES: { id: Mode; label: string; d: string }[] = [
   { id: "skeleton", label: "Esqueleto", d: "Esqueleto anatómico interactivo" },
   { id: "xray", label: "Rayos X", d: "Hueso bajo la silueta" },
   { id: "thermal", label: "Térmico IA", d: "Mapa de composición" },
-  { id: "holo", label: "Holograma", d: "Visualización clínica" },
+  { id: "holo", label: "Holograma", d: "Visualización anatómica" },
+  { id: "organs", label: "Órganos", d: "Órganos internos" },
+  { id: "arteries", label: "Arterias", d: "Sistema arterial" },
+  { id: "veins", label: "Venas", d: "Sistema venoso" },
+  { id: "nerves", label: "Nervios", d: "Sistema nervioso" },
+  { id: "all", label: "Todas las capas", d: "Atlas completo" },
 ];
 const VIEWS: { id: ViewPreset; label: string }[] = [
   { id: "3q", label: "3/4" }, { id: "front", label: "Frontal" }, { id: "side", label: "Lateral" }, { id: "back", label: "Posterior" },

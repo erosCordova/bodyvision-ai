@@ -185,6 +185,7 @@ export function BodyScene({
           <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
         </EffectComposer>
       </Canvas>
+      <a className="absolute bottom-1 right-2 z-10 text-[9px] text-slate-400 hover:text-cyan-200" href="https://github.com/SeemaBansal1/3d-human-body-anatomy#credits-and-licences" target="_blank" rel="noreferrer">Z-Anatomy · créditos CC</a>
       {!ready && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#050c18]/85 text-sm text-cyan-200">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" />

@@ -66,6 +66,7 @@ export default function AppLayout() {
           </div>
           <div className="mt-1 text-[13px] text-slate-300">Consulta de demostración</div>
         </div>
+        <button type="button" onClick={() => { logout(); nav("/login", { replace: true }); }} className="mt-3 flex w-full items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-500/5 px-3 py-2.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/15"><LogOut size={17} /> Cerrar sesión</button>
         <button onClick={() => setSec(true)} className="mt-3 flex items-center gap-2 px-1 text-[13px] text-slate-400 hover:text-white">
           <Lock size={14} /> Acceso y seguridad
         </button>
