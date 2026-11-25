@@ -100,7 +100,9 @@ export function PoseReview({ file, review, autoRun=false }: { file: File; review
       if (poseInFlight.current === requestId) poseInFlight.current = null;
     }
   };
-  useEffect(()=>{if(!autoRun)return;const timer=window.setTimeout(()=>void run(),0);return()=>window.clearTimeout(timer);},[file,autoRun]);
+  const runRef = useRef(run);
+  useEffect(()=>{ runRef.current = run; });
+  useEffect(()=>{if(!autoRun)return;const timer=window.setTimeout(()=>void runRef.current(),0);return()=>window.clearTimeout(timer);},[file,autoRun]);
   const runBenchmark = async () => {
     if (!benchmarkConfirmed || benchmarkRunning || diagnosticRunning || state !== "ready") return;
     const requestId = ++requestSequence.current;

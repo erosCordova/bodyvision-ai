@@ -6,6 +6,8 @@ import { DataLayout } from "../src/app/layouts/DataLayout";
 
 vi.mock("../src/app/providers/PrivateAuthProvider", () => ({
   privateAuthEnabled: () => true,
+  sessionRequired: () => true,
+  sandboxAuthEnabled: () => false,
   usePrivateAuth: () => ({
     session: { user_id: "actor", role: "privacy_officer" }, restoring: false,
     logout: vi.fn(), idleWarning: false, continueWorking: vi.fn(),

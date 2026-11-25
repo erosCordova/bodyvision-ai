@@ -1,7 +1,9 @@
 import { ApiError } from "../../services/api/client";
+import { Icon } from "./Icon";
 export function LoadingState() {
   return (
-    <p role="status" className="panel state">
+    <p role="status" className="panel state loading-state">
+      <span className="loading-orbit" aria-hidden="true" />
       Cargando información…
     </p>
   );
@@ -20,14 +22,14 @@ export function ErrorState({
       {error instanceof ApiError && (
         <details className="reference"><summary>Referencia de soporte</summary>{error.correlationId}</details>
       )}
-      <button onClick={retry}>Reintentar</button>
+      <button onClick={retry}><Icon name="refresh" size={15} /> Reintentar</button>
     </div>
   );
 }
 export function EmptyState({ text }: { text: string }) {
   return (
     <div className="panel state empty">
-      <span aria-hidden="true">▱</span>
+      <span aria-hidden="true"><Icon name="inbox" size={34} strokeWidth={1.4} /></span>
       <h2>{text}</h2>
 
     </div>

@@ -9,7 +9,7 @@
 .enterprise-pose-photo img{display:block;width:100%;height:100%;object-fit:fill}
 .enterprise-pose-photo svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 0 2px #001526)}
 .enterprise-pose-error{border-left:3px solid #f2979a;padding:12px;background:#482d3a;color:#ffe3e5;font-size:12px;line-height:1.6}
-.enterprise-pose-result{padding:12px 15px;border:1px solid #477c94;background:#173b50;border-radius:11px;color:#ddf5ff;font-size:12px}
+.enterprise-pose-result{padding:12px 15px;border:1px solid #477c94;background:#173b50;border-radius:11px;color:#eef4ff;font-size:12px}
 .enterprise-pose-result p{margin:5px 0;line-height:1.65}
 @media(max-width:700px){.enterprise-pose-review{margin:12px 4px;padding:13px}.enterprise-pose-review-head button{width:100%}}
 

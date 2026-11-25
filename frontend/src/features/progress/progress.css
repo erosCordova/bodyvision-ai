@@ -13,7 +13,7 @@
 .project-progress-text>p,.project-next-step span{
   color:#76d8ed;font-size:9px;letter-spacing:.12em;margin:0 0 6px;font-weight:700
 }
-.project-progress-text h2{font-size:16px;margin:0 0 6px;color:#e8f6ff}
+.project-progress-text h2{font-size:16px;margin:0 0 6px;color:#eef4ff}
 .project-progress-text>span{font-size:10px;color:#abc8de;line-height:1.5}
 .project-progress-meter-top{display:flex;align-items:baseline;gap:10px}
 .project-progress-meter-top strong{font-size:29px;letter-spacing:-.035em;color:#87e3f4}
@@ -53,8 +53,8 @@
 /* Phase-close evidence, distinct from manually estimated percentages. */
 .project-acceptance-audit{margin:0 0 24px}
 .project-acceptance-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin:0 0 12px}
-.project-acceptance-heading h2{font-size:17px;color:#e9f7ff;margin:0 0 7px}
-.project-acceptance-heading p{color:#bad0e2;font-size:11px;line-height:1.65;max-width:730px;margin:0}
+.project-acceptance-heading h2{font-size:17px;color:#eef4ff;margin:0 0 7px}
+.project-acceptance-heading p{color:#a9bdd6;font-size:11px;line-height:1.65;max-width:730px;margin:0}
 .project-acceptance-heading>a{font-size:11px;color:#aee7ff;border:1px solid #467592;border-radius:8px;padding:9px 12px;flex-shrink:0}
 .project-acceptance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .project-acceptance-card{border:1px solid #395b7a;background:#142c43;border-radius:11px;padding:17px;min-width:0}

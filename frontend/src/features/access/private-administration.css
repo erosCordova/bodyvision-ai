@@ -7,11 +7,11 @@
 .private-admin-grid{display:grid;grid-template-columns:minmax(320px,0.95fr) minmax(340px,1.3fr);gap:20px;align-items:start}
 .private-admin .enterprise-panel{min-width:0}
 .private-admin .enterprise-panel h2{font-size:18px;margin:0 0 13px}
-.private-admin .enterprise-panel p{font-size:12px;line-height:1.7;color:#b6cee0}
+.private-admin .enterprise-panel p{font-size:12px;line-height:1.7;color:#a9bdd6}
 .private-admin-form{display:flex;flex-direction:column;gap:9px;margin-top:22px}
-.private-admin-form label{font-size:11px;font-weight:700;color:#dbeeff;margin-top:10px}
+.private-admin-form label{font-size:11px;font-weight:700;color:#eef4ff;margin-top:10px}
 .private-admin-form input,.private-admin-form select{width:100%;min-height:44px;
-  border:1px solid #466381;border-radius:8px;background:#0c2035;color:#e9f7ff;
+  border:1px solid #466381;border-radius:8px;background:#0d1626;color:#eef4ff;
   padding:10px 12px;font:inherit;font-size:12px}
 .private-admin-form input:focus-visible,.private-admin-form select:focus-visible{
   outline:2px solid #62d4eb;outline-offset:1px}
@@ -42,31 +42,31 @@
 .private-admin-permissions{max-width:100%}
 .private-admin-permissions .private-admin-form{max-width:650px}
 .private-admin-reset .private-admin-form{max-width:650px}
-.private-admin-directory button,.private-admin-pagination button{padding:8px 12px;border:1px solid #527c9c;border-radius:7px;background:#173853;color:#e9f7ff;cursor:pointer}
+.private-admin-directory button,.private-admin-pagination button{padding:8px 12px;border:1px solid #527c9c;border-radius:7px;background:#173853;color:#eef4ff;cursor:pointer}
 .private-admin-search{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:700;margin:18px 0}
-.private-admin-search input{width:100%;min-height:44px;background:#0c2035;border:1px solid #466381;border-radius:8px;padding:10px 12px;color:#e9f7ff}
+.private-admin-search input{width:100%;min-height:44px;background:#0d1626;border:1px solid #466381;border-radius:8px;padding:10px 12px;color:#eef4ff}
 .private-admin-pagination{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:16px 0;font-size:12px}
 .private-admin-selected{background:#173f59}.private-admin-selected-account{border-top:1px solid #45627c;padding-top:18px;margin-top:18px}
 .private-admin-selected-account .private-admin-form{max-width:650px;margin-top:12px}
 .private-admin-current-grant{padding:12px;border:1px solid #426987;border-radius:8px}
 .private-admin-audit-filters{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}
 .private-admin-audit-filters label{display:flex;flex-direction:column;gap:7px;font-size:11px;flex:1}
-.private-admin-audit-filters input,.private-admin-audit-filters select{min-height:40px;border:1px solid #466381;border-radius:7px;background:#0c2035;color:#e9f7ff;padding:8px;min-width:0}
+.private-admin-audit-filters input,.private-admin-audit-filters select{min-height:40px;border:1px solid #466381;border-radius:7px;background:#0d1626;color:#eef4ff;padding:8px;min-width:0}
 .private-admin-permission-actions{display:flex;flex-wrap:wrap;gap:10px}
 .private-admin-permission-actions button{flex:1;min-width:180px}
 .private-admin-permission-actions .private-admin-revoke{
   border:1px solid #b17b88;background:#403041;color:#ffe0e5
 }
 .private-admin-permission-actions .private-admin-revoke:hover{background:#543447}
-.private-admin-integrity{border-top:1px solid var(--border,#33566c);padding-top:20px;margin-top:22px}
+.private-admin-integrity{border-top:1px solid var(--border,#2b3c58);padding-top:20px;margin-top:22px}
 .private-admin-integrity h3{font-size:15px;margin:0 0 8px}
-.private-admin-integrity>small{display:block;font-size:11px;line-height:1.7;color:var(--text-muted,#9fb3c8);margin-top:12px}
+.private-admin-integrity>small{display:block;font-size:11px;line-height:1.7;color:var(--text-muted,#a9bdd6);margin-top:12px}
 .private-admin-integrity code{overflow-wrap:anywhere;font-size:11px}
 .private-admin-integrity details{margin-top:10px}
 
 .operations-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}
-.operations-grid>div{padding:14px;border:1px solid var(--border,#33566c);border-radius:8px;min-width:0}
-.operations-grid dt{font-size:11px;color:var(--text-muted,#b6cee0);line-height:1.6}
+.operations-grid>div{padding:14px;border:1px solid var(--border,#2b3c58);border-radius:8px;min-width:0}
+.operations-grid dt{font-size:11px;color:var(--text-muted,#a9bdd6);line-height:1.6}
 .operations-grid dd{margin:8px 0 0;font-size:16px;font-weight:650;overflow-wrap:anywhere}
 .operations-panel>p,.operations-panel details{font-size:12px;line-height:1.7}
 .operations-panel li{font-size:12px;line-height:1.8}
@@ -76,9 +76,9 @@
 .private-admin-invitations .private-admin-form{max-width:620px}
 .private-admin-invitation-secret{margin:18px 0;padding:16px;border:1px solid #4d8b9b;border-radius:8px}
 .private-admin-invitation-secret input{display:block;width:100%;padding:11px;margin:10px 0;
-  border:1px solid #5d8097;border-radius:7px;background:#0d253a;color:#e9f7ff;font-family:monospace}
+  border:1px solid #5d8097;border-radius:7px;background:#0d253a;color:#eef4ff;font-family:monospace}
 .private-admin-invitation-secret button,.private-admin-invitation-list button{
-  padding:9px 12px;border:1px solid #537e97;border-radius:7px;background:#183e56;color:#e9f7ff;cursor:pointer
+  padding:9px 12px;border:1px solid #537e97;border-radius:7px;background:#183e56;color:#eef4ff;cursor:pointer
 }
 .private-admin-invitation-list{list-style:none;padding:0}
 .private-admin-invitation-list li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;
