@@ -5,6 +5,7 @@ import { useStore, type Consent, type ReportRecord } from "../store";
 
 import {useConnection} from "../ConnectedProvider";
 import {request,json,type Role,type Account} from "../api";
+import {downloadReportPdf,type ReportTable} from "../reportPdf";
 
 const tone = (e: Consent["estado"]) => (e === "Vigente" ? "ok" : e === "Pendiente" ? "warn" : e === "Por vencer" ? "info" : "bad");
 
@@ -66,39 +67,37 @@ export function Consentimientos() {
 }
 
 const TEMPLATES = [
-  ["Informe de composición corporal","Datos de composición del expediente seleccionado."],
-  ["Evolución del paciente","Mediciones registradas del expediente seleccionado."],
-  ["Consentimientos del paciente","Estado de solicitudes vinculadas al expediente."],
+  ["Informe de composición corporal","Últimas mediciones de composición corporal."],
+  ["Evolución del paciente","Historial de mediciones registradas."],
+  ["Medidas antropométricas","Medidas de segmentos corporales."],
 ];
+type SavedReport=ReportTable&{id:string;patientId:string;date:string};
 export function Reportes(){
   const {patient}=useStore();
   return <PatientReports key={patient.id}/>;
 }
 function PatientReports(){
-  const {toast,mediciones,patient,consents}=useStore();
-  const [reports,setReports]=useState<ReportRecord[]>([]);
-  const {selected,catalog}=useConnection();
+  const {toast,patient}=useStore(),{selected,catalog}=useConnection();
+  const [reports,setReports]=useState<SavedReport[]>([]),[tpl,setTpl]=useState(TEMPLATES[0][0]),[view,setView]=useState<SavedReport|null>(null),[removing,setRemoving]=useState<SavedReport|null>(null);
   const [open,setOpen]=useState(false);
-  const [tpl,setTpl]=useState(TEMPLATES[0][0]);
-  const [removing,setRemoving]=useState<ReportRecord|null>(null);
-  const [view,setView]=useState<ReportRecord|null>(null);
-  const records=reports.filter(r=>r.patientId===patient.id);
-  const gen=()=>{
-    if(tpl===TEMPLATES[2][0])return toast("Consentimientos no habilitados en el servidor");
+  const composition=["weight","height","body_fat_pct","muscle_mass_kg"],segments=["waist","hip","chest","arm","thigh","neck"];
+  const make=(template:string):SavedReport=>{
     const ms=selected?.observations||[];
-    const title=tpl+" · "+patient.nombre;
-    const content=["BODYVISION AI · Informe de registros",title,"Expediente: "+patient.id,"Edad aproximada: "+patient.edad+" años",...ms.filter(o=>tpl===TEMPLATES[1][0]||["weight","height","body_fat_pct","muscle_mass_kg"].includes(o.metric_code)).map(o=>(catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code)+" · "+o.value+" "+o.unit+" · "+o.measured_at)].join("\n");
-    const report:ReportRecord={id:crypto.randomUUID(),patientId:patient.id,title,date:new Date().toLocaleString("es-PE"),content};
-    setReports([report,...reports]);setOpen(false);toast("Reporte generado para descarga local");
+    const filtered=template===TEMPLATES[0][0]?ms.filter(o=>composition.includes(o.metric_code)).filter((o,i,a)=>a.findIndex(x=>x.metric_code===o.metric_code)===i):template===TEMPLATES[2][0]?ms.filter(o=>segments.includes(o.metric_code)):ms;
+    return {id:crypto.randomUUID(),patientId:patient.id,title:template,patient:patient.nombre,code:selected?.profile.display_code||patient.id,date:new Date().toLocaleString("es-PE"),columns:["Variable","Valor","Unidad","Fecha"],rows:filtered.map(o=>[catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code,new Intl.NumberFormat("es-PE",{maximumFractionDigits:2}).format(o.value),o.unit,new Date(o.measured_at).toLocaleDateString("es-PE")])};
   };
-  const dl=(r:ReportRecord)=>{const url=URL.createObjectURL(new Blob([r.content],{type:"text/plain;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="bodyvision-"+r.id+".txt";a.click();URL.revokeObjectURL(url);};
+  const preview=make(tpl);
+  const table=(r:ReportTable)=><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-slate-400"><tr>{r.columns.map(c=><th key={c} className="px-3 py-3">{c}</th>)}</tr></thead><tbody>{r.rows.map((row,i)=><tr key={i} className="border-t border-white/5">{row.map((cell,j)=><td key={j} className="px-3 py-3">{cell}</td>)}</tr>)}{!r.rows.length&&<tr><td colSpan={r.columns.length} className="py-8 text-center text-slate-400">Sin datos registrados para este informe</td></tr>}</tbody></table></div>;
+  const gen=()=>{if(!preview.rows.length)return toast("No hay mediciones para generar este reporte");setReports(r=>[preview,...r]);setOpen(false);setView(preview);toast("Reporte generado");};
+  const dl=(r:SavedReport)=>{try{downloadReportPdf(r,"bodyvision-"+r.id+".pdf");}catch{toast("No se pudo generar el PDF");}};
   return <div>
-    <PageHead title="Reportes" sub={patient.nombre+" · informes de la sesión"} actions={<Btn variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/> Generar reporte</Btn>}/>
-    <div className="mb-6 grid gap-4 md:grid-cols-3">{TEMPLATES.map(([t,d])=><button key={t} disabled={t===TEMPLATES[2][0]} onClick={()=>{setTpl(t);setOpen(true);}} className="panel p-5 text-left hover:border-cyan-400/40"><FileText className="mb-3 text-cyan-300"/><div className="font-semibold text-white">{t}</div><div className="mt-1 text-sm text-slate-400">{d}</div></button>)}</div>
-    <Panel title="Reportes generados"><ul className="divide-y divide-white/5">{records.map(r=><li key={r.id} className="flex flex-wrap items-center gap-3 py-3 text-sm"><FileText size={18} className="text-sky-300"/><div className="flex-1"><button className="text-left text-white hover:text-cyan-300" onClick={()=>setView(r)}>{r.title}</button><div className="text-xs text-slate-500">{r.date}</div></div><Btn onClick={()=>dl(r)}><Download size={15}/> Descargar</Btn><button title="Eliminar reporte" className="p-2 text-rose-300" onClick={()=>setRemoving(r)}><Trash2 size={16}/></button></li>)}</ul>{!records.length&&<p className="py-8 text-center text-slate-400">Sin reportes de este expediente</p>}</Panel>
-    <Modal open={open} onClose={()=>setOpen(false)} title="Generar reporte"><div className="space-y-4"><select className="field" value={tpl} onChange={e=>setTpl(e.target.value)}>{TEMPLATES.map(([t])=><option key={t} disabled={t===TEMPLATES[2][0]}>{t}</option>)}</select><p className="text-sm text-slate-300">Paciente: {patient.nombre}. Se generará una copia descargable de los datos del servidor. No se guarda en PostgreSQL.</p><Btn variant="primary" className="w-full" onClick={gen}>Generar</Btn></div></Modal>
-    <Modal open={!!view} onClose={()=>setView(null)} title="Consultar reporte" wide><pre className="whitespace-pre-wrap text-sm text-slate-300">{view?.content}</pre></Modal>
-    <Modal open={!!removing} onClose={()=>setRemoving(null)} title="Eliminar reporte"><p className="text-sm text-slate-300">¿Eliminar {removing?.title}?</p><div className="mt-5 flex justify-end gap-2"><Btn onClick={()=>setRemoving(null)}>Cancelar</Btn><Btn variant="danger" onClick={()=>{if(removing){setReports(reports.filter(r=>r.id!==removing.id));setRemoving(null);toast("Reporte local eliminado");}}}>Eliminar</Btn></div></Modal>
+    <PageHead title="Reportes" sub={patient.nombre} actions={<Btn variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/> Generar reporte</Btn>}/>
+    <div className="mb-6 grid gap-4 md:grid-cols-3">{TEMPLATES.map(([t,d])=><button key={t} onClick={()=>setTpl(t)} className={"panel p-5 text-left hover:border-cyan-400/40 "+(tpl===t?"!border-cyan-400/60":"")}><FileText className="mb-3 text-cyan-300"/><div className="font-semibold text-white">{t}</div><div className="mt-1 text-sm text-slate-400">{d}</div></button>)}</div>
+    <Panel title={tpl} action={<Btn disabled={!preview.rows.length} onClick={()=>dl(preview)}><Download size={15}/> Descargar PDF</Btn>}>{table(preview)}</Panel>
+    <Panel className="mt-5" title="Reportes generados"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-slate-400"><tr><th className="py-3">Informe</th><th>Paciente</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>{reports.map(r=><tr key={r.id} className="border-t border-white/5"><td className="py-3">{r.title}</td><td>{r.patient}</td><td>{r.date}</td><td><div className="flex flex-wrap gap-2"><Btn onClick={()=>setView(r)}>Ver</Btn><Btn onClick={()=>dl(r)}><Download size={15}/> PDF</Btn><button title="Eliminar reporte" className="p-2 text-rose-300" onClick={()=>setRemoving(r)}><Trash2 size={16}/></button></div></td></tr>)}{!reports.length&&<tr><td colSpan={4} className="py-8 text-center text-slate-400">Sin reportes generados en esta sesión</td></tr>}</tbody></table></div></Panel>
+    <Modal open={open} onClose={()=>setOpen(false)} title="Generar reporte"><div className="space-y-4"><select className="field" value={tpl} onChange={e=>setTpl(e.target.value)}>{TEMPLATES.map(([t])=><option key={t}>{t}</option>)}</select><Btn variant="primary" disabled={!preview.rows.length} className="w-full" onClick={gen}>Generar</Btn></div></Modal>
+    <Modal open={!!view} onClose={()=>setView(null)} title={view?.title||"Consultar reporte"} wide>{view&&<>{table(view)}<Btn className="mt-4" onClick={()=>dl(view)}><Download size={15}/> Descargar PDF</Btn></>}</Modal>
+    <Modal open={!!removing} onClose={()=>setRemoving(null)} title="Eliminar reporte"><p className="text-sm text-slate-300">¿Eliminar {removing?.title} de esta sesión?</p><Btn className="mt-4" variant="danger" onClick={()=>{if(removing){setReports(r=>r.filter(x=>x.id!==removing.id));setRemoving(null);}}}>Eliminar</Btn></Modal>
   </div>;
 }
 

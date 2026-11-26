@@ -15,23 +15,24 @@ export default function AnalisisIA() {
   // Only measurements explicitly linked to this record ID; do not match by name.
   const records = mediciones.filter(m => m.patientId === p.id);
   const latest = records[0];
-  const data = [{ mes: "Expediente", grasa: p.grasa }, ...records.slice().reverse().map((m, i) => ({ mes: "M" + (i + 1), grasa: m.grasa }))];
+  const fmt=(v:number,unit="")=>Number.isFinite(v)?new Intl.NumberFormat("es-PE",{maximumFractionDigits:1}).format(v)+unit:"—";
+  const data = records.filter(m=>Number.isFinite(m.grasa)).slice().reverse().map((m,i)=>({mes:"M"+(i+1),grasa:m.grasa,fecha:m.fecha}));
   const sc = p.altura / 175;
   const radial = Math.min(1.65, Math.max(.65, Math.sqrt(imc/23) * (1+fat*.004+mus*.002)));
   const position = (x:number,y:number,z:number):[number,number,number] => [x*sc*radial,y*sc,z*sc*radial];
   const metrics = [
     ["IMC", imc.toFixed(1), imc >= 25 ? "text-amber-300" : "text-emerald-300"],
     ["Peso de referencia", `${ideal} kg`, "text-sky-300"],
-    ["Grasa Corporal", `${p.grasa}%`, "text-amber-300"],
-    ["Masa Muscular", `${p.musculo}%`, "text-cyan-300"],
+    ["Grasa Corporal", fmt(p.grasa,"%"), "text-amber-300"],
+    ["Masa Muscular", fmt(p.musculo,"%"), "text-cyan-300"],
   ];
   const segments = latest ? [
     ["Brazo", latest.brazo], ["Pecho", latest.pecho], ["Cintura", latest.cintura],
     ["Cadera", latest.cadera], ["Muslo", latest.muslo],
-  ] as const : [];
+  ].filter(([,value])=>Number.isFinite(value)) as [string,number][] : [];
   const insights = [
     `Expediente: ${p.edad} años · ${p.altura} cm · ${p.peso} kg.`,
-    `Composición registrada: ${p.grasa}% de grasa y ${p.musculo}% de masa muscular.`,
+    `Composición registrada: ${fmt(p.grasa,"%")} de grasa y ${fmt(p.musculo,"%")} de masa muscular.`,
     latest ? "Mediciones vinculadas al expediente disponibles." : "No hay mediciones segmentarias vinculadas a este expediente.",
     "El atlas y sus colores son ilustrativos; no constituyen una medición térmica, diagnóstico ni análisis de la fotografía.",
   ];
@@ -39,8 +40,8 @@ export default function AnalisisIA() {
   return (
     <div>
       <PageHead title="Análisis con IA" sub={`Informe de composición corporal · ${p.nombre}`} actions={<Badge tone="info">{p.id} · Datos del expediente</Badge>} />
-      <div className="grid gap-5 xl:grid-cols-[260px_1fr_380px]">
-        <Panel pad={false} className="overflow-hidden">
+      <div className="grid gap-5 xl:grid-cols-[minmax(200px,260px)_minmax(0,1fr)_minmax(280px,380px)] items-start">
+        <div className="min-w-0 space-y-5"><Panel pad={false} className="overflow-hidden">
           <div className="relative flex min-h-[240px] flex-col xl:min-h-[560px]">
             <img key={p.id} src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía registrada de ${p.nombre}`:"Imagen anatómica de referencia"} className={`h-[280px] w-full bg-black xl:h-[560px] ${p.foto?"object-contain":"object-cover object-top"}`} />
             <div className="border-t border-white/5 bg-slate-950/50 p-3">
@@ -48,8 +49,8 @@ export default function AnalisisIA() {
               <div className="mt-1 text-xs text-slate-400">{p.foto ? "Fotografía del expediente" : "Imagen de referencia · sin fotografía registrada"}</div>
             </div>
           </div>
-        </Panel>
-        <Panel pad={false}>
+        </Panel><Panel title="Datos del paciente"><dl className="space-y-3 text-sm">{[["Edad",fmt(p.edad," años")],["Estatura",fmt(p.altura," cm")],["Peso",fmt(p.peso," kg")],["IMC",fmt(imc)],["Grasa corporal",fmt(p.grasa,"%")],["Masa muscular",fmt(p.musculo,"%")]].map(([label,value])=><div key={label} className="flex justify-between gap-2 border-b border-white/5 pb-2"><dt className="text-slate-400">{label}</dt><dd className="font-semibold text-white">{value}</dd></div>)}</dl></Panel></div>
+        <div className="min-w-0 space-y-5"><Panel pad={false}>
           <BodyScene className="h-[600px] rounded-2xl" distance={4.6 * Math.max(1, sc)} ring="#f59e0b" rotateSpeed={1}>
             <BodyModel key={p.id} sex={p.sexo} heightCm={p.altura} weightKg={p.peso} ageYears={p.edad} fat={fat} mus={mus} mode="thermal" />
             <Annotation position={position(0,1.69,.1)} label="Edad" value={`${p.edad} años`} color="#fb923c" align="left" />
@@ -57,8 +58,8 @@ export default function AnalisisIA() {
             <Annotation position={position(.05,1.08,.13)} label="Grasa corporal total" value={`${p.grasa}%`} color="#facc15" align="left" />
             <Annotation position={position(.1,.6,.1)} label="Altura" value={`${p.altura} cm`} color="#34d399" />
           </BodyScene>
-        </Panel>
-        <div className="space-y-5">
+        </Panel><Panel title="Historial de composición corporal"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr><th className="pb-2">Fecha</th><th>Peso</th><th>Grasa corporal</th></tr></thead><tbody>{records.filter(m=>Number.isFinite(m.peso)||Number.isFinite(m.grasa)).slice(0,8).map(m=><tr key={m.id} className="border-t border-white/5"><td className="py-2">{m.fecha}</td><td>{fmt(m.peso," kg")}</td><td>{fmt(m.grasa,"%")}</td></tr>)}</tbody></table>{!records.some(m=>Number.isFinite(m.peso)||Number.isFinite(m.grasa))&&<p className="py-3 text-sm text-slate-400">Sin registros de composición corporal</p>}</div></Panel></div>
+        <div className="min-w-0 space-y-5">
           <Panel title="Análisis Corporal">
             <div className="grid grid-cols-2 gap-3">
               {metrics.map(([l, v, c]) => (
@@ -83,10 +84,10 @@ export default function AnalisisIA() {
               <ResponsiveContainer>
                 <LineChart data={data} margin={{ left: -25, right: 10 }}>
                   <XAxis dataKey="mes" stroke="#5f7a99" fontSize={11} /><YAxis stroke="#5f7a99" fontSize={11} domain={["auto", "auto"]} />
-                  <Tooltip {...chartTip} /><Line dataKey="grasa" name="Grasa registrada / estimada (%)" stroke="#f59e0b" strokeWidth={2.5} dot />
+                  <Tooltip {...chartTip} /><Line dataKey="grasa" name="Grasa registrada (%)" stroke="#f59e0b" strokeWidth={2.5} dot />
                 </LineChart>
               </ResponsiveContainer>
-            </div><p className="mt-2 text-xs text-slate-400">M: medición registrada; grasa estimada en Mediciones.</p></> : <p className="py-5 text-center text-sm text-slate-400">Valor inicial: {p.grasa}%. Registra una medición para ver la evolución.</p>}
+            </div><p className="mt-2 text-xs text-slate-400">Mediciones registradas del expediente.</p></> : <p className="py-5 text-center text-sm text-slate-400">{data.length===1?`Último valor: ${fmt(data[0].grasa,"%")}.`:"Sin mediciones de grasa registradas."}</p>}
           </Panel>
           <Panel title="Resumen del expediente">
             <ul className="space-y-3">
