@@ -84,7 +84,7 @@ export interface Consent {
 }
 
 export interface ReportRecord { id: string; patientId: string; title: string; date: string; content: string; }
-interface Store {
+export interface Store {
   user: { nombre: string; email: string } | null;
   login: (email: string) => void;
   logout: () => void;
@@ -107,7 +107,7 @@ interface Store {
   toasts: { id: number; msg: string }[];
 }
 
-const Ctx = createContext<Store>(null!);
+export const Ctx = createContext<Store>(null!);
 export const useStore = () => useContext(Ctx);
 
 const initialMed: Medicion[] = PATIENTS.slice(0, 6).map((p, i) => ({

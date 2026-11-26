@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail, ShieldCheck, User } from "lucide-react";
 import { Logo, Btn } from "../ui";
-import { useStore } from "../store";
+import { useConnection } from "../ConnectedProvider";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
 
@@ -10,30 +10,26 @@ type Mode = "login" | "register" | "recover";
 
 export default function Login() {
   const nav = useNavigate();
-  const { login } = useStore();
+  const { login } = useConnection();
   const [mode, setMode] = useState<Mode>("login");
-  const [email, setEmail] = useState("doctor@bodyvision.ai");
-  const [pass, setPass] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
   const [name, setName] = useState("");
   const [show, setShow] = useState(false);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(false);
+  const [synthetic, setSynthetic] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setErr("");
-    setOk("");
-    if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("Ingresa un correo electrónico válido.");
-    if (mode === "recover") return setOk("Te enviamos un enlace de recuperación (simulado).");
-    if (pass.length < 4) return setErr("La contraseña debe tener al menos 4 caracteres.");
-    if (mode === "register" && !name.trim()) return setErr("Indica tu nombre completo.");
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();setErr("");setOk("");
+    if (!/^\S+@\S+\.\S+$/.test(email))return setErr("Ingresa un correo electrónico válido.");
+    if(mode==="recover")return setErr("La recuperación de contraseña no está habilitada en pruebas.");
+    if(mode==="register"&&(pass.length<12||!synthetic))return setErr("Usa una contraseña de al menos 12 caracteres y confirma el entorno ficticio.");
     setLoading(true);
-    setTimeout(() => {
-      login(email);
-      nav("/app");
-    }, 800);
+    try{await login(email.trim(),pass,mode==="register");nav("/app/expedientes",{replace:true});}
+    catch(e){setErr(e instanceof Error?e.message:"No se pudo conectar al servidor.");}finally{setLoading(false);}
   };
 
   return (
@@ -52,10 +48,10 @@ export default function Login() {
               {mode === "login" ? "Accede a tu cuenta" : mode === "register" ? "Crea tu cuenta" : "Recupera tu acceso"}
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              {mode === "login" ? "Plataforma de análisis corporal inteligente." : mode === "register" ? "Empieza tu prueba gratuita de 14 días." : "Te enviaremos un enlace seguro."}
+              {mode === "login" ? "Plataforma de análisis corporal inteligente." : mode === "register" ? "Crea una cuenta aislada de pruebas." : "Recuperación no habilitada en pruebas."}
             </p>
             <form onSubmit={submit} className="mt-6 space-y-4">
-              {mode === "register" && (
+              {false && mode === "register" && (
                 <label className="block">
                   <span className="mb-1.5 block text-xs text-slate-400">Nombre completo</span>
                   <div className="relative">
@@ -86,14 +82,15 @@ export default function Login() {
               {mode === "login" && (
                 <div className="flex items-center justify-between text-xs">
                   <label className="flex cursor-pointer items-center gap-2 text-slate-300">
-                    <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4 accent-cyan-400" />
-                    Recordarme
+                    <input type="checkbox" checked={false} disabled className="h-4 w-4 accent-cyan-400" />
+                    Recordarme (no disponible)
                   </label>
                   <button type="button" onClick={() => setMode("recover")} className="text-cyan-300 hover:underline">
                     ¿Olvidaste tu contraseña?
                   </button>
                 </div>
               )}
+              {mode==="register"&&<label className="flex gap-2 text-xs text-slate-300"><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)}/> Confirmo el uso exclusivo de expedientes e imágenes ficticios.</label>}
               {err && <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>}
               {ok && <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{ok}</div>}
               <Btn type="submit" variant="primary" className="w-full !py-3" disabled={loading}>
@@ -116,7 +113,7 @@ export default function Login() {
             </p>
           </div>
           <p className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-slate-500">
-            <ShieldCheck size={14} className="text-cyan-300" /> Entorno de demostración · credenciales precargadas
+            <ShieldCheck size={14} className="text-cyan-300" /> Acceso autenticado · Solo datos ficticios
           </p>
         </div>
       </div>
