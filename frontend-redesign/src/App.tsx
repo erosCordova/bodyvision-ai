@@ -59,7 +59,7 @@ export default function App() {
             <Route path="simulador" element={<DataRoute><NeedPatient complete><Simulador /></NeedPatient></DataRoute>} />
             <Route path="analitica" element={<DataRoute><Analitica /></DataRoute>} />
             <Route path="consentimientos" element={<DataRoute><Consentimientos /></DataRoute>} />
-            <Route path="reportes" element={<DataRoute><NeedPatient><Reportes /></NeedPatient></DataRoute>} />
+            <Route path="reportes" element={<DataRoute><Reportes /></DataRoute>} />
             <Route path="administracion" element={<AdminRoute />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

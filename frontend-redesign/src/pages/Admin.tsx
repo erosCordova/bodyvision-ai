@@ -1,104 +1,75 @@
 import { useState,useEffect } from "react";
 import { Download, FileText, Plus, ShieldCheck, Trash2, Pencil } from "lucide-react";
 import { Avatar, Badge, Btn, Modal, PageHead, Panel, Segmented, Toggle } from "../ui";
-import { useStore, type Consent, type ReportRecord } from "../store";
+import { useStore } from "../store";
 
 import {useConnection} from "../ConnectedProvider";
 import {request,json,type Role,type Account} from "../api";
 import {downloadReportPdf,type ReportTable} from "../reportPdf";
 import LiveMesh from "../LiveMesh";
 
-const tone = (e: Consent["estado"]) => (e === "Vigente" ? "ok" : e === "Pendiente" ? "warn" : e === "Por vencer" ? "info" : "bad");
-
-export function Consentimientos() {
-  const { consents, setConsents, toast, patients } = useStore();
-  const [open, setOpen] = useState(false);
-  const [pac, setPac] = useState(patients[0]?.id||"");
-  const [tipo, setTipo] = useState("Tratamiento de imágenes corporales");
-  const [editing,setEditing]=useState<Consent|null>(null);
-  const [removing,setRemoving]=useState<Consent|null>(null);
-  const types=["Tratamiento de imágenes corporales","Reconstrucción 3D","Uso de IA en análisis","Compartir con especialista"];
-  const begin=()=>{setEditing(null);setPac((patients[0]?.id||""));setTipo(types[0]);setOpen(true);};
-  const edit=(c:Consent)=>{setEditing(c);setPac(c.patientId??patients[0].id);setTipo(c.tipo);setOpen(true);};
-  const add=()=>{
-    const p=patients.find(p=>p.id===pac);if(!p)return;
-    if(editing&&editing.estado!=="Pendiente")return;
-    const next:Consent=editing?{...editing,patientId:p.id,paciente:p.nombre,tipo}:{id:"CON-"+crypto.randomUUID().slice(0,8),patientId:p.id,paciente:p.nombre,tipo,fecha:new Date().toLocaleDateString("es-PE"),vigencia:"Sin firma",estado:"Pendiente"};
-    if(setConsents(editing?consents.map(c=>c.id===editing.id?next:c):[next,...consents])){setOpen(false);toast(editing?"Solicitud actualizada":"Solicitud registrada");}
-  };
-  const remove=()=>{if(!removing)return;const pending=removing.estado==="Pendiente";const next=pending?consents.filter(c=>c.id!==removing.id):consents.map(c=>c.id===removing.id?{...c,estado:"Revocado" as const}:c);if(setConsents(next)){setRemoving(null);toast(pending?"Solicitud eliminada":"Consentimiento revocado");}};
-  const count = (e: string) => consents.filter((c) => c.estado === e).length;
-  return (
-    <div>
-      <PageHead title="Consentimientos" sub="Gestión de consentimientos informados y tratamiento de datos biométricos" actions={<Btn variant="primary" disabled title="Operación no habilitada en el servidor de pruebas" onClick={begin}><Plus size={16} /> Solicitar firma</Btn>} />
-      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {(["Vigente", "Pendiente", "Por vencer", "Revocado"] as const).map((e) => (
-          <div key={e} className="panel p-4"><Badge tone={tone(e)}>{e}</Badge><div className="mt-2 font-display text-3xl font-bold text-white">—</div></div>
-        ))}
-      </div>
-      <Panel pad={false}>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Paciente</th><th>Tipo</th><th>Fecha</th><th>Vigencia</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead>
-            <tbody>
-              {!consents.length&&<tr><td colSpan={6} className="py-12 text-center text-slate-400">Consentimientos no disponibles en este entorno</td></tr>}
-              {consents.map((c) => (
-                <tr key={c.id} className="border-t border-white/5 hover:bg-white/[0.03] [&>td]:px-4 [&>td]:py-3">
-                  <td><div className="flex items-center gap-3"><Avatar name={c.paciente} size={30} /><span className="font-medium text-white">{c.paciente}</span></div></td>
-                  <td className="text-slate-300">{c.tipo}</td><td className="text-slate-400">{c.fecha}</td><td className="text-slate-400">{c.vigencia}</td>
-                  <td><Badge tone={tone(c.estado)}>{c.estado}</Badge></td>
-                  <td className="text-right"><div className="flex justify-end gap-2">{c.estado==="Pendiente"&&<button title="Editar solicitud" className="p-2 text-cyan-300" onClick={()=>edit(c)}><Pencil size={16}/></button>}{c.estado!=="Revocado"&&<button className="rounded-lg px-2 py-1 text-xs text-rose-300" onClick={()=>setRemoving(c)}>{c.estado==="Pendiente"?"Eliminar":"Revocar"}</button>}</div></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-      <Panel className="mt-5" title="Captura anatómica por cámara"><LiveMesh/></Panel>
-      <div className="mt-5 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-300"><ShieldCheck className="mt-0.5 shrink-0 text-cyan-300" size={18}/>La autorización de cámara es temporal y local. El registro de firmas y archivos biométricos personales no está habilitado.</div>
-      <Modal open={open} onClose={() => setOpen(false)} title={editing?"Editar solicitud":"Solicitar consentimiento"}>
-        <div className="space-y-4">
-          <label className="block"><span className="mb-1 block text-xs text-slate-400">Paciente</span><select className="field" value={pac} onChange={(e) => setPac(e.target.value)}>{patients.map((p) => <option key={p.id} value={p.id} className="bg-slate-900">{p.nombre}</option>)}</select></label>
-          <label className="block"><span className="mb-1 block text-xs text-slate-400">Tipo</span><select className="field" value={tipo} onChange={(e) => setTipo(e.target.value)}>{["Tratamiento de imágenes corporales", "Reconstrucción 3D", "Uso de IA en análisis", "Compartir con especialista"].map((t) => <option key={t} className="bg-slate-900">{t}</option>)}</select></label>
-          <Btn variant="primary" className="w-full" onClick={add}>{editing?"Guardar cambios":"Registrar solicitud"}</Btn>
-        </div>
-      </Modal>
-      <Modal open={!!removing} onClose={()=>setRemoving(null)} title={removing?.estado==="Pendiente"?"Eliminar solicitud":"Revocar consentimiento"}><p className="text-sm text-slate-300">Confirma la acción para {removing?.paciente}.</p><div className="mt-5 flex justify-end gap-2"><Btn onClick={()=>setRemoving(null)}>Cancelar</Btn><Btn variant="danger" onClick={remove}>Confirmar</Btn></div></Modal>
-    </div>
-  );
+const purposes={images:"Tratamiento de imágenes corporales",reconstruction:"Reconstrucción 3D",analysis:"Uso de IA en análisis",sharing:"Compartir con especialista",camera:"Captura anatómica por cámara"};
+type Purpose=keyof typeof purposes;
+type State="active"|"pending"|"expiring"|"revoked"|"expired";
+type ConsentRow={id:string;profile_id:string;patient_name:string;purpose:Purpose;state:State;created_at:string;accepted_at:string|null;expires_at:string|null;revoked_at:string|null};
+const states:Record<State,{label:string;tone:"ok"|"warn"|"info"|"bad"}>={active:{label:"Vigente",tone:"ok"},pending:{label:"Pendiente",tone:"warn"},expiring:{label:"Por vencer",tone:"info"},revoked:{label:"Revocado",tone:"bad"},expired:{label:"Vencido",tone:"bad"}};
+const dateLabel=(v:string|null)=>v?new Date(v).toLocaleDateString("es-PE",{timeZone:"America/Lima"}):"—";
+export function Consentimientos(){
+ const {patients,selectedId,toast}=useStore(),{run,role,token,records}=useConnection();
+ const [items,setItems]=useState<ConsentRow[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[open,setOpen]=useState(false),[pac,setPac]=useState(""),[purpose,setPurpose]=useState<Purpose>("images"),[saving,setSaving]=useState(false),[action,setAction]=useState<{row:ConsentRow;kind:"accept"|"revoke"}|null>(null),[confirmed,setConfirmed]=useState(false),[filter,setFilter]=useState<State|"all">("all");
+ const writable=role==="administrator"||role==="specialist";
+ const active=patients.filter(p=>records.some(r=>r.profile.id===p.id&&r.profile.status==="active"));
+ const reload=async()=>{setLoading(true);setError("");try{const result=await run(t=>request<{items:ConsentRow[]}>("/sandbox/consents",t));setItems(result.items);}catch(e){setError(e instanceof Error?e.message:"No se pudieron consultar los consentimientos.");}finally{setLoading(false);}};
+ useEffect(()=>{if(token)void reload();else{setItems([]);setLoading(false);}},[token]);
+ const create=async()=>{if(!pac||saving)return;setSaving(true);try{await run(t=>request("/sandbox/consents",t,json("POST",{profile_id:pac,purpose})));setOpen(false);await reload();toast("Solicitud registrada");}catch(e){toast(e instanceof Error?e.message:"No se pudo registrar");}finally{setSaving(false);}};
+ const change=async()=>{if(!action||!confirmed||saving)return;setSaving(true);try{await run(t=>request("/sandbox/consents/"+action.row.id,t,json("PATCH",{action:action.kind,confirmed:true})));toast(action.kind==="accept"?"Confirmación de prueba registrada":"Consentimiento revocado");setAction(null);await reload();}catch(e){toast(e instanceof Error?e.message:"No se pudo actualizar");}finally{setSaving(false);}};
+ const begin=()=>{setPac(active.some(p=>p.id===selectedId)?selectedId:active[0]?.id||"");setPurpose("images");setOpen(true);};
+ const shown=items.filter(c=>filter==="all"||c.state===filter);
+ return <div>
+ <PageHead title="Consentimientos" sub="Solicitudes y autorizaciones de prueba por expediente" actions={<Btn variant="primary" disabled={!writable||!active.length||loading} onClick={begin}><Plus size={16}/> Solicitar firma</Btn>}/>
+ <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-5">{(Object.keys(states) as State[]).map(e=><button key={e} className={"panel p-4 text-left "+(filter===e?"!border-cyan-400/60":"")} onClick={()=>setFilter(filter===e?"all":e)}><Badge tone={states[e].tone}>{states[e].label}</Badge><div className="mt-2 font-display text-3xl font-bold text-white">{loading||error?"—":items.filter(c=>c.state===e).length}</div></button>)}</div>
+ <Panel pad={false}><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Paciente</th><th>Tipo</th><th>Fecha</th><th>Vigencia</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead><tbody>
+ {loading||error||!shown.length?<tr><td colSpan={6} className="py-10 text-center text-slate-400">{loading?"Cargando consentimientos…":error||"No hay solicitudes registradas"+(filter==="all"?"":" con este estado")}{error&&<Btn className="ml-3" onClick={reload}>Reintentar</Btn>}</td></tr>:shown.map(c=><tr key={c.id} className="border-t border-white/5 [&>td]:px-4 [&>td]:py-3"><td><div className="flex items-center gap-3"><Avatar name={c.patient_name} size={30}/><span className="font-medium text-white">{c.patient_name}</span></div></td><td>{purposes[c.purpose]}</td><td>{dateLabel(c.accepted_at||c.created_at)}</td><td>{dateLabel(c.expires_at)}</td><td><Badge tone={states[c.state].tone}>{states[c.state].label}</Badge></td><td><div className="flex justify-end gap-2">{writable&&c.state==="pending"&&active.some(p=>p.id===c.profile_id)&&<Btn onClick={()=>{setConfirmed(false);setAction({row:c,kind:"accept"});}}>Confirmar prueba</Btn>}{writable&&c.state!=="revoked"&&<button className="text-xs text-rose-300" onClick={()=>{setConfirmed(false);setAction({row:c,kind:"revoke"});}}>{c.state==="pending"?"Cancelar":"Revocar"}</button>}</div></td></tr>)}
+ </tbody></table></div></Panel>
+ <Panel className="mt-5" title="Captura anatómica por cámara"><LiveMesh/></Panel>
+ <div className="mt-5 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-300"><ShieldCheck size={18} className="shrink-0 text-cyan-300"/>Los consentimientos registrados son de prueba, no firmas legales. La cámara conserva su autorización local independiente.</div>
+ <Modal open={open} onClose={()=>setOpen(false)} title="Solicitar consentimiento"><div className="space-y-4"><label className="block">Paciente<select className="field mt-1" value={pac} onChange={e=>setPac(e.target.value)}>{active.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label><label className="block">Finalidad<select className="field mt-1" value={purpose} onChange={e=>setPurpose(e.target.value as Purpose)}>{Object.entries(purposes).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label><Btn variant="primary" className="w-full" disabled={!pac||saving} onClick={create}>Registrar solicitud</Btn></div></Modal>
+ <Modal open={!!action} onClose={()=>setAction(null)} title={action?.kind==="accept"?"Registrar confirmación de prueba":"Revocar o cancelar solicitud"}>{action&&<div className="space-y-4"><p>{action.row.patient_name} · {purposes[action.row.purpose]}</p><label className="flex gap-2 items-start text-sm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>{action.kind==="accept"?"Confirmo que es una autorización ficticia de prueba, válida por 365 días. No constituye una firma legal.":"Confirmo la revocación o cancelación de esta solicitud."}</label><Btn disabled={!confirmed||saving} variant={action.kind==="accept"?"primary":"danger"} onClick={change}>Confirmar</Btn></div>}</Modal>
+ </div>;
 }
 
 const TEMPLATES = [
   ["Informe de composición corporal","Últimas mediciones de composición corporal."],
   ["Evolución del paciente","Historial de mediciones registradas."],
   ["Medidas antropométricas","Medidas de segmentos corporales."],
+  ["Informe general de pacientes","Resumen de todos los expedientes accesibles."],
 ];
 type SavedReport=ReportTable&{id:string;patientId:string;date:string};
 export function Reportes(){
-  const {patient}=useStore();
-  return <PatientReports key={patient.id}/>;
+  return <PatientReports/>;
 }
 function PatientReports(){
-  const {toast,patient}=useStore(),{selected,catalog}=useConnection();
+  const {toast,patient}=useStore(),{selected,catalog,records,busy}=useConnection();
   const [reports,setReports]=useState<SavedReport[]>([]),[tpl,setTpl]=useState(TEMPLATES[0][0]),[view,setView]=useState<SavedReport|null>(null),[removing,setRemoving]=useState<SavedReport|null>(null);
   const [open,setOpen]=useState(false);
   const composition=["weight","height","body_fat_pct","muscle_mass_kg"],segments=["waist","hip","chest","arm","thigh","neck"];
   const make=(template:string):SavedReport=>{
+    if(template===TEMPLATES[3][0])return {id:crypto.randomUUID(),patientId:"all",title:template,patient:"Todos los pacientes",code:records.length+" expedientes",date:new Date().toLocaleString("es-PE"),columns:["Paciente","Expediente","Estado","Peso (kg)","Estatura (cm)","Grasa (%)","Músculo (kg)"],rows:records.map(r=>{const val=(code:string)=>{const o=r.observations.find(x=>x.metric_code===code);return o&&Number.isFinite(o.value)?new Intl.NumberFormat("es-PE",{maximumFractionDigits:2}).format(o.value):"—";};return [r.profile.display_name||r.profile.display_code,r.profile.display_code,{active:"Activo",restricted:"Restringido",archived:"Archivado"}[r.profile.status],val("weight"),val("height"),val("body_fat_pct"),val("muscle_mass_kg")];})};
     const ms=selected?.observations||[];
     const filtered=template===TEMPLATES[0][0]?ms.filter(o=>composition.includes(o.metric_code)).filter((o,i,a)=>a.findIndex(x=>x.metric_code===o.metric_code)===i):template===TEMPLATES[2][0]?ms.filter(o=>segments.includes(o.metric_code)):ms;
-    return {id:crypto.randomUUID(),patientId:patient.id,title:template,patient:patient.nombre,code:selected?.profile.display_code||patient.id,date:new Date().toLocaleString("es-PE"),columns:["Variable","Valor","Unidad","Fecha"],rows:filtered.map(o=>[catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code,new Intl.NumberFormat("es-PE",{maximumFractionDigits:2}).format(o.value),o.unit,new Date(o.measured_at).toLocaleDateString("es-PE")])};
+    return {id:crypto.randomUUID(),patientId:patient?.id||"",title:template,patient:patient?.nombre||"Sin paciente seleccionado",code:selected?.profile.display_code||"—",date:new Date().toLocaleString("es-PE"),columns:["Variable","Valor","Unidad","Fecha"],rows:filtered.map(o=>[catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code,new Intl.NumberFormat("es-PE",{maximumFractionDigits:2}).format(o.value),o.unit,new Date(o.measured_at).toLocaleDateString("es-PE")])};
   };
   const preview=make(tpl);
   const table=(r:ReportTable)=><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-slate-400"><tr>{r.columns.map(c=><th key={c} className="px-3 py-3">{c}</th>)}</tr></thead><tbody>{r.rows.map((row,i)=><tr key={i} className="border-t border-white/5">{row.map((cell,j)=><td key={j} className="px-3 py-3">{cell}</td>)}</tr>)}{!r.rows.length&&<tr><td colSpan={r.columns.length} className="py-8 text-center text-slate-400">Sin datos registrados para este informe</td></tr>}</tbody></table></div>;
   const gen=()=>{if(!preview.rows.length)return toast("No hay mediciones para generar este reporte");setReports(r=>[preview,...r]);setOpen(false);setView(preview);toast("Reporte generado");};
-  const dl=(r:SavedReport)=>{try{downloadReportPdf(r,"bodyvision-"+r.id+".pdf");}catch{toast("No se pudo generar el PDF");}};
+  const dl=(r:SavedReport)=>{try{downloadReportPdf(r,"BodyVision-"+r.patient.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-")+"-"+r.title.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-")+"-"+new Date().toISOString().slice(0,10)+".pdf");}catch{toast("No se pudo generar el PDF");}};
   return <div>
-    <PageHead title="Reportes" sub={patient.nombre} actions={<Btn variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/> Generar reporte</Btn>}/>
-    <div className="mb-6 grid gap-4 md:grid-cols-3">{TEMPLATES.map(([t,d])=><button key={t} onClick={()=>setTpl(t)} className={"panel p-5 text-left hover:border-cyan-400/40 "+(tpl===t?"!border-cyan-400/60":"")}><FileText className="mb-3 text-cyan-300"/><div className="font-semibold text-white">{t}</div><div className="mt-1 text-sm text-slate-400">{d}</div></button>)}</div>
-    <Panel title={tpl} action={<Btn disabled={!preview.rows.length} onClick={()=>dl(preview)}><Download size={15}/> Descargar PDF</Btn>}>{table(preview)}</Panel>
+    <PageHead title="Reportes" sub={preview.patient} actions={<Btn variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/> Generar reporte</Btn>}/>
+    <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{TEMPLATES.map(([t,d])=><button key={t} onClick={()=>setTpl(t)} className={"panel p-5 text-left hover:border-cyan-400/40 "+(tpl===t?"!border-cyan-400/60":"")}><FileText className="mb-3 text-cyan-300"/><div className="font-semibold text-white">{t}</div><div className="mt-1 text-sm text-slate-400">{d}</div></button>)}</div>
+    <Panel title={tpl+" · "+preview.patient} action={<Btn disabled={busy||!preview.rows.length} onClick={()=>dl(preview)}><Download size={15}/> Descargar PDF</Btn>}>{table(preview)}</Panel>
     <Panel className="mt-5" title="Reportes generados"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-slate-400"><tr><th className="py-3">Informe</th><th>Paciente</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>{reports.map(r=><tr key={r.id} className="border-t border-white/5"><td className="py-3">{r.title}</td><td>{r.patient}</td><td>{r.date}</td><td><div className="flex flex-wrap gap-2"><Btn onClick={()=>setView(r)}>Ver</Btn><Btn onClick={()=>dl(r)}><Download size={15}/> PDF</Btn><button title="Eliminar reporte" className="p-2 text-rose-300" onClick={()=>setRemoving(r)}><Trash2 size={16}/></button></div></td></tr>)}{!reports.length&&<tr><td colSpan={4} className="py-8 text-center text-slate-400">Sin reportes generados en esta sesión</td></tr>}</tbody></table></div></Panel>
-    <Modal open={open} onClose={()=>setOpen(false)} title="Generar reporte"><div className="space-y-4"><select className="field" value={tpl} onChange={e=>setTpl(e.target.value)}>{TEMPLATES.map(([t])=><option key={t}>{t}</option>)}</select><Btn variant="primary" disabled={!preview.rows.length} className="w-full" onClick={gen}>Generar</Btn></div></Modal>
-    <Modal open={!!view} onClose={()=>setView(null)} title={view?.title||"Consultar reporte"} wide>{view&&<>{table(view)}<Btn className="mt-4" onClick={()=>dl(view)}><Download size={15}/> Descargar PDF</Btn></>}</Modal>
+    <Modal open={open} onClose={()=>setOpen(false)} title="Generar reporte"><div className="space-y-4"><p className="text-sm text-slate-300">Paciente: {preview.patient}</p><select className="field" value={tpl} onChange={e=>setTpl(e.target.value)}>{TEMPLATES.map(([t])=><option key={t}>{t}</option>)}</select><Btn variant="primary" disabled={!preview.rows.length} className="w-full" onClick={gen}>Generar</Btn></div></Modal>
+    <Modal open={!!view} onClose={()=>setView(null)} title={view?view.title+" · "+view.patient:"Consultar reporte"} wide>{view&&<><p className="mb-3 text-sm text-slate-300">Paciente: {view.patient} · {view.code}</p>{table(view)}<Btn className="mt-4" onClick={()=>dl(view)}><Download size={15}/> Descargar PDF</Btn></>}</Modal>
     <Modal open={!!removing} onClose={()=>setRemoving(null)} title="Eliminar reporte"><p className="text-sm text-slate-300">¿Eliminar {removing?.title} de esta sesión?</p><Btn className="mt-4" variant="danger" onClick={()=>{if(removing){setReports(r=>r.filter(x=>x.id!==removing.id));setRemoving(null);}}}>Eliminar</Btn></Modal>
   </div>;
 }
