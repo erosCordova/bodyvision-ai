@@ -3,6 +3,8 @@ import { Eye, RotateCw, Shirt } from "lucide-react";
 import { Avatar, Panel, PageHead, Range, Toggle } from "../ui";
 import { bodyParams, idealWeight, imcOf, useStore } from "../store";
 import { BodyScene, type ViewPreset } from "../three/BodyScene";
+import man2 from "../assets/img/man2.jpg";
+import woman from "../assets/img/woman.jpg";
 import { BodyModel, TONES, type Mode } from "../three/BodyModel";
 
 const MODES: { id: Mode; label: string; d: string }[] = [
@@ -69,7 +71,8 @@ function PatientVision() {
               <Avatar name={p.nombre} size={44} photo={p.foto} />
               <div><div className="font-semibold text-white">{p.nombre}</div><div className="text-xs text-slate-400">{p.id} · {p.edad} años</div></div>
             </div>
-            {p.foto ? <img src={p.foto} alt={`Fotografía de referencia de ${p.nombre}`} className="mt-3 max-h-64 w-full rounded-xl border border-white/10 object-contain bg-slate-950" /> : <p className="mt-3 text-xs text-slate-500">Sin fotografía registrada</p>}
+            <img src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía de referencia de ${p.nombre}`:"Imagen ilustrativa de demostración"} className="mt-3 max-h-64 w-full rounded-xl border border-white/10 object-contain bg-slate-950" />
+            {!p.foto&&<p className="mt-1 text-xs text-slate-500">Imagen ilustrativa · sin foto registrada</p>}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
               {[["Edad", `${p.edad} años`], ["Altura", `${p.altura} cm`], ["Peso", `${p.peso} kg`]].map(([label,value]) => <div key={label} className="rounded-lg bg-white/5 p-2"><dt className="text-xs text-slate-400">{label}</dt><dd className="font-semibold text-white">{value}</dd></div>)}
             </dl>

@@ -1,9 +1,11 @@
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ImagePlus, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { Badge, Panel, PageHead, chartTip } from "../ui";
 import { bodyParams, idealWeight, imcOf, useStore } from "../store";
 import { BodyScene, Annotation } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
+import man2 from "../assets/img/man2.jpg";
+import woman from "../assets/img/woman.jpg";
 
 export default function AnalisisIA() {
   const { patient: p, mediciones } = useStore();
@@ -40,14 +42,10 @@ export default function AnalisisIA() {
       <div className="grid gap-5 xl:grid-cols-[260px_1fr_380px]">
         <Panel pad={false} className="overflow-hidden">
           <div className="relative flex min-h-[240px] flex-col xl:min-h-[560px]">
-            {p.foto ? <img key={p.id} src={p.foto} alt={`Fotografía registrada de ${p.nombre}`} className="h-[280px] w-full bg-black object-contain xl:h-[560px]" /> :
-              <div className="flex min-h-[240px] flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-slate-400">
-                <ImagePlus size={32} className="text-slate-500" />
-                <span className="text-sm">Sin fotografía registrada</span>
-              </div>}
+            <img key={p.id} src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía registrada de ${p.nombre}`:"Imagen ilustrativa de demostración"} className={`h-[280px] w-full bg-black xl:h-[560px] ${p.foto?"object-contain":"object-cover object-top"}`} />
             <div className="border-t border-white/5 bg-slate-950/50 p-3">
               <div className="text-sm font-semibold text-white">{p.nombre}</div>
-              <div className="mt-1 text-xs text-slate-400">{p.foto ? "Fotografía del expediente" : p.id}</div>
+              <div className="mt-1 text-xs text-slate-400">{p.foto ? "Fotografía del expediente" : "Imagen ilustrativa · sin foto registrada"}</div>
             </div>
           </div>
         </Panel>
