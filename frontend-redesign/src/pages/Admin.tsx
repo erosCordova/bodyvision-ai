@@ -6,6 +6,7 @@ import { useStore, type Consent, type ReportRecord } from "../store";
 import {useConnection} from "../ConnectedProvider";
 import {request,json,type Role,type Account} from "../api";
 import {downloadReportPdf,type ReportTable} from "../reportPdf";
+import LiveMesh from "../LiveMesh";
 
 const tone = (e: Consent["estado"]) => (e === "Vigente" ? "ok" : e === "Pendiente" ? "warn" : e === "Por vencer" ? "info" : "bad");
 
@@ -53,7 +54,8 @@ export function Consentimientos() {
           </table>
         </div>
       </Panel>
-      <div className="mt-5 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-300"><ShieldCheck className="mt-0.5 shrink-0 text-cyan-300" size={18} />El servidor de pruebas no habilita la gestión de consentimientos. </div>
+      <Panel className="mt-5" title="Captura anatómica por cámara"><LiveMesh/></Panel>
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-300"><ShieldCheck className="mt-0.5 shrink-0 text-cyan-300" size={18}/>La autorización de cámara es temporal y local. El registro de firmas y archivos biométricos personales no está habilitado.</div>
       <Modal open={open} onClose={() => setOpen(false)} title={editing?"Editar solicitud":"Solicitar consentimiento"}>
         <div className="space-y-4">
           <label className="block"><span className="mb-1 block text-xs text-slate-400">Paciente</span><select className="field" value={pac} onChange={(e) => setPac(e.target.value)}>{patients.map((p) => <option key={p.id} value={p.id} className="bg-slate-900">{p.nombre}</option>)}</select></label>
