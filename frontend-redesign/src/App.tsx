@@ -1,7 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import { useStore } from "./store";
-import { ConnectedProvider } from "./ConnectedProvider";
-import { ConnectedProfiles,ConnectedMeasurements,ConnectedCaptures,ConnectedReports,ConnectedAnalytics,ConnectedHome,NeedPatient,Unavailable } from "./ConnectedPages";
+import { AppProvider, useStore } from "./store";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import AppLayout from "./pages/AppLayout";
@@ -20,8 +18,6 @@ function Protected({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-function Home(){const {patient}=useStore();return patient&&[patient.peso,patient.altura,patient.grasa,patient.musculo].every(Number.isFinite)?<NeedPatient complete><Dashboard /></NeedPatient>:<ConnectedHome/>;}
-
 function Toasts() {
   const { toasts } = useStore();
   return (
@@ -38,7 +34,7 @@ function Toasts() {
 
 export default function App() {
   return (
-    <ConnectedProvider>
+    <AppProvider>
       <HashRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -47,20 +43,20 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="expedientes" element={<Expedientes />} />
             <Route path="expedientes/:id" element={<ExpedienteDetalle />} />
-            <Route path="mediciones" element={<NeedPatient><Mediciones /></NeedPatient>} />
-            <Route path="captura" element={<NeedPatient><Captura /></NeedPatient>} />
-            <Route path="analisis" element={<NeedPatient body><AnalisisIA /></NeedPatient>} />
-            <Route path="vision-3d" element={<NeedPatient body><Vision3D /></NeedPatient>} />
-            <Route path="simulador" element={<NeedPatient complete><Simulador /></NeedPatient>} />
+            <Route path="mediciones" element={<Mediciones />} />
+            <Route path="captura" element={<Captura />} />
+            <Route path="analisis" element={<AnalisisIA />} />
+            <Route path="vision-3d" element={<Vision3D />} />
+            <Route path="simulador" element={<Simulador />} />
             <Route path="analitica" element={<Analitica />} />
             <Route path="consentimientos" element={<Consentimientos />} />
-            <Route path="reportes" element={<NeedPatient><Reportes /></NeedPatient>} />
+            <Route path="reportes" element={<Reportes />} />
             <Route path="administracion" element={<Administracion />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
       <Toasts />
-    </ConnectedProvider>
+    </AppProvider>
   );
 }

@@ -93,7 +93,7 @@ function PatientVision() {
           </Panel>
           <Panel title="Datos del modelo">
             <dl className="grid grid-cols-2 gap-3 text-sm">
-              {[["IMC", imc.toFixed(1)], ["Peso", `${(p.peso + dfat * 0.9 + dmus * 0.5).toFixed(1)} kg`], ["Peso ideal", `${idealWeight(p.altura, p.sexo)} kg`], ["Grasa", Number.isFinite(p.grasa)?`${(p.grasa + dfat).toFixed(1)}%`:"No registrado"]].map(([l, v]) => (
+              {[["IMC", imc.toFixed(1)], ["Peso", `${(p.peso + dfat * 0.9 + dmus * 0.5).toFixed(1)} kg`], ["Peso ideal", `${idealWeight(p.altura, p.sexo)} kg`], ["Grasa", `${(p.grasa + dfat).toFixed(1)}%`]].map(([l, v]) => (
                 <div key={l} className="rounded-xl border border-white/5 bg-white/[0.03] p-3"><dt className="text-xs text-slate-500">{l}</dt><dd className="font-display text-lg font-bold text-white">{v}</dd></div>
               ))}
             </dl>

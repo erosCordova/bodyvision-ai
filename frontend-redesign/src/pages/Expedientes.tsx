@@ -6,22 +6,16 @@ import { Avatar, Badge, Btn, Modal, PageHead, Panel, Segmented, chartTip, estado
 import { bodyParams, historial, idealWeight, imcOf, useStore, type Patient } from "../store";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
-import {useConnection} from "../ConnectedProvider";
-import {useAction,uploadPhoto} from "../ConnectedPages";
-import {request,json,saveObservation,type Profile} from "../api";
 import type { Sex } from "../three/assets";
 
 export function Expedientes() {
   const nav = useNavigate();
-  const { patients, select, toast } = useStore();
-  const {records,catalog}=useConnection();
-  const {pending,action}=useAction();
-  const [file,setFile]=useState<File|null>(null),[confirmed,setConfirmed]=useState(false),[instrument,setInstrument]=useState("");
+  const { patients, addPatient, updatePatient, deletePatient, select, toast } = useStore();
   const [q, setQ] = useState("");
   const [sex, setSex] = useState<"all" | Sex>("all");
   const [estado, setEstado] = useState("Todos");
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ nombre: "", edad: 30, sexo: "male" as Sex, altura: NaN, peso: NaN, grasa: NaN, musculo: NaN, objetivo: "" });
+  const [f, setF] = useState({ nombre: "", edad: 30, sexo: "male" as Sex, altura: 175, peso: 75, grasa: 20, musculo: 38, objetivo: "Salud general" });
 
   const [editing, setEditing] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState<Patient | null>(null);
@@ -31,10 +25,10 @@ export function Expedientes() {
   const photoRequest = useRef(0);
   const reset = () => {
     photoRequest.current++;
-    setEditing(null); setStatus("Nuevo"); setFile(null);setConfirmed(false);setInstrument("");
+    setEditing(null); setStatus("Nuevo");
     setFoto(undefined);
     setReading(false);
-    setF({ nombre: "", edad: 30, sexo: "male", altura: NaN, peso: NaN, grasa: NaN, musculo: NaN, objetivo: "" });
+    setF({ nombre: "", edad: 30, sexo: "male", altura: 175, peso: 75, grasa: 20, musculo: 38, objetivo: "Salud general" });
   };
   const edit = (p: Patient) => { reset(); setEditing(p); setStatus(p.estado); setF({nombre:p.nombre,edad:p.edad,sexo:p.sexo,altura:p.altura,peso:p.peso,grasa:p.grasa,musculo:p.musculo,objetivo:p.objetivo}); setFoto(p.foto); setOpen(true); };
   const close = () => { reset(); setOpen(false); };
@@ -60,7 +54,7 @@ export function Expedientes() {
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
         const data = canvas.toDataURL("image/jpeg", 0.8);
-        if (photoRequest.current === request) {setFoto(data);setFile(file);setConfirmed(false);}
+        if (photoRequest.current === request) setFoto(data);
       } finally { bitmap.close(); }
     } catch { if (photoRequest.current === request) toast("No se pudo abrir la imagen"); }
     finally { if (photoRequest.current === request) setReading(false); }
@@ -71,27 +65,15 @@ export function Expedientes() {
     [patients, q, sex, estado]
   );
 
-  const create = async () => {
+  const create = () => {
     if (!f.nombre.trim()) return toast("Indica el nombre del paciente");
-    if (reading||pending) return;
-    if (!Number.isInteger(f.edad)||f.edad<18||f.edad>100)return toast("Registra una edad de 18 a 100 años");
-    if(file&&!confirmed)return toast("Confirma que la imagen es ficticia");
-    const isNew=!editing;
-    const weight=f.peso, muscle=Number.isFinite(f.musculo)&&Number.isFinite(weight)?Math.round(weight*f.musculo)/100:NaN;
-    if(isNew&&Number.isFinite(f.musculo)&&(!Number.isFinite(weight)||f.musculo<=0||f.musculo>100))return toast("Registra peso y porcentaje muscular válido");
-    const measurements:[string,number][]=[["height",f.altura],["weight",weight],["body_fat_pct",f.grasa],["muscle_mass_kg",muscle]];
-    if(isNew)for(const [code,value] of measurements){if(!Number.isFinite(value))continue;const metric=catalog.find(m=>m.code===code);if(!metric||value<metric.min_value||value>metric.max_value)return toast("Revisa "+(metric?.label||code));}
-    if(isNew&&(Number.isFinite(f.grasa)||Number.isFinite(muscle))&&!instrument.trim())return toast("Indica el instrumento utilizado para medir grasa y masa muscular");
-    let created:Profile|undefined;
-    const ok=await action(async t=>{
-      if(editing){await request("/profiles/"+editing.id,t,json("PATCH",{display_name:f.nombre.trim()}));return;}
-      created=await request<Profile>("/profiles",t,json("POST",{display_name:f.nombre.trim(),birth_year:new Date().getFullYear()-f.edad,sex:f.sexo}));
-      const at=new Date().toISOString();
-      for(const [code,value] of measurements){if(!Number.isFinite(value))continue;const metric=catalog.find(m=>m.code===code)!;const device=!metric.allowed_methods.includes("manual");await saveObservation(t,created.id,{metric_code:code,value:Math.round(value*100)/100,unit:metric.unit,method:device?"device":"manual",instrument:device?instrument.trim():null,measured_at:at});}
-      if(file)await uploadPhoto(t,created.id,file);
-    },editing?"Expediente actualizado":"Expediente creado correctamente");
-    if(created){select(created.id);close();if(!ok)toast("Expediente creado. Completa los registros pendientes en Mediciones o Captura.");}
-    else if(ok)close();
+    if (reading) return;
+    if (!Number.isInteger(f.edad) || f.edad < 18 || f.edad > 100) return toast("El atlas de demostración admite edades de 18 a 100 años");
+    if (![f.altura, f.peso, f.grasa, f.musculo].every(Number.isFinite) || f.altura < 100 || f.altura > 230 || f.peso < 25 || f.peso > 350 || f.grasa < 0 || f.grasa > 70 || f.musculo < 0 || f.musculo > 100 || f.grasa + f.musculo > 100) return toast("Revisa las medidas corporales y los porcentajes");
+    const record={...f,nombre:f.nombre.trim(),foto,estado:status};
+    const saved=editing?updatePatient(editing.id,record):addPatient({...record,tono:"medio",email:"nuevo@correo.com"});
+    if(!saved)return toast("No se pudo guardar el expediente");
+    toast(editing?"Expediente actualizado":"Expediente creado correctamente");close();
   };
 
   return (
@@ -129,17 +111,17 @@ export function Expedientes() {
                         <Avatar name={p.nombre} size={34} photo={p.foto} />
                         <div>
                           <div className="font-medium text-white">{p.nombre}</div>
-                          <div className="text-xs text-slate-500">{p.sexo === "male" ? "Hombre" : "Mujer"} · {Number.isFinite(p.altura)?p.altura+" cm":"—"} · {Number.isFinite(p.peso)?p.peso+" kg":"—"}</div>
+                          <div className="text-xs text-slate-500">{p.sexo === "male" ? "Hombre" : "Mujer"} · {p.altura} cm · {p.peso} kg</div>
                         </div>
                       </div>
                     </td>
-                    <td className="text-slate-400">{records.find(r=>r.profile.id===p.id)?.profile.display_code||p.id}</td>
+                    <td className="text-slate-400">{p.id}</td>
                     <td className="text-slate-300">{p.edad}</td>
-                    <td><span className={imc >= 30 ? "text-rose-300" : imc >= 25 ? "text-amber-300" : "text-emerald-300"}>{Number.isFinite(imc)?imc.toFixed(1):"—"}</span></td>
-                    <td className="text-slate-300">{Number.isFinite(p.grasa)?p.grasa+"%":"—"}</td>
+                    <td><span className={imc >= 30 ? "text-rose-300" : imc >= 25 ? "text-amber-300" : "text-emerald-300"}>{imc.toFixed(1)}</span></td>
+                    <td className="text-slate-300">{p.grasa}%</td>
                     <td className="text-slate-300">{p.objetivo}</td>
                     <td><Badge tone={estadoTone(p.estado)}>{p.estado}</Badge></td>
-                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2"><button type="button" disabled={p.estado!=="Activo"} title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" disabled={p.estado!=="Activo"} title="Archivar expediente" aria-label={`Archivar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
+                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2"><button type="button" title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" title="Eliminar expediente" aria-label={`Eliminar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
                   </tr>
                 );
               })}
@@ -148,36 +130,36 @@ export function Expedientes() {
           </table>
         </div>
       </Panel>
-      <Modal open={open} onClose={()=>{if(!pending)close();}} title={editing?"Editar expediente":"Nuevo expediente"} wide>
+      <Modal open={open} onClose={close} title={editing?"Editar expediente":"Nuevo expediente"} wide>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2 rounded-xl border border-white/10 p-3">
             <div className="flex items-center gap-4">
               {foto ? <img src={foto} alt="Vista previa de la fotografía" className="h-24 w-24 shrink-0 rounded-xl object-cover" /> : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-xl bg-white/5 text-cyan-300"><ImagePlus size={30}/></div>}
               <div className="min-w-0 flex-1">
                 <label className="block text-sm font-medium text-white" htmlFor="patient-photo">Fotografía del paciente (opcional)</label>
-                <input id="patient-photo" type="file" disabled={!!editing||pending} accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs text-slate-300" onChange={e => { void pickPhoto(e.target.files?.[0]); e.currentTarget.value = ""; }}/>
+                <input id="patient-photo" type="file" accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs text-slate-300" onChange={e => { void pickPhoto(e.target.files?.[0]); e.currentTarget.value = ""; }}/>
                 {reading && <span className="text-xs text-cyan-300">Procesando imagen…</span>}
-                {foto && !editing && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(undefined); setFile(null);setConfirmed(false); setReading(false); }}>Quitar fotografía</button>}
-                {file&&<label className="mt-2 flex gap-2 text-xs"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> Confirmo que la imagen es ficticia.</label>}
-                <p className="mt-2 text-xs text-slate-400">Solo imágenes ficticias. Almacenamiento cifrado temporal en el servidor.</p>
+                {foto && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(undefined); setReading(false); }}>Quitar fotografía</button>}
+                <p className="mt-2 text-xs text-slate-400">Solo imágenes ficticias o sintéticas. Se guardan en esta sesión del navegador, no en el servidor.</p>
               </div>
             </div>
           </div>
           <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Nombre completo</span><input className="field" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} /></label>
           <label><span className="mb-1 block text-xs text-slate-400">Sexo</span>
-            <select className="field" disabled={!!editing||pending} value={f.sexo} onChange={(e) => setF({ ...f, sexo: e.target.value as Sex })}><option value="male" className="bg-slate-900">Hombre</option><option value="female" className="bg-slate-900">Mujer</option></select></label>
+            <select className="field" value={f.sexo} onChange={(e) => setF({ ...f, sexo: e.target.value as Sex })}><option value="male" className="bg-slate-900">Hombre</option><option value="female" className="bg-slate-900">Mujer</option></select></label>
           {(["edad", "altura", "peso", "grasa", "musculo"] as const).map((k) => (
             <label key={k}><span className="mb-1 block text-xs capitalize text-slate-400">{k === "musculo" ? "Masa muscular (%)" : k === "grasa" ? "Grasa corporal (%)" : k === "altura" ? "Altura (cm)" : k === "peso" ? "Peso (kg)" : "Edad"}</span>
-              <input type="number" step={k==="edad"?1:".01"} className="field" disabled={!!editing||pending} value={Number.isFinite(f[k])?f[k]:""} onChange={(e) => setF({ ...f, [k]: e.target.value===""?NaN:+e.target.value })} /></label>
+              <input type="number" className="field" value={f[k]} onChange={(e) => setF({ ...f, [k]: +e.target.value })} /></label>
           ))}
-          {!editing&&<label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Instrumento para grasa y masa muscular (si se registran)</span><input className="field" value={instrument} maxLength={100} onChange={e=>setInstrument(e.target.value)}/></label>}
-          {editing&&<p className="sm:col-span-2 text-xs text-slate-400">El servidor permite editar el nombre. Las mediciones se corrigen desde Mediciones y las fotografías desde Captura corporal. La edad se deriva del año de nacimiento.</p>}
+          <label><span className="mb-1 block text-xs text-slate-400">Estado</span><select className="field" value={status} onChange={e=>setStatus(e.target.value as Patient["estado"])}>{["Nuevo","Activo","En seguimiento","Alta"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+          <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Objetivo</span><input className="field" value={f.objetivo} onChange={(e) => setF({ ...f, objetivo: e.target.value })} /></label>
         </div>
-        <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading||pending}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
+        <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
       </Modal>
-      <Modal open={!!deleting} onClose={()=>{if(!pending)setDeleting(null);}} title="Archivar expediente">
-        <p className="text-sm text-slate-300">¿Archivar el expediente de <strong>{deleting?.nombre}</strong>? El historial se conserva según las reglas del servidor.</p>
-        <div className="mt-5 flex justify-end gap-2"><Btn disabled={pending} onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={pending} onClick={async()=>{if(deleting&&await action(t=>request("/profiles/"+deleting.id+"/archive",t,json("POST",{})),"Expediente archivado"))setDeleting(null);}}>Archivar</Btn></div>
+      <Modal open={!!deleting} onClose={()=>setDeleting(null)} title="Eliminar expediente">
+        <p className="text-sm text-slate-300">¿Eliminar el expediente de <strong>{deleting?.nombre}</strong>, su fotografía y los registros de demostración vinculados (mediciones, consentimientos y reportes)? Esta acción no se puede deshacer.</p>
+        {patients.length<=1&&<p className="mt-3 text-sm text-amber-300">Debe quedar al menos un expediente activo en la demostración. Crea otro antes de eliminar este.</p>}
+        <div className="mt-5 flex justify-end gap-2"><Btn onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={patients.length<=1} onClick={()=>{if(deleting&&deletePatient(deleting.id)){setDeleting(null);toast("Expediente eliminado");}}}>Eliminar</Btn></div>
       </Modal>
     </div>
   );
@@ -186,13 +168,11 @@ export function Expedientes() {
 export function ExpedienteDetalle() {
   const { id } = useParams();
   const nav = useNavigate();
-  const { patients, select, mediciones } = useStore();
-  const p = patients.find((x) => x.id === id);
-  if(!p)return <Panel title="Expediente no disponible"><Link className="text-cyan-300" to="/app/expedientes">Volver a expedientes</Link></Panel>;
-  const valid=p.estado==="Activo"&&Number.isFinite(p.altura)&&Number.isFinite(p.peso);
+  const { patients, select } = useStore();
+  const p = patients.find((x) => x.id === id) || patients[0];
   const { fat, mus } = bodyParams(p);
   const imc = imcOf(p.peso, p.altura);
-  const data = mediciones.filter(m=>m.patientId===p.id&&Number.isFinite(m.peso)).slice().reverse().map((m,i)=>({mes:"M"+(i+1),peso:m.peso}));
+  const data = historial(p);
   const m = [
     ["IMC", imc.toFixed(1), imc >= 25 ? "text-amber-300" : "text-emerald-300"],
     ["Peso", `${p.peso} kg`, "text-white"],
@@ -206,9 +186,9 @@ export function ExpedienteDetalle() {
       <Link to="/app/expedientes" className="mb-4 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white"><ArrowLeft size={15} /> Expedientes</Link>
       <div className="grid gap-5 xl:grid-cols-[1.05fr_1fr]">
         <Panel pad={false}>
-          {valid?<BodyScene className="h-[560px] rounded-2xl" distance={4.5} rotateSpeed={1.2}>
+          <BodyScene className="h-[560px] rounded-2xl" distance={4.5} rotateSpeed={1.2}>
             <BodyModel sex={p.sexo} heightCm={p.altura} weightKg={p.peso} ageYears={p.edad} fat={fat} mus={mus} tone={p.tono} />
-          </BodyScene>:<div className="grid h-[560px] place-items-center text-slate-400">Modelo no disponible: completa peso y altura del expediente activo</div>}
+          </BodyScene>
         </Panel>
         <div className="space-y-5">
           <Panel>
@@ -224,13 +204,12 @@ export function ExpedienteDetalle() {
               {m.map(([l, v, c]) => (
                 <div key={l} className="rounded-xl border border-white/5 bg-white/[0.03] p-3.5">
                   <div className="text-xs text-slate-500">{l}</div>
-                  <div className={`font-display text-xl font-bold ${c}`}>{String(v).includes("NaN")?"—":v}</div>
+                  <div className={`font-display text-xl font-bold ${c}`}>{v}</div>
                 </div>
               ))}
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Btn onClick={()=>{select(p.id);nav("/app/mediciones");}}>Mediciones</Btn><Btn onClick={()=>{select(p.id);nav("/app/captura");}}>Fotografías</Btn>
-              <Btn variant="primary" disabled={!valid} onClick={() => { select(p.id); nav("/app/vision-3d"); }}><Box size={16} /> Visor 3D</Btn>
+              <Btn variant="primary" onClick={() => { select(p.id); nav("/app/vision-3d"); }}><Box size={16} /> Visor 3D</Btn>
               <Btn variant="outline" onClick={() => { select(p.id); nav("/app/analisis"); }}><Sparkles size={16} /> Análisis IA</Btn>
               <Btn variant="outline" onClick={() => { select(p.id); nav("/app/simulador"); }}><SlidersHorizontal size={16} /> Simular</Btn>
             </div>
@@ -251,7 +230,9 @@ export function ExpedienteDetalle() {
               </ResponsiveContainer>
             </div>
           </Panel>
-          
+          <Panel title="Notas clínicas">
+            <p className="text-sm leading-relaxed text-slate-300">Objetivo: <b className="text-white">{p.objetivo}</b>. Se recomienda déficit calórico moderado, entrenamiento de fuerza 3×/semana y nueva captura corporal en 4 semanas para validar la progresión en el gemelo digital.</p>
+          </Panel>
         </div>
       </div>
     </div>
