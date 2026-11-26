@@ -28,7 +28,7 @@ export default function Login() {
     if(mode==="recover")return setErr("La recuperación de contraseña no está habilitada en pruebas.");
     if(mode==="register"&&(pass.length<12||!synthetic))return setErr("Usa una contraseña de al menos 12 caracteres y confirma el entorno ficticio.");
     setLoading(true);
-    try{await login(email.trim(),pass,mode==="register");nav("/app/expedientes",{replace:true});}
+    try{await login(email.trim(),pass,mode==="register");nav("/app",{replace:true});}
     catch(e){setErr(e instanceof Error?e.message:"No se pudo conectar al servidor.");}finally{setLoading(false);}
   };
 

@@ -26,9 +26,9 @@ async function syntheticPng(file:File):Promise<Blob>{
   throw Error("No se pudo reducir la imagen a 256 KiB.");
  }finally{bitmap.close();}
 }
-async function uploadPhoto(token:string,profileId:string,file:File){const png=await syntheticPng(file);return request("/profiles/"+profileId+"/captures",token,{method:"POST",body:png,headers:{"Content-Type":"image/png","X-Synthetic-Only":"confirmed"}});}
+export async function uploadPhoto(token:string,profileId:string,file:File){const png=await syntheticPng(file);return request("/profiles/"+profileId+"/captures",token,{method:"POST",body:png,headers:{"Content-Type":"image/png","X-Synthetic-Only":"confirmed"}});}
 
-function useAction(){
+export function useAction(){
  const {refresh,run}=useConnection(),{toast}=useStore();
  const [pending,setPending]=useState(false);
  const action=async(fn:(token:string)=>Promise<unknown>,message:string)=>{

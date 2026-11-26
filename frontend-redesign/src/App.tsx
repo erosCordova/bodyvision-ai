@@ -44,15 +44,15 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/app" element={<Protected><AppLayout /></Protected>}>
-            <Route index element={<Home/>} />
-            <Route path="expedientes" element={<ConnectedProfiles />} />
-            <Route path="expedientes/:id" element={<ConnectedProfiles />} />
+            <Route index element={<Dashboard />} />
+            <Route path="expedientes" element={<Expedientes />} />
+            <Route path="expedientes/:id" element={<ExpedienteDetalle />} />
             <Route path="mediciones" element={<ConnectedMeasurements />} />
             <Route path="captura" element={<ConnectedCaptures />} />
             <Route path="analisis" element={<NeedPatient body><AnalisisIA /></NeedPatient>} />
             <Route path="vision-3d" element={<NeedPatient body><Vision3D /></NeedPatient>} />
             <Route path="simulador" element={<NeedPatient complete><Simulador /></NeedPatient>} />
-            <Route path="analitica" element={<ConnectedAnalytics />} />
+            <Route path="analitica" element={<Analitica />} />
             <Route path="consentimientos" element={<Unavailable title="Consentimientos" />} />
             <Route path="reportes" element={<ConnectedReports />} />
             <Route path="administracion" element={<Unavailable title="Administración" />} />
