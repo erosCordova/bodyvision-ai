@@ -108,22 +108,6 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         retention_interval=settings.capture_retention_interval_seconds,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=list(dict.fromkeys([*settings.cors_origins, *(["https://bodyvision-ai-redesign.onrender.com"] if settings.app_env == "sandbox" else [])])),
-        allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH", "DELETE"],
-        allow_headers=[
-            "X-Correlation-ID",
-            "Content-Type",
-            "X-Workspace-ID",
-            "Idempotency-Key",
-            "X-Synthetic-Only",
-            *(["Authorization"] if settings.identity_enabled or settings.app_env == "sandbox" else []),
-            *(["X-Requested-With"] if settings.jwt_access_enabled else []),
-        ],
-        expose_headers=["X-Correlation-ID"],
-    )
 
     def error(request: Request, status: int, code: str, message: str) -> JSONResponse:
         return JSONResponse(
@@ -205,6 +189,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                             or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}(?:/archive|/measurements)?", path)
                             or __import__("re").fullmatch(r"/api/v1/measurements/[0-9a-fA-F-]{36}", path)
                             or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}/captures(?:/[0-9a-fA-F-]{36})?", path)
+                            or (request.method == "POST" and path == "/api/v1/sandbox/consents")
+                            or (request.method == "PATCH" and __import__("re").fullmatch(r"/api/v1/sandbox/consents/[0-9a-fA-F-]{36}", path))
                         ):
                             response = error(request, 403, "SANDBOX_LIMIT", "Operación no habilitada en pruebas.")
                         else:
@@ -255,6 +241,24 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             },
         )
         return response
+
+    # CORS must wrap request_context so authorization errors also reach the browser.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(dict.fromkeys([*settings.cors_origins, *(["https://bodyvision-ai-redesign.onrender.com"] if settings.app_env == "sandbox" else [])])),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=[
+            "X-Correlation-ID",
+            "Content-Type",
+            "X-Workspace-ID",
+            "Idempotency-Key",
+            "X-Synthetic-Only",
+            *(["Authorization"] if settings.identity_enabled or settings.app_env == "sandbox" else []),
+            *(["X-Requested-With"] if settings.jwt_access_enabled else []),
+        ],
+        expose_headers=["X-Correlation-ID"],
+    )
 
     app.include_router(health_router)
     app.include_router(data_router)
