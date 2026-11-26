@@ -14,14 +14,14 @@ const PIPE = ["Fotografías registradas", "Atlas anatómico de referencia", "Rec
 export default function Captura(){const {patient}=useStore();return <PatientCapture key={patient.id}/>;}
 function PatientCapture() {
   const {patient,toast}=useStore(),{selected,run}=useConnection(),{pending,action}=useAction();
-  const [shots,setShots]=useState<string[]>([]),[preview,setPreview]=useState<string|undefined>(),[confirmed,setConfirmed]=useState(false),[remove,setRemove]=useState<Capture|null>(null);
+  const [shots,setShots]=useState<string[]>([]),[preview,setPreview]=useState<string|undefined>(),[remove,setRemove]=useState<Capture|null>(null);
   const [showAtlas,setShowAtlas]=useState(false);
   const file=useRef<HTMLInputElement>(null);
   const {fat,mus}=bodyParams(patient);
   const captures=selected?.captures||[];
   const ids=captures.slice(0,3).map(c=>c.id).join(",");
   useEffect(()=>{let alive=true;setShots([]);setPreview(undefined);Promise.all(captures.slice(0,3).map(c=>run(t=>image("/profiles/"+patient.id+"/captures/"+c.id,t)).catch(()=>""))).then(s=>{if(alive)setShots(s);});return()=>{alive=false;};},[patient.id,ids]);
-  const onFile=async(f?:File)=>{if(!f)return;if(!window.confirm("El almacenamiento actual solo admite imágenes de prueba, no fotografías clínicas o personales reales. ¿Confirmas que la imagen cumple esta condición?"))return;if(await action(t=>uploadPhoto(t,patient.id,f),"Fotografía guardada"))setConfirmed(false);};
+  const onFile=async(f?:File)=>{if(!f)return;if(!window.confirm("El almacenamiento actual solo admite imágenes de prueba, no fotografías clínicas o personales reales. ¿Confirmas que la imagen cumple esta condición?"))return;await action(t=>uploadPhoto(t,patient.id,f),"Fotografía guardada");};
   const valid=Number.isFinite(patient.altura)&&Number.isFinite(patient.peso);
   const done=showAtlas&&valid;
   const step=Math.min(captures.length,2),proc=captures.length?1:0;
@@ -51,7 +51,6 @@ function PatientCapture() {
                 <span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" /> Fotografía del expediente
               </div>
               <div className="absolute inset-x-0 bottom-4 flex flex-wrap items-center justify-center gap-3 px-4">
-                <label className="flex items-center gap-2 rounded-lg bg-black/80 px-3 py-2 text-xs"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> Imagen ficticia</label>
                 <Btn variant="primary" disabled={pending} onClick={()=>file.current?.click()}><Upload size={16}/> Subir foto</Btn>
                 <Btn disabled={!valid} onClick={()=>setShowAtlas(true)}>Ver atlas 3D</Btn>
                 <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{void onFile(e.target.files?.[0]);e.target.value="";}}/>

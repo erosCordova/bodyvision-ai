@@ -16,7 +16,7 @@ export default function Login() {
   const [pass, setPass] = useState("");
   const [name, setName] = useState("");
   const [show, setShow] = useState(false);
-  const [remember, setRemember] = useState(false);
+  
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [loading, setLoading] = useState(false);
@@ -79,10 +79,7 @@ export default function Login() {
               )}
               {mode === "login" && (
                 <div className="flex items-center justify-between text-xs">
-                  <label className="flex cursor-pointer items-center gap-2 text-slate-300">
-                    <input type="checkbox" checked={false} disabled className="h-4 w-4 accent-cyan-400" />
-                    Recordarme (no disponible)
-                  </label>
+
                   <button type="button" onClick={() => setMode("recover")} className="text-cyan-300 hover:underline">
                     ¿Olvidaste tu contraseña?
                   </button>
