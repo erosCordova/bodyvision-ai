@@ -4,7 +4,7 @@ import { Avatar, Badge, Btn, Modal, PageHead, Panel, Segmented, Toggle } from ".
 import { useStore, type Consent, type ReportRecord } from "../store";
 
 import {useConnection} from "../ConnectedProvider";
-import {request} from "../api";
+import {request,json,type Role,type Account} from "../api";
 
 const tone = (e: Consent["estado"]) => (e === "Vigente" ? "ok" : e === "Pendiente" ? "warn" : e === "Por vencer" ? "info" : "bad");
 
@@ -104,25 +104,41 @@ function PatientReports(){
 
 export function Administracion() {
   const {patients,user}=useStore();
-  const {token}=useConnection();
+  const {token,role,run}=useConnection();
+  const {toast}=useStore();
+  const [accounts,setAccounts]=useState<Account[]>([]),[usersLoading,setUsersLoading]=useState(false),[accountOpen,setAccountOpen]=useState(false),[saving,setSaving]=useState(false),[accountError,setAccountError]=useState("");
+  const [form,setForm]=useState({display_name:"",email:"",password:"",role:"specialist" as Role});
+  const roles:Record<Role,string>={administrator:"Administrador",specialist:"Especialista",member:"Miembro (lectura)",privacy_officer:"Responsable de privacidad"};
+  const loadUsers=async()=>{setUsersLoading(true);try{const result=await run(t=>request<{items:Account[]}>("/auth/admin/users",t));setAccounts(result.items);}catch(e){setAccountError(e instanceof Error?e.message:String(e));}finally{setUsersLoading(false);}};
+  useEffect(()=>{if(token&&role==="administrator")void loadUsers();},[token,role]);
+  const createAccount=async()=>{setAccountError("");if(!form.display_name.trim()||!/^\\S+@\\S+\\.\\S+$/.test(form.email)||form.password.length<12){setAccountError("Completa nombre, correo y contraseña de al menos 12 caracteres.");return;}setSaving(true);try{await run(t=>request("/auth/admin/users",t,json("POST",form)));setAccountOpen(false);setForm({display_name:"",email:"",password:"",role:"specialist"});toast("Cuenta creada");await loadUsers();}catch(e){setAccountError(e instanceof Error?e.message:String(e));}finally{setSaving(false);}};
   const [tab,setTab]=useState<"u"|"s"|"i"|"a">("u");
   const [health,setHealth]=useState("Consultando");
   useEffect(()=>{let alive=true;request<{database:string}>("/health/ready").then(r=>{if(alive)setHealth(r.database==="connected"?"Operativa":"No verificada");}).catch(()=>{if(alive)setHealth("No disponible");});return()=>{alive=false;};},[]);
-  const USERS=user?[[user.nombre,"Especialista","Activo"]]:[];
+
   const INTEGR=[["API FastAPI (Python)",health,"—"],["PostgreSQL",health,"—"],["MediaPipe Pose","No habilitado","—"],["Pipeline Maya 3D","Atlas local","—"],["Simulador IA","Visualización local","—"]];
   const AUDIT:string[]=[];
   const sec={twofa:false,ip:false,enc:false,timeout:true,audit:true};
   return (
     <div>
       <PageHead title="Administración" sub="Usuarios, seguridad, integraciones y auditoría" actions={<Segmented value={tab} onChange={setTab} options={[{ id: "u", label: "Usuarios" }, { id: "s", label: "Seguridad" }, { id: "i", label: "Integraciones" }, { id: "a", label: "Auditoría" }]} />} />
-      {tab === "u" && (
-        <Panel pad={false}><table className="w-full text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Usuario</th><th>Rol</th><th>Estado</th></tr></thead><tbody>
-          {USERS.map(([n, r, s]) => <tr key={n} className="border-t border-white/5 [&>td]:px-4 [&>td]:py-3"><td><div className="flex items-center gap-3"><Avatar name={n} size={32} /><span className="font-medium text-white">{n}</span></div></td><td className="text-slate-300">{r}</td><td><Badge tone={s === "Activo" ? "ok" : "warn"}>{s}</Badge></td></tr>)}
-        </tbody></table><div className="border-t border-white/5 p-3 text-xs text-slate-500">{patients.length} expedientes asociados a esta organización.</div></Panel>
-      )}
+      {tab === "u" && (<>
+        <div className="mb-4 flex justify-end"><Btn variant="primary" onClick={()=>{setAccountError("");setForm({display_name:"",email:"",password:"",role:"specialist"});setAccountOpen(true);}}><Plus size={16}/> Nuevo usuario</Btn></div>
+        <Panel pad={false}><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Usuario</th><th>Correo</th><th>Rol</th><th>Estado</th></tr></thead><tbody>
+          {accounts.map(a=><tr key={a.user_id} className="border-t border-white/5 [&>td]:px-4 [&>td]:py-3"><td><div className="flex items-center gap-3"><Avatar name={a.display_name} size={32}/><span className="font-medium text-white">{a.display_name}</span></div></td><td>{a.email}</td><td>{roles[a.role]}</td><td><Badge tone="ok">Activo</Badge></td></tr>)}
+          {!accounts.length&&<tr><td colSpan={4} className="py-8 text-center text-slate-400">{usersLoading?"Cargando usuarios…":"Sin usuarios disponibles"}</td></tr>}
+        </tbody></table></div>{accountError&&!accountOpen&&<p className="p-3 text-sm text-rose-300">{accountError}</p>}<div className="border-t border-white/5 p-3 text-xs text-slate-500">{accounts.length} usuarios registrados.</div></Panel>
+        <Modal open={accountOpen} onClose={()=>{if(!saving)setAccountOpen(false);}} title="Nuevo usuario"><div className="space-y-4">
+          <label className="block text-sm">Nombre completo<input className="field mt-1" value={form.display_name} maxLength={100} onChange={e=>setForm({...form,display_name:e.target.value})}/></label>
+          <label className="block text-sm">Correo electrónico<input type="email" className="field mt-1" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+          <label className="block text-sm">Contraseña inicial<input type="password" autoComplete="new-password" className="field mt-1" value={form.password} maxLength={128} onChange={e=>setForm({...form,password:e.target.value})}/><span className="text-xs text-slate-400">Mínimo 12 caracteres.</span></label>
+          <label className="block text-sm">Tipo de usuario<select className="field mt-1" value={form.role} onChange={e=>setForm({...form,role:e.target.value as Role})}>{Object.entries(roles).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
+          {accountError&&<p className="text-sm text-rose-300">{accountError}</p>}<div className="flex justify-end gap-2"><Btn disabled={saving} onClick={()=>setAccountOpen(false)}>Cancelar</Btn><Btn variant="primary" disabled={saving} onClick={createAccount}>{saving?"Guardando…":"Crear usuario"}</Btn></div>
+        </div></Modal>
+      </>)}
       {tab === "s" && (
         <Panel><div className="divide-y divide-white/5">
-          {([["twofa", "Autenticación en dos pasos (2FA)", "No habilitada en este entorno"], ["ip", "Restricción por IP", "No disponible"], ["enc", "Cifrado de fotografías", "Configuración del servidor"], ["timeout", "Cierre de sesión por inactividad", "15 minutos"], ["audit", "Registro de auditoría", "Todas las acciones se registran"]] as const).map(([k, t, d]) => (
+          {([["twofa", "Autenticación en dos pasos (2FA)", "No habilitada en este entorno"], ["ip", "Restricción por IP", "No disponible"], ["enc", "Cifrado de fotografías", "Configuración del servidor"], ["timeout", "Vigencia de sesión", "30 días renovables; cierre manual"], ["audit", "Registro de auditoría", "Todas las acciones se registran"]] as const).map(([k, t, d]) => (
             <div key={k} className="flex items-center justify-between gap-4 py-4"><div><div className="font-medium text-white">{t}</div><div className="text-sm text-slate-400">{d}</div></div><Badge tone={k==="timeout"||k==="audit"?"info":"muted"}>{k==="timeout"||k==="audit"?"Servidor":"No configurable"}</Badge></div>
           ))}
         </div></Panel>

@@ -88,7 +88,7 @@ export default function Landing() {
               Iniciar sesión
             </button>
             <button onClick={() => nav("/login")} className="btn-primary rounded-xl px-4 py-2 text-sm">
-              Crear cuenta
+              Iniciar sesión
             </button>
             <button className="rounded-lg p-2 text-slate-300 lg:hidden" onClick={() => setMenu(!menu)} aria-label="Menú">
               {menu ? <X size={20} /> : <Menu size={20} />}

@@ -4,6 +4,7 @@ import { Activity, Bell, Box, ChevronDown, FileText, FolderOpen, LayoutDashboard
 import { motion } from "framer-motion";
 import { Logo, Avatar, Modal, Btn, Toggle } from "../ui";
 import { useStore } from "../store";
+import {useConnection} from "../ConnectedProvider";
 
 const NAV = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -23,6 +24,7 @@ const NOTIFS: {t:string;s:string}[] = [];
 
 export default function AppLayout() {
   const { user, logout, patients, patient, select } = useStore();
+  const {role}=useConnection();
   const nav = useNavigate();
   const loc = useLocation();
   const [open, setOpen] = useState(false);
@@ -37,7 +39,7 @@ export default function AppLayout() {
         <Logo size={32} />
       </button>
       <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
-        {NAV.map((n) => (
+        {NAV.filter(n=>role==="privacy_officer"?n.to==="/app":n.to!=="/app/administracion"||role==="administrator").map((n) => (
           <NavLink
             key={n.to}
             to={n.to}

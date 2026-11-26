@@ -1,8 +1,8 @@
 import {createContext,useContext,useState,useEffect,useCallback,useRef,type ReactNode} from "react";
 import {Ctx,type Store,type Patient,type Medicion} from "./store";
-import {request,all,image,json,ApiFailure,type Profile,type Observation,type Metric,type Capture,type Session} from "./api";
+import {request,all,image,json,ApiFailure,type Profile,type Observation,type Metric,type Capture,type Session,type Role,type Account} from "./api";
 type RecordData={profile:Profile;observations:Observation[];captures:Capture[];photo?:string};
-type Connection={token:string|null;records:RecordData[];catalog:Metric[];busy:boolean;error:string;login:(email:string,password:string,register:boolean)=>Promise<void>;logout:()=>Promise<void>;refresh:()=>Promise<void>;refreshCaptures:(profileId:string)=>Promise<void>;refreshPatient:(profileId:string)=>Promise<void>;run:<T>(fn:(token:string)=>Promise<T>)=>Promise<T>;selected:RecordData|undefined};
+type Connection={token:string|null;role:Role|null;restoring:boolean;records:RecordData[];catalog:Metric[];busy:boolean;error:string;login:(email:string,password:string)=>Promise<void>;logout:()=>Promise<void>;refresh:()=>Promise<void>;refreshCaptures:(profileId:string)=>Promise<void>;refreshPatient:(profileId:string)=>Promise<void>;run:<T>(fn:(token:string)=>Promise<T>)=>Promise<T>;selected:RecordData|undefined};
 const ConnectionCtx=createContext<Connection>(null!);
 export const useConnection=()=>useContext(ConnectionCtx);
 function toPatient(r:RecordData):Patient {
@@ -18,10 +18,13 @@ function toMeasurements(r:RecordData):Medicion[]{
 }
 export function ConnectedProvider({children}:{children:ReactNode}){
  const [session,setSession]=useState<Session|null>(null), [user,setUser]=useState<Store["user"]>(null),[records,setRecords]=useState<RecordData[]>([]),[catalog,setCatalog]=useState<Metric[]>([]),[selectedId,setSelectedId]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[toasts,setToasts]=useState<Store["toasts"]>([]);
+ const SESSION_KEY="bv_authenticated_session_v2";
+ const [restoring,setRestoring]=useState(()=>{try{return !!localStorage.getItem(SESSION_KEY);}catch{return false;}});
+ const restoreStarted=useRef(false);
  const active=useRef<string|null>(null);
  const refreshVersion=useRef(0);
  const toast=useCallback((msg:string)=>{const id=Date.now()+Math.random();setToasts(t=>[...t,{id,msg}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4500);},[]);
- const clear=()=>{refreshVersion.current++;active.current=null;setSession(null);setUser(null);setRecords([]);setCatalog([]);setSelectedId("");};
+ const clear=()=>{try{localStorage.removeItem(SESSION_KEY);}catch{}refreshVersion.current++;active.current=null;setRestoring(false);setSession(null);setUser(null);setRecords([]);setCatalog([]);setSelectedId("");};
  const run=async<T,>(fn:(token:string)=>Promise<T>):Promise<T>=>{const token=active.current;if(!token)throw Error("Inicia sesión");try{return await fn(token);}catch(e){if(e instanceof ApiFailure&&e.status===401){clear();toast("Sesión caducada. Inicia sesión.");}throw e;}};
  const fetchCaptures=async(token:string,id:string)=>{
    const captures=(await request<{items:Capture[]}>("/profiles/"+id+"/captures",token)).items;
@@ -58,18 +61,31 @@ export function ConnectedProvider({children}:{children:ReactNode}){
      if(profile.status!=="active")setSelectedId(old=>old===profileId?"":old);
    });
  };
- const login=async(email:string,password:string,register:boolean)=>{
-   if(register)await request("/auth/register",undefined,json("POST",{email,password,synthetic_only:true}));
-   // The shared LoginInput requires organization_id; sandbox resolves the actual tenant exclusively from verified account credentials.
+ const establish=async(token:string,issued?:Session)=>{
+   const me=await request<Account>("/auth/me",token);
+   if(active.current!==token)throw Error("Sesión cancelada");
+   setSession(issued?{...issued,role:me.role}:{token,user_id:me.user_id,organization_id:me.organization_id||"",expires_at:"",role:me.role});
+   setUser({nombre:me.display_name,email:me.email});
+   if(me.role!=="privacy_officer")await load(token);
+ };
+ const login=async(email:string,password:string)=>{
    const next=await request<Session>("/auth/login",undefined,json("POST",{organization_id:"10000000-0000-4000-8000-000000000001",email,password}));
    active.current=next.token;setBusy(true);setError("");
-   try{await load(next.token);if(active.current!==next.token)throw Error("Sesión cancelada");setSession(next);setUser({nombre:email.split("@")[0],email});}
+   try{await establish(next.token,next);if(active.current!==next.token)throw Error("Sesión cancelada");try{localStorage.setItem(SESSION_KEY,next.token);}catch{toast("No se pudo recordar la sesión en este navegador.");}}
    catch(e){clear();void request("/auth/logout",next.token,{method:"POST"}).catch(()=>{});throw e;}finally{setBusy(false);}
  };
+ useEffect(()=>{
+   if(restoreStarted.current)return;restoreStarted.current=true;
+   let token:string|null=null;try{token=localStorage.getItem(SESSION_KEY);}catch{}
+   if(!token){setRestoring(false);return;}
+   active.current=token;setRestoring(true);setBusy(true);
+   void establish(token).catch(e=>{if(active.current!==token)return;if(e instanceof ApiFailure&&e.status===401)clear();else{setError(e instanceof Error?e.message:String(e));toast("No se pudo restaurar la sesión. Vuelve a cargar la página.");}}).finally(()=>{setRestoring(false);setBusy(false);});
+ },[]);
+ useEffect(()=>{const sync=(e:StorageEvent)=>{if(e.key===SESSION_KEY&&!e.newValue){active.current=null;refreshVersion.current++;setSession(null);setUser(null);setRecords([]);setSelectedId("");setRestoring(false);}};window.addEventListener("storage",sync);return()=>window.removeEventListener("storage",sync);},[]);
  const logout=async()=>{const token=active.current;clear();if(token)try{await request("/auth/logout",token,{method:"POST"});}catch{toast("Sesión local cerrada; no se confirmó la revocación remota.");}};
  useEffect(()=>{if(!session)return;let last=0;const activity=()=>{const now=Date.now();if(now-last<60000)return;last=now;void run(t=>request("/auth/activity",t,{method:"POST"})).catch(()=>{});};window.addEventListener("pointerdown",activity);window.addEventListener("keydown",activity);return()=>{window.removeEventListener("pointerdown",activity);window.removeEventListener("keydown",activity);};},[session]);
  const patients=records.map(toPatient), selected=records.find(r=>r.profile.id===selectedId&&r.profile.status==="active")||records.find(r=>r.profile.status==="active"),patient=patients.find(p=>p.id===selected?.profile.id);
  const disabled=()=>{toast("Operación no habilitada en el servidor de pruebas");return false;};
  const value:Store={user,login:()=>{throw Error("Usa el acceso autenticado");},logout:()=>{void logout();},patients,selectedId:selected?.profile.id||"",select:id=>setSelectedId(id),patient:patient as Patient,mediciones:records.flatMap(toMeasurements),consents:[],reports:[],addPatient:disabled,updatePatient:disabled,deletePatient:disabled,addMedicion:disabled,updateMedicion:disabled,deleteMedicion:disabled,setConsents:disabled,setReports:disabled,toast,toasts};
- return <ConnectionCtx.Provider value={{token:session?.token??null,records,catalog,busy,error,login,logout,refresh,refreshCaptures,refreshPatient,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
+ return <ConnectionCtx.Provider value={{token:session?.token??null,role:session?.role??null,restoring,records,catalog,busy,error,login,logout,refresh,refreshCaptures,refreshPatient,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
 }

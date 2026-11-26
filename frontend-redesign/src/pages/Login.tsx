@@ -6,7 +6,7 @@ import { useConnection } from "../ConnectedProvider";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
 
-type Mode = "login" | "register" | "recover";
+type Mode = "login" | "recover";
 
 export default function Login() {
   const nav = useNavigate();
@@ -14,7 +14,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
-  const [name, setName] = useState("");
+
   const [show, setShow] = useState(false);
   
   const [err, setErr] = useState("");
@@ -25,9 +25,7 @@ export default function Login() {
     e.preventDefault();setErr("");setOk("");
     if(!/^\S+@\S+\.\S+$/.test(email))return setErr("Ingresa un correo electrónico válido.");
     if(mode==="recover")return setErr("Recuperación de contraseña no disponible.");
-    if(mode==="register"&&pass.length<12)return setErr("La contraseña debe tener al menos 12 caracteres.");
-    if(mode==="register"&&!window.confirm("El servicio actual solo admite datos e imágenes de prueba. No ingreses información personal o clínica real. ¿Aceptas continuar?"))return;
-    setLoading(true);try{await login(email.trim(),pass,mode==="register");nav("/app",{replace:true});}catch(e){setErr(e instanceof Error?e.message:"No se pudo iniciar sesión.");}finally{setLoading(false);}
+    setLoading(true);try{await login(email.trim(),pass);nav("/app",{replace:true});}catch(e){setErr(e instanceof Error?e.message:"No se pudo iniciar sesión.");}finally{setLoading(false);}
   };
 
   return (
@@ -43,21 +41,12 @@ export default function Login() {
           </div>
           <div className="panel panel-glow p-7 sm:p-8">
             <h1 className="font-display text-2xl font-bold text-white">
-              {mode === "login" ? "Accede a tu cuenta" : mode === "register" ? "Crea tu cuenta" : "Recupera tu acceso"}
+              {mode === "login" ? "Accede a tu cuenta" : "Recupera tu acceso"}
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              {mode === "login" ? "Plataforma de análisis corporal inteligente." : mode === "register" ? "Crea tu cuenta." : "Recuperación no disponible."}
+              {mode === "login" ? "Plataforma de análisis corporal inteligente." : "Recuperación no disponible."}
             </p>
             <form onSubmit={submit} className="mt-6 space-y-4">
-              {false && mode === "register" && (
-                <label className="block">
-                  <span className="mb-1.5 block text-xs text-slate-400">Nombre completo</span>
-                  <div className="relative">
-                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input className="field pl-9" value={name} onChange={(e) => setName(e.target.value)} placeholder="Dr. Nombre Apellido" />
-                  </div>
-                </label>
-              )}
               <label className="block">
                 <span className="mb-1.5 block text-xs text-slate-400">Correo electrónico</span>
                 <div className="relative">
@@ -88,23 +77,10 @@ export default function Login() {
               {err && <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{err}</div>}
               {ok && <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{ok}</div>}
               <Btn type="submit" variant="primary" className="w-full !py-3" disabled={loading}>
-                {loading ? "Verificando…" : mode === "login" ? "Iniciar Sesión" : mode === "register" ? "Crear cuenta" : "Enviar enlace"}
+                {loading ? "Verificando…" : mode === "login" ? "Iniciar Sesión" : "Enviar enlace"}
               </Btn>
             </form>
-            <p className="mt-5 text-center text-sm text-slate-400">
-              {mode === "login" ? (
-                <>
-                  ¿No tienes cuenta?{" "}
-                  <button onClick={() => setMode("register")} className="font-medium text-cyan-300 hover:underline">
-                    Regístrate
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => setMode("login")} className="font-medium text-cyan-300 hover:underline">
-                  Ya tengo cuenta · Iniciar sesión
-                </button>
-              )}
-            </p>
+            {mode==="recover"&&<p className="mt-5 text-center text-sm text-slate-400"><button onClick={()=>setMode("login")} className="font-medium text-cyan-300">Volver a iniciar sesión</button></p>}
           </div>
           <p className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-slate-500">
             <ShieldCheck size={14} className="text-cyan-300" /> Acceso a tu cuenta
