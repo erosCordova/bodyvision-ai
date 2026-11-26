@@ -38,7 +38,8 @@ export function ConnectedProvider({children}:{children:ReactNode}){
  const refresh=async()=>{setBusy(true);setError("");try{await run(load);}catch(e){setError(e instanceof Error?e.message:String(e));throw e;}finally{setBusy(false);}};
  const login=async(email:string,password:string,register:boolean)=>{
    if(register)await request("/auth/register",undefined,json("POST",{email,password,synthetic_only:true}));
-   const next=await request<Session>("/auth/login",undefined,json("POST",{email,password}));
+   // The shared LoginInput requires organization_id; sandbox resolves the actual tenant exclusively from verified account credentials.
+   const next=await request<Session>("/auth/login",undefined,json("POST",{organization_id:"10000000-0000-4000-8000-000000000001",email,password}));
    active.current=next.token;setBusy(true);setError("");
    try{await load(next.token);if(active.current!==next.token)throw Error("Sesión cancelada");setSession(next);setUser({nombre:email.split("@")[0],email});}
    catch(e){clear();void request("/auth/logout",next.token,{method:"POST"}).catch(()=>{});throw e;}finally{setBusy(false);}
