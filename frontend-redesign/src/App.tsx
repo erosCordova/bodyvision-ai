@@ -1,7 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useStore } from "./store";
 import { ConnectedProvider } from "./ConnectedProvider";
-import { ConnectedProfiles,ConnectedMeasurements,ConnectedCaptures,ConnectedReports,ConnectedAnalytics,NeedPatient,Unavailable } from "./ConnectedPages";
+import { ConnectedProfiles,ConnectedMeasurements,ConnectedCaptures,ConnectedReports,ConnectedAnalytics,ConnectedHome,NeedPatient,Unavailable } from "./ConnectedPages";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import AppLayout from "./pages/AppLayout";
@@ -19,6 +19,8 @@ function Protected({ children }: { children: React.ReactNode }) {
   const { user } = useStore();
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 }
+
+function Home(){const {patient}=useStore();return patient&&[patient.peso,patient.altura,patient.grasa,patient.musculo].every(Number.isFinite)?<NeedPatient complete><Dashboard /></NeedPatient>:<ConnectedHome/>;}
 
 function Toasts() {
   const { toasts } = useStore();
@@ -42,7 +44,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/app" element={<Protected><AppLayout /></Protected>}>
-            <Route index element={<NeedPatient complete><Dashboard /></NeedPatient>} />
+            <Route index element={<Home/>} />
             <Route path="expedientes" element={<ConnectedProfiles />} />
             <Route path="expedientes/:id" element={<ConnectedProfiles />} />
             <Route path="mediciones" element={<ConnectedMeasurements />} />

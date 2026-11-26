@@ -12,8 +12,8 @@ export default function AnalisisIA() {
   const ideal = idealWeight(p.altura, p.sexo);
   // Only measurements explicitly linked to this record ID; do not match by name.
   const records = mediciones.filter(m => m.patientId === p.id);
-  const latest = records[0];
-  const data = [{ mes: "Expediente", grasa: p.grasa }, ...records.slice().reverse().map((m, i) => ({ mes: "M" + (i + 1), grasa: m.grasa }))];
+  const latest = records.find(m=>[m.brazo,m.pecho,m.cintura,m.cadera,m.muslo].some(Number.isFinite));
+  const data = [{ mes: "Expediente", grasa: p.grasa }, ...records.filter(m=>Number.isFinite(m.grasa)).slice().reverse().map((m, i) => ({ mes: "M" + (i + 1), grasa: m.grasa }))];
   const sc = p.altura / 175;
   const radial = Math.min(1.65, Math.max(.65, Math.sqrt(imc/23) * (1+fat*.004+mus*.002)));
   const position = (x:number,y:number,z:number):[number,number,number] => [x*sc*radial,y*sc,z*sc*radial];
@@ -77,7 +77,7 @@ export default function AnalisisIA() {
           </Panel>
           <Panel title="Medidas por segmentos">
             {segments.length ? <dl className="grid grid-cols-2 gap-2">
-              {segments.map(([label, value]) => <div key={label} className="rounded-lg bg-white/5 p-3"><dt className="text-xs text-slate-400">{label}</dt><dd className="text-lg font-semibold text-white">{value} cm</dd></div>)}
+              {segments.filter(([,value])=>Number.isFinite(value)).map(([label, value]) => <div key={label} className="rounded-lg bg-white/5 p-3"><dt className="text-xs text-slate-400">{label}</dt><dd className="text-lg font-semibold text-white">{value} cm</dd></div>)}
             </dl> : <p className="py-5 text-center text-sm text-slate-400">Sin mediciones segmentarias registradas</p>}
           </Panel>
           <Panel title="Tendencia · % Grasa">

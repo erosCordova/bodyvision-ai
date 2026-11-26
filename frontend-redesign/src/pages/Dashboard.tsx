@@ -11,9 +11,9 @@ export default function Dashboard() {
   const { patient, patients, user, mediciones, reports, consents, select } = useStore();
   const data = [{mes:"Inicial",peso:patient.peso,imc:imcOf(patient.peso,patient.altura),grasa:patient.grasa},...mediciones.filter(m=>m.patientId===patient.id).slice().reverse().map((m,i)=>({mes:"M"+(i+1),peso:m.peso,imc:imcOf(m.peso,patient.altura),grasa:m.grasa}))];
   const STATS=[
-    {icon:ClipboardList,value:String(patients.filter(p=>p.estado!=="Alta").length),label:"Expedientes activos",c:"text-cyan-300 bg-cyan-400/10 border-cyan-400/30"},
-    {icon:Ruler,value:String(mediciones.length),label:"Mediciones",c:"text-emerald-300 bg-emerald-400/10 border-emerald-400/30"},
-    {icon:Sparkles,value:String(reports.length),label:"Reportes",c:"text-violet-300 bg-violet-400/10 border-violet-400/30"},
+    {icon:ClipboardList,value:String(patients.filter(p=>p.estado==="Activo").length),label:"Expedientes activos",c:"text-cyan-300 bg-cyan-400/10 border-cyan-400/30"},
+    {icon:Ruler,value:String(mediciones.length),label:"Registros de medición",c:"text-emerald-300 bg-emerald-400/10 border-emerald-400/30"},
+    {icon:Sparkles,value:String(reports.length),label:"Reportes guardados",c:"text-violet-300 bg-violet-400/10 border-violet-400/30"},
     {icon:Target,value:String(consents.filter(c=>c.estado==="Pendiente").length),label:"Consentimientos pendientes",c:"text-amber-300 bg-amber-400/10 border-amber-400/30"},
   ];
   const ACT=[

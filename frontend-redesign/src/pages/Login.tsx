@@ -16,7 +16,7 @@ export default function Login() {
   const [pass, setPass] = useState("");
   const [name, setName] = useState("");
   const [show, setShow] = useState(false);
-  const [remember, setRemember] = useState(false);
+  
   const [synthetic, setSynthetic] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
@@ -81,10 +81,7 @@ export default function Login() {
               )}
               {mode === "login" && (
                 <div className="flex items-center justify-between text-xs">
-                  <label className="flex cursor-pointer items-center gap-2 text-slate-300">
-                    <input type="checkbox" checked={false} disabled className="h-4 w-4 accent-cyan-400" />
-                    Recordarme (no disponible)
-                  </label>
+
                   <button type="button" onClick={() => setMode("recover")} className="text-cyan-300 hover:underline">
                     ¿Olvidaste tu contraseña?
                   </button>
@@ -125,7 +122,7 @@ export default function Login() {
           <div className="panel panel-glow max-w-md p-5">
             <div className="text-xs uppercase tracking-widest text-cyan-300">Análisis · Simulación · Transformación</div>
             <p className="mt-2 font-display text-2xl font-semibold leading-snug text-white">Tu cuerpo, en tus manos.</p>
-            <p className="mt-1 text-sm text-slate-300">Reconstrucción 3D anatómica y simulación de cambios con IA, en minutos.</p>
+            <p className="mt-1 text-sm text-slate-300">Atlas anatómico y simulación orientativa de cambios corporales.</p>
           </div>
         </div>
       </div>
