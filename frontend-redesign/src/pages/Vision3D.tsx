@@ -71,8 +71,8 @@ function PatientVision() {
               <Avatar name={p.nombre} size={44} photo={p.foto} />
               <div><div className="font-semibold text-white">{p.nombre}</div><div className="text-xs text-slate-400">{p.id} · {p.edad} años</div></div>
             </div>
-            <img src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía de referencia de ${p.nombre}`:"Imagen ilustrativa de demostración"} className="mt-3 max-h-64 w-full rounded-xl border border-white/10 object-contain bg-slate-950" />
-            {!p.foto&&<p className="mt-1 text-xs text-slate-500">Imagen ilustrativa · sin foto registrada</p>}
+            <img src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía de referencia de ${p.nombre}`:"Imagen anatómica de referencia"} className="mt-3 max-h-64 w-full rounded-xl border border-white/10 object-contain bg-slate-950" />
+            {!p.foto&&<p className="mt-1 text-xs text-slate-500">Imagen de referencia · sin fotografía registrada</p>}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
               {[["Edad", `${p.edad} años`], ["Altura", `${p.altura} cm`], ["Peso", `${p.peso} kg`]].map(([label,value]) => <div key={label} className="rounded-lg bg-white/5 p-2"><dt className="text-xs text-slate-400">{label}</dt><dd className="font-semibold text-white">{value}</dd></div>)}
             </dl>
@@ -96,7 +96,7 @@ function PatientVision() {
           </Panel>
           <Panel title="Datos del modelo">
             <dl className="grid grid-cols-2 gap-3 text-sm">
-              {[["IMC", imc.toFixed(1)], ["Peso", `${(p.peso + dfat * 0.9 + dmus * 0.5).toFixed(1)} kg`], ["Peso ideal", `${idealWeight(p.altura, p.sexo)} kg`], ["Grasa", `${(p.grasa + dfat).toFixed(1)}%`]].map(([l, v]) => (
+              {[["IMC", imc.toFixed(1)], ["Peso", `${(p.peso + dfat * 0.9 + dmus * 0.5).toFixed(1)} kg`], ["Peso ideal", `${idealWeight(p.altura, p.sexo)} kg`], ["Grasa", Number.isFinite(p.grasa)?`${(p.grasa + dfat).toFixed(1)}%`:"—"]].map(([l, v]) => (
                 <div key={l} className="rounded-xl border border-white/5 bg-white/[0.03] p-3"><dt className="text-xs text-slate-500">{l}</dt><dd className="font-display text-lg font-bold text-white">{v}</dd></div>
               ))}
             </dl>

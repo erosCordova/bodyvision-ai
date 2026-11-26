@@ -1,34 +1,37 @@
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import { Download, FileText, Plus, ShieldCheck, Trash2, Pencil } from "lucide-react";
 import { Avatar, Badge, Btn, Modal, PageHead, Panel, Segmented, Toggle } from "../ui";
-import { PATIENTS, useStore, type Consent, type ReportRecord } from "../store";
+import { useStore, type Consent, type ReportRecord } from "../store";
+
+import {useConnection} from "../ConnectedProvider";
+import {request} from "../api";
 
 const tone = (e: Consent["estado"]) => (e === "Vigente" ? "ok" : e === "Pendiente" ? "warn" : e === "Por vencer" ? "info" : "bad");
 
 export function Consentimientos() {
   const { consents, setConsents, toast, patients } = useStore();
   const [open, setOpen] = useState(false);
-  const [pac, setPac] = useState(patients[0].id);
+  const [pac, setPac] = useState(patients[0]?.id||"");
   const [tipo, setTipo] = useState("Tratamiento de imágenes corporales");
   const [editing,setEditing]=useState<Consent|null>(null);
   const [removing,setRemoving]=useState<Consent|null>(null);
   const types=["Tratamiento de imágenes corporales","Reconstrucción 3D","Uso de IA en análisis","Compartir con especialista"];
-  const begin=()=>{setEditing(null);setPac(patients[0].id);setTipo(types[0]);setOpen(true);};
+  const begin=()=>{setEditing(null);setPac((patients[0]?.id||""));setTipo(types[0]);setOpen(true);};
   const edit=(c:Consent)=>{setEditing(c);setPac(c.patientId??patients[0].id);setTipo(c.tipo);setOpen(true);};
   const add=()=>{
     const p=patients.find(p=>p.id===pac);if(!p)return;
     if(editing&&editing.estado!=="Pendiente")return;
     const next:Consent=editing?{...editing,patientId:p.id,paciente:p.nombre,tipo}:{id:"CON-"+crypto.randomUUID().slice(0,8),patientId:p.id,paciente:p.nombre,tipo,fecha:new Date().toLocaleDateString("es-PE"),vigencia:"Sin firma",estado:"Pendiente"};
-    if(setConsents(editing?consents.map(c=>c.id===editing.id?next:c):[next,...consents])){setOpen(false);toast(editing?"Solicitud actualizada":"Solicitud registrada (demostración)");}
+    if(setConsents(editing?consents.map(c=>c.id===editing.id?next:c):[next,...consents])){setOpen(false);toast(editing?"Solicitud actualizada":"Solicitud registrada");}
   };
   const remove=()=>{if(!removing)return;const pending=removing.estado==="Pendiente";const next=pending?consents.filter(c=>c.id!==removing.id):consents.map(c=>c.id===removing.id?{...c,estado:"Revocado" as const}:c);if(setConsents(next)){setRemoving(null);toast(pending?"Solicitud eliminada":"Consentimiento revocado");}};
   const count = (e: string) => consents.filter((c) => c.estado === e).length;
   return (
     <div>
-      <PageHead title="Consentimientos" sub="Gestión de consentimientos informados y tratamiento de datos biométricos" actions={<Btn variant="primary" onClick={begin}><Plus size={16} /> Solicitar firma</Btn>} />
+      <PageHead title="Consentimientos" sub="Gestión de consentimientos informados y tratamiento de datos biométricos" actions={<Btn variant="primary" disabled title="Operación no habilitada en el servidor de pruebas" onClick={begin}><Plus size={16} /> Solicitar firma</Btn>} />
       <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
         {(["Vigente", "Pendiente", "Por vencer", "Revocado"] as const).map((e) => (
-          <div key={e} className="panel p-4"><Badge tone={tone(e)}>{e}</Badge><div className="mt-2 font-display text-3xl font-bold text-white">{count(e)}</div></div>
+          <div key={e} className="panel p-4"><Badge tone={tone(e)}>{e}</Badge><div className="mt-2 font-display text-3xl font-bold text-white">—</div></div>
         ))}
       </div>
       <Panel pad={false}>
@@ -36,6 +39,7 @@ export function Consentimientos() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Paciente</th><th>Tipo</th><th>Fecha</th><th>Vigencia</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead>
             <tbody>
+              {!consents.length&&<tr><td colSpan={6} className="py-12 text-center text-slate-400">Consentimientos no disponibles en este entorno</td></tr>}
               {consents.map((c) => (
                 <tr key={c.id} className="border-t border-white/5 hover:bg-white/[0.03] [&>td]:px-4 [&>td]:py-3">
                   <td><div className="flex items-center gap-3"><Avatar name={c.paciente} size={30} /><span className="font-medium text-white">{c.paciente}</span></div></td>
@@ -48,7 +52,7 @@ export function Consentimientos() {
           </table>
         </div>
       </Panel>
-      <div className="mt-5 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-300"><ShieldCheck className="mt-0.5 shrink-0 text-cyan-300" size={18} />Registro de demostración: no envía firmas, no otorga consentimiento real ni ejecuta procesos legales de eliminación.</div>
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-300"><ShieldCheck className="mt-0.5 shrink-0 text-cyan-300" size={18} />El servidor de pruebas no habilita la gestión de consentimientos. </div>
       <Modal open={open} onClose={() => setOpen(false)} title={editing?"Editar solicitud":"Solicitar consentimiento"}>
         <div className="space-y-4">
           <label className="block"><span className="mb-1 block text-xs text-slate-400">Paciente</span><select className="field" value={pac} onChange={(e) => setPac(e.target.value)}>{patients.map((p) => <option key={p.id} value={p.id} className="bg-slate-900">{p.nombre}</option>)}</select></label>
@@ -71,38 +75,43 @@ export function Reportes(){
   return <PatientReports key={patient.id}/>;
 }
 function PatientReports(){
-  const {toast,mediciones,patient,consents,reports,setReports}=useStore();
+  const {toast,mediciones,patient,consents}=useStore();
+  const [reports,setReports]=useState<ReportRecord[]>([]);
+  const {selected,catalog}=useConnection();
   const [open,setOpen]=useState(false);
   const [tpl,setTpl]=useState(TEMPLATES[0][0]);
   const [removing,setRemoving]=useState<ReportRecord|null>(null);
   const [view,setView]=useState<ReportRecord|null>(null);
   const records=reports.filter(r=>r.patientId===patient.id);
   const gen=()=>{
-    const ms=mediciones.filter(m=>m.patientId===patient.id),cs=consents.filter(c=>c.patientId===patient.id);
+    if(tpl===TEMPLATES[2][0])return toast("Consentimientos no habilitados en el servidor");
+    const ms=selected?.observations||[];
     const title=tpl+" · "+patient.nombre;
-    const content=["BODYVISION AI · Demostración",title,"Expediente: "+patient.id,"Edad: "+patient.edad+" años","Altura: "+patient.altura+" cm","Peso: "+patient.peso+" kg","Grasa: "+patient.grasa+"%","Masa muscular: "+patient.musculo+"%",...(tpl===TEMPLATES[1][0]?ms.map(m=>m.fecha+" · "+m.peso+" kg · grasa estimada "+m.grasa+"%"):tpl===TEMPLATES[2][0]?cs.map(c=>c.tipo+" · "+c.estado):[])].join("\n");
+    const content=["BODYVISION AI · Informe de registros",title,"Expediente: "+patient.id,"Edad aproximada: "+patient.edad+" años",...ms.filter(o=>tpl===TEMPLATES[1][0]||["weight","height","body_fat_pct","muscle_mass_kg"].includes(o.metric_code)).map(o=>(catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code)+" · "+o.value+" "+o.unit+" · "+o.measured_at)].join("\n");
     const report:ReportRecord={id:crypto.randomUUID(),patientId:patient.id,title,date:new Date().toLocaleString("es-PE"),content};
-    if(setReports([report,...reports])){setOpen(false);toast("Reporte generado");}
+    setReports([report,...reports]);setOpen(false);toast("Reporte generado para descarga local");
   };
   const dl=(r:ReportRecord)=>{const url=URL.createObjectURL(new Blob([r.content],{type:"text/plain;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="bodyvision-"+r.id+".txt";a.click();URL.revokeObjectURL(url);};
   return <div>
-    <PageHead title="Reportes" sub={patient.nombre+" · informes de demostración"} actions={<Btn variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/> Generar reporte</Btn>}/>
-    <div className="mb-6 grid gap-4 md:grid-cols-3">{TEMPLATES.map(([t,d])=><button key={t} onClick={()=>{setTpl(t);setOpen(true);}} className="panel p-5 text-left hover:border-cyan-400/40"><FileText className="mb-3 text-cyan-300"/><div className="font-semibold text-white">{t}</div><div className="mt-1 text-sm text-slate-400">{d}</div></button>)}</div>
+    <PageHead title="Reportes" sub={patient.nombre+" · informes de la sesión"} actions={<Btn variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/> Generar reporte</Btn>}/>
+    <div className="mb-6 grid gap-4 md:grid-cols-3">{TEMPLATES.map(([t,d])=><button key={t} disabled={t===TEMPLATES[2][0]} onClick={()=>{setTpl(t);setOpen(true);}} className="panel p-5 text-left hover:border-cyan-400/40"><FileText className="mb-3 text-cyan-300"/><div className="font-semibold text-white">{t}</div><div className="mt-1 text-sm text-slate-400">{d}</div></button>)}</div>
     <Panel title="Reportes generados"><ul className="divide-y divide-white/5">{records.map(r=><li key={r.id} className="flex flex-wrap items-center gap-3 py-3 text-sm"><FileText size={18} className="text-sky-300"/><div className="flex-1"><button className="text-left text-white hover:text-cyan-300" onClick={()=>setView(r)}>{r.title}</button><div className="text-xs text-slate-500">{r.date}</div></div><Btn onClick={()=>dl(r)}><Download size={15}/> Descargar</Btn><button title="Eliminar reporte" className="p-2 text-rose-300" onClick={()=>setRemoving(r)}><Trash2 size={16}/></button></li>)}</ul>{!records.length&&<p className="py-8 text-center text-slate-400">Sin reportes de este expediente</p>}</Panel>
-    <Modal open={open} onClose={()=>setOpen(false)} title="Generar reporte"><div className="space-y-4"><select className="field" value={tpl} onChange={e=>setTpl(e.target.value)}>{TEMPLATES.map(([t])=><option key={t}>{t}</option>)}</select><p className="text-sm text-slate-300">Paciente: {patient.nombre}. Se guardará una copia de los datos actuales.</p><Btn variant="primary" className="w-full" onClick={gen}>Generar</Btn></div></Modal>
+    <Modal open={open} onClose={()=>setOpen(false)} title="Generar reporte"><div className="space-y-4"><select className="field" value={tpl} onChange={e=>setTpl(e.target.value)}>{TEMPLATES.map(([t])=><option key={t} disabled={t===TEMPLATES[2][0]}>{t}</option>)}</select><p className="text-sm text-slate-300">Paciente: {patient.nombre}. Se generará una copia descargable de los datos del servidor. No se guarda en PostgreSQL.</p><Btn variant="primary" className="w-full" onClick={gen}>Generar</Btn></div></Modal>
     <Modal open={!!view} onClose={()=>setView(null)} title="Consultar reporte" wide><pre className="whitespace-pre-wrap text-sm text-slate-300">{view?.content}</pre></Modal>
-    <Modal open={!!removing} onClose={()=>setRemoving(null)} title="Eliminar reporte"><p className="text-sm text-slate-300">¿Eliminar {removing?.title}?</p><div className="mt-5 flex justify-end gap-2"><Btn onClick={()=>setRemoving(null)}>Cancelar</Btn><Btn variant="danger" onClick={()=>{if(removing&&setReports(reports.filter(r=>r.id!==removing.id))){setRemoving(null);toast("Reporte eliminado");}}}>Eliminar</Btn></div></Modal>
+    <Modal open={!!removing} onClose={()=>setRemoving(null)} title="Eliminar reporte"><p className="text-sm text-slate-300">¿Eliminar {removing?.title}?</p><div className="mt-5 flex justify-end gap-2"><Btn onClick={()=>setRemoving(null)}>Cancelar</Btn><Btn variant="danger" onClick={()=>{if(removing){setReports(reports.filter(r=>r.id!==removing.id));setRemoving(null);toast("Reporte local eliminado");}}}>Eliminar</Btn></div></Modal>
   </div>;
 }
 
-const USERS = [["Dr. Martínez", "Administrador", "Activo"], ["Dra. Salazar", "Especialista", "Activo"], ["Lic. Prieto", "Nutrición", "Activo"], ["Ana Torres", "Recepción", "Invitado"]];
-const INTEGR = [["API FastAPI (Python)", "Operativa", "42 ms"], ["PostgreSQL", "Operativa", "8 ms"], ["MediaPipe Pose", "Operativa", "61 ms"], ["Pipeline Maya 3D", "Operativa", "—"], ["Simulador IA", "Mantenimiento", "—"]];
-const AUDIT = ["Dr. Martínez inició sesión", "Se exportó mediciones.csv", "Consentimiento revocado · Sergio Vidal", "Nuevo expediente creado", "Reporte generado · Resumen de cohorte"];
-
 export function Administracion() {
-  const {patients}=useStore();
-  const [tab, setTab] = useState<"u" | "s" | "i" | "a">("u");
-  const [sec, setSec] = useState({ twofa: true, ip: false, enc: true, timeout: true, audit: true });
+  const {patients,user}=useStore();
+  const {token}=useConnection();
+  const [tab,setTab]=useState<"u"|"s"|"i"|"a">("u");
+  const [health,setHealth]=useState("Consultando");
+  useEffect(()=>{let alive=true;request<{database:string}>("/health/ready").then(r=>{if(alive)setHealth(r.database==="connected"?"Operativa":"No verificada");}).catch(()=>{if(alive)setHealth("No disponible");});return()=>{alive=false;};},[]);
+  const USERS=user?[[user.nombre,"Especialista","Activo"]]:[];
+  const INTEGR=[["API FastAPI (Python)",health,"—"],["PostgreSQL",health,"—"],["MediaPipe Pose","No habilitado","—"],["Pipeline Maya 3D","Atlas local","—"],["Simulador IA","Visualización local","—"]];
+  const AUDIT:string[]=[];
+  const sec={twofa:false,ip:false,enc:false,timeout:true,audit:true};
   return (
     <div>
       <PageHead title="Administración" sub="Usuarios, seguridad, integraciones y auditoría" actions={<Segmented value={tab} onChange={setTab} options={[{ id: "u", label: "Usuarios" }, { id: "s", label: "Seguridad" }, { id: "i", label: "Integraciones" }, { id: "a", label: "Auditoría" }]} />} />
@@ -113,8 +122,8 @@ export function Administracion() {
       )}
       {tab === "s" && (
         <Panel><div className="divide-y divide-white/5">
-          {([["twofa", "Autenticación en dos pasos (2FA)", "Obligatoria para todos los usuarios clínicos"], ["ip", "Restricción por IP", "Sólo redes de la clínica"], ["enc", "Cifrado AES-256 de datos biométricos", "Imágenes y mallas 3D"], ["timeout", "Cierre de sesión por inactividad", "15 minutos"], ["audit", "Registro de auditoría", "Todas las acciones se registran"]] as const).map(([k, t, d]) => (
-            <div key={k} className="flex items-center justify-between gap-4 py-4"><div><div className="font-medium text-white">{t}</div><div className="text-sm text-slate-400">{d}</div></div><Toggle checked={sec[k]} onChange={(v) => setSec({ ...sec, [k]: v })} label={t} /></div>
+          {([["twofa", "Autenticación en dos pasos (2FA)", "No habilitada en este entorno"], ["ip", "Restricción por IP", "No disponible"], ["enc", "Cifrado de fotografías", "Configuración del servidor"], ["timeout", "Cierre de sesión por inactividad", "15 minutos"], ["audit", "Registro de auditoría", "Todas las acciones se registran"]] as const).map(([k, t, d]) => (
+            <div key={k} className="flex items-center justify-between gap-4 py-4"><div><div className="font-medium text-white">{t}</div><div className="text-sm text-slate-400">{d}</div></div><Badge tone={k==="timeout"||k==="audit"?"info":"muted"}>{k==="timeout"||k==="audit"?"Servidor":"No configurable"}</Badge></div>
           ))}
         </div></Panel>
       )}
@@ -124,7 +133,7 @@ export function Administracion() {
         ))}</div>
       )}
       {tab === "a" && (
-        <Panel><ul className="space-y-3 text-sm">{AUDIT.map((a, i) => <li key={a} className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-cyan-300" /><span className="flex-1 text-slate-200">{a}</span><span className="text-xs text-slate-500">hace {i * 17 + 3} min</span></li>)}</ul></Panel>
+        <Panel><p className="text-sm text-slate-400">Consulta de auditoría no habilitada para esta cuenta.</p><ul className="space-y-3 text-sm">{AUDIT.map((a, i) => <li key={a} className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-cyan-300" /><span className="flex-1 text-slate-200">{a}</span><span className="text-xs text-slate-500">hace {i * 17 + 3} min</span></li>)}</ul></Panel>
       )}
     </div>
   );

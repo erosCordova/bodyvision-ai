@@ -35,7 +35,7 @@ const FEATURES = [
   { i: Brain, t: "Análisis con IA", d: "IMC, peso ideal, grasa y masa muscular segmentada por regiones con mapas térmicos y recomendaciones." },
   { i: Zap, t: "Simulador de cambios", d: "Proyecta pérdida de grasa o ganancia muscular y visualiza el antes y después sobre el modelo 3D del paciente." },
   { i: BarChart3, t: "Analítica y reportes", d: "Evolución por paciente y cohortes, reportes PDF/CSV y tableros listos para tu consulta o gimnasio." },
-  { i: ShieldCheck, t: "Privacidad y consentimientos", d: "Gestión de consentimientos, cifrado de extremo a extremo y registro de auditoría conforme a RGPD." },
+  { i: ShieldCheck, t: "Privacidad y consentimientos", d: "Acceso autenticado y gestión de permisos según disponibilidad del servidor." },
 ];
 
 const PHASES = [
@@ -53,9 +53,9 @@ const PLANS = [
 ];
 
 const FAQ = [
-  ["¿Qué precisión tiene el análisis corporal?", "Las mediciones derivadas de la reconstrucción 3D alcanzan un 98.7% de concordancia frente a antropometría manual en nuestras validaciones internas."],
+  ["¿Qué precisión tiene el análisis corporal?", "La visualización es orientativa. No se ha validado su precisión clínica."],
   ["¿Necesito equipo especial para capturar?", "No. Basta con la cámara de un teléfono o webcam y 3 fotografías guiadas. El sistema comprueba iluminación, distancia y postura."],
-  ["¿Cómo se protegen los datos de mis pacientes?", "Cifrado AES-256 en reposo y TLS 1.3 en tránsito, consentimientos explícitos por paciente y registro de auditoría completo."],
+  ["¿Cómo se protegen los datos de mis pacientes?", "El acceso está autenticado. El servicio actual no está habilitado para datos clínicos reales."],
   ["¿Puedo integrarlo con mi sistema actual?", "Sí. La API REST (FastAPI) y los webhooks permiten integrar expedientes, mediciones y reportes con tu software."],
 ];
 
@@ -88,7 +88,7 @@ export default function Landing() {
               Iniciar sesión
             </button>
             <button onClick={() => nav("/login")} className="btn-primary rounded-xl px-4 py-2 text-sm">
-              Solicitar demo
+              Crear cuenta
             </button>
             <button className="rounded-lg p-2 text-slate-300 lg:hidden" onClick={() => setMenu(!menu)} aria-label="Menú">
               {menu ? <X size={20} /> : <Menu size={20} />}
@@ -132,7 +132,7 @@ export default function Landing() {
                 </button>
               </div>
               <div className="mt-10 grid max-w-lg grid-cols-3 gap-4">
-                {[["247+", "Expedientes"], ["98.7%", "Precisión"], ["< 2 min", "Por análisis"]].map(([v, l]) => (
+                {[["3D", "Visor anatómico"], ["360°", "Rotación"], ["CSV", "Exportación"]].map(([v, l]) => (
                   <div key={l}>
                     <div className="font-display text-2xl font-bold text-white">{v}</div>
                     <div className="text-xs text-slate-400">{l}</div>
@@ -176,7 +176,7 @@ export default function Landing() {
       <section className="border-y border-white/5 bg-white/[0.02] py-8">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-12 gap-y-4 px-5 text-sm text-slate-400">
           <span className="text-xs uppercase tracking-widest text-slate-500">Tecnología de confianza</span>
-          {["React + Three.js", "FastAPI · Python", "PostgreSQL", "MediaPipe Pose", "Autodesk Maya", "RGPD · HIPAA ready"].map((t) => (
+          {["React + Three.js", "FastAPI · Python", "PostgreSQL", "MediaPipe Pose", "Autodesk Maya", "Control de acceso"].map((t) => (
             <span key={t} className="font-display font-medium text-slate-300">{t}</span>
           ))}
         </div>
@@ -256,7 +256,7 @@ export default function Landing() {
               ))}
             </ul>
             <button onClick={() => nav("/login")} className="btn-primary mt-9 inline-flex items-center gap-2 rounded-xl px-6 py-3">
-              Explorar la demo <ArrowRight size={16} />
+              Explorar plataforma <ArrowRight size={16} />
             </button>
           </Reveal>
         </div>
@@ -379,9 +379,9 @@ export default function Landing() {
           <img src={man} alt="" className="absolute inset-0 h-full w-full object-cover opacity-15" />
           <div className="relative">
             <h2 className="font-display text-4xl font-bold text-white">El futuro del análisis corporal</h2>
-            <p className="mx-auto mt-4 max-w-xl text-slate-300">Tu cuerpo, en tus manos. Descubre BodyVision AI con una consulta de demostración completa.</p>
+            <p className="mx-auto mt-4 max-w-xl text-slate-300">Tu cuerpo, en tus manos. Accede a tus expedientes y visualización corporal.</p>
             <button onClick={() => nav("/login")} className="btn-primary mt-8 inline-flex items-center gap-2 rounded-xl px-8 py-3.5">
-              Acceder a la demo <ArrowRight size={17} />
+              Acceder a la plataforma <ArrowRight size={17} />
             </button>
           </div>
         </div>
@@ -390,7 +390,7 @@ export default function Landing() {
       <footer className="border-t border-white/5 py-10">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 text-sm text-slate-500">
           <Logo size={26} />
-          <span>© 2025 BodyVision AI · Versión 1.0.0 · Datos y pacientes ficticios con fines de demostración.</span>
+          <span>© 2025 BodyVision AI · Versión 1.0.0.</span>
         </div>
       </footer>
     </div>

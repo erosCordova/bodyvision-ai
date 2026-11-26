@@ -19,11 +19,7 @@ const NAV = [
   { to: "/app/administracion", label: "Administración", icon: Settings },
 ];
 
-const NOTIFS = [
-  { t: "Nuevo análisis completado", s: "Carlos Ramírez · hace 2 min" },
-  { t: "Medición registrada", s: "Lucía Fernández · hace 5 min" },
-  { t: "Consentimiento por vencer", s: "Valeria Soto · hace 1 h" },
-];
+const NOTIFS: {t:string;s:string}[] = [];
 
 export default function AppLayout() {
   const { user, logout, patients, patient, select } = useStore();
@@ -62,9 +58,9 @@ export default function AppLayout() {
         <div className="rounded-xl border border-sky-400/25 bg-sky-400/5 p-3.5">
           <div className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-wider text-sky-300">
             <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_10px_#22d3ee]" />
-            Entorno ficticio
+            Área de trabajo
           </div>
-          <div className="mt-1 text-[13px] text-slate-300">Consulta de demostración</div>
+          <div className="mt-1 text-[13px] text-slate-300">BodyVision AI</div>
         </div>
         <button onClick={() => setSec(true)} className="mt-3 flex items-center gap-2 px-1 text-[13px] text-slate-400 hover:text-white">
           <Lock size={14} /> Acceso y seguridad
@@ -97,7 +93,8 @@ export default function AppLayout() {
           <div className="ml-auto flex items-center gap-2 md:gap-3">
             <div className="hidden items-center gap-2 sm:flex">
               <span className="text-xs text-slate-500">Paciente activo</span>
-              <select value={patient.id} onChange={(e) => select(e.target.value)} className="field !w-auto !rounded-xl !py-1.5 !text-xs">
+              <select value={patient?.id||""} onChange={(e) => select(e.target.value)} className="field !w-auto !rounded-xl !py-1.5 !text-xs">
+                {!patients.length&&<option value="">Sin expedientes</option>}
                 {patients.map((p) => (
                   <option key={p.id} value={p.id} className="bg-slate-900">
                     {p.nombre}
@@ -108,10 +105,11 @@ export default function AppLayout() {
             <div className="relative">
               <button onClick={() => { setBell(!bell); setMenu(false); }} className="relative rounded-xl border border-white/10 bg-white/5 p-2.5 text-slate-300 hover:text-white" aria-label="Notificaciones">
                 <Bell size={17} />
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-cyan-300" />
+                {NOTIFS.length>0&&<span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-cyan-300" />}
               </button>
               {bell && (
                 <div className="panel absolute right-0 mt-2 w-72 p-2">
+                  {!NOTIFS.length&&<p className="p-3 text-xs text-slate-400">Sin notificaciones</p>}
                   {NOTIFS.map((n) => (
                     <div key={n.t} className="rounded-lg px-3 py-2.5 hover:bg-white/5">
                       <div className="text-sm text-white">{n.t}</div>
@@ -123,7 +121,7 @@ export default function AppLayout() {
             </div>
             <div className="relative">
               <button onClick={() => { setMenu(!menu); setBell(false); }} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-1.5 pr-3">
-                <Avatar name={user?.nombre || "Dr Martínez"} size={30} />
+                <Avatar name={user?.nombre || "Usuario"} size={30} />
                 <span className="hidden text-sm font-medium text-white sm:block">{user?.nombre}</span>
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
@@ -147,16 +145,7 @@ export default function AppLayout() {
       </div>
       <Modal open={sec} onClose={() => setSec(false)} title="Acceso y seguridad">
         <div className="space-y-4 text-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="font-medium text-white">Autenticación en dos pasos</div>
-              <div className="text-xs text-slate-400">Código TOTP en cada inicio de sesión</div>
-            </div>
-            <Toggle checked={twofa} onChange={setTwofa} label="2FA" />
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs leading-relaxed text-slate-300">
-            Sesión cifrada (TLS 1.3) · Datos biométricos almacenados con AES-256 · Registro de auditoría activo · Entorno de demostración con datos ficticios.
-          </div>
+          <p className="text-sm text-slate-300">Sesión autenticada. El servicio actual solo admite datos de prueba; no introduzcas datos personales o clínicos reales.</p>
           <Btn variant="danger" className="w-full" onClick={() => { logout(); nav("/login"); }}>
             <LogOut size={16} /> Cerrar sesión
           </Btn>

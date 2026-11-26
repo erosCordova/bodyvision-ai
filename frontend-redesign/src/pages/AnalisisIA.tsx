@@ -42,10 +42,10 @@ export default function AnalisisIA() {
       <div className="grid gap-5 xl:grid-cols-[260px_1fr_380px]">
         <Panel pad={false} className="overflow-hidden">
           <div className="relative flex min-h-[240px] flex-col xl:min-h-[560px]">
-            <img key={p.id} src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía registrada de ${p.nombre}`:"Imagen ilustrativa de demostración"} className={`h-[280px] w-full bg-black xl:h-[560px] ${p.foto?"object-contain":"object-cover object-top"}`} />
+            <img key={p.id} src={p.foto || (p.sexo==="male"?man2:woman)} alt={p.foto?`Fotografía registrada de ${p.nombre}`:"Imagen anatómica de referencia"} className={`h-[280px] w-full bg-black xl:h-[560px] ${p.foto?"object-contain":"object-cover object-top"}`} />
             <div className="border-t border-white/5 bg-slate-950/50 p-3">
               <div className="text-sm font-semibold text-white">{p.nombre}</div>
-              <div className="mt-1 text-xs text-slate-400">{p.foto ? "Fotografía del expediente" : "Imagen ilustrativa · sin foto registrada"}</div>
+              <div className="mt-1 text-xs text-slate-400">{p.foto ? "Fotografía del expediente" : "Imagen de referencia · sin fotografía registrada"}</div>
             </div>
           </div>
         </Panel>
