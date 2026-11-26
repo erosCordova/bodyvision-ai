@@ -35,7 +35,7 @@ def check_sandbox_session(request: Request) -> str:
             SELECT s.organization_id,s.user_id,COALESCE(a.role,'specialist') AS role, a.email, a.display_name FROM sandbox_sessions s LEFT JOIN sandbox_accounts a ON a.user_id=s.user_id AND a.organization_id=s.organization_id WHERE s.digest=:digest AND NOT s.revoked AND s.expires_at>now()
         """), {"digest": digest}).mappings().one_or_none()
         if valid is not None:
-            connection.execute(text("UPDATE sandbox_sessions SET last_activity=now(), expires_at=now()+interval '30 days' WHERE digest=:digest AND NOT revoked AND expires_at>now() AND last_activity<now()-interval '1 hour'"), {"digest":digest})
+            connection.execute(text("UPDATE sandbox_sessions SET last_activity=now(), expires_at=now()+interval '30 days' WHERE digest=:digest AND NOT revoked AND expires_at>now() AND expires_at<now()+interval '29 days'"), {"digest":digest})
     if valid is None:
         raise DomainError(401, "SESSION_EXPIRED", "La sesión de pruebas caducó.")
     request.state.sandbox_verified = True
