@@ -32,10 +32,10 @@ export function useAction(profileId?:string,scope:"captures"|"patient"="captures
  const {refresh,refreshCaptures,refreshPatient,run}=useConnection(),{toast}=useStore();
  const [pending,setPending]=useState(false);
  const reload=()=>profileId?(scope==="patient"?refreshPatient(profileId):refreshCaptures(profileId)):refresh();
- const action=async(fn:(token:string)=>Promise<unknown>,message:string)=>{
-  setPending(true);let saved=false;
-  try{await run(fn);saved=true;await reload();toast(message);return true;}
-  catch(e){toast((saved?"Guardado, pero no se pudo recargar: ":"")+(e instanceof Error?e.message:String(e)));if(!saved)try{await reload();}catch{}return saved;}
+ const action=async(fn:(token:string)=>Promise<unknown>,message:string,refreshOverride?:()=>Promise<void>)=>{
+  setPending(true);let saved=false;const update=refreshOverride||reload;
+  try{await run(fn);saved=true;await update();toast(message);return true;}
+  catch(e){toast((saved?"Guardado, pero no se pudo recargar: ":"")+(e instanceof Error?e.message:String(e)));if(!saved)try{await update();}catch{}return saved;}
   finally{setPending(false);}
  };
  return {pending,action};

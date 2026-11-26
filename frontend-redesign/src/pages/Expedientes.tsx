@@ -92,7 +92,7 @@ export function Expedientes() {
       const at=new Date().toISOString();
       for(const [code,value] of changes){const metric=catalog.find(m=>m.code===code)!;const device=!metric.allowed_methods.includes("manual");await saveObservation(t,id,{metric_code:code,value:Math.round(value*100)/100,unit:metric.unit,method:device?"device":"manual",instrument:device?instrument.trim():null,measured_at:at});}
       if(file)await uploadPhoto(t,id,file);
-    },editing?"Expediente actualizado":"Expediente creado correctamente");
+    },editing?"Expediente actualizado":"Expediente creado correctamente",async()=>{const id=editing?.id||created?.id;if(!id)return;await refreshPatient(id);if(file)await refreshCaptures(id);});
     if(created){select(created.id);close();if(!ok)toast("Expediente creado. Completa los registros pendientes en Mediciones o Captura.");}
     else if(ok)close();
   };
@@ -142,7 +142,7 @@ export function Expedientes() {
                     <td className="text-slate-300">{Number.isFinite(p.grasa)?p.grasa+"%":"—"}</td>
                     <td className="text-slate-300">{p.objetivo}</td>
                     <td><Badge tone={estadoTone(p.estado)}>{p.estado==="Alta"?"Archivado":p.estado}</Badge></td>
-                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2">{p.estado==="En seguimiento"&&<Btn disabled={pending} onClick={async e=>{e.stopPropagation();if(window.confirm("¿Reactivar este expediente para permitir su edición?"))await action(t=>request("/profiles/"+p.id,t,json("PATCH",{status:"active"})),"Expediente reactivado");}}>Reactivar</Btn>}<button type="button" disabled={p.estado!=="Activo"} title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" disabled={p.estado!=="Activo"} title="Eliminar de la lista (archivar)" aria-label={`Archivar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
+                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2">{p.estado==="En seguimiento"&&<Btn disabled={pending} onClick={async e=>{e.stopPropagation();if(window.confirm("¿Reactivar este expediente para permitir su edición?"))await action(t=>request("/profiles/"+p.id,t,json("PATCH",{status:"active"})) ,"Expediente reactivado",()=>refreshPatient(p.id));}}>Reactivar</Btn>}<button type="button" disabled={pending||p.estado!=="Activo"} title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" disabled={p.estado!=="Activo"} title="Eliminar de la lista (archivar)" aria-label={`Archivar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
                   </tr>
                 );
               })}
@@ -160,7 +160,7 @@ export function Expedientes() {
                 <label className="block text-sm font-medium text-white" htmlFor="patient-photo">Fotografía del paciente (opcional)</label>
                 <input id="patient-photo" type="file" disabled={pending} accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs text-slate-300" onChange={e => { void pickPhoto(e.target.files?.[0]); e.currentTarget.value = ""; }}/>
                 {reading && <span className="text-xs text-cyan-300">Procesando imagen…</span>}
-                {file && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(undefined); setFile(null);setConfirmed(false); setReading(false); }}>Quitar fotografía</button>}
+                {file && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(editing?.foto); setFile(null);setConfirmed(false); setReading(false); }}>Quitar fotografía</button>}
                 
                 <p className="mt-2 text-xs text-slate-400">Almacenamiento cifrado temporal en el servidor.</p>
               </div>
@@ -180,7 +180,7 @@ export function Expedientes() {
       </Modal>
       <Modal open={!!deleting} onClose={()=>{if(!pending)setDeleting(null);}} title="Eliminar expediente">
         <p className="text-sm text-slate-300">¿Retirar el expediente de <strong>{deleting?.nombre}</strong> de la lista habitual? Se archivará y podrás consultarlo en el filtro Archivados. El historial no se borrará físicamente.</p>
-        <div className="mt-5 flex justify-end gap-2"><Btn disabled={pending} onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={pending} onClick={async()=>{if(deleting&&await action(t=>request("/profiles/"+deleting.id+"/archive",t,json("POST",{})),"Expediente archivado")){setDeleting(null);setEstado("Todos");}}}>Eliminar de la lista</Btn></div>
+        <div className="mt-5 flex justify-end gap-2"><Btn disabled={pending} onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={pending} onClick={async()=>{if(deleting&&await action(t=>request("/profiles/"+deleting.id+"/archive",t,json("POST",{})),"Expediente archivado",()=>refreshPatient(deleting.id))){setDeleting(null);setEstado("Todos");}}}>Eliminar de la lista</Btn></div>
       </Modal>
     </div>
   );
