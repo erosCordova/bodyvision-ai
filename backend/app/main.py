@@ -183,7 +183,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 )
             elif settings.app_env == "sandbox" and request.url.path.startswith("/api/"):
                 path = request.url.path
-                if request.method == "OPTIONS" or path in {"/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/login", "/api/v1/auth/register"}:
+                if request.method == "OPTIONS" or path in {"/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/login"}:
                     response = await call_next(request)
                 else:
                     try:
@@ -191,8 +191,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                     except DomainError as exc:
                         response = error(request, exc.status, exc.code, exc.message)
                     else:
-                        if request.method not in {"GET", "HEAD", "OPTIONS"} and not (
-                            path in {"/api/v1/auth/logout", "/api/v1/auth/activity", "/api/v1/profiles"}
+                        role = request.state.sandbox_role
+                        if role == "privacy_officer" and not path.startswith("/api/v1/auth/"):
+                            response = error(request, 403, "FORBIDDEN", "Tu rol no permite consultar expedientes.")
+                        elif role == "member" and request.method not in {"GET", "HEAD", "OPTIONS"} and not path.startswith("/api/v1/auth/"):
+                            response = error(request, 403, "FORBIDDEN", "Tu rol solo permite consultar registros.")
+                        elif request.method not in {"GET", "HEAD", "OPTIONS"} and not (
+                            path in {"/api/v1/auth/logout", "/api/v1/auth/activity", "/api/v1/auth/admin/users", "/api/v1/profiles"}
                             or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}(?:/archive|/measurements)?", path)
                             or __import__("re").fullmatch(r"/api/v1/measurements/[0-9a-fA-F-]{36}", path)
                             or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}/captures(?:/[0-9a-fA-F-]{36})?", path)
