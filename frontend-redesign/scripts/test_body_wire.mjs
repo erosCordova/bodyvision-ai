@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {buildBodyWire,fullBodyVisible} from "../src/bodyWire.ts";
+import {buildBodyWire,fullBodyVisible,fitRingFactors,applyRingFit,smoothPose} from "../src/bodyWire.ts";
 const landmarks=Array.from({length:33},()=>({x:.5,y:.5,z:0,visibility:0}));
 const positions={0:[.5,.12],7:[.46,.13],8:[.54,.13],11:[.40,.25],12:[.60,.25],13:[.33,.40],14:[.67,.40],15:[.28,.52],16:[.72,.52],19:[.26,.56],20:[.74,.56],23:[.43,.51],24:[.57,.51],25:[.42,.70],26:[.58,.70],27:[.41,.89],28:[.59,.89],31:[.39,.94],32:[.61,.94]};
 for(const [i,[x,y]] of Object.entries(positions))landmarks[Number(i)]={x,y,z:0,visibility:.99};
@@ -13,3 +13,11 @@ const m=buildBodyWire(partial,partial,4/3);verify(m);assert(!fullBodyVisible(par
 assert.equal(buildBodyWire([],[],1).points.length,0);
 const invalid=landmarks.map(p=>({...p,x:NaN}));assert.equal(buildBodyWire(invalid,invalid,1).points.length,0);
 console.log("Body wireframe checks passed:",complete.points.length,"vertices,",complete.edges.length,"edges.");
+
+assert(complete.faces.length>1000);
+assert(complete.faces.every(t=>t.length===3&&t.every(i=>i>=0&&i<complete.points.length)));
+const mask={width:100,height:100,data:new Float32Array(10000)};
+for(let y=0;y<100;y++)for(let x=0;x<100;x++)if(x>=32&&x<=68&&y>=5&&y<=95)mask.data[y*100+x]=1;
+const fits=fitRingFactors(complete,mask,4/3);assert(fits.size>0);verify(applyRingFit(complete,fits,4/3,false));assert([...fits.values()].every(f=>f.factor>=.58&&f.factor<=1.6));
+const moved=landmarks.map(p=>({...p,x:p.x+.02}));assert(smoothPose(moved,landmarks)[11].x<moved[11].x);assert.equal(smoothPose([],landmarks).length,0);
+console.log("Surface, silhouette fitting and smoothing checks passed.");

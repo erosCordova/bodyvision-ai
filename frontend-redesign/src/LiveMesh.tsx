@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import {Camera,Square} from "lucide-react";
 import {Btn,Panel} from "./ui";
-import {buildBodyWire,fullBodyVisible,type WireMesh} from "./bodyWire";
+import {buildBodyWire,fullBodyVisible,fitRingFactors,applyRingFit,smoothPose,type BodyMask,type RingFit,type WireMesh} from "./bodyWire";
 type Point={x:number;y:number;z:number;visibility?:number};
 type Edge={start:number;end:number};
 type Frame={points:Point[];edges:Edge[];world:Point[];body?:WireMesh;aspect?:number};
@@ -29,6 +29,7 @@ function drawMesh(canvas:HTMLCanvasElement,frame:Frame|null,face:boolean,yaw:num
   const rx=x*cy+z*sy,rz=-x*sy+z*cy,ry=y*cp-rz*sp,depth=y*sp+rz*cp;
   return {x:w/2+rx*scale,y:h/2+ry*scale,z:depth};
  });
+ if(!face&&frame.body?.faces.length){const triangles=frame.body.faces.map(indices=>{const a=coords[indices[0]],b=coords[indices[1]],c=coords[indices[2]];return a&&b&&c?{a,b,c,depth:(a.z+b.z+c.z)/3}:null;}).filter(t=>t!==null).sort((a,b)=>b!.depth-a!.depth);for(const t of triangles){if(!t)continue;const {a,b,c}=t;const ux=b.x-a.x,uy=b.y-a.y,uz=(b.z-a.z)*scale,vx=c.x-a.x,vy=c.y-a.y,vz=(c.z-a.z)*scale;const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const n=Math.hypot(nx,ny,nz)||1;const light=.28+.72*Math.abs((nx*.35-ny*.45+nz*.82)/n);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c.x,c.y);ctx.closePath();ctx.fillStyle="rgba(14,"+Math.round(50+95*light)+","+Math.round(75+112*light)+",0.82)";ctx.fill();ctx.strokeStyle="rgba(86,225,247,0.34)";ctx.lineWidth=.55;ctx.stroke();}return;}
  ctx.strokeStyle="#52e6f3";ctx.lineWidth=face?.85:1;ctx.beginPath();
  for(const {start,end} of displayEdges){const a=coords[start],b=coords[end];if(a&&b){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}}ctx.stroke();
  ctx.fillStyle="#ddfaff";ctx.beginPath();for(const p of coords){if(!p)continue;const radius=face?1.15:1.05;ctx.moveTo(p.x+radius,p.y);ctx.arc(p.x,p.y,radius,0,2*Math.PI);}ctx.fill();
@@ -62,20 +63,35 @@ export default function LiveMesh(){
    if(!video.current)throw Error("Visor de cámara no disponible");video.current.srcObject=media;await video.current.play();
    stage="model";setStatus("Cámara activa · cargando detección…");
    const vision=await import("./vendor/vision_bundle.mjs");const base=new URL("/pose/wasm/",location.origin).href;
-   const face=mode==="face";const options={baseOptions:{modelAssetPath:new URL(face?"/pose/face_landmarker.task":"/pose/pose_landmarker_lite.task",location.origin).href,delegate:"CPU"},runningMode:"VIDEO" as const,...(face?{numFaces:1}:{numPoses:1,outputSegmentationMasks:false})};
+   const face=mode==="face";const options={baseOptions:{modelAssetPath:new URL(face?"/pose/face_landmarker.task":"/pose/pose_landmarker_lite.task",location.origin).href,delegate:"CPU"},runningMode:"VIDEO" as const,...(face?{numFaces:1}:{numPoses:1,outputSegmentationMasks:true})};
    const create=(files:any)=>face?vision.FaceLandmarker.createFromOptions(files,{...options,canvas:document.createElement("canvas")}):vision.PoseLandmarker.createFromOptions(files,{...options,canvas:document.createElement("canvas")});
    let detector:any;
    try{detector=await create(await vision.FilesetResolver.forVisionTasks(base.slice(0,-1)));}catch{detector=await create({wasmLoaderPath:base+"vision_wasm_nosimd_internal.js",wasmBinaryPath:base+"vision_wasm_nosimd_internal.wasm"});}
    if(id!==seq.current){detector.close();return;}model.current=detector;
    const edges:Edge[]=face?Array.from(vision.FaceLandmarker.FACE_LANDMARKS_TESSELATION||[]):bodyEdges;
-   let last=-Infinity,lastTime=-1;
+   let last=-Infinity,lastTime=-1,previousScreen:Point[]=[],previousWorld:Point[]=[],previousFits=new Map<string,RingFit>();
+   const maskCanvas=document.createElement("canvas");
+   const maskContext=maskCanvas.getContext("2d");
    const tick=(now:number)=>{if(id!==seq.current)return;try{
-     const v=video.current,c=overlay.current;if(v&&c&&v.readyState>=2&&now-last>100&&v.currentTime!==lastTime){last=now;lastTime=v.currentTime;const result=detector.detectForVideo(v,now);const points:Point[]=(face?result.faceLandmarks:result.landmarks)?.[0]||[];const world:Point[]=face?[]:result.worldLandmarks?.[0]||[];
+     const v=video.current,c=overlay.current;if(v&&c&&v.readyState>=2&&now-last>100&&v.currentTime!==lastTime){last=now;lastTime=v.currentTime;let result:any,mask:BodyMask|undefined;
+     if(face){result=detector.detectForVideo(v,now);}else{
+      // Copy only the small probability mask within MediaPipe's callback lifetime.
+      detector.detectForVideo(v,now,(r:any)=>{result=r;const m=r.segmentationMasks?.[0];if(m)try{mask={width:m.width,height:m.height,data:new Float32Array(m.getAsFloat32Array())};}catch{/* pose still works without segmentation */}});
+     }
+     const raw:Point[]=(face?result?.faceLandmarks:result?.landmarks)?.[0]||[],rawWorld:Point[]=face?[]:result?.worldLandmarks?.[0]||[];
+     const points=face?raw:smoothPose(raw,previousScreen),world=face?[]:smoothPose(rawWorld,previousWorld);
+     previousScreen=points;previousWorld=world;
      const aspect=v.videoWidth/Math.max(1,v.videoHeight);
-     const screenMesh=face?undefined:buildBodyWire(points,points,aspect,false);
-     const worldMesh=face?undefined:world.length===points.length?buildBodyWire(world,points,aspect,true):screenMesh;
-     if(points.length){setFrame({points,edges,world,body:worldMesh,aspect});setStatus(face?"Rostro detectado · "+points.length+" puntos":fullBodyVisible(points)?"Cuerpo completo detectado · malla activa":screenMesh?.points.length?"Captura parcial · muestra todo el cuerpo":"Sitúa el cuerpo dentro del encuadre");}else{setFrame(null);setStatus(face?"Coloca el rostro frente a la cámara":"Sitúa el cuerpo dentro del encuadre");}
-     if(c.width!==v.videoWidth||c.height!==v.videoHeight){c.width=v.videoWidth;c.height=v.videoHeight;}const ctx=c.getContext("2d");if(ctx){ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle="#22d3ee";const drawPoints=screenMesh?.points||points,drawEdges=screenMesh?.edges||edges;ctx.lineWidth=face?1.25:1.15;ctx.beginPath();for(const {start,end} of drawEdges){const a=drawPoints[start],b=drawPoints[end];if(visible(a,face)&&visible(b,face)){ctx.moveTo(a.x*c.width,a.y*c.height);ctx.lineTo(b.x*c.width,b.y*c.height);}}ctx.stroke();ctx.fillStyle="#b7fcff";ctx.beginPath();for(const p of drawPoints){if(!visible(p,face))continue;const x=p.x*c.width,y=p.y*c.height,r=face?1.4:1.0;ctx.moveTo(x+r,y);ctx.arc(x,y,r,0,2*Math.PI);}ctx.fill();}
+     let screenMesh=face?undefined:buildBodyWire(points,points,aspect,false);
+     let worldMesh=face?undefined:world.length===points.length?buildBodyWire(world,points,aspect,true):screenMesh;
+     if(mask&&screenMesh&&worldMesh){
+      const fits=fitRingFactors(screenMesh,mask,aspect);
+      for(const [key,fit] of fits){const prior=previousFits.get(key);if(prior){fit.factor=prior.factor*.55+fit.factor*.45;fit.shift=prior.shift*.55+fit.shift*.45;}}
+      previousFits=fits;const same=worldMesh===screenMesh;screenMesh=applyRingFit(screenMesh,fits,aspect,false);worldMesh=same?screenMesh:applyRingFit(worldMesh,fits,aspect,true);
+     }else{previousFits.clear();}
+
+     if(points.length){setFrame({points,edges,world,body:worldMesh,aspect});setStatus(face?"Rostro detectado · "+points.length+" puntos":fullBodyVisible(points)?(mask?"Cuerpo completo · silueta ajustada":"Cuerpo completo · malla de pose"):screenMesh?.points.length?"Captura parcial · muestra todo el cuerpo":"Sitúa el cuerpo dentro del encuadre");}else{setFrame(null);setStatus(face?"Coloca el rostro frente a la cámara":"Sitúa el cuerpo dentro del encuadre");}
+     if(c.width!==v.videoWidth||c.height!==v.videoHeight){c.width=v.videoWidth;c.height=v.videoHeight;}const ctx=c.getContext("2d");if(ctx){ctx.clearRect(0,0,c.width,c.height);if(mask&&maskContext){maskCanvas.width=mask.width;maskCanvas.height=mask.height;const img=maskContext.createImageData(mask.width,mask.height);for(let j=0;j<mask.height;j++)for(let i=0;i<mask.width;i++){const k=j*mask.width+i;if(mask.data[k]<.52)continue;const boundary=i===0||j===0||i===mask.width-1||j===mask.height-1||mask.data[k-1]<.52||mask.data[k+1]<.52||mask.data[k-mask.width]<.52||mask.data[k+mask.width]<.52;img.data[k*4]=35;img.data[k*4+1]=220;img.data[k*4+2]=245;img.data[k*4+3]=boundary?205:22;}maskContext.putImageData(img,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(maskCanvas,0,0,c.width,c.height);}ctx.strokeStyle="#22d3ee";const drawPoints=screenMesh?.points||points,drawEdges=screenMesh?.edges||edges;ctx.lineWidth=face?1.25:.7;ctx.beginPath();for(const {start,end} of drawEdges){const a=drawPoints[start],b=drawPoints[end];if(visible(a,face)&&visible(b,face)){ctx.moveTo(a.x*c.width,a.y*c.height);ctx.lineTo(b.x*c.width,b.y*c.height);}}ctx.stroke();ctx.fillStyle="#b7fcff";ctx.beginPath();for(const p of drawPoints){if(!visible(p,face))continue;const x=p.x*c.width,y=p.y*c.height,r=face?1.4:1.0;ctx.moveTo(x+r,y);ctx.arc(x,y,r,0,2*Math.PI);}ctx.fill();}
      }raf.current=requestAnimationFrame(tick);
     }catch(e){cancelAnimationFrame(raf.current);try{model.current?.close();}catch{}model.current=null;setFrame(null);setStatus("Cámara activa · error de detección. Detén y vuelve a activar para reintentar.");}};
    setStatus("Buscando puntos anatómicos…");raf.current=requestAnimationFrame(tick);
@@ -84,5 +100,5 @@ export default function LiveMesh(){
  return <div className="space-y-4"><div className="flex flex-wrap items-center gap-3"><select className="field !w-auto" disabled={running} value={mode} onChange={e=>{setMode(e.target.value as "face"|"body");setFrame(null);}}><option value="face">Rostro</option><option value="body">Cuerpo completo</option></select><Btn variant="primary" disabled={running} onClick={start}><Camera size={16}/> Activar cámara</Btn><Btn disabled={!running} onClick={stop}><Square size={15}/> Detener</Btn><span className="text-sm text-cyan-300">{status}</span></div>
  <p className="text-sm text-slate-400">Al activar la cámara se solicitará autorización. El procesamiento es local y no se guardan imágenes ni datos biométricos.</p>
  <div className="grid gap-4 lg:grid-cols-2"><Panel pad={false}><div className="relative aspect-video overflow-hidden rounded-xl bg-black"><video ref={video} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-contain"/><canvas ref={overlay} className="pointer-events-none absolute inset-0 z-10 h-full w-full object-contain"/>{!running&&<div className="absolute inset-0 grid place-items-center text-sm text-slate-400">Vista previa de cámara</div>}</div></Panel><Panel pad={false}><MeshPreview frame={frame} face={mode==="face"}/></Panel></div>
- <p className="text-xs text-slate-400">{mode==="face"?"Malla facial de puntos y conexiones estimadas en 3D.":"Malla corporal aproximada ajustada a los puntos de pose. No es un escaneo de la superficie ni una medición anatómica exacta."} No identifica personas ni mide composición corporal. La cámara se detiene al salir.</p></div>;
+ <p className="text-xs text-slate-400">{mode==="face"?"Malla facial de puntos y conexiones estimadas en 3D.":"Malla anatómica aproximada: pose, ajuste al contorno visible y superficie sombreada. La profundidad es estimada; no es un escaneo exacto."} No identifica personas ni mide composición corporal. La cámara se detiene al salir.</p></div>;
 }
