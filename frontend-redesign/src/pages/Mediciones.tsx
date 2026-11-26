@@ -13,7 +13,7 @@ export default function Mediciones(){
 function PatientMeasurements(){
  const {patient,toast}=useStore();
  const {selected,catalog}=useConnection();
- const {pending,action}=useAction();
+ const {pending,action}=useAction(patient.id,"patient");
  const fields=[["weight","Peso"],["height","Altura"],["waist","Cintura"],["hip","Cadera"],["chest","Pecho"],["arm","Brazo"],["thigh","Muslo"],["body_fat_pct","Grasa corporal"],["muscle_mass_kg","Masa muscular"]];
  const [values,setValues]=useState<Record<string,string>>({});
  const [editing,setEditing]=useState<Observation|null>(null);
@@ -27,10 +27,11 @@ function PatientMeasurements(){
   const entries=Object.entries(values).filter(([,v])=>v.trim()!=="");
   if(!entries.length)return toast("Registra al menos una medición");
   if(editing&&reason.trim().length<5)return toast("Indica el motivo de la corrección");
-  for(const [code,v] of entries){const m=catalog.find(m=>m.code===code);if(!m||!Number.isFinite(+v)||+v<m.min_value||+v>m.max_value)return toast("Revisa "+(m?.label||code));if(!m.allowed_methods.includes("manual")&&!instrument.trim())return toast("Indica el instrumento utilizado");}
+  for(const [code,v] of entries){const m=catalog.find(m=>m.code===code);if(!m||!Number.isFinite(+v)||+v<m.min_value||+v>m.max_value)return toast("Revisa "+(m?.label||code));if((editing?.method==="device"||!m.allowed_methods.includes("manual"))&&!instrument.trim())return toast("Indica el instrumento utilizado");}
   const at=editing?.measured_at||new Date().toISOString();
-  const ok=await action(async t=>{for(const [code,v] of entries){const m=catalog.find(m=>m.code===code)!;const device=!m.allowed_methods.includes("manual");await saveObservation(t,patient.id,{metric_code:code,value:Math.round(+v*100)/100,unit:m.unit,method:device?"device":"manual",instrument:instrument.trim()||null,measured_at:at,...(editing?{correction_reason:reason.trim()}: {})},editing?.id);}},editing?"Corrección registrada":"Mediciones registradas");
-  if(ok)reset();
+  const submitted:string[]=[];
+  const ok=await action(async t=>{for(const [code,v] of entries){const m=catalog.find(m=>m.code===code)!;const device=editing?editing.method==="device":!m.allowed_methods.includes("manual");await saveObservation(t,patient.id,{metric_code:code,value:Math.round(+v*100)/100,unit:m.unit,method:device?"device":"manual",instrument:instrument.trim()||null,measured_at:at,...(editing?{correction_reason:reason.trim()}: {})},editing?.id);submitted.push(code);}},editing?"Corrección registrada":"Mediciones registradas");
+  if(ok)reset();else if(submitted.length){setValues(previous=>Object.fromEntries(Object.entries(previous).filter(([k])=>!submitted.includes(k))));toast("Se guardaron "+submitted.length+" mediciones. Revisa las pendientes.");}
  };
  const csv=()=>{const rows=[["Variable","Valor","Unidad","Fecha","Método"],...records.map(o=>[catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code,o.value,o.unit,o.measured_at,o.method])];const text=rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\n");const url=URL.createObjectURL(new Blob([text],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="mediciones.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
  const weight=values.weight?.trim()?+values.weight:patient.peso,height=values.height?.trim()?+values.height:patient.altura;

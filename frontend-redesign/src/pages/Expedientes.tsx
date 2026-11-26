@@ -14,7 +14,7 @@ import type { Sex } from "../three/assets";
 export function Expedientes() {
   const nav = useNavigate();
   const { patients, select, toast } = useStore();
-  const {records,catalog}=useConnection();
+  const {records,catalog,refreshPatient,refreshCaptures,run}=useConnection();
   const {pending,action}=useAction();
   const [file,setFile]=useState<File|null>(null),[confirmed,setConfirmed]=useState(false),[instrument,setInstrument]=useState("");
   const [q, setQ] = useState("");
@@ -78,17 +78,20 @@ export function Expedientes() {
     if(file&&!window.confirm("El almacenamiento actual solo admite imágenes de prueba, no fotografías clínicas o personales reales. ¿Confirmas que la imagen cumple esta condición?"))return;
     const isNew=!editing;
     const weight=f.peso, muscle=Number.isFinite(f.musculo)&&Number.isFinite(weight)?Math.round(weight*f.musculo)/100:NaN;
-    if(isNew&&Number.isFinite(f.musculo)&&(!Number.isFinite(weight)||f.musculo<=0||f.musculo>100))return toast("Registra peso y porcentaje muscular válido");
+    if(Number.isFinite(f.musculo)&&(!Number.isFinite(weight)||f.musculo<=0||f.musculo>100))return toast("Registra peso y porcentaje muscular válido");
     const measurements:[string,number][]=[["height",f.altura],["weight",weight],["body_fat_pct",f.grasa],["muscle_mass_kg",muscle]];
-    if(isNew)for(const [code,value] of measurements){if(!Number.isFinite(value))continue;const metric=catalog.find(m=>m.code===code);if(!metric||value<metric.min_value||value>metric.max_value)return toast("Revisa "+(metric?.label||code));}
-    if(isNew&&(Number.isFinite(f.grasa)||Number.isFinite(muscle))&&!instrument.trim())return toast("Indica el instrumento utilizado para medir grasa y masa muscular");
+    const prior=editing?records.find(r=>r.profile.id===editing.id):undefined;
+    const changes=measurements.filter(([code,value])=>Number.isFinite(value)&&(!prior||Math.abs((prior.observations.find(o=>o.metric_code===code)?.value??Infinity)-value)>.005));
+    for(const [code,value] of changes){if(!Number.isFinite(value))continue;const metric=catalog.find(m=>m.code===code);if(!metric||value<metric.min_value||value>metric.max_value)return toast("Revisa "+(metric?.label||code));}
+    if(changes.some(([code])=>!catalog.find(m=>m.code===code)?.allowed_methods.includes("manual"))&&!instrument.trim())return toast("Indica el instrumento utilizado para medir grasa y masa muscular");
     let created:Profile|undefined;
     const ok=await action(async t=>{
-      if(editing){await request("/profiles/"+editing.id,t,json("PATCH",{display_name:f.nombre.trim()}));return;}
-      created=await request<Profile>("/profiles",t,json("POST",{display_name:f.nombre.trim(),birth_year:new Date().getFullYear()-f.edad,sex:f.sexo}));
+      if(editing){if(f.nombre.trim()!==editing.nombre)await request("/profiles/"+editing.id,t,json("PATCH",{display_name:f.nombre.trim()}));}
+      else created=await request<Profile>("/profiles",t,json("POST",{display_name:f.nombre.trim(),birth_year:new Date().getFullYear()-f.edad,sex:f.sexo}));
+      const id=editing?.id||created!.id;
       const at=new Date().toISOString();
-      for(const [code,value] of measurements){if(!Number.isFinite(value))continue;const metric=catalog.find(m=>m.code===code)!;const device=!metric.allowed_methods.includes("manual");await saveObservation(t,created.id,{metric_code:code,value:Math.round(value*100)/100,unit:metric.unit,method:device?"device":"manual",instrument:device?instrument.trim():null,measured_at:at});}
-      if(file)await uploadPhoto(t,created.id,file);
+      for(const [code,value] of changes){const metric=catalog.find(m=>m.code===code)!;const device=!metric.allowed_methods.includes("manual");await saveObservation(t,id,{metric_code:code,value:Math.round(value*100)/100,unit:metric.unit,method:device?"device":"manual",instrument:device?instrument.trim():null,measured_at:at});}
+      if(file)await uploadPhoto(t,id,file);
     },editing?"Expediente actualizado":"Expediente creado correctamente");
     if(created){select(created.id);close();if(!ok)toast("Expediente creado. Completa los registros pendientes en Mediciones o Captura.");}
     else if(ok)close();
@@ -155,25 +158,25 @@ export function Expedientes() {
               {foto ? <img src={foto} alt="Vista previa de la fotografía" className="h-24 w-24 shrink-0 rounded-xl object-cover" /> : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-xl bg-white/5 text-cyan-300"><ImagePlus size={30}/></div>}
               <div className="min-w-0 flex-1">
                 <label className="block text-sm font-medium text-white" htmlFor="patient-photo">Fotografía del paciente (opcional)</label>
-                <input id="patient-photo" type="file" disabled={!!editing||pending} accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs text-slate-300" onChange={e => { void pickPhoto(e.target.files?.[0]); e.currentTarget.value = ""; }}/>
+                <input id="patient-photo" type="file" disabled={pending} accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs text-slate-300" onChange={e => { void pickPhoto(e.target.files?.[0]); e.currentTarget.value = ""; }}/>
                 {reading && <span className="text-xs text-cyan-300">Procesando imagen…</span>}
-                {foto && !editing && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(undefined); setFile(null);setConfirmed(false); setReading(false); }}>Quitar fotografía</button>}
+                {file && <button type="button" className="mt-2 text-xs text-rose-300" onClick={() => { photoRequest.current++; setFoto(undefined); setFile(null);setConfirmed(false); setReading(false); }}>Quitar fotografía</button>}
                 
                 <p className="mt-2 text-xs text-slate-400">Almacenamiento cifrado temporal en el servidor.</p>
               </div>
             </div>
           </div>
-          <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Nombre completo</span><input className="field" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} /></label>
+          <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Nombre completo</span><input className="field" maxLength={100} disabled={pending} value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} /></label>
           <label><span className="mb-1 block text-xs text-slate-400">Sexo</span>
             <select className="field" disabled={!!editing||pending} value={f.sexo} onChange={(e) => setF({ ...f, sexo: e.target.value as Sex })}><option value="male" className="bg-slate-900">Hombre</option><option value="female" className="bg-slate-900">Mujer</option></select></label>
           {(["edad", "altura", "peso", "grasa", "musculo"] as const).map((k) => (
             <label key={k}><span className="mb-1 block text-xs capitalize text-slate-400">{k === "musculo" ? "Masa muscular (%)" : k === "grasa" ? "Grasa corporal (%)" : k === "altura" ? "Altura (cm)" : k === "peso" ? "Peso (kg)" : "Edad"}</span>
-              <input type="number" step={k==="edad"?1:".01"} className="field" disabled={!!editing||pending} value={Number.isFinite(f[k])?f[k]:""} onChange={(e) => setF({ ...f, [k]: e.target.value===""?NaN:+e.target.value })} /></label>
+              <input type="number" step={k==="edad"?1:".01"} className="field" disabled={(!!editing&&k==="edad")||pending} value={Number.isFinite(f[k])?f[k]:""} onChange={(e) => setF({ ...f, [k]: e.target.value===""?NaN:+e.target.value })} /></label>
           ))}
-          {!editing&&<label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Instrumento para grasa y masa muscular (si se registran)</span><input className="field" value={instrument} maxLength={100} onChange={e=>setInstrument(e.target.value)}/></label>}
-          {editing&&<p className="sm:col-span-2 text-xs text-slate-400">El servidor permite editar el nombre. Las mediciones se corrigen desde Mediciones y las fotografías desde Captura corporal. La edad se deriva del año de nacimiento.</p>}
+          <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Instrumento para nuevas mediciones de composición corporal</span><input className="field" value={instrument} maxLength={100} onChange={e=>setInstrument(e.target.value)}/></label>
+          {editing&&<p className="sm:col-span-2 text-xs text-slate-400">Los cambios corporales se guardan como nuevas mediciones y conservan el historial. Edad y sexo no son editables en esta API.</p>}
         </div>
-        <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading||pending}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
+        <div className="mt-6 flex justify-end gap-2"><Btn disabled={pending} onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading||pending}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
       </Modal>
       <Modal open={!!deleting} onClose={()=>{if(!pending)setDeleting(null);}} title="Eliminar expediente">
         <p className="text-sm text-slate-300">¿Retirar el expediente de <strong>{deleting?.nombre}</strong> de la lista habitual? Se archivará y podrás consultarlo en el filtro Archivados. El historial no se borrará físicamente.</p>

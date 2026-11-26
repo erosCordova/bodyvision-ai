@@ -2,7 +2,7 @@ import {createContext,useContext,useState,useEffect,useCallback,useRef,type Reac
 import {Ctx,type Store,type Patient,type Medicion} from "./store";
 import {request,all,image,json,ApiFailure,type Profile,type Observation,type Metric,type Capture,type Session} from "./api";
 type RecordData={profile:Profile;observations:Observation[];captures:Capture[];photo?:string};
-type Connection={token:string|null;records:RecordData[];catalog:Metric[];busy:boolean;error:string;login:(email:string,password:string,register:boolean)=>Promise<void>;logout:()=>Promise<void>;refresh:()=>Promise<void>;refreshCaptures:(profileId:string)=>Promise<void>;run:<T>(fn:(token:string)=>Promise<T>)=>Promise<T>;selected:RecordData|undefined};
+type Connection={token:string|null;records:RecordData[];catalog:Metric[];busy:boolean;error:string;login:(email:string,password:string,register:boolean)=>Promise<void>;logout:()=>Promise<void>;refresh:()=>Promise<void>;refreshCaptures:(profileId:string)=>Promise<void>;refreshPatient:(profileId:string)=>Promise<void>;run:<T>(fn:(token:string)=>Promise<T>)=>Promise<T>;selected:RecordData|undefined};
 const ConnectionCtx=createContext<Connection>(null!);
 export const useConnection=()=>useContext(ConnectionCtx);
 function toPatient(r:RecordData):Patient {
@@ -49,6 +49,15 @@ export function ConnectedProvider({children}:{children:ReactNode}){
      setRecords(previous=>previous.map(r=>r.profile.id===profileId?{...r,...photos}:r));
    });
  };
+ const refreshPatient=async(profileId:string)=>{
+   await run(async token=>{
+     const profile=await request<Profile>("/profiles/"+profileId,token);
+     const observations=await all<Observation>("/profiles/"+profileId+"/measurements",token);
+     if(active.current!==token)return;
+     setRecords(prev=>{const prior=prev.find(r=>r.profile.id===profileId);const next={profile,observations,captures:profile.status==="active"?prior?.captures||[]:[],photo:profile.status==="active"?prior?.photo:undefined};return prior?prev.map(r=>r.profile.id===profileId?next:r):[next,...prev];});
+     if(profile.status!=="active")setSelectedId(old=>old===profileId?"":old);
+   });
+ };
  const login=async(email:string,password:string,register:boolean)=>{
    if(register)await request("/auth/register",undefined,json("POST",{email,password,synthetic_only:true}));
    // The shared LoginInput requires organization_id; sandbox resolves the actual tenant exclusively from verified account credentials.
@@ -62,5 +71,5 @@ export function ConnectedProvider({children}:{children:ReactNode}){
  const patients=records.map(toPatient), selected=records.find(r=>r.profile.id===selectedId),patient=patients.find(p=>p.id===selectedId);
  const disabled=()=>{toast("Operación no habilitada en el servidor de pruebas");return false;};
  const value:Store={user,login:()=>{throw Error("Usa el acceso autenticado");},logout:()=>{void logout();},patients,selectedId,select:id=>{if(records.some(r=>r.profile.id===id&&r.profile.status==="active"))setSelectedId(id);},patient:patient as Patient,mediciones:records.flatMap(toMeasurements),consents:[],reports:[],addPatient:disabled,updatePatient:disabled,deletePatient:disabled,addMedicion:disabled,updateMedicion:disabled,deleteMedicion:disabled,setConsents:disabled,setReports:disabled,toast,toasts};
- return <ConnectionCtx.Provider value={{token:session?.token??null,records,catalog,busy,error,login,logout,refresh,refreshCaptures,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
+ return <ConnectionCtx.Provider value={{token:session?.token??null,records,catalog,busy,error,login,logout,refresh,refreshCaptures,refreshPatient,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
 }
