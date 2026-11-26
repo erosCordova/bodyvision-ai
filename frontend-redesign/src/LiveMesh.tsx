@@ -1,21 +1,46 @@
 import {useEffect,useRef,useState} from "react";
 import {Camera,Square} from "lucide-react";
-import {Canvas} from "@react-three/fiber";
-import {OrbitControls} from "@react-three/drei";
 import {Btn,Panel} from "./ui";
-import * as THREE from "three";
 type Point={x:number;y:number;z:number;visibility?:number};
 type Edge={start:number;end:number};
 type Frame={points:Point[];edges:Edge[];world:Point[]};
 const bodyEdges=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,29],[29,31],[28,30],[30,32],[15,17],[17,19],[19,21],[16,18],[18,20],[20,22],[0,2],[2,5],[0,1],[1,4]].map(([start,end])=>({start,end}));
-function Mesh({frame,face}:{frame:Frame;face:boolean}){
- const pts=frame.world.length?frame.world:frame.points;
- const valid=pts.filter(p=>[p.x,p.y,p.z].every(Number.isFinite));
- const center=valid.length?valid.reduce((a,p)=>a.add(new THREE.Vector3(p.x,-p.y,-p.z)),new THREE.Vector3()).divideScalar(valid.length):new THREE.Vector3();
- const scale=face?5:1.8;
- const coords=pts.map(p=>new THREE.Vector3(p.x,-p.y,-p.z).sub(center).multiplyScalar(scale));
- const pairs:number[]=[];for(const {start,end} of frame.edges){if(!coords[start]||!coords[end]||(frame.points[start]?.visibility??1)<.5||(frame.points[end]?.visibility??1)<.5)continue;pairs.push(...coords[start].toArray(),...coords[end].toArray());}
- return <><lineSegments><bufferGeometry><bufferAttribute attach="attributes-position" args={[new Float32Array(pairs),3]}/></bufferGeometry><lineBasicMaterial color="#67e8f9" transparent opacity={.85}/></lineSegments><points><bufferGeometry><bufferAttribute attach="attributes-position" args={[new Float32Array(coords.filter((_,i)=>(frame.points[i]?.visibility??1)>=.5).flatMap(v=>v.toArray())),3]}/></bufferGeometry><pointsMaterial color="#e0f2fe" size={.018}/></points></>;
+// Face landmarks may contain visibility=0: unlike pose landmarks, that field
+// is not a confidence signal for the face model. Validate coordinates instead.
+const visible=(p:Point|undefined,face:boolean)=>!!p&&[p.x,p.y,p.z].every(Number.isFinite)&&(face||(p.visibility??1)>=.5);
+function drawMesh(canvas:HTMLCanvasElement,frame:Frame|null,face:boolean,yaw:number,pitch:number,zoom:number){
+ const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+ const ctx=canvas.getContext("2d");if(!ctx)return;
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+ if(!frame)return;
+ const pts=frame.world.length===frame.points.length?frame.world:frame.points;
+ const valid=pts.filter((p,i)=>visible(frame.points[i],face)&&[p.x,p.y,p.z].every(Number.isFinite));
+ if(!valid.length)return;
+ const center=valid.reduce((a,p)=>({x:a.x+p.x/valid.length,y:a.y+p.y/valid.length,z:a.z+p.z/valid.length}),{x:0,y:0,z:0});
+ const extent=Math.max(.001,...valid.map(p=>Math.hypot(p.x-center.x,p.y-center.y,p.z-center.z)));
+ const scale=Math.min(w,h)*.39*zoom/extent;
+ const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+ const coords=pts.map((p,i)=>{if(!visible(frame.points[i],face)||![p.x,p.y,p.z].every(Number.isFinite))return null;
+  const x=p.x-center.x,y=p.y-center.y,z=p.z-center.z;
+  const rx=x*cy+z*sy,rz=-x*sy+z*cy,ry=y*cp-rz*sp,depth=y*sp+rz*cp;
+  return {x:w/2+rx*scale,y:h/2+ry*scale,z:depth};
+ });
+ ctx.strokeStyle="#52e6f3";ctx.lineWidth=face?.85:2;ctx.beginPath();
+ for(const {start,end} of frame.edges){const a=coords[start],b=coords[end];if(a&&b){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}}ctx.stroke();
+ ctx.fillStyle="#ddfaff";ctx.beginPath();for(const p of coords){if(!p)continue;const radius=face?1.15:3;ctx.moveTo(p.x+radius,p.y);ctx.arc(p.x,p.y,radius,0,2*Math.PI);}ctx.fill();
+}
+function MeshPreview({frame,face}:{frame:Frame|null;face:boolean}){
+ const canvas=useRef<HTMLCanvasElement>(null),current=useRef(frame),rotation=useRef({yaw:0,pitch:0,zoom:1}),drag=useRef<{x:number;y:number}|null>(null);
+ current.current=frame;
+ const paint=()=>{const c=canvas.current;if(c)drawMesh(c,current.current,face,rotation.current.yaw,rotation.current.pitch,rotation.current.zoom);};
+ useEffect(paint,[frame,face]);
+ useEffect(()=>{const c=canvas.current;if(!c)return;const observer=new ResizeObserver(paint);observer.observe(c);return()=>observer.disconnect();},[face]);
+ return <div className="relative aspect-video overflow-hidden rounded-xl bg-[#050c18]">
+ <canvas ref={canvas} aria-label="Malla anatómica tridimensional interactiva" className="absolute inset-0 h-full w-full touch-none cursor-grab" onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={x:e.clientX,y:e.clientY};}} onPointerMove={e=>{if(!drag.current)return;rotation.current.yaw+=(e.clientX-drag.current.x)*.012;rotation.current.pitch=Math.max(-1.4,Math.min(1.4,rotation.current.pitch+(e.clientY-drag.current.y)*.012));drag.current={x:e.clientX,y:e.clientY};paint();}} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}} onWheel={e=>{rotation.current.zoom=Math.max(.5,Math.min(2.5,rotation.current.zoom-e.deltaY*.001));paint();}}/>
+ {!frame?<div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-slate-400">La geometría aparecerá al detectar puntos</div>:<div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 text-xs text-slate-300"><span className="pointer-events-none">Arrastra para rotar · rueda para acercar</span><Btn className="!px-2 !py-1" onClick={()=>{rotation.current={yaw:0,pitch:0,zoom:1};paint();}}>Centrar</Btn></div>}
+ </div>;
 }
 export default function LiveMesh(){
  const [mode,setMode]=useState<"face"|"body">("face"),[running,setRunning]=useState(false),[status,setStatus]=useState("Cámara apagada"),[frame,setFrame]=useState<Frame|null>(null);
@@ -40,12 +65,12 @@ export default function LiveMesh(){
    let detector:any;
    try{detector=await create(await vision.FilesetResolver.forVisionTasks(base.slice(0,-1)));}catch{detector=await create({wasmLoaderPath:base+"vision_wasm_nosimd_internal.js",wasmBinaryPath:base+"vision_wasm_nosimd_internal.wasm"});}
    if(id!==seq.current){detector.close();return;}model.current=detector;
-   const edges:Edge[]=face?vision.FaceLandmarker.FACE_LANDMARKS_TESSELATION:bodyEdges;
+   const edges:Edge[]=face?Array.from(vision.FaceLandmarker.FACE_LANDMARKS_TESSELATION||[]):bodyEdges;
    let last=-Infinity,lastTime=-1;
    const tick=(now:number)=>{if(id!==seq.current)return;try{
      const v=video.current,c=overlay.current;if(v&&c&&v.readyState>=2&&now-last>100&&v.currentTime!==lastTime){last=now;lastTime=v.currentTime;const result=detector.detectForVideo(v,now);const points:Point[]=(face?result.faceLandmarks:result.landmarks)?.[0]||[];const world:Point[]=face?[]:result.worldLandmarks?.[0]||[];
-     if(points.length){setFrame({points,edges,world});setStatus(face?"Rostro detectado · "+points.length+" puntos":"Cuerpo detectado · "+points.filter(p=>(p.visibility??0)>=.5).length+" puntos visibles");}else{setFrame(null);setStatus(face?"Coloca el rostro frente a la cámara":"Sitúa el cuerpo dentro del encuadre");}
-     if(c.width!==v.videoWidth||c.height!==v.videoHeight){c.width=v.videoWidth;c.height=v.videoHeight;}const ctx=c.getContext("2d");if(ctx){ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle="#22d3ee";ctx.lineWidth=face?.65:2;ctx.beginPath();for(const {start,end} of edges){const a=points[start],b=points[end];if(a&&b&&(a.visibility??1)>=.5&&(b.visibility??1)>=.5){ctx.moveTo(a.x*c.width,a.y*c.height);ctx.lineTo(b.x*c.width,b.y*c.height);}}ctx.stroke();}
+     if(points.length){setFrame({points,edges,world});setStatus(face?"Rostro detectado · "+points.length+" puntos":"Cuerpo detectado · "+points.filter(p=>visible(p,false)).length+" puntos visibles");}else{setFrame(null);setStatus(face?"Coloca el rostro frente a la cámara":"Sitúa el cuerpo dentro del encuadre");}
+     if(c.width!==v.videoWidth||c.height!==v.videoHeight){c.width=v.videoWidth;c.height=v.videoHeight;}const ctx=c.getContext("2d");if(ctx){ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle="#22d3ee";ctx.lineWidth=face?1.25:2.5;ctx.beginPath();for(const {start,end} of edges){const a=points[start],b=points[end];if(visible(a,face)&&visible(b,face)){ctx.moveTo(a.x*c.width,a.y*c.height);ctx.lineTo(b.x*c.width,b.y*c.height);}}ctx.stroke();ctx.fillStyle="#b7fcff";ctx.beginPath();for(const p of points){if(!visible(p,face))continue;const x=p.x*c.width,y=p.y*c.height,r=face?1.4:3;ctx.moveTo(x+r,y);ctx.arc(x,y,r,0,2*Math.PI);}ctx.fill();}
      }raf.current=requestAnimationFrame(tick);
     }catch(e){cancelAnimationFrame(raf.current);try{model.current?.close();}catch{}model.current=null;setFrame(null);setStatus("Cámara activa · error de detección. Detén y vuelve a activar para reintentar.");}};
    setStatus("Buscando puntos anatómicos…");raf.current=requestAnimationFrame(tick);
@@ -53,6 +78,6 @@ export default function LiveMesh(){
  };
  return <div className="space-y-4"><div className="flex flex-wrap items-center gap-3"><select className="field !w-auto" disabled={running} value={mode} onChange={e=>{setMode(e.target.value as "face"|"body");setFrame(null);}}><option value="face">Rostro</option><option value="body">Cuerpo completo</option></select><Btn variant="primary" disabled={running} onClick={start}><Camera size={16}/> Activar cámara</Btn><Btn disabled={!running} onClick={stop}><Square size={15}/> Detener</Btn><span className="text-sm text-cyan-300">{status}</span></div>
  <p className="text-sm text-slate-400">Al activar la cámara se solicitará autorización. El procesamiento es local y no se guardan imágenes ni datos biométricos.</p>
- <div className="grid gap-4 lg:grid-cols-2"><Panel pad={false}><div className="relative aspect-video overflow-hidden rounded-xl bg-black"><video ref={video} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-contain"/><canvas ref={overlay} className="pointer-events-none absolute inset-0 h-full w-full object-contain"/>{!running&&<div className="absolute inset-0 grid place-items-center text-sm text-slate-400">Vista previa de cámara</div>}</div></Panel><Panel pad={false}><div className="relative aspect-video overflow-hidden rounded-xl bg-[#050c18]">{frame?<Canvas camera={{position:[0,0,3],fov:42}}><Mesh frame={frame} face={mode==="face"}/><OrbitControls enablePan={false}/></Canvas>:<div className="grid h-full place-items-center text-sm text-slate-400">La geometría aparecerá al detectar puntos</div>}</div></Panel></div>
+ <div className="grid gap-4 lg:grid-cols-2"><Panel pad={false}><div className="relative aspect-video overflow-hidden rounded-xl bg-black"><video ref={video} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-contain"/><canvas ref={overlay} className="pointer-events-none absolute inset-0 z-10 h-full w-full object-contain"/>{!running&&<div className="absolute inset-0 grid place-items-center text-sm text-slate-400">Vista previa de cámara</div>}</div></Panel><Panel pad={false}><MeshPreview frame={frame} face={mode==="face"}/></Panel></div>
  <p className="text-xs text-slate-400">{mode==="face"?"Malla facial de puntos y conexiones estimadas en 3D.":"Estructura corporal 3D de puntos de pose; no es una superficie corporal completa."} No identifica personas ni mide composición corporal. La cámara se detiene al salir.</p></div>;
 }
