@@ -8,8 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "predev": "node scripts/prepare_anatomy_assets.mjs && node scripts/prepare_camera_assets.mjs",
-    "prebuild": "npm run test:body-wire && node scripts/prepare_anatomy_assets.mjs && node scripts/prepare_camera_assets.mjs",
-    "test:body-wire": "node --experimental-strip-types scripts/test_body_wire.mjs"
+    "prebuild": "npm run test:body-wire && npm run test:projection && node scripts/prepare_anatomy_assets.mjs && node scripts/prepare_camera_assets.mjs",
+    "test:body-wire": "node --experimental-strip-types scripts/test_body_wire.mjs",
+    "test:projection": "node --experimental-strip-types scripts/test_projection.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

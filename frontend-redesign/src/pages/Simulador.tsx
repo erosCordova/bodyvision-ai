@@ -5,6 +5,7 @@ import { Btn, PageHead, Panel, Range, chartTip } from "../ui";
 import { bodyParams, imcOf, useStore } from "../store";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel } from "../three/BodyModel";
+import {projectBody} from "../bodyProjection";
 
 export default function Simulador() {
   const { patient: p, toast } = useStore();
@@ -31,12 +32,7 @@ export default function Simulador() {
   };
   const reset = () => { cancelAnimationFrame(raf.current); setProg(0); };
 
-  const pesoObj = +(p.peso + dfat * 0.9 + dmus * 0.5).toFixed(1);
-  const grasaObj = +(p.grasa + dfat).toFixed(1);
-  const data = Array.from({ length: weeks + 1 }, (_, w) => {
-    const k = 1 - Math.pow(1 - w / weeks, 2);
-    return { sem: w, peso: +(p.peso + (pesoObj - p.peso) * k).toFixed(1), grasa: +(p.grasa + dfat * k).toFixed(1) };
-  });
+  const {pesoObj,grasaObj,data}=projectBody(p.peso,p.grasa,dfat,dmus,weeks);
   const sc = p.sexo === "female" ? 0.935 : 1;
 
   return (

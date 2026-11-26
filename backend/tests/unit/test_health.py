@@ -52,6 +52,7 @@ def test_ready_requires_migration(client):
     response = client.get("/api/v1/health/ready")
     assert response.status_code == 200
     assert response.json()["schema_revision"] == SCHEMA_REVISION
+    assert response.json()["database_latency_ms"] >= 0
 
 
 def test_demo_ready_uses_data_core_revision(client, engine):

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Literal
 
 from fastapi import APIRouter, Request
@@ -25,6 +26,7 @@ class ReadyResponse(BaseModel):
     status: Literal["ready"] = "ready"
     database: Literal["connected"] = "connected"
     schema_revision: str
+    database_latency_ms: float
     checked_at: datetime
 
 
@@ -37,6 +39,7 @@ def live(request: Request) -> LiveResponse:
 
 @router.get("/ready", response_model=ReadyResponse, responses={503: {"description": "Not ready"}})
 def ready(request: Request) -> ReadyResponse | JSONResponse:
+    started = perf_counter()
     try:
         with request.app.state.engine.connect() as connection:
             revision = connection.execute(
@@ -59,4 +62,4 @@ def ready(request: Request) -> ReadyResponse | JSONResponse:
                 "correlation_id": request.state.correlation_id,
             },
         )
-    return ReadyResponse(schema_revision=revision, checked_at=datetime.now(UTC))
+    return ReadyResponse(schema_revision=revision, database_latency_ms=round((perf_counter() - started) * 1000, 2), checked_at=datetime.now(UTC))

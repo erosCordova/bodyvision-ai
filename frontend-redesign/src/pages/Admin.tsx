@@ -6,6 +6,7 @@ import { useStore } from "../store";
 import {useConnection} from "../ConnectedProvider";
 import {request,json,type Role,type Account} from "../api";
 import {downloadReportPdf,type ReportTable} from "../reportPdf";
+import IntegrationStatus from "../IntegrationStatus";
 
 const purposes={images:"Tratamiento de imágenes corporales",reconstruction:"Reconstrucción 3D",analysis:"Uso de IA en análisis",sharing:"Compartir con especialista",camera:"Captura anatómica por cámara"};
 type Purpose=keyof typeof purposes;
@@ -82,10 +83,6 @@ export function Administracion() {
   useEffect(()=>{if(token&&role==="administrator")void loadUsers();},[token,role]);
   const createAccount=async()=>{setAccountError("");if(!form.display_name.trim()||!/^\S+@\S+\.\S+$/.test(form.email)||form.password.length<12){setAccountError("Completa nombre, correo y contraseña de al menos 12 caracteres.");return;}setSaving(true);try{await run(t=>request("/auth/admin/users",t,json("POST",form)));setAccountOpen(false);setForm({display_name:"",email:"",password:"",role:"specialist"});toast("Cuenta creada");await loadUsers();}catch(e){setAccountError(e instanceof Error?e.message:String(e));}finally{setSaving(false);}};
   const [tab,setTab]=useState<"u"|"s"|"i"|"a">("u");
-  const [health,setHealth]=useState("Consultando");
-  useEffect(()=>{let alive=true;request<{database:string}>("/health/ready").then(r=>{if(alive)setHealth(r.database==="connected"?"Operativa":"No verificada");}).catch(()=>{if(alive)setHealth("No disponible");});return()=>{alive=false;};},[]);
-
-  const INTEGR=[["API FastAPI (Python)",health,"—"],["PostgreSQL",health,"—"],["MediaPipe Pose","No habilitado","—"],["Pipeline Maya 3D","Atlas local","—"],["Simulador IA","Visualización local","—"]];
   const AUDIT:string[]=[];
   const sec={twofa:false,ip:false,enc:false,timeout:true,audit:true};
   return (
@@ -112,11 +109,7 @@ export function Administracion() {
           ))}
         </div></Panel>
       )}
-      {tab === "i" && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{INTEGR.map(([n, s, l]) => (
-          <div key={n} className="panel p-5"><div className="flex items-center justify-between"><div className="font-semibold text-white">{n}</div><Badge tone={s === "Operativa" ? "ok" : "warn"}>{s}</Badge></div><div className="mt-3 text-sm text-slate-400">Latencia: {l}</div></div>
-        ))}</div>
-      )}
+      {tab === "i" && <IntegrationStatus/>}
       {tab === "a" && (
         <Panel><p className="text-sm text-slate-400">Consulta de auditoría no habilitada para esta cuenta.</p><ul className="space-y-3 text-sm">{AUDIT.map((a, i) => <li key={a} className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-cyan-300" /><span className="flex-1 text-slate-200">{a}</span><span className="text-xs text-slate-500">hace {i * 17 + 3} min</span></li>)}</ul></Panel>
       )}
