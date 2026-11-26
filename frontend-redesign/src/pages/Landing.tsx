@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Activity, ArrowRight, BarChart3, Box, Brain, Camera, Check, ChevronDown, Cloud, Cpu, Database, Layers, Menu, Monitor, Play, Server, ShieldCheck, Smartphone, Sparkles, X, Zap } from "lucide-react";
 import { Logo, Segmented } from "../ui";
+import LandingRobot from "../LandingRobot";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel, type Mode } from "../three/BodyModel";
 import type { Sex } from "../three/assets";
@@ -61,6 +62,7 @@ const FAQ = [
 
 export default function Landing() {
   const nav = useNavigate();
+  const [hero, setHero] = useState<"robot"|"atlas">("robot");
   const [mode, setMode] = useState<Mode>("skin");
   const [sex, setSex] = useState<Sex>("male");
   const [fat, setFat] = useState(0);
@@ -127,7 +129,7 @@ export default function Landing() {
                 <button onClick={() => nav("/login")} className="btn-primary flex items-center gap-2 rounded-xl px-6 py-3.5 text-[15px]">
                   Probar la plataforma <ArrowRight size={17} />
                 </button>
-                <button onClick={() => go("visor")} className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 text-[15px] text-white transition hover:bg-white/10">
+                <button onClick={() => {setHero("atlas");go("hero-visual");}} className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 text-[15px] text-white transition hover:bg-white/10">
                   <Play size={16} className="text-cyan-300" /> Ver visor 3D
                 </button>
               </div>
@@ -142,14 +144,15 @@ export default function Landing() {
             </Reveal>
           </div>
           <Reveal delay={0.15}>
-            <div className="panel panel-glow relative overflow-hidden rounded-3xl">
+            <div id="hero-visual" className="panel panel-glow relative scroll-mt-24 overflow-hidden rounded-3xl">
+              {hero==="robot"?<div className="relative h-[500px] md:h-[660px] bg-[radial-gradient(ellipse_at_center,#102e43_0%,#071522_55%,#070e19_100%)]"><div className="absolute inset-x-0 top-20 bottom-12"><LandingRobot/></div><div className="pointer-events-none absolute inset-x-0 bottom-5 text-center"><div className="font-display text-sm font-semibold tracking-[.2em] text-cyan-200">BODYVISION</div><div className="mt-1 text-xs text-slate-400">Mueve el cursor</div></div></div>:<>
               <BodyScene className="h-[560px] md:h-[660px]" distance={5.4} autoRotate rotateSpeed={1.4}>
                 <BodyModel sex={sex} mode={mode} fat={fat} mus={fat < 0 ? -fat * 0.35 : 0} />
               </BodyScene>
-              <div className="absolute left-4 top-4 flex flex-col gap-2">
+              <div className="absolute left-4 top-16 flex flex-col gap-2">
                 <Segmented value={sex} onChange={setSex} options={[{ id: "male", label: "Hombre" }, { id: "female", label: "Mujer" }]} />
               </div>
-              <div className="floaty absolute right-4 top-4 hidden rounded-xl border border-cyan-400/30 bg-slate-950/70 px-3.5 py-2.5 backdrop-blur sm:block">
+              <div className="floaty absolute right-4 top-16 hidden rounded-xl border border-cyan-400/30 bg-slate-950/70 px-3.5 py-2.5 backdrop-blur sm:block">
                 <div className="text-[10px] uppercase tracking-wider text-cyan-300">IA · en vivo</div>
                 <div className="font-display text-lg font-bold text-white">{(24 + fat).toFixed(1)}% grasa</div>
               </div>
@@ -166,7 +169,8 @@ export default function Landing() {
                   <input type="range" className="flex-1" min={-12} max={22} value={fat} onChange={(e) => setFat(+e.target.value)} />
                   <span className="w-10 text-right font-semibold text-cyan-300">{fat > 0 ? "+" : ""}{fat}%</span>
                 </div>
-              </div>
+              </div></>}
+              <div className="absolute left-4 top-4 z-20 flex gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur"><button type="button" aria-pressed={hero==="robot"} onClick={()=>setHero("robot")} className={"rounded-lg px-3 py-2 text-xs font-medium "+(hero==="robot"?"bg-cyan-400 text-slate-950":"text-slate-300 hover:bg-white/10")}>Asistente</button><button type="button" aria-pressed={hero==="atlas"} onClick={()=>setHero("atlas")} className={"rounded-lg px-3 py-2 text-xs font-medium "+(hero==="atlas"?"bg-cyan-400 text-slate-950":"text-slate-300 hover:bg-white/10")}>Visor 3D</button></div>
             </div>
           </Reveal>
         </div>
