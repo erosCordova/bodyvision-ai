@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, Html, Lightformer, OrbitControls, Sparkles } from "@react-three/drei";
 import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postprocessing";
@@ -106,6 +106,7 @@ interface SceneProps {
   minDistance?: number;
   maxDistance?: number;
   rotateSpeed?: number;
+  onReady?: () => void;
 }
 
 export function BodyScene({
@@ -121,8 +122,10 @@ export function BodyScene({
   minDistance = 1.1,
   maxDistance = 7,
   rotateSpeed = 1.1,
+  onReady,
 }: SceneProps) {
   const [ready, setReady] = useState(false);
+  const markReady = useCallback(()=>{setReady(true);onReady?.();},[onReady]);
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ background: bg }}>
       <Canvas
@@ -159,7 +162,7 @@ export function BodyScene({
             <Lightformer form="rect" intensity={1.3} color="#ffffff" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[8, 8, 1]} />
           </Environment>
         </Suspense>
-        <ReadyContext.Provider value={() => setReady(true)}>
+        <ReadyContext.Provider value={markReady}>
           <Suspense fallback={null}>{children}</Suspense>
         </ReadyContext.Provider>
         <Platform ring={ring} />
@@ -189,7 +192,7 @@ export function BodyScene({
       {!ready && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#050c18]/85 text-sm text-cyan-200">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" />
-          Reconstruyendo modelo anatómico…
+          Cargando modelo anatómico…
         </div>
       )}
     </div>
