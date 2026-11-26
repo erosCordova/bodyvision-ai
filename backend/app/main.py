@@ -106,7 +106,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=list(dict.fromkeys([*settings.cors_origins, *(["https://bodyvision-ai-redesign.onrender.com"] if settings.app_env == "sandbox" else [])])),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=[
