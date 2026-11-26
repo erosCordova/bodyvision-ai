@@ -1,5 +1,6 @@
 """Encrypted fictional image library, hosted sandbox only."""
 import hashlib
+import os
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -12,6 +13,8 @@ from app.api.routes.synthetic_captures import SyntheticCaptureRead, SyntheticCap
 from app.core.errors import DomainError
 from app.models.context import Workspace
 from app.repositories import records
+from app.services.b2_capture_store import B2Store, B2Error, object_name
+from starlette.concurrency import run_in_threadpool
 from app.services.synthetic_capture_png import MAX_CAPTURE_BYTES, validate_synthetic_png
 
 router = APIRouter(prefix="/api/v1", tags=["Sandbox fictional images"])
@@ -24,6 +27,15 @@ def cipher(request):
     if request.app.state.settings.app_env != "sandbox" or key is None:
         raise DomainError(503,"CAPTURE_STORAGE_DISABLED","Archivo de pruebas no disponible.")
     return Fernet(key.get_secret_value().encode("ascii"))
+
+
+def storage():
+    if os.environ.get("CAPTURE_STORAGE","postgres")!="b2":
+        return None
+    try:
+        return B2Store()
+    except (B2Error,KeyError,ValueError,TypeError):
+        raise DomainError(503,"CAPTURE_STORAGE_DISABLED","Almacenamiento de imágenes no disponible.") from None
 
 
 def context(scope, profile_id, write=False):
@@ -50,14 +62,46 @@ async def upload(profile_id:UUID,scope:Scope,request:Request):
     width,height=validate_synthetic_png(image)
     conn=scope.connection
     conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:orgkey,0))"),{"orgkey":str(scope.organization_id)})
-    conn.execute(text("DELETE FROM sandbox_capture_objects WHERE organization_id=:org AND expires_at<=now()"),params)
-    count=conn.execute(text("SELECT count(*) FROM sandbox_capture_objects WHERE organization_id=:org"),params).scalar_one()
+    store=await run_in_threadpool(storage)
+    if store:
+        expired=conn.execute(text("SELECT id,b2_file_id FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND expires_at<=now() FOR UPDATE"),params).mappings().all()
+        for item in expired:
+            if item["b2_file_id"]:
+                try:
+                    await run_in_threadpool(store.delete,object_name(item["id"]),item["b2_file_id"])
+                except B2Error:
+                    continue
+            conn.execute(text("DELETE FROM sandbox_capture_objects WHERE organization_id=:org AND id=:id"),{**params,"id":item["id"]})
+    else:
+        conn.execute(text("DELETE FROM sandbox_capture_objects WHERE organization_id=:org AND expires_at<=now()"),params)
+    count=conn.execute(text("SELECT count(*) FROM sandbox_capture_objects WHERE organization_id=:org AND expires_at>now()"),params).scalar_one()
     if count>=20:
         raise DomainError(409,"CAPTURE_LIMIT","Máximo 20 imágenes por cuenta de pruebas.")
-    row=conn.execute(text(f"""
-      INSERT INTO sandbox_capture_objects(id,organization_id,profile_id,created_by,original_bytes,width,height,sha256_digest,ciphertext)
-      VALUES(:id,:org,:profile,:actor,:size,:width,:height,:sha,:encrypted) RETURNING {FIELDS}
-    """),{**params,"id":uuid4(),"size":len(image),"width":width,"height":height,"sha":hashlib.sha256(image).hexdigest(),"encrypted":key.encrypt(image)}).mappings().one()
+    identifier=uuid4()
+    encrypted=key.encrypt(image)
+    values={**params,"id":identifier,"size":len(image),"width":width,"height":height,"sha":hashlib.sha256(image).hexdigest()}
+    if store:
+        name=object_name(identifier)
+        try:
+            file_id=await run_in_threadpool(store.verified_put,name,encrypted)
+        except (B2Error,KeyError,ValueError,TypeError):
+            raise DomainError(503,"CAPTURE_UNAVAILABLE","No se pudo guardar la imagen en Backblaze.") from None
+        try:
+            row=conn.execute(text(f"""
+              INSERT INTO sandbox_capture_objects(id,organization_id,profile_id,created_by,original_bytes,width,height,sha256_digest,ciphertext,b2_file_id)
+              VALUES(:id,:org,:profile,:actor,:size,:width,:height,:sha,NULL,:file_id) RETURNING {FIELDS}
+            """),{**values,"file_id":file_id}).mappings().one()
+        except Exception:
+            try:
+                await run_in_threadpool(store.delete,name,file_id)
+            except B2Error:
+                pass
+            raise
+    else:
+        row=conn.execute(text(f"""
+          INSERT INTO sandbox_capture_objects(id,organization_id,profile_id,created_by,original_bytes,width,height,sha256_digest,ciphertext)
+          VALUES(:id,:org,:profile,:actor,:size,:width,:height,:sha,:encrypted) RETURNING {FIELDS}
+        """),{**values,"encrypted":encrypted}).mappings().one()
     return dict(row)
 
 
@@ -74,12 +118,19 @@ def list_images(profile_id:UUID,scope:Scope,request:Request,limit:int=Query(20,g
 def download(profile_id:UUID,capture_id:UUID,scope:Scope,request:Request):
     key=cipher(request)
     params=context(scope,profile_id)
-    row=scope.connection.execute(text("SELECT ciphertext,sha256_digest FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id AND expires_at>now()"),{**params,"id":capture_id}).mappings().one_or_none()
+    enabled=os.environ.get("CAPTURE_STORAGE")=="b2"
+    fields="ciphertext,sha256_digest,b2_file_id" if enabled else "ciphertext,sha256_digest"
+    row=scope.connection.execute(text(f"SELECT {fields} FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id AND expires_at>now()"),{**params,"id":capture_id}).mappings().one_or_none()
     if row is None:
         raise DomainError(404,"NOT_FOUND","Imagen no disponible.")
     try:
-        data=key.decrypt(bytes(row["ciphertext"]))
-    except InvalidToken:
+        if row.get("b2_file_id"):
+            store=storage()
+            encrypted=store.get(row["b2_file_id"])
+        else:
+            encrypted=bytes(row["ciphertext"])
+        data=key.decrypt(encrypted)
+    except (InvalidToken,B2Error,TypeError,ValueError,KeyError):
         raise DomainError(500,"CAPTURE_UNAVAILABLE","Imagen no disponible.") from None
     if hashlib.sha256(data).hexdigest()!=row["sha256_digest"]:
         raise DomainError(500,"CAPTURE_UNAVAILABLE","Imagen no disponible.")
@@ -90,6 +141,15 @@ def download(profile_id:UUID,capture_id:UUID,scope:Scope,request:Request):
 def delete(profile_id:UUID,capture_id:UUID,scope:Scope,request:Request):
     cipher(request)
     params=context(scope,profile_id,True)
+    if os.environ.get("CAPTURE_STORAGE")=="b2":
+        row=scope.connection.execute(text("SELECT b2_file_id FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id FOR UPDATE"),{**params,"id":capture_id}).mappings().one_or_none()
+        if row is None:
+            raise DomainError(404,"NOT_FOUND","Imagen no disponible.")
+        if row["b2_file_id"]:
+            try:
+                storage().delete(object_name(capture_id),row["b2_file_id"])
+            except (B2Error,KeyError,ValueError,TypeError):
+                raise DomainError(503,"CAPTURE_UNAVAILABLE","No se pudo eliminar la imagen de Backblaze.") from None
     found=scope.connection.execute(text("DELETE FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id RETURNING id"),{**params,"id":capture_id}).scalar_one_or_none()
     if found is None:
         raise DomainError(404,"NOT_FOUND","Imagen no disponible.")
