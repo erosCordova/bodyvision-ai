@@ -47,7 +47,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="expedientes" element={<Expedientes />} />
             <Route path="expedientes/:id" element={<ExpedienteDetalle />} />
-            <Route path="mediciones" element={<ConnectedMeasurements />} />
+            <Route path="mediciones" element={<NeedPatient><Mediciones /></NeedPatient>} />
             <Route path="captura" element={<ConnectedCaptures />} />
             <Route path="analisis" element={<NeedPatient body><AnalisisIA /></NeedPatient>} />
             <Route path="vision-3d" element={<NeedPatient body><Vision3D /></NeedPatient>} />
