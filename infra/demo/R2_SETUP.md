@@ -1,0 +1,7 @@
+# Private R2 captures — deployment checklist
+
+1. Create a dedicated private Standard R2 bucket bodyvision-images. Do not enable r2.dev or custom public domains. Configure a lifecycle rule for captures/ to delete objects after 7 days (existing sandbox retention; do not change legal/clinical restrictions).
+2. Create Object Read & Write S3 credentials limited to this bucket. Store R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY only as backend secrets. Never send secrets to frontend or GitHub.
+3. Apply infra/demo/r2_capture_storage.sql as database owner; deploy this branch with CAPTURE_STORAGE=r2. Verify authenticated create/list/get/delete with an isolated synthetic test image. Disable writes during cutover if necessary.
+4. Execute app.services.migrate_r2_captures in a trusted administrative environment with MIGRATION_DATABASE_URL (database owner), SANDBOX_CAPTURE_KEY and R2 credentials. Old objects retain original expiry in DB. Verify counts of nonexpired ciphertext rows are zero and R2 objects are readable. Expired rows must be cleaned separately according to existing retention policy. Never switch back to postgres mode after migrating without a reverse migration.
+5. The S3 key contains only opaque capture UUID. Fernet encryption, SHA-256 integrity, authentication and tenant scoping remain. R2 lifecycle also clears orphan uploads after expiry. R2 is not configured for real clinical or biometric data by this change.

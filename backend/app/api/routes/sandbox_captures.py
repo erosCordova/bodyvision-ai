@@ -1,5 +1,6 @@
 """Encrypted fictional image library, hosted sandbox only."""
 import hashlib
+import os
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -12,6 +13,8 @@ from app.api.routes.synthetic_captures import SyntheticCaptureRead, SyntheticCap
 from app.core.errors import DomainError
 from app.models.context import Workspace
 from app.repositories import records
+from app.services.r2_capture_store import R2Store, R2Error, object_key
+from starlette.concurrency import run_in_threadpool
 from app.services.synthetic_capture_png import MAX_CAPTURE_BYTES, validate_synthetic_png
 
 router = APIRouter(prefix="/api/v1", tags=["Sandbox fictional images"])
@@ -24,6 +27,15 @@ def cipher(request):
     if request.app.state.settings.app_env != "sandbox" or key is None:
         raise DomainError(503,"CAPTURE_STORAGE_DISABLED","Archivo de pruebas no disponible.")
     return Fernet(key.get_secret_value().encode("ascii"))
+
+
+def storage():
+    if os.environ.get("CAPTURE_STORAGE","postgres")!="r2":
+        return None
+    try:
+        return R2Store()
+    except R2Error:
+        raise DomainError(503,"CAPTURE_STORAGE_DISABLED","Almacenamiento de imágenes no configurado.") from None
 
 
 def context(scope, profile_id, write=False):
@@ -54,10 +66,38 @@ async def upload(profile_id:UUID,scope:Scope,request:Request):
     count=conn.execute(text("SELECT count(*) FROM sandbox_capture_objects WHERE organization_id=:org"),params).scalar_one()
     if count>=20:
         raise DomainError(409,"CAPTURE_LIMIT","Máximo 20 imágenes por cuenta de pruebas.")
-    row=conn.execute(text(f"""
-      INSERT INTO sandbox_capture_objects(id,organization_id,profile_id,created_by,original_bytes,width,height,sha256_digest,ciphertext)
-      VALUES(:id,:org,:profile,:actor,:size,:width,:height,:sha,:encrypted) RETURNING {FIELDS}
-    """),{**params,"id":uuid4(),"size":len(image),"width":width,"height":height,"sha":hashlib.sha256(image).hexdigest(),"encrypted":key.encrypt(image)}).mappings().one()
+    identifier=uuid4()
+    encrypted=key.encrypt(image)
+    store=storage()
+    values={**params,"id":identifier,"size":len(image),"width":width,"height":height,"sha":hashlib.sha256(image).hexdigest(),"encrypted":encrypted}
+    if store is None:
+        row=conn.execute(text(f"""
+          INSERT INTO sandbox_capture_objects(id,organization_id,profile_id,created_by,original_bytes,width,height,sha256_digest,ciphertext)
+          VALUES(:id,:org,:profile,:actor,:size,:width,:height,:sha,:encrypted) RETURNING {FIELDS}
+        """),values).mappings().one()
+    else:
+        object_id=object_key(identifier)
+        try:
+            await run_in_threadpool(store.put,object_id,encrypted)
+            if await run_in_threadpool(store.get,object_id)!=encrypted:
+                raise R2Error("Verificación de integridad fallida.")
+        except R2Error:
+            try:
+                await run_in_threadpool(store.delete,object_id)
+            except R2Error:
+                pass
+            raise DomainError(503,"CAPTURE_UNAVAILABLE","No se pudo guardar la fotografía en R2.") from None
+        try:
+            row=conn.execute(text(f"""
+              INSERT INTO sandbox_capture_objects(id,organization_id,profile_id,created_by,original_bytes,width,height,sha256_digest,ciphertext,r2_key)
+              VALUES(:id,:org,:profile,:actor,:size,:width,:height,:sha,NULL,:object_id) RETURNING {FIELDS}
+            """),{**values,"object_id":object_id}).mappings().one()
+        except Exception:
+            try:
+                await run_in_threadpool(store.delete,object_id)
+            except R2Error:
+                pass
+            raise
     return dict(row)
 
 
@@ -74,12 +114,16 @@ def list_images(profile_id:UUID,scope:Scope,request:Request,limit:int=Query(20,g
 def download(profile_id:UUID,capture_id:UUID,scope:Scope,request:Request):
     key=cipher(request)
     params=context(scope,profile_id)
-    row=scope.connection.execute(text("SELECT ciphertext,sha256_digest FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id AND expires_at>now()"),{**params,"id":capture_id}).mappings().one_or_none()
+    store=storage()
+    fields="ciphertext,sha256_digest,r2_key" if store else "ciphertext,sha256_digest"
+    row=scope.connection.execute(text(f"SELECT {fields} FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id AND expires_at>now()"),{**params,"id":capture_id}).mappings().one_or_none()
     if row is None:
         raise DomainError(404,"NOT_FOUND","Imagen no disponible.")
     try:
-        data=key.decrypt(bytes(row["ciphertext"]))
-    except InvalidToken:
+        object_id=row.get("r2_key")
+        encrypted=store.get(object_id) if store and object_id else bytes(row["ciphertext"])
+        data=key.decrypt(encrypted)
+    except (InvalidToken,R2Error,TypeError):
         raise DomainError(500,"CAPTURE_UNAVAILABLE","Imagen no disponible.") from None
     if hashlib.sha256(data).hexdigest()!=row["sha256_digest"]:
         raise DomainError(500,"CAPTURE_UNAVAILABLE","Imagen no disponible.")
@@ -90,6 +134,16 @@ def download(profile_id:UUID,capture_id:UUID,scope:Scope,request:Request):
 def delete(profile_id:UUID,capture_id:UUID,scope:Scope,request:Request):
     cipher(request)
     params=context(scope,profile_id,True)
+    store=storage()
+    if store:
+        row=scope.connection.execute(text("SELECT r2_key FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id FOR UPDATE"),{**params,"id":capture_id}).mappings().one_or_none()
+        if row is None:
+            raise DomainError(404,"NOT_FOUND","Imagen no disponible.")
+        if row["r2_key"]:
+            try:
+                store.delete(row["r2_key"])
+            except R2Error:
+                raise DomainError(503,"CAPTURE_UNAVAILABLE","No se pudo eliminar la imagen de R2.") from None
     found=scope.connection.execute(text("DELETE FROM sandbox_capture_objects WHERE organization_id=:org AND profile_id=:profile AND id=:id RETURNING id"),{**params,"id":capture_id}).scalar_one_or_none()
     if found is None:
         raise DomainError(404,"NOT_FOUND","Imagen no disponible.")
