@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import {buildBodyWire,fullBodyVisible} from "../src/bodyWire.ts";
+const landmarks=Array.from({length:33},()=>({x:.5,y:.5,z:0,visibility:0}));
+const positions={0:[.5,.12],7:[.46,.13],8:[.54,.13],11:[.40,.25],12:[.60,.25],13:[.33,.40],14:[.67,.40],15:[.28,.52],16:[.72,.52],19:[.26,.56],20:[.74,.56],23:[.43,.51],24:[.57,.51],25:[.42,.70],26:[.58,.70],27:[.41,.89],28:[.59,.89],31:[.39,.94],32:[.61,.94]};
+for(const [i,[x,y]] of Object.entries(positions))landmarks[Number(i)]={x,y,z:0,visibility:.99};
+const verify=(m)=>{assert(m.points.length>0);assert(m.points.every(p=>[p.x,p.y,p.z].every(Number.isFinite)));assert(m.edges.every(e=>e.start>=0&&e.end>=0&&e.start<m.points.length&&e.end<m.points.length&&e.start!==e.end));assert.equal(new Set(m.edges.map(e=>[e.start,e.end].sort((a,b)=>a-b).join(":"))).size,m.edges.length);};
+const complete=buildBodyWire(landmarks,landmarks,4/3);
+verify(complete);assert(fullBodyVisible(landmarks));assert(complete.points.length>500);assert(complete.edges.length>1000);
+const world=landmarks.map(p=>({...p,x:(p.x-.5)*1.6,y:(p.y-.5)*1.2,z:p.z}));
+verify(buildBodyWire(world,landmarks,4/3,true));
+const partial=landmarks.map((p,i)=>[25,26,27,28,31,32].includes(i)?{...p,visibility:0}:p);
+const m=buildBodyWire(partial,partial,4/3);verify(m);assert(!fullBodyVisible(partial));assert(m.points.length<complete.points.length);
+assert.equal(buildBodyWire([],[],1).points.length,0);
+const invalid=landmarks.map(p=>({...p,x:NaN}));assert.equal(buildBodyWire(invalid,invalid,1).points.length,0);
+console.log("Body wireframe checks passed:",complete.points.length,"vertices,",complete.edges.length,"edges.");
