@@ -67,7 +67,7 @@ export function Expedientes() {
   };
 
   const list = useMemo(
-    () => patients.filter((p) => (sex === "all" || p.sexo === sex) && (estado === "Todos" || p.estado === estado) && (p.nombre + p.id).toLowerCase().includes(q.toLowerCase())),
+    () => patients.filter((p) => (sex === "all" || p.sexo === sex) && (estado === "Todos" ? p.estado !== "Alta" : estado === "Archivados" ? p.estado === "Alta" : p.estado === estado) && (p.nombre + p.id).toLowerCase().includes(q.toLowerCase())),
     [patients, q, sex, estado]
   );
 
@@ -109,7 +109,7 @@ export function Expedientes() {
           </div>
           <Segmented value={sex} onChange={setSex} options={[{ id: "all", label: "Todos" }, { id: "male", label: "Hombres" }, { id: "female", label: "Mujeres" }]} />
           <select className="field !w-auto" value={estado} onChange={(e) => setEstado(e.target.value)}>
-            {["Todos", "Activo", "En seguimiento", "Nuevo", "Alta"].map((e) => <option key={e} className="bg-slate-900">{e}</option>)}
+            {["Todos", "Activo", "En seguimiento", "Archivados"].map((e) => <option key={e} className="bg-slate-900">{e}</option>)}
           </select>
         </div>
         <div className="overflow-x-auto">
@@ -138,8 +138,8 @@ export function Expedientes() {
                     <td><span className={imc >= 30 ? "text-rose-300" : imc >= 25 ? "text-amber-300" : "text-emerald-300"}>{Number.isFinite(imc)?imc.toFixed(1):"—"}</span></td>
                     <td className="text-slate-300">{Number.isFinite(p.grasa)?p.grasa+"%":"—"}</td>
                     <td className="text-slate-300">{p.objetivo}</td>
-                    <td><Badge tone={estadoTone(p.estado)}>{p.estado}</Badge></td>
-                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2"><button type="button" disabled={p.estado!=="Activo"} title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" disabled={p.estado!=="Activo"} title="Archivar expediente" aria-label={`Archivar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
+                    <td><Badge tone={estadoTone(p.estado)}>{p.estado==="Alta"?"Archivado":p.estado}</Badge></td>
+                    <td className="text-slate-500">{p.ultima}</td><td><div className="flex gap-2">{p.estado==="En seguimiento"&&<Btn disabled={pending} onClick={async e=>{e.stopPropagation();if(window.confirm("¿Reactivar este expediente para permitir su edición?"))await action(t=>request("/profiles/"+p.id,t,json("PATCH",{status:"active"})),"Expediente reactivado");}}>Reactivar</Btn>}<button type="button" disabled={p.estado!=="Activo"} title="Editar expediente" aria-label={`Editar ${p.nombre}`} className="rounded-lg p-2 text-cyan-300 hover:bg-white/10" onClick={e=>{e.stopPropagation();edit(p);}}><Pencil size={16}/></button><button type="button" disabled={p.estado!=="Activo"} title="Eliminar de la lista (archivar)" aria-label={`Archivar ${p.nombre}`} className="rounded-lg p-2 text-rose-300 hover:bg-rose-500/10" onClick={e=>{e.stopPropagation();setDeleting(p);}}><Trash2 size={16}/></button></div></td>
                   </tr>
                 );
               })}
@@ -175,9 +175,9 @@ export function Expedientes() {
         </div>
         <div className="mt-6 flex justify-end gap-2"><Btn onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading||pending}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
       </Modal>
-      <Modal open={!!deleting} onClose={()=>{if(!pending)setDeleting(null);}} title="Archivar expediente">
-        <p className="text-sm text-slate-300">¿Archivar el expediente de <strong>{deleting?.nombre}</strong>? El historial se conserva según las reglas del servidor.</p>
-        <div className="mt-5 flex justify-end gap-2"><Btn disabled={pending} onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={pending} onClick={async()=>{if(deleting&&await action(t=>request("/profiles/"+deleting.id+"/archive",t,json("POST",{})),"Expediente archivado"))setDeleting(null);}}>Archivar</Btn></div>
+      <Modal open={!!deleting} onClose={()=>{if(!pending)setDeleting(null);}} title="Eliminar expediente">
+        <p className="text-sm text-slate-300">¿Retirar el expediente de <strong>{deleting?.nombre}</strong> de la lista habitual? Se archivará y podrás consultarlo en el filtro Archivados. El historial no se borrará físicamente.</p>
+        <div className="mt-5 flex justify-end gap-2"><Btn disabled={pending} onClick={()=>setDeleting(null)}>Cancelar</Btn><Btn variant="danger" disabled={pending} onClick={async()=>{if(deleting&&await action(t=>request("/profiles/"+deleting.id+"/archive",t,json("POST",{})),"Expediente archivado")){setDeleting(null);setEstado("Todos");}}}>Eliminar de la lista</Btn></div>
       </Modal>
     </div>
   );

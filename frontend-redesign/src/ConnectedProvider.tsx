@@ -33,7 +33,7 @@ export function ConnectedProvider({children}:{children:ReactNode}){
      return {profile:p,observations,captures,photo};
    })));}
    if(active.current!==token)return;
-   setRecords(result);setCatalog(metrics);setSelectedId(old=>result.some(r=>r.profile.id===old)?old:(result.find(r=>r.profile.status==="active")||result[0])?.profile.id||"");
+   setRecords(result);setCatalog(metrics);setSelectedId(old=>result.some(r=>r.profile.id===old&&r.profile.status==="active")?old:result.find(r=>r.profile.status==="active")?.profile.id||"");
  };
  const refresh=async()=>{setBusy(true);setError("");try{await run(load);}catch(e){setError(e instanceof Error?e.message:String(e));throw e;}finally{setBusy(false);}};
  const login=async(email:string,password:string,register:boolean)=>{
@@ -48,6 +48,6 @@ export function ConnectedProvider({children}:{children:ReactNode}){
  useEffect(()=>{if(!session)return;let last=0;const activity=()=>{const now=Date.now();if(now-last<60000)return;last=now;void run(t=>request("/auth/activity",t,{method:"POST"})).catch(()=>{});};window.addEventListener("pointerdown",activity);window.addEventListener("keydown",activity);return()=>{window.removeEventListener("pointerdown",activity);window.removeEventListener("keydown",activity);};},[session]);
  const patients=records.map(toPatient), selected=records.find(r=>r.profile.id===selectedId),patient=patients.find(p=>p.id===selectedId);
  const disabled=()=>{toast("Operación no habilitada en el servidor de pruebas");return false;};
- const value:Store={user,login:()=>{throw Error("Usa el acceso autenticado");},logout:()=>{void logout();},patients,selectedId,select:setSelectedId,patient:patient as Patient,mediciones:records.flatMap(toMeasurements),consents:[],reports:[],addPatient:disabled,updatePatient:disabled,deletePatient:disabled,addMedicion:disabled,updateMedicion:disabled,deleteMedicion:disabled,setConsents:disabled,setReports:disabled,toast,toasts};
+ const value:Store={user,login:()=>{throw Error("Usa el acceso autenticado");},logout:()=>{void logout();},patients,selectedId,select:id=>{if(records.some(r=>r.profile.id===id&&r.profile.status==="active"))setSelectedId(id);},patient:patient as Patient,mediciones:records.flatMap(toMeasurements),consents:[],reports:[],addPatient:disabled,updatePatient:disabled,deletePatient:disabled,addMedicion:disabled,updateMedicion:disabled,deleteMedicion:disabled,setConsents:disabled,setReports:disabled,toast,toasts};
  return <ConnectionCtx.Provider value={{token:session?.token??null,records,catalog,busy,error,login,logout,refresh,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
 }

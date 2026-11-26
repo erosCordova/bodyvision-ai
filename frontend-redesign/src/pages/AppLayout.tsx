@@ -94,8 +94,8 @@ export default function AppLayout() {
             <div className="hidden items-center gap-2 sm:flex">
               <span className="text-xs text-slate-500">Paciente activo</span>
               <select value={patient?.id||""} onChange={(e) => select(e.target.value)} className="field !w-auto !rounded-xl !py-1.5 !text-xs">
-                {!patients.length&&<option value="">Sin expedientes</option>}
-                {patients.map((p) => (
+                {!patients.some(p=>p.estado==="Activo")&&<option value="">Sin expedientes activos</option>}
+                {patients.filter(p=>p.estado==="Activo").map((p) => (
                   <option key={p.id} value={p.id} className="bg-slate-900">
                     {p.nombre}
                   </option>
