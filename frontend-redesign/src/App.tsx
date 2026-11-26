@@ -48,14 +48,14 @@ export default function App() {
             <Route path="expedientes" element={<Expedientes />} />
             <Route path="expedientes/:id" element={<ExpedienteDetalle />} />
             <Route path="mediciones" element={<NeedPatient><Mediciones /></NeedPatient>} />
-            <Route path="captura" element={<ConnectedCaptures />} />
+            <Route path="captura" element={<NeedPatient><Captura /></NeedPatient>} />
             <Route path="analisis" element={<NeedPatient body><AnalisisIA /></NeedPatient>} />
             <Route path="vision-3d" element={<NeedPatient body><Vision3D /></NeedPatient>} />
             <Route path="simulador" element={<NeedPatient complete><Simulador /></NeedPatient>} />
             <Route path="analitica" element={<Analitica />} />
-            <Route path="consentimientos" element={<Unavailable title="Consentimientos" />} />
-            <Route path="reportes" element={<ConnectedReports />} />
-            <Route path="administracion" element={<Unavailable title="Administración" />} />
+            <Route path="consentimientos" element={<Consentimientos />} />
+            <Route path="reportes" element={<NeedPatient><Reportes /></NeedPatient>} />
+            <Route path="administracion" element={<Administracion />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

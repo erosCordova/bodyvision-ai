@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {Download,Plus,Ruler,Pencil} from "lucide-react";
-import {Badge,Btn,PageHead,Panel} from "../ui";
+import {Badge,Btn,PageHead,Panel,Modal} from "../ui";
 import {imcOf,useStore} from "../store";
 import {useConnection} from "../ConnectedProvider";
 import {useAction} from "../ConnectedPages";
@@ -17,8 +17,10 @@ function PatientMeasurements(){
  const fields=[["weight","Peso"],["height","Altura"],["waist","Cintura"],["hip","Cadera"],["chest","Pecho"],["arm","Brazo"],["thigh","Muslo"],["body_fat_pct","Grasa corporal"],["muscle_mass_kg","Masa muscular"]];
  const [values,setValues]=useState<Record<string,string>>({});
  const [editing,setEditing]=useState<Observation|null>(null);
+ const [group,setGroup]=useState<Observation[]|null>(null);
  const [instrument,setInstrument]=useState(""),[reason,setReason]=useState("");
  const records=selected?.observations||[];
+ const grouped=Array.from(new Set(records.map(o=>o.measured_at))).map(at=>({at,items:records.filter(o=>o.measured_at===at)}));
  const reset=()=>{setValues({});setEditing(null);setInstrument("");setReason("");};
  const edit=(o:Observation)=>{setEditing(o);setValues({[o.metric_code]:String(o.value)});setInstrument(o.instrument||"");setReason("");};
  const save=async()=>{
@@ -43,6 +45,7 @@ function PatientMeasurements(){
  <div className="mt-5 grid grid-cols-3 gap-2 text-center">{[["IMC",fmt(bmi)],["ICC",fmt(icc,2)],["Grasa registrada",Number.isFinite(patient.grasa)?patient.grasa+"%":"—"]].map(([l,v])=><div key={l} className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3"><div className="text-[11px] text-slate-400">{l}</div><div className="font-display text-lg font-bold text-cyan-200">{v}</div></div>)}</div>
  <Btn className="mt-5 w-full" variant="primary" disabled={pending} onClick={save}><Plus size={16}/>{editing?"Guardar corrección":"Guardar mediciones"}</Btn>{editing&&<Btn className="mt-2 w-full" disabled={pending} onClick={reset}>Cancelar edición</Btn>}
  </Panel>
- <Panel title="Historial de mediciones" pad={false}><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>Variable</th><th>Paciente</th><th>Fecha</th><th>Valor</th><th>Método</th><th>Acciones</th></tr></thead><tbody>{records.map(o=><tr key={o.id} className="border-t border-white/5 [&>td]:px-4 [&>td]:py-3"><td>{catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code}</td><td>{patient.nombre}</td><td>{new Date(o.measured_at).toLocaleDateString("es-PE")}</td><td>{o.value} {o.unit}</td><td><Badge tone="info">{o.method==="device"?"Instrumento":"Manual"}</Badge></td><td><button className="p-2 text-cyan-300" title="Corregir medición" aria-label="Corregir medición" disabled={pending} onClick={()=>edit(o)}><Pencil size={16}/></button></td></tr>)}{!records.length&&<tr><td colSpan={6} className="py-12 text-center text-slate-400">Sin mediciones de este expediente</td></tr>}</tbody></table></div></Panel>
+ <Panel title="Historial de mediciones" pad={false}><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-500"><tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-medium"><th>ID</th><th>Paciente</th><th>Fecha</th><th>Peso</th><th>Cintura</th><th>Cadera</th><th>% Grasa</th><th>Fuente</th><th>Acciones</th></tr></thead><tbody>{grouped.map(g=>{const v=(code:string)=>{const o=g.items.find(o=>o.metric_code===code);return o?o.value+" "+o.unit:"—";};return <tr key={g.at} className="border-t border-white/5 [&>td]:px-4 [&>td]:py-3"><td className="text-slate-400">{g.items[0].id.slice(0,8)}</td><td>{patient.nombre}</td><td>{new Date(g.at).toLocaleDateString("es-PE")}</td><td>{v("weight")}</td><td>{v("waist")}</td><td>{v("hip")}</td><td>{v("body_fat_pct")}</td><td><Badge tone="info">{g.items.some(o=>o.method==="device")?"Instrumento":"Manual"}</Badge></td><td><button className="p-2 text-cyan-300" title="Corregir medición" aria-label="Corregir medición" disabled={pending} onClick={()=>setGroup(g.items)}><Pencil size={16}/></button></td></tr>;})}{!grouped.length&&<tr><td colSpan={9} className="py-12 text-center text-slate-400">Sin mediciones de este expediente</td></tr>}</tbody></table></div></Panel>
+ <Modal open={!!group} onClose={()=>setGroup(null)} title="Consultar y corregir medición">{group?.map(o=><div key={o.id} className="flex items-center justify-between border-b border-white/5 py-2 text-sm"><span>{catalog.find(m=>m.code===o.metric_code)?.label||o.metric_code}: {o.value} {o.unit}</span><Btn onClick={()=>{edit(o);setGroup(null);}}>Corregir</Btn></div>)}</Modal>
  </div></div>;
 }
