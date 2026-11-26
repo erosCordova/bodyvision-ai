@@ -29,7 +29,8 @@ export function ConnectedProvider({children}:{children:ReactNode}){
  const fetchCaptures=async(token:string,id:string)=>{
    const captures=(await request<{items:Capture[]}>("/profiles/"+id+"/captures",token)).items;
    let photo:string|undefined;
-   if(captures.length)try{photo=await image("/profiles/"+id+"/captures/"+captures[0].id,token);}catch(e){if(e instanceof ApiFailure&&e.status===401)throw e;}
+   const representative=captures.find(c=>c.posture==="front")||captures[0];
+   if(representative)try{photo=await image("/profiles/"+id+"/captures/"+representative.id,token);}catch(e){if(e instanceof ApiFailure&&e.status===401)throw e;}
    return {captures,photo};
  };
  const load=async(token:string)=>{

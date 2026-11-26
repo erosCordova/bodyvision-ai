@@ -4,7 +4,7 @@ import {Plus,Pencil,Archive,Download,Upload,Trash2,RefreshCw} from "lucide-react
 import {Btn,Panel,PageHead,Modal,Badge} from "./ui";
 import {useStore} from "./store";
 import {useConnection} from "./ConnectedProvider";
-import {request,json,saveObservation,image,type Profile,type Observation,type Metric,type Capture} from "./api";
+import {request,json,saveObservation,image,type Profile,type Observation,type Metric,type Capture,type CapturePosture} from "./api";
 
 
 // Re-encode to a small non-interlaced PNG and retain only the mandatory chunks.
@@ -26,7 +26,7 @@ async function syntheticPng(file:File):Promise<Blob>{
   throw Error("No se pudo reducir la imagen a 256 KiB.");
  }finally{bitmap.close();}
 }
-export async function uploadPhoto(token:string,profileId:string,file:File){const png=await syntheticPng(file);return request("/profiles/"+profileId+"/captures",token,{method:"POST",body:png,headers:{"Content-Type":"image/png","X-Synthetic-Only":"confirmed"}});}
+export async function uploadPhoto(token:string,profileId:string,file:File,posture:CapturePosture='unspecified'){const png=await syntheticPng(file);return request("/profiles/"+profileId+"/captures?posture="+encodeURIComponent(posture),token,{method:"POST",body:png,headers:{"Content-Type":"image/png","X-Synthetic-Only":"confirmed"}});}
 
 export function useAction(profileId?:string,scope:"captures"|"patient"="captures"){
  const {refresh,refreshCaptures,refreshPatient,run}=useConnection(),{toast}=useStore();

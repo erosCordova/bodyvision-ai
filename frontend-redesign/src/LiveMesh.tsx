@@ -45,14 +45,14 @@ function MeshPreview({frame,face}:{frame:Frame|null;face:boolean}){
  {!frame?<div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-slate-400">La geometría aparecerá al detectar puntos</div>:<div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 text-xs text-slate-300"><span className="pointer-events-none">Arrastra para rotar · rueda para acercar</span><Btn className="!px-2 !py-1" onClick={()=>{rotation.current={yaw:0,pitch:0,zoom:1};paint();}}>Centrar</Btn></div>}
  </div>;
 }
-export default function LiveMesh(){
- const [mode,setMode]=useState<"face"|"body">("face"),[running,setRunning]=useState(false),[status,setStatus]=useState("Cámara apagada"),[frame,setFrame]=useState<Frame|null>(null);
+export default function LiveMesh({onPhoto,photoLabel='Tomar foto',photoDisabled=false,initialMode='face'}:{onPhoto?:(file:File)=>void;photoLabel?:string;photoDisabled?:boolean;initialMode?:'face'|'body'}={}){
+ const [mode,setMode]=useState<"face"|"body">(initialMode),[running,setRunning]=useState(false),[status,setStatus]=useState("Cámara apagada"),[frame,setFrame]=useState<Frame|null>(null),[cameraReady,setCameraReady]=useState(false);
  const video=useRef<HTMLVideoElement>(null),overlay=useRef<HTMLCanvasElement>(null),stream=useRef<MediaStream|null>(null),model=useRef<any>(null),seq=useRef(0),raf=useRef(0);
- const stop=()=>{seq.current++;cancelAnimationFrame(raf.current);stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;try{model.current?.close();}catch{}model.current=null;if(video.current)video.current.srcObject=null;setRunning(false);setFrame(null);setStatus("Cámara apagada");const c=overlay.current;c?.getContext("2d")?.clearRect(0,0,c.width,c.height);};
+ const stop=()=>{seq.current++;cancelAnimationFrame(raf.current);stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;try{model.current?.close();}catch{}model.current=null;if(video.current)video.current.srcObject=null;setRunning(false);setCameraReady(false);setFrame(null);setStatus("Cámara apagada");const c=overlay.current;c?.getContext("2d")?.clearRect(0,0,c.width,c.height);};
  useEffect(()=>()=>{seq.current++;cancelAnimationFrame(raf.current);stream.current?.getTracks().forEach(t=>t.stop());try{model.current?.close();}catch{}},[]);
  const start=async()=>{
   if(running)return;
-  if(!window.confirm("¿Autorizas activar la cámara para procesar tu imagen localmente? No se guardarán imágenes ni datos biométricos."))return;
+  if(!window.confirm("¿Autorizas activar la cámara? El vídeo y la malla se procesan localmente. Solo se registra una fotografía si la seleccionas y confirmas su almacenamiento de prueba."))return;
   const id=++seq.current;setRunning(true);setStatus("Solicitando permiso de cámara…");setFrame(null);
   let stage="camera";
   try{
@@ -60,7 +60,7 @@ export default function LiveMesh(){
    let media:MediaStream;
    try{media=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"user"},width:{ideal:640},height:{ideal:480}},audio:false});}catch(e){if(e instanceof DOMException&&e.name==="OverconstrainedError")media=await navigator.mediaDevices.getUserMedia({video:true,audio:false});else throw e;}
    if(id!==seq.current){media.getTracks().forEach(t=>t.stop());return;}stream.current=media;
-   if(!video.current)throw Error("Visor de cámara no disponible");video.current.srcObject=media;await video.current.play();
+   if(!video.current)throw Error("Visor de cámara no disponible");video.current.srcObject=media;await video.current.play();if(id!==seq.current)return;setCameraReady(true);
    stage="model";setStatus("Cámara activa · cargando detección…");
    const vision=await import("./vendor/vision_bundle.mjs");const base=new URL("/pose/wasm/",location.origin).href;
    const face=mode==="face";const options={baseOptions:{modelAssetPath:new URL(face?"/pose/face_landmarker.task":"/pose/pose_landmarker_lite.task",location.origin).href,delegate:"CPU"},runningMode:"VIDEO" as const,...(face?{numFaces:1}:{numPoses:1,outputSegmentationMasks:true})};
@@ -97,8 +97,9 @@ export default function LiveMesh(){
    setStatus("Buscando puntos anatómicos…");raf.current=requestAnimationFrame(tick);
   }catch(e){if(id===seq.current){if(stage==="model"){setStatus("Cámara activa · no se pudo cargar el modelo de IA. Detén y reintenta.");return;}stop();const name=e instanceof Error?e.name:"";setStatus(name==="NotAllowedError"||name==="SecurityError"?"Permiso de cámara bloqueado. Permite la cámara desde el icono de configuración junto a la dirección del navegador.":name==="NotFoundError"?"No se detectó ninguna cámara.":name==="NotReadableError"||name==="AbortError"?"La cámara no está disponible; revisa si otra aplicación la está utilizando.":e instanceof Error?e.message:"No se pudo iniciar la cámara.");}}
  };
- return <div className="space-y-4"><div className="flex flex-wrap items-center gap-3"><select className="field !w-auto" disabled={running} value={mode} onChange={e=>{setMode(e.target.value as "face"|"body");setFrame(null);}}><option value="face">Rostro</option><option value="body">Cuerpo completo</option></select><Btn variant="primary" disabled={running} onClick={start}><Camera size={16}/> Activar cámara</Btn><Btn disabled={!running} onClick={stop}><Square size={15}/> Detener</Btn><span className="text-sm text-cyan-300">{status}</span></div>
- <p className="text-sm text-slate-400">Al activar la cámara se solicitará autorización. El procesamiento es local y no se guardan imágenes ni datos biométricos.</p>
+ const takePhoto=()=>{const v=video.current;if(!onPhoto||!v||v.readyState<2||!v.videoWidth||!v.videoHeight)return;const c=document.createElement("canvas");c.width=v.videoWidth;c.height=v.videoHeight;const ctx=c.getContext("2d");if(!ctx)return;ctx.drawImage(v,0,0);const id=seq.current;c.toBlob(b=>{if(b&&id===seq.current)onPhoto(new File([b],"captura-"+Date.now()+".jpg",{type:"image/jpeg"}));},"image/jpeg",.94);};
+ return <div className="space-y-4"><div className="flex flex-wrap items-center gap-3"><select className="field !w-auto" disabled={running} value={mode} onChange={e=>{setMode(e.target.value as "face"|"body");setFrame(null);}}><option value="face">Rostro</option><option value="body">Cuerpo completo</option></select><Btn variant="primary" disabled={running} onClick={start}><Camera size={16}/> Activar cámara</Btn><Btn disabled={!running} onClick={stop}><Square size={15}/> Detener</Btn>{onPhoto&&<Btn variant="primary" disabled={!cameraReady||photoDisabled||mode!=="body"} onClick={takePhoto}><Camera size={16}/> {photoLabel}</Btn>}<span className="text-sm text-cyan-300">{status}</span></div>
+ <p className="text-sm text-slate-400">Vídeo y malla procesados localmente. Las fotografías requieren una acción de guardado independiente.</p>
  <div className="grid gap-4 lg:grid-cols-2"><Panel pad={false}><div className="relative aspect-video overflow-hidden rounded-xl bg-black"><video ref={video} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-contain"/><canvas ref={overlay} className="pointer-events-none absolute inset-0 z-10 h-full w-full object-contain"/>{!running&&<div className="absolute inset-0 grid place-items-center text-sm text-slate-400">Vista previa de cámara</div>}</div></Panel><Panel pad={false}><MeshPreview frame={frame} face={mode==="face"}/></Panel></div>
  <p className="text-xs text-slate-400">{mode==="face"?"Malla facial de puntos y conexiones estimadas en 3D.":"Malla anatómica aproximada: pose, ajuste al contorno visible y superficie sombreada. La profundidad es estimada; no es un escaneo exacto."} No identifica personas ni mide composición corporal. La cámara se detiene al salir.</p></div>;
 }

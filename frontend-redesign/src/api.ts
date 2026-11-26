@@ -16,7 +16,8 @@ export async function image(path:string,token:string):Promise<string>{
 export type Profile={id:string;display_code:string;display_name:string|null;birth_year:number;sex:string|null;status:"active"|"restricted"|"archived";created_at:string;synthetic:boolean};
 export type Observation={id:string;profile_id:string;metric_code:string;value:number;unit:string;measured_at:string;method:"manual"|"device";instrument:string|null;notes:string|null;created_at:string};
 export type Metric={code:string;label:string;unit:string;min_value:number;max_value:number;allowed_methods:string[]};
-export type Capture={id:string;created_at:string;expires_at:string};
+export type CapturePosture='front'|'side'|'back'|'unspecified';
+export type Capture={id:string;created_at:string;expires_at:string;posture?:CapturePosture};
 export type Role="administrator"|"specialist"|"member"|"privacy_officer";
 export type Account={user_id:string;email:string;display_name:string;role:Role;created_at?:string;organization_id?:string};
 export type Session={role:Role;token:string;user_id:string;organization_id:string;expires_at:string};
