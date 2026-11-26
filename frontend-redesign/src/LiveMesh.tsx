@@ -52,7 +52,7 @@ export default function LiveMesh({onPhoto,photoLabel='Tomar foto',photoDisabled=
  useEffect(()=>()=>{seq.current++;cancelAnimationFrame(raf.current);stream.current?.getTracks().forEach(t=>t.stop());try{model.current?.close();}catch{}},[]);
  const start=async(nextMode:"face"|"body"=mode,reuseAuthorization=false)=>{
   if(running&&!reuseAuthorization)return;
-  if(!reuseAuthorization&&!window.confirm("¿Autorizas activar la cámara? El vídeo y la malla se procesan localmente. Solo se registra una fotografía si la seleccionas y confirmas su almacenamiento de prueba."))return;
+  if(!reuseAuthorization&&!window.confirm("¿Autorizas activar la cámara? El vídeo y la malla se procesan localmente. Guardar una fotografía requiere confirmación."))return;
   const id=++seq.current;setRunning(true);setStatus("Solicitando permiso de cámara…");setFrame(null);
   let stage="camera";
   try{

@@ -85,6 +85,7 @@ export default function Login() {
           <p className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-slate-500">
             <ShieldCheck size={14} className="text-cyan-300" /> Acceso a tu cuenta
           </p>
+          <p className="mt-2 text-center text-xs text-slate-400">No introduzcas datos personales o clínicos reales.</p>
         </div>
       </div>
       <div className="relative hidden overflow-hidden lg:block">

@@ -147,7 +147,7 @@ export default function AppLayout() {
       </div>
       <Modal open={sec} onClose={() => setSec(false)} title="Acceso y seguridad">
         <div className="space-y-4 text-sm">
-          <p className="text-sm text-slate-300">Sesión autenticada. El servicio actual solo admite datos de prueba; no introduzcas datos personales o clínicos reales.</p>
+          <p className="text-sm text-slate-300">Tu sesión está activa.</p>
           <Btn variant="danger" className="w-full" onClick={() => { logout(); nav("/login"); }}>
             <LogOut size={16} /> Cerrar sesión
           </Btn>

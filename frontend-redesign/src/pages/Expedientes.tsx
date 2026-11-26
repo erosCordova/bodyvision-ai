@@ -75,7 +75,7 @@ export function Expedientes() {
     if (!f.nombre.trim()) return toast("Indica el nombre del paciente");
     if (reading||pending) return;
     if (!Number.isInteger(f.edad)||f.edad<18||f.edad>100)return toast("Registra una edad de 18 a 100 años");
-    if(file&&!window.confirm("El almacenamiento actual solo admite imágenes de prueba, no fotografías clínicas o personales reales. ¿Confirmas que la imagen cumple esta condición?"))return;
+    if(file&&!window.confirm("¿Confirmas que la imagen es sintética y no contiene datos personales ni clínicos reales?"))return;
     const isNew=!editing;
     const weight=f.peso, muscle=Number.isFinite(f.musculo)&&Number.isFinite(weight)?Math.round(weight*f.musculo)/100:NaN;
     if(Number.isFinite(f.musculo)&&(!Number.isFinite(weight)||f.musculo<=0||f.musculo>100))return toast("Registra peso y porcentaje muscular válido");
@@ -174,7 +174,7 @@ export function Expedientes() {
               <input type="number" step={k==="edad"?1:".01"} className="field" disabled={(!!editing&&k==="edad")||pending} value={Number.isFinite(f[k])?f[k]:""} onChange={(e) => setF({ ...f, [k]: e.target.value===""?NaN:+e.target.value })} /></label>
           ))}
           <label className="sm:col-span-2"><span className="mb-1 block text-xs text-slate-400">Instrumento para nuevas mediciones de composición corporal</span><input className="field" value={instrument} maxLength={100} onChange={e=>setInstrument(e.target.value)}/></label>
-          {editing&&<p className="sm:col-span-2 text-xs text-slate-400">Los cambios corporales se guardan como nuevas mediciones y conservan el historial. Edad y sexo no son editables en esta API.</p>}
+          {editing&&<p className="sm:col-span-2 text-xs text-slate-400">Las nuevas mediciones conservan el historial. Edad y sexo no editables.</p>}
         </div>
         <div className="mt-6 flex justify-end gap-2"><Btn disabled={pending} onClick={close}>Cancelar</Btn><Btn variant="primary" onClick={create} disabled={reading||pending}>{editing?"Guardar cambios":"Crear expediente"}</Btn></div>
       </Modal>
