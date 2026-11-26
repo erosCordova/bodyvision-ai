@@ -40,8 +40,8 @@ export function bodyParams(p: { sexo: Sex; grasa: number; musculo: number }) {
   const bf = p.sexo === "female" ? 24 : 15;
   const bm = p.sexo === "female" ? 31 : 40;
   return {
-    fat: Math.max(-12, Math.min(26, p.grasa - bf)),
-    mus: Math.max(-8, Math.min(12, p.musculo - bm)),
+    fat: Number.isFinite(p.grasa) ? Math.max(-12, Math.min(26, p.grasa - bf)) : 0,
+    mus: Number.isFinite(p.musculo) ? Math.max(-8, Math.min(12, p.musculo - bm)) : 0,
   };
 }
 

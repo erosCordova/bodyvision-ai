@@ -13,15 +13,15 @@ export default function AnalisisIA() {
   // Only measurements explicitly linked to this record ID; do not match by name.
   const records = mediciones.filter(m => m.patientId === p.id);
   const latest = records.find(m=>[m.brazo,m.pecho,m.cintura,m.cadera,m.muslo].some(Number.isFinite));
-  const data = [{ mes: "Expediente", grasa: p.grasa }, ...records.filter(m=>Number.isFinite(m.grasa)).slice().reverse().map((m, i) => ({ mes: "M" + (i + 1), grasa: m.grasa }))];
+  const data = [...(Number.isFinite(p.grasa)?[{ mes: "Expediente", grasa: p.grasa }]:[]), ...records.filter(m=>Number.isFinite(m.grasa)).slice().reverse().map((m, i) => ({ mes: "M" + (i + 1), grasa: m.grasa }))];
   const sc = p.altura / 175;
   const radial = Math.min(1.65, Math.max(.65, Math.sqrt(imc/23) * (1+fat*.004+mus*.002)));
   const position = (x:number,y:number,z:number):[number,number,number] => [x*sc*radial,y*sc,z*sc*radial];
   const metrics = [
     ["IMC", imc.toFixed(1), imc >= 25 ? "text-amber-300" : "text-emerald-300"],
     ["Peso de referencia", `${ideal} kg`, "text-sky-300"],
-    ["Grasa Corporal", `${p.grasa}%`, "text-amber-300"],
-    ["Masa Muscular", `${p.musculo}%`, "text-cyan-300"],
+    ["Grasa Corporal", Number.isFinite(p.grasa)?`${p.grasa}%`:"No registrado", "text-amber-300"],
+    ["Masa Muscular", Number.isFinite(p.musculo)?`${p.musculo.toFixed(1)}%`:"No registrado", "text-cyan-300"],
   ];
   const segments = latest ? [
     ["Brazo", latest.brazo], ["Pecho", latest.pecho], ["Cintura", latest.cintura],
@@ -29,7 +29,7 @@ export default function AnalisisIA() {
   ] as const : [];
   const insights = [
     `Expediente: ${p.edad} años · ${p.altura} cm · ${p.peso} kg.`,
-    `Composición registrada: ${p.grasa}% de grasa y ${p.musculo}% de masa muscular.`,
+    `Composición registrada: ${Number.isFinite(p.grasa)?p.grasa+"% de grasa":"grasa no registrada"} y ${Number.isFinite(p.musculo)?p.musculo.toFixed(1)+"% de masa muscular":"masa muscular no registrada"}.`,
     latest ? "Mediciones vinculadas al expediente disponibles." : "No hay mediciones segmentarias vinculadas a este expediente.",
     "El atlas y sus colores son ilustrativos; no constituyen una medición térmica, diagnóstico ni análisis de la fotografía.",
   ];
@@ -88,7 +88,7 @@ export default function AnalisisIA() {
                   <Tooltip {...chartTip} /><Line dataKey="grasa" name="Grasa registrada / estimada (%)" stroke="#f59e0b" strokeWidth={2.5} dot />
                 </LineChart>
               </ResponsiveContainer>
-            </div><p className="mt-2 text-xs text-slate-400">M: medición registrada; grasa estimada en Mediciones.</p></> : <p className="py-5 text-center text-sm text-slate-400">Valor inicial: {p.grasa}%. Registra una medición para ver la evolución.</p>}
+            </div><p className="mt-2 text-xs text-slate-400">M: medición registrada; grasa estimada en Mediciones.</p></> : <p className="py-5 text-center text-sm text-slate-400">{Number.isFinite(p.grasa)?`Último valor: ${p.grasa}%.`:"Grasa no registrada."} Registra mediciones para ver la evolución.</p>}
           </Panel>
           <Panel title="Resumen del expediente">
             <ul className="space-y-3">

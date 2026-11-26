@@ -49,8 +49,8 @@ export default function App() {
             <Route path="expedientes/:id" element={<ConnectedProfiles />} />
             <Route path="mediciones" element={<ConnectedMeasurements />} />
             <Route path="captura" element={<ConnectedCaptures />} />
-            <Route path="analisis" element={<NeedPatient complete><AnalisisIA /></NeedPatient>} />
-            <Route path="vision-3d" element={<NeedPatient complete><Vision3D /></NeedPatient>} />
+            <Route path="analisis" element={<NeedPatient body><AnalisisIA /></NeedPatient>} />
+            <Route path="vision-3d" element={<NeedPatient body><Vision3D /></NeedPatient>} />
             <Route path="simulador" element={<NeedPatient complete><Simulador /></NeedPatient>} />
             <Route path="analitica" element={<ConnectedAnalytics />} />
             <Route path="consentimientos" element={<Unavailable title="Consentimientos" />} />
