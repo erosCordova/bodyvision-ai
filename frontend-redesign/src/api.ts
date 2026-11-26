@@ -8,7 +8,7 @@ export async function request<T>(path:string,token?:string,init:RequestInit={}):
  return response.json();
 }
 export async function image(path:string,token:string):Promise<string>{
- const r=await fetch(ROOT+path,{headers:{Authorization:"Bearer "+token},cache:"no-store",signal:AbortSignal.timeout(90000)});
+ const r=await fetch(ROOT+path,{headers:{Authorization:"Bearer "+token},cache:"no-store",signal:AbortSignal.timeout(20000)});
  if(!r.ok)throw new ApiFailure(r.status,"Fotografía no disponible.");
  const blob=await r.blob();if(blob.type!=="image/png")throw Error("Formato de imagen inesperado");
  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(blob);});

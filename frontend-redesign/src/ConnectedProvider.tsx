@@ -2,7 +2,7 @@ import {createContext,useContext,useState,useEffect,useCallback,useRef,type Reac
 import {Ctx,type Store,type Patient,type Medicion} from "./store";
 import {request,all,image,json,ApiFailure,type Profile,type Observation,type Metric,type Capture,type Session} from "./api";
 type RecordData={profile:Profile;observations:Observation[];captures:Capture[];photo?:string};
-type Connection={token:string|null;records:RecordData[];catalog:Metric[];busy:boolean;error:string;login:(email:string,password:string,register:boolean)=>Promise<void>;logout:()=>Promise<void>;refresh:()=>Promise<void>;run:<T>(fn:(token:string)=>Promise<T>)=>Promise<T>;selected:RecordData|undefined};
+type Connection={token:string|null;records:RecordData[];catalog:Metric[];busy:boolean;error:string;login:(email:string,password:string,register:boolean)=>Promise<void>;logout:()=>Promise<void>;refresh:()=>Promise<void>;refreshCaptures:(profileId:string)=>Promise<void>;run:<T>(fn:(token:string)=>Promise<T>)=>Promise<T>;selected:RecordData|undefined};
 const ConnectionCtx=createContext<Connection>(null!);
 export const useConnection=()=>useContext(ConnectionCtx);
 function toPatient(r:RecordData):Patient {
@@ -19,23 +19,36 @@ function toMeasurements(r:RecordData):Medicion[]{
 export function ConnectedProvider({children}:{children:ReactNode}){
  const [session,setSession]=useState<Session|null>(null), [user,setUser]=useState<Store["user"]>(null),[records,setRecords]=useState<RecordData[]>([]),[catalog,setCatalog]=useState<Metric[]>([]),[selectedId,setSelectedId]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[toasts,setToasts]=useState<Store["toasts"]>([]);
  const active=useRef<string|null>(null);
+ const refreshVersion=useRef(0);
  const toast=useCallback((msg:string)=>{const id=Date.now()+Math.random();setToasts(t=>[...t,{id,msg}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4500);},[]);
- const clear=()=>{active.current=null;setSession(null);setUser(null);setRecords([]);setCatalog([]);setSelectedId("");};
+ const clear=()=>{refreshVersion.current++;active.current=null;setSession(null);setUser(null);setRecords([]);setCatalog([]);setSelectedId("");};
  const run=async<T,>(fn:(token:string)=>Promise<T>):Promise<T>=>{const token=active.current;if(!token)throw Error("Inicia sesión");try{return await fn(token);}catch(e){if(e instanceof ApiFailure&&e.status===401){clear();toast("Sesión caducada. Inicia sesión.");}throw e;}};
+ const fetchCaptures=async(token:string,id:string)=>{
+   const captures=(await request<{items:Capture[]}>("/profiles/"+id+"/captures",token)).items;
+   let photo:string|undefined;
+   if(captures.length)try{photo=await image("/profiles/"+id+"/captures/"+captures[0].id,token);}catch(e){if(e instanceof ApiFailure&&e.status===401)throw e;}
+   return {captures,photo};
+ };
  const load=async(token:string)=>{
+   const version=++refreshVersion.current;
    const [profiles,metrics]=await Promise.all([all<Profile>("/profiles",token),request<Metric[]>("/metrics/catalog",token)]);
    const result:RecordData[]=[];
    for(let i=0;i<profiles.length;i+=4){result.push(...await Promise.all(profiles.slice(i,i+4).map(async p=>{
-     if(!p.synthetic)throw Error("El entorno solo admite expedientes ficticios");
-     const observations=await all<Observation>("/profiles/"+p.id+"/measurements",token);
-     let captures:Capture[]=[],photo:string|undefined;
-     if(p.status==="active"){try{captures=(await request<{items:Capture[]}>("/profiles/"+p.id+"/captures",token)).items;if(captures.length)photo=await image("/profiles/"+p.id+"/captures/"+captures[0].id,token);}catch(e){if(e instanceof ApiFailure&&e.status===401)throw e;}}
-     return {profile:p,observations,captures,photo};
+     if(!p.synthetic)throw Error("El entorno solo admite expedientes de prueba");
+     const [observations,photos]=await Promise.all([all<Observation>("/profiles/"+p.id+"/measurements",token),p.status==="active"?fetchCaptures(token,p.id).catch(e=>{if(e instanceof ApiFailure&&e.status===401)throw e;return {captures:[] as Capture[],photo:undefined};}):Promise.resolve({captures:[] as Capture[],photo:undefined})]);
+     return {profile:p,observations,...photos};
    })));}
-   if(active.current!==token)return;
+   if(active.current!==token||version!==refreshVersion.current)return;
    setRecords(result);setCatalog(metrics);setSelectedId(old=>result.some(r=>r.profile.id===old&&r.profile.status==="active")?old:result.find(r=>r.profile.status==="active")?.profile.id||"");
  };
  const refresh=async()=>{setBusy(true);setError("");try{await run(load);}catch(e){setError(e instanceof Error?e.message:String(e));throw e;}finally{setBusy(false);}};
+ const refreshCaptures=async(profileId:string)=>{
+   await run(async token=>{
+     const photos=await fetchCaptures(token,profileId);
+     if(active.current!==token)return;
+     setRecords(previous=>previous.map(r=>r.profile.id===profileId?{...r,...photos}:r));
+   });
+ };
  const login=async(email:string,password:string,register:boolean)=>{
    if(register)await request("/auth/register",undefined,json("POST",{email,password,synthetic_only:true}));
    // The shared LoginInput requires organization_id; sandbox resolves the actual tenant exclusively from verified account credentials.
@@ -49,5 +62,5 @@ export function ConnectedProvider({children}:{children:ReactNode}){
  const patients=records.map(toPatient), selected=records.find(r=>r.profile.id===selectedId),patient=patients.find(p=>p.id===selectedId);
  const disabled=()=>{toast("Operación no habilitada en el servidor de pruebas");return false;};
  const value:Store={user,login:()=>{throw Error("Usa el acceso autenticado");},logout:()=>{void logout();},patients,selectedId,select:id=>{if(records.some(r=>r.profile.id===id&&r.profile.status==="active"))setSelectedId(id);},patient:patient as Patient,mediciones:records.flatMap(toMeasurements),consents:[],reports:[],addPatient:disabled,updatePatient:disabled,deletePatient:disabled,addMedicion:disabled,updateMedicion:disabled,deleteMedicion:disabled,setConsents:disabled,setReports:disabled,toast,toasts};
- return <ConnectionCtx.Provider value={{token:session?.token??null,records,catalog,busy,error,login,logout,refresh,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
+ return <ConnectionCtx.Provider value={{token:session?.token??null,records,catalog,busy,error,login,logout,refresh,refreshCaptures,run,selected}}><Ctx.Provider value={value}>{children}</Ctx.Provider></ConnectionCtx.Provider>;
 }

@@ -28,21 +28,22 @@ async function syntheticPng(file:File):Promise<Blob>{
 }
 export async function uploadPhoto(token:string,profileId:string,file:File){const png=await syntheticPng(file);return request("/profiles/"+profileId+"/captures",token,{method:"POST",body:png,headers:{"Content-Type":"image/png","X-Synthetic-Only":"confirmed"}});}
 
-export function useAction(){
- const {refresh,run}=useConnection(),{toast}=useStore();
+export function useAction(profileId?:string){
+ const {refresh,refreshCaptures,run}=useConnection(),{toast}=useStore();
  const [pending,setPending]=useState(false);
+ const reload=()=>profileId?refreshCaptures(profileId):refresh();
  const action=async(fn:(token:string)=>Promise<unknown>,message:string)=>{
   setPending(true);let saved=false;
-  try{await run(fn);saved=true;await refresh();toast(message);return true;}
-  catch(e){toast((saved?"Guardado, pero no se pudo recargar: ":"")+(e instanceof Error?e.message:String(e)));if(!saved)try{await refresh();}catch{}return false;}
+  try{await run(fn);saved=true;await reload();toast(message);return true;}
+  catch(e){toast((saved?"Guardado, pero no se pudo recargar: ":"")+(e instanceof Error?e.message:String(e)));if(!saved)try{await reload();}catch{}return false;}
   finally{setPending(false);}
  };
  return {pending,action};
 }
 export function NeedPatient({children,complete=false,body=false}:{children:ReactNode;complete?:boolean;body?:boolean}){
  const {patient}=useStore(),{selected,busy,error}=useConnection();
- if(busy)return <Panel>Consultando expedientes en PostgreSQL…</Panel>;
- if(error)return <Panel>{error}</Panel>;
+ if(busy&&!selected)return <Panel>Consultando expedientes…</Panel>;
+ if(error&&!selected)return <Panel title="No se pudieron cargar los expedientes">{error}<div className="mt-3"><Link className="text-cyan-300" to="/app/expedientes">Volver a expedientes</Link></div></Panel>;
  if(!selected||!patient)return <Panel title="Sin expediente seleccionado"><Link className="text-cyan-300" to="/app/expedientes">Crear o seleccionar expediente</Link></Panel>;
  if(selected.profile.status!=="active")return <Panel title="Expediente no activo">Los expedientes archivados o restringidos no se utilizan para simulación o captura.</Panel>;
  if((complete||body)&&(!["male","female"].includes(selected.profile.sex||"")||![patient.peso,patient.altura,...(complete?[patient.grasa,patient.musculo]:[])].every(Number.isFinite)))return <Panel title="Completa los datos corporales"><p className="mb-3 text-sm text-slate-400">{complete?"Registra peso, estatura, grasa corporal y masa muscular observada mediante instrumento.":"Registra peso y estatura antes de abrir el modelo personalizado."}</p><Link to="/app/mediciones" className="text-cyan-300">Registrar mediciones</Link></Panel>;

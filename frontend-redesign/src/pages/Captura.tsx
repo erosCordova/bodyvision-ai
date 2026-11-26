@@ -9,22 +9,24 @@ import {useAction,uploadPhoto} from "../ConnectedPages";
 import {image,request,type Capture} from "../api";
 
 const VIEWS = ["Foto 1", "Foto 2", "Foto 3"];
-const PIPE = ["Fotografías registradas", "Atlas anatómico de referencia", "Reconstrucción desde imágenes (no habilitada)"];
+const PIPE = ["Fotografías registradas", "Atlas anatómico de referencia", "Reconstrucción desde imágenes"];
 
 export default function Captura(){const {patient}=useStore();return <PatientCapture key={patient.id}/>;}
 function PatientCapture() {
-  const {patient,toast}=useStore(),{selected,run}=useConnection(),{pending,action}=useAction();
+  const {patient,toast}=useStore(),{selected,run}=useConnection(),{pending,action}=useAction(patient.id);
   const [shots,setShots]=useState<string[]>([]),[preview,setPreview]=useState<string|undefined>(),[remove,setRemove]=useState<Capture|null>(null);
   const [showAtlas,setShowAtlas]=useState(false);
   const file=useRef<HTMLInputElement>(null);
   const {fat,mus}=bodyParams(patient);
   const captures=selected?.captures||[];
   const ids=captures.slice(0,3).map(c=>c.id).join(",");
-  useEffect(()=>{let alive=true;setShots([]);setPreview(undefined);Promise.all(captures.slice(0,3).map(c=>run(t=>image("/profiles/"+patient.id+"/captures/"+c.id,t)).catch(()=>""))).then(s=>{if(alive)setShots(s);});return()=>{alive=false;};},[patient.id,ids]);
+  useEffect(()=>{let alive=true;setShots([]);setPreview(undefined);Promise.all(captures.slice(0,3).map((c,i)=>i===0&&patient.foto?Promise.resolve(patient.foto):run(t=>image("/profiles/"+patient.id+"/captures/"+c.id,t)).catch(()=>""))).then(s=>{if(alive)setShots(s);});return()=>{alive=false;};},[patient.id,ids]);
   const onFile=async(f?:File)=>{if(!f)return;if(!window.confirm("El almacenamiento actual solo admite imágenes de prueba, no fotografías clínicas o personales reales. ¿Confirmas que la imagen cumple esta condición?"))return;await action(t=>uploadPhoto(t,patient.id,f),"Fotografía guardada");};
   const valid=Number.isFinite(patient.altura)&&Number.isFinite(patient.peso);
   const done=showAtlas&&valid;
-  const step=Math.min(captures.length,2),proc=captures.length?1:0;
+  const step=Math.min(captures.length,2);
+  const completed=[captures.length>0,valid,false];
+  const progress=completed.filter(Boolean).length/2*100;
   const reset=()=>{setShowAtlas(false);setPreview(undefined);};
   const checks=[["Fotografías",String(captures.length)],["Peso",Number.isFinite(patient.peso)?patient.peso+" kg":"—"],["Altura",Number.isFinite(patient.altura)?patient.altura+" cm":"—"],["Reconstrucción","No habilitada"]];
 
@@ -48,10 +50,10 @@ function PatientCapture() {
               </svg>
               
               <div className="absolute left-4 top-4 flex items-center gap-2 rounded-lg bg-black/60 px-3 py-1.5 text-xs backdrop-blur">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" /> Fotografía del expediente
+                <span className="h-2 w-2 rounded-full bg-cyan-400" /> Fotografía del expediente
               </div>
               <div className="absolute inset-x-0 bottom-4 flex flex-wrap items-center justify-center gap-3 px-4">
-                <Btn variant="primary" disabled={pending} onClick={()=>file.current?.click()}><Upload size={16}/> Subir foto</Btn>
+                <Btn variant="primary" disabled={pending} onClick={()=>file.current?.click()}>{pending?<Loader2 size={16} className="animate-spin"/>:<Upload size={16}/>} {pending?"Guardando…":"Subir foto"}</Btn>
                 <Btn disabled={!valid} onClick={()=>setShowAtlas(true)}>Ver atlas 3D</Btn>
                 <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{void onFile(e.target.files?.[0]);e.target.value="";}}/>
 
@@ -80,13 +82,13 @@ function PatientCapture() {
           <Panel title="Pipeline de reconstrucción">
             <ul className="space-y-3 text-sm">
               {PIPE.map((p, i) => (
-                <li key={p} className={`flex items-center gap-3 ${proc > i ? "text-white" : proc === i ? "text-cyan-200" : "text-slate-500"}`}>
-                  {proc > i ? <CheckCircle2 size={16} className="text-emerald-300" /> : proc === i ? <Loader2 size={16} className="animate-spin" /> : <span className="h-4 w-4 rounded-full border border-slate-600" />}
-                  {p}
+                <li key={p} className={`flex items-center gap-3 ${completed[i] ? "text-white" : "text-slate-400"}`}>
+                  {completed[i] ? <CheckCircle2 size={16} className="text-emerald-300" /> : <span className="h-4 w-4 rounded-full border border-slate-600" />}
+                  <span className="flex-1">{p}</span><span className="text-xs text-slate-400">{i===2?"No disponible":completed[i]?"Disponible":i===0?"Sin fotos":"Faltan medidas"}</span>
                 </li>
               ))}
             </ul>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-700" style={{ width: `${Math.max(0, proc) / PIPE.length * 100}%` }} /></div>
+            <p className="mt-3 text-xs text-slate-400">Preparación del atlas: {completed.filter(Boolean).length} de 2 requisitos. La reconstrucción a partir de fotografías no está disponible.</p><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-700" style={{ width: `${progress}%` }} /></div>
           </Panel>
           <Panel title="Gestionar fotografías">{captures.map(c=><div key={c.id} className="flex items-center gap-2 border-b border-white/5 py-2 text-xs"><span className="flex-1">{new Date(c.created_at).toLocaleString("es-PE")}</span><Btn onClick={async()=>{try{setPreview(await run(t=>image("/profiles/"+patient.id+"/captures/"+c.id,t)));setShowAtlas(false);}catch(e){toast(String(e));}}}>Ver</Btn><Btn variant="danger" disabled={pending} onClick={()=>setRemove(c)}>Eliminar</Btn></div>)}{!captures.length&&<p className="text-sm text-slate-400">Sin fotografías</p>}</Panel>
         </div>
