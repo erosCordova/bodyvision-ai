@@ -61,4 +61,4 @@ def migrate_configured_account(engine,settings):
                 log.warning("b2_migration_record_failed")
         log.info("b2_migration_completed count=%d expected=%d",migrated,len(ids))
     except Exception as exc:
-        log.warning("b2_storage_verification_failed type=%s",type(exc).__name__)
+        log.warning("b2_storage_verification_failed type=%s reason=%s",type(exc).__name__,str(exc) if isinstance(exc,B2Error) else "internal")

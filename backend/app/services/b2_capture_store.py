@@ -48,14 +48,18 @@ class B2Store:
                     raise B2Error("B2 response exceeds size limit")
                 return body
         except HTTPError as exc:
-            if allow_missing and exc.code in (400,404):
-                try:
-                    code=json.loads(exc.read(8192)).get("code")
-                    if code in ("file_not_present","not_found","no_such_file"):
-                        return b"{}"
-                except (ValueError, OSError):
-                    pass
-            raise B2Error("B2 HTTP "+str(exc.code)) from None
+            code="unknown"
+            try:
+                candidate=json.loads(exc.read(8192)).get("code","unknown")
+                if isinstance(candidate,str) and re.fullmatch(r"[a-zA-Z0-9_]{1,64}",candidate):
+                    code=candidate
+            except (ValueError, OSError):
+                pass
+            if allow_missing and exc.code in (400,404) and code in ("file_not_present","not_found","no_such_file"):
+                return b"{}"
+            # Log only allowlisted operation names and provider error code, never URL or tokens.
+            operation=next((op for op in ("b2_authorize_account","b2_get_upload_url","b2_upload_file","b2_download_file_by_id","b2_delete_file_version") if op in parsed.path),"request")
+            raise B2Error(operation+" HTTP "+str(exc.code)+" "+code) from None
         except (URLError,TimeoutError,OSError):
             raise B2Error("B2 unavailable") from None
 
