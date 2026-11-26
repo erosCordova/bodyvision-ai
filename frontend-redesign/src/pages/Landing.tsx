@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Activity, ArrowRight, BarChart3, Box, Brain, Camera, Check, ChevronDown, Cloud, Cpu, Database, Layers, Menu, Monitor, Play, Server, ShieldCheck, Smartphone, Sparkles, X, Zap } from "lucide-react";
 import { Logo, Segmented } from "../ui";
-import LandingAthlete from "../LandingAthlete";
+import LandingRobot from "../LandingRobot";
 import { BodyScene } from "../three/BodyScene";
 import { BodyModel, type Mode } from "../three/BodyModel";
 import type { Sex } from "../three/assets";
@@ -62,7 +62,7 @@ const FAQ = [
 
 export default function Landing() {
   const nav = useNavigate();
-  const [hero, setHero] = useState<"athlete"|"atlas">("athlete");
+  const [hero, setHero] = useState<"robot"|"atlas">("robot");
   const [mode, setMode] = useState<Mode>("skin");
   const [sex, setSex] = useState<Sex>("male");
   const [fat, setFat] = useState(0);
@@ -145,7 +145,7 @@ export default function Landing() {
           </div>
           <Reveal delay={0.15}>
             <div id="hero-visual" className="panel panel-glow relative scroll-mt-24 overflow-hidden rounded-3xl">
-              {hero==="athlete"?<div className="relative h-[500px] md:h-[660px] bg-[radial-gradient(ellipse_at_center,#102e43_0%,#071522_55%,#070e19_100%)]"><div className="absolute inset-x-0 top-20 bottom-12"><LandingAthlete/></div><div className="pointer-events-none absolute inset-x-0 bottom-5 text-center"><div className="font-display text-sm font-semibold tracking-[.2em] text-cyan-200">BODYVISION</div><div className="mt-1 text-xs text-slate-400">Mueve el cursor</div></div></div>:<>
+              {hero==="robot"?<div className="relative h-[500px] md:h-[660px] bg-[radial-gradient(ellipse_at_center,#102e43_0%,#071522_55%,#070e19_100%)]"><div className="absolute inset-x-0 top-20 bottom-12"><LandingRobot/></div><div className="pointer-events-none absolute inset-x-0 bottom-5 text-center"><div className="font-display text-sm font-semibold tracking-[.2em] text-cyan-200">BODYVISION</div><div className="mt-1 text-xs text-slate-400">Mueve el cursor</div></div></div>:<>
               <BodyScene className="h-[560px] md:h-[660px]" distance={5.4} autoRotate rotateSpeed={1.4}>
                 <BodyModel sex={sex} mode={mode} fat={fat} mus={fat < 0 ? -fat * 0.35 : 0} />
               </BodyScene>
@@ -170,7 +170,7 @@ export default function Landing() {
                   <span className="w-10 text-right font-semibold text-cyan-300">{fat > 0 ? "+" : ""}{fat}%</span>
                 </div>
               </div></>}
-              <div className="absolute left-4 top-4 z-20 flex gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur"><button type="button" aria-pressed={hero==="athlete"} onClick={()=>setHero("athlete")} className={"rounded-lg px-3 py-2 text-xs font-medium "+(hero==="athlete"?"bg-cyan-400 text-slate-950":"text-slate-300 hover:bg-white/10")}>Personaje</button><button type="button" aria-pressed={hero==="atlas"} onClick={()=>setHero("atlas")} className={"rounded-lg px-3 py-2 text-xs font-medium "+(hero==="atlas"?"bg-cyan-400 text-slate-950":"text-slate-300 hover:bg-white/10")}>Visor 3D</button></div>
+              <div className="absolute left-4 top-4 z-20 flex gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur"><button type="button" aria-pressed={hero==="robot"} onClick={()=>setHero("robot")} className={"rounded-lg px-3 py-2 text-xs font-medium "+(hero==="robot"?"bg-cyan-400 text-slate-950":"text-slate-300 hover:bg-white/10")}>Asistente</button><button type="button" aria-pressed={hero==="atlas"} onClick={()=>setHero("atlas")} className={"rounded-lg px-3 py-2 text-xs font-medium "+(hero==="atlas"?"bg-cyan-400 text-slate-950":"text-slate-300 hover:bg-white/10")}>Visor 3D</button></div>
             </div>
           </Reveal>
         </div>
