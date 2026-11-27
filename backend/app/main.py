@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 from contextlib import asynccontextmanager, suppress
 from uuid import UUID, uuid4
@@ -8,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException
@@ -16,14 +17,16 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.health import router as health_router
 from app.api.routes.auth import router as auth_router
-from app.api.routes.sandbox_auth import router as sandbox_router, check_sandbox_session, sandbox_event
-from app.api.routes.sandbox_captures import router as sandbox_capture_router
-from app.api.routes.sandbox_consents import router as sandbox_consent_router
 from app.api.routes.comparison_reports import router as report_router
 from app.api.routes.data_core import router as data_router
 from app.api.routes.operations import router as operations_router
 from app.api.routes.pose_summaries import router as pose_router
 from app.api.routes.privacy_requests import router as privacy_router
+from app.api.routes.sandbox_auth import check_sandbox_session
+from app.api.routes.sandbox_auth import router as sandbox_router
+from app.api.routes.sandbox_auth import sandbox_event
+from app.api.routes.sandbox_captures import router as sandbox_capture_router
+from app.api.routes.sandbox_consents import router as sandbox_consent_router
 from app.api.routes.server_pose import router as server_pose_router
 from app.api.routes.simulation_scenarios import router as simulation_router
 from app.api.routes.synthetic_captures import router as capture_router
@@ -33,6 +36,30 @@ from app.core.logging import configure_logging
 from app.core.operations import OperationsMetrics
 from app.db.session import build_engine
 from app.workers.capture_retention import retention_loop
+
+
+def sandbox_mutation_allowed(method: str, path: str) -> bool:
+    if path in {
+        "/api/v1/auth/logout",
+        "/api/v1/auth/activity",
+        "/api/v1/auth/admin/users",
+        "/api/v1/profiles",
+    }:
+        return True
+    if any(
+        re.fullmatch(pattern, path)
+        for pattern in (
+            r"/api/v1/profiles/[0-9a-fA-F-]{36}(?:/archive|/measurements)?",
+            r"/api/v1/measurements/[0-9a-fA-F-]{36}",
+            r"/api/v1/profiles/[0-9a-fA-F-]{36}/captures(?:/[0-9a-fA-F-]{36})?",
+        )
+    ):
+        return True
+    if method == "POST" and path == "/api/v1/sandbox/consents":
+        return True
+    return method == "PATCH" and bool(
+        re.fullmatch(r"/api/v1/sandbox/consents/[0-9a-fA-F-]{36}", path)
+    )
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -53,9 +80,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         if settings.app_env == "sandbox":
-            from sqlalchemy import text
             with database_engine.connect() as connection:
-                if not connection.execute(text("SELECT to_regclass('public.sandbox_sessions') IS NOT NULL")).scalar_one():
+                exists = connection.execute(
+                    text("SELECT to_regclass('public.sandbox_sessions') IS NOT NULL")
+                ).scalar_one()
+                if not exists:
                     raise RuntimeError("Isolated sandbox schema is required")
         logging.getLogger("bodyvision").info("service_started")
         retention_task = None
@@ -168,7 +197,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 )
             elif settings.app_env == "sandbox" and request.url.path.startswith("/api/"):
                 path = request.url.path
-                if request.method == "OPTIONS" or path in {"/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/login"}:
+                method = request.method
+                readonly = method in {"GET", "HEAD", "OPTIONS"}
+                auth_path = path.startswith("/api/v1/auth/")
+                if method == "OPTIONS" or path in {
+                    "/api/v1/health/live",
+                    "/api/v1/health/ready",
+                    "/api/v1/auth/login",
+                }:
                     response = await call_next(request)
                 else:
                     try:
@@ -177,24 +213,30 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                         response = error(request, exc.status, exc.code, exc.message)
                     else:
                         role = request.state.sandbox_role
-                        if role == "privacy_officer" and not path.startswith("/api/v1/auth/"):
-                            response = error(request, 403, "FORBIDDEN", "Tu rol no permite consultar expedientes.")
-                        elif role == "member" and request.method not in {"GET", "HEAD", "OPTIONS"} and not path.startswith("/api/v1/auth/"):
-                            response = error(request, 403, "FORBIDDEN", "Tu rol solo permite consultar registros.")
-                        elif request.method not in {"GET", "HEAD", "OPTIONS"} and not (
-                            path in {"/api/v1/auth/logout", "/api/v1/auth/activity", "/api/v1/auth/admin/users", "/api/v1/profiles"}
-                            or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}(?:/archive|/measurements)?", path)
-                            or __import__("re").fullmatch(r"/api/v1/measurements/[0-9a-fA-F-]{36}", path)
-                            or __import__("re").fullmatch(r"/api/v1/profiles/[0-9a-fA-F-]{36}/captures(?:/[0-9a-fA-F-]{36})?", path)
-                            or (request.method == "POST" and path == "/api/v1/sandbox/consents")
-                            or (request.method == "PATCH" and __import__("re").fullmatch(r"/api/v1/sandbox/consents/[0-9a-fA-F-]{36}", path))
-                        ):
-                            response = error(request, 403, "SANDBOX_LIMIT", "Operación no habilitada en pruebas.")
+                        if role == "privacy_officer" and not auth_path:
+                            response = error(
+                                request,
+                                403,
+                                "FORBIDDEN",
+                                "Tu rol no permite consultar expedientes.",
+                            )
+                        elif role == "member" and not readonly and not auth_path:
+                            response = error(
+                                request, 403, "FORBIDDEN", "Tu rol solo permite consultar registros."
+                            )
+                        elif not readonly and not sandbox_mutation_allowed(method, path):
+                            response = error(
+                                request, 403, "SANDBOX_LIMIT", "Operación no habilitada en pruebas."
+                            )
                         else:
                             response = await call_next(request)
-                            if request.method not in {"GET", "HEAD", "OPTIONS"} and not path.startswith("/api/v1/auth/"):
+                            if not readonly and not auth_path:
                                 route = request.scope.get("route")
-                                sandbox_event(request, route.path if route else "unmatched", response.status_code)
+                                sandbox_event(
+                                    request,
+                                    route.path if route else "unmatched",
+                                    response.status_code,
+                                )
             else:
                 response = await call_next(request)
         except Exception as exc:
@@ -240,9 +282,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         return response
 
     # CORS must wrap request_context so authorization errors also reach the browser.
+    origins = list(settings.cors_origins)
+    if settings.app_env == "sandbox":
+        origins.append("https://bodyvision-ai-redesign.onrender.com")
+    allow_bearer = settings.identity_enabled or settings.app_env == "sandbox"
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(dict.fromkeys([*settings.cors_origins, *(["https://bodyvision-ai-redesign.onrender.com"] if settings.app_env == "sandbox" else [])])),
+        allow_origins=list(dict.fromkeys(origins)),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=[
@@ -251,7 +297,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             "X-Workspace-ID",
             "Idempotency-Key",
             "X-Synthetic-Only",
-            *(["Authorization"] if settings.identity_enabled or settings.app_env == "sandbox" else []),
+            *(["Authorization"] if allow_bearer else []),
             *(["X-Requested-With"] if settings.jwt_access_enabled else []),
         ],
         expose_headers=["X-Correlation-ID"],
