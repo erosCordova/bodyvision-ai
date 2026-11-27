@@ -22,9 +22,8 @@ from app.api.routes.data_core import router as data_router
 from app.api.routes.operations import router as operations_router
 from app.api.routes.pose_summaries import router as pose_router
 from app.api.routes.privacy_requests import router as privacy_router
-from app.api.routes.sandbox_auth import check_sandbox_session
+from app.api.routes.sandbox_auth import check_sandbox_session, sandbox_event
 from app.api.routes.sandbox_auth import router as sandbox_router
-from app.api.routes.sandbox_auth import sandbox_event
 from app.api.routes.sandbox_captures import router as sandbox_capture_router
 from app.api.routes.sandbox_consents import router as sandbox_consent_router
 from app.api.routes.server_pose import router as server_pose_router
@@ -222,7 +221,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                             )
                         elif role == "member" and not readonly and not auth_path:
                             response = error(
-                                request, 403, "FORBIDDEN", "Tu rol solo permite consultar registros."
+                                request,
+                                403,
+                                "FORBIDDEN",
+                                "Tu rol solo permite consultar registros.",
                             )
                         elif not readonly and not sandbox_mutation_allowed(method, path):
                             response = error(

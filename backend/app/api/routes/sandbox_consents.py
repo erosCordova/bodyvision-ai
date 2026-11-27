@@ -15,7 +15,8 @@ from app.repositories import records
 router = APIRouter(prefix="/api/v1", tags=["Sandbox consent workflow"])
 Scope = Annotated[Workspace, Depends(workspace, scope="function")]
 Purpose = Literal["images", "reconstruction", "analysis", "sharing", "camera"]
-FIELDS = """c.id,c.profile_id,c.purpose,c.status,c.created_at,c.accepted_at,c.expires_at,c.revoked_at,
+FIELDS = """c.id,c.profile_id,c.purpose,c.status,c.created_at,
+ c.accepted_at,c.expires_at,c.revoked_at,
  COALESCE(p.display_name,p.display_code) AS patient_name,
  CASE WHEN c.status='revoked' THEN 'revoked' WHEN c.status='pending' THEN 'pending'
  WHEN c.expires_at<=now() THEN 'expired' WHEN c.expires_at<=now()+interval '30 days' THEN 'expiring'

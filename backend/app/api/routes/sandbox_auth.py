@@ -107,7 +107,9 @@ def login_sandbox(request: Request, data: LoginInput):
             role = row["role"]
             found = True
     salt, expected = verifier.split(":")
-    actual = hashlib.pbkdf2_hmac("sha256", data.password.encode(), bytes.fromhex(salt), 600000).hex()
+    actual = hashlib.pbkdf2_hmac(
+        "sha256", data.password.encode(), bytes.fromhex(salt), 600000
+    ).hex()
     if not (hmac.compare_digest(actual, expected) and found):
         sandbox_event(request, "auth.login", 401)
         raise DomainError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.")
@@ -126,7 +128,9 @@ def issue_sandbox_session(request: Request, org: UUID, actor: UUID, role: str) -
             {"d": hashlib.sha256(token.encode()).hexdigest(), "e": expiry, "o": org, "u": actor},
         )
     sandbox_event(request, "auth.login", 200)
-    return SessionRead(token=token, expires_at=expiry, organization_id=org, user_id=actor, role=role)
+    return SessionRead(
+        token=token, expires_at=expiry, organization_id=org, user_id=actor, role=role
+    )
 
 
 @router.get("/me")
@@ -192,7 +196,9 @@ def create_account(request: Request, data: AdminAccountInput):
         ).scalar_one()
     if not created:
         raise DomainError(
-            409, "REGISTRATION_UNAVAILABLE", "El correo ya existe o se alcanzó el límite de cuentas."
+            409,
+            "REGISTRATION_UNAVAILABLE",
+            "El correo ya existe o se alcanzó el límite de cuentas.",
         )
     sandbox_event(request, "auth.admin.create", 201)
     return {"status": "created"}

@@ -52,7 +52,9 @@ def context(scope, profile_id, write=False):
 
 @router.post("/profiles/{profile_id}/captures", status_code=201, response_model=SandboxCaptureRead)
 async def upload(
-    profile_id: UUID, scope: Scope, request: Request,
+    profile_id: UUID,
+    scope: Scope,
+    request: Request,
     posture: Annotated[Pose, Query()] = "unspecified",
 ):
     key = cipher(request)
@@ -76,18 +78,22 @@ async def upload(
         {"orgkey": str(scope.organization_id)},
     )
     conn.execute(
-        text("DELETE FROM sandbox_capture_objects "
-             "WHERE organization_id=:org AND expires_at<=now() AND ciphertext IS NOT NULL"),
+        text(
+            "DELETE FROM sandbox_capture_objects "
+            "WHERE organization_id=:org AND expires_at<=now() AND ciphertext IS NOT NULL"
+        ),
         params,
     )
     count = conn.execute(
-        text("SELECT count(*) FROM sandbox_capture_objects "
-             "WHERE organization_id=:org AND expires_at>now()"),
+        text(
+            "SELECT count(*) FROM sandbox_capture_objects "
+            "WHERE organization_id=:org AND expires_at>now()"
+        ),
         params,
     ).scalar_one()
     if count >= 20:
         raise DomainError(409, "CAPTURE_LIMIT", "Máximo 20 imágenes por cuenta de pruebas.")
-    row = conn.execute(
+    result = conn.execute(
         text(f"""
             INSERT INTO sandbox_capture_objects(
                 id,organization_id,profile_id,created_by,original_bytes,
@@ -105,8 +111,8 @@ async def upload(
             "posture": posture,
             "encrypted": key.encrypt(image),
         },
-    ).mappings().one()
-    return dict(row)
+    )
+    return dict(result.mappings().one())
 
 
 @router.get("/profiles/{profile_id}/captures", response_model=SandboxCaptureList)
@@ -118,29 +124,36 @@ def list_images(
     cipher(request)
     params = context(scope, profile_id)
     total = scope.connection.execute(
-        text("SELECT count(*) FROM sandbox_capture_objects "
-             "WHERE organization_id=:org AND profile_id=:profile AND expires_at>now()"),
+        text(
+            "SELECT count(*) FROM sandbox_capture_objects "
+            "WHERE organization_id=:org AND profile_id=:profile AND expires_at>now()"
+        ),
         params,
     ).scalar_one()
-    rows = scope.connection.execute(
-        text(f"SELECT {FIELDS} FROM sandbox_capture_objects "
-             "WHERE organization_id=:org AND profile_id=:profile AND expires_at>now() "
-             "ORDER BY created_at DESC,id LIMIT :limit OFFSET :offset"),
+    result = scope.connection.execute(
+        text(
+            f"SELECT {FIELDS} FROM sandbox_capture_objects "
+            "WHERE organization_id=:org AND profile_id=:profile AND expires_at>now() "
+            "ORDER BY created_at DESC,id LIMIT :limit OFFSET :offset"
+        ),
         {**params, "limit": limit, "offset": offset},
-    ).mappings().all()
-    return {"items": [dict(row) for row in rows], "total": total}
+    )
+    return {"items": [dict(row) for row in result.mappings().all()], "total": total}
 
 
 @router.get("/profiles/{profile_id}/captures/{capture_id}")
 def download(profile_id: UUID, capture_id: UUID, scope: Scope, request: Request):
     key = cipher(request)
     params = context(scope, profile_id)
-    row = scope.connection.execute(
-        text("SELECT ciphertext,sha256_digest FROM sandbox_capture_objects "
-             "WHERE organization_id=:org AND profile_id=:profile AND id=:id "
-             "AND expires_at>now()"),
+    result = scope.connection.execute(
+        text(
+            "SELECT ciphertext,sha256_digest FROM sandbox_capture_objects "
+            "WHERE organization_id=:org AND profile_id=:profile AND id=:id "
+            "AND expires_at>now()"
+        ),
         {**params, "id": capture_id},
-    ).mappings().one_or_none()
+    )
+    row = result.mappings().one_or_none()
     if row is None:
         raise DomainError(404, "NOT_FOUND", "Imagen no disponible.")
     try:
@@ -161,9 +174,11 @@ def delete(profile_id: UUID, capture_id: UUID, scope: Scope, request: Request):
     cipher(request)
     params = context(scope, profile_id, True)
     found = scope.connection.execute(
-        text("DELETE FROM sandbox_capture_objects "
-             "WHERE organization_id=:org AND profile_id=:profile AND id=:id "
-             "AND ciphertext IS NOT NULL RETURNING id"),
+        text(
+            "DELETE FROM sandbox_capture_objects "
+            "WHERE organization_id=:org AND profile_id=:profile AND id=:id "
+            "AND ciphertext IS NOT NULL RETURNING id"
+        ),
         {**params, "id": capture_id},
     ).scalar_one_or_none()
     if found is None:
