@@ -57,9 +57,6 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             with database_engine.connect() as connection:
                 if not connection.execute(text("SELECT to_regclass('public.sandbox_sessions') IS NOT NULL")).scalar_one():
                     raise RuntimeError("Isolated sandbox schema is required")
-        if settings.app_env == "sandbox":
-            from app.services.b2_capture_migration import migrate_configured_account
-            await asyncio.to_thread(migrate_configured_account,database_engine,settings)
         logging.getLogger("bodyvision").info("service_started")
         retention_task = None
         if (

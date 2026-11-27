@@ -1,2 +1,13 @@
-# Backblaze B2 private capture storage
-Configure CAPTURE_STORAGE=b2, B2_BUCKET_ID, B2_KEY_ID, B2_APPLICATION_KEY in Render (backend only). Set B2_MIGRATE_ORG and B2_MIGRATE_ACTOR for one authorized synthetic workspace until migration is verified; clear after. Apply b2_capture_storage.sql first. Existing encryption and synthetic-only restrictions are unchanged. Each migrated file is uploaded, read back, verified, and its DB ciphertext replaced by its B2 file ID. File names contain opaque capture UUID only. Configure bucket lifecycle for captures/ with 7-day hiding and subsequent deletion (B2 lifecycle is not an exact expiry guarantee; database blocks reads on expiry). Do not expose the bucket or use real clinical/biometric data. Reconcile expired objects periodically; cleanup on upload covers that profile only.
+# Hosted capture storage
+
+PostgreSQL (Neon) is the only active image storage provider for the hosted sandbox.
+The previously attempted Backblaze integration was disabled at the user's request.
+On 26 November 2026 the database contained four capture objects and zero external
+object references. No media migration or deletion is required.
+
+Existing b2_file_id schema fields remain as historical migration compatibility;
+the application never writes them or calls Backblaze. The historical SQL migration
+is retained. Photographs remain encrypted, synthetic-only, access-scoped and subject
+to existing retention and size limits. Production use still requires the security
+and privacy acceptance gates.
+
