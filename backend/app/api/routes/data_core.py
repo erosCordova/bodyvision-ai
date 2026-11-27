@@ -56,7 +56,11 @@ def workspaces(request: Request, scope: Scope) -> dict:
         "items": [dict(x) for x in rows],
         "synthetic": True,
         "read_only": request.app.state.settings.app_env == "demo",
-        "notice": "Sesión de pruebas autenticada." if request.app.state.settings.app_env == "sandbox" else "Selector local de datos ficticios. No representa autenticación.",
+        "notice": (
+            "Sesión de pruebas autenticada."
+            if request.app.state.settings.app_env == "sandbox"
+            else "Selector local de datos ficticios. No representa autenticación."
+        ),
     }
 
 

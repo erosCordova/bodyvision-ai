@@ -65,8 +65,13 @@ class Settings(BaseSettings):
             )
         if self.app_env == "sandbox":
             if self.identity_enabled or self.sandbox_password_hash is None:
-                raise ValueError("Sandbox requires isolated fixture credentials, not private identity")
-            if not re.fullmatch(r"[0-9a-f]{32}:[0-9a-f]{64}", self.sandbox_password_hash.get_secret_value()):
+                raise ValueError(
+                    "Sandbox requires isolated fixture credentials, not private identity"
+                )
+            if not re.fullmatch(
+                r"[0-9a-f]{32}:[0-9a-f]{64}",
+                self.sandbox_password_hash.get_secret_value(),
+            ):
                 raise ValueError("Invalid sandbox password verifier")
         elif self.sandbox_password_hash is not None:
             raise ValueError("Sandbox verifier is forbidden outside sandbox")

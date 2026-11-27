@@ -62,4 +62,8 @@ def ready(request: Request) -> ReadyResponse | JSONResponse:
                 "correlation_id": request.state.correlation_id,
             },
         )
-    return ReadyResponse(schema_revision=revision, database_latency_ms=round((perf_counter() - started) * 1000, 2), checked_at=datetime.now(UTC))
+    return ReadyResponse(
+        schema_revision=revision,
+        database_latency_ms=round((perf_counter() - started) * 1000, 2),
+        checked_at=datetime.now(UTC),
+    )

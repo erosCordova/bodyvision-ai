@@ -28,7 +28,7 @@ async function signIn(page: Page, code?: string) {
   const result = await response;
   expect(result.status()).toBe(200);
   const { token } = await result.json() as { token: string };
-  await expect(page.getByRole("heading", { name: "Dashboard general", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   return token;
 }
 

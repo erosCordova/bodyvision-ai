@@ -55,7 +55,7 @@ def context(scope, profile_id, write=False):
 
 
 @router.post("/profiles/{profile_id}/captures",status_code=201,response_model=SandboxCaptureRead)
-async def upload(profile_id:UUID,scope:Scope,request:Request,posture:Pose=Query('unspecified')):
+async def upload(profile_id:UUID,scope:Scope,request:Request,posture:Annotated[Pose, Query()]='unspecified'):
     key=cipher(request)
     params=context(scope,profile_id,True)
     if request.headers.get("X-Synthetic-Only")!="confirmed":
